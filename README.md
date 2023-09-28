@@ -35,6 +35,11 @@ My setup is as following:
 		- HACS integration in HomeAssistant
 		- fordpass-ha integration by [itchannel](https://github.com/itchannel )
 
+## Goals
+Easy all in one self hosted install
+ProPower Onboard Logs
+OBD2 Logging Integration
+
 ## Getting Started
 
 Setup and configure the fordpass-ha integration
