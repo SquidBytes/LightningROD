@@ -145,7 +145,8 @@ run
 
 ## Screenshot
 LightningROD Dashboard
-![[LightningROD.png]]
+![Alt text](/assets/LightningROD.png?raw=true "LightningROD Dashboard")
+
 
 ## Disclaimer
 
