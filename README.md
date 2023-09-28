@@ -143,6 +143,10 @@ run
 - Create any graph you want
 - I have included my [Grafana Dashbaord Here](https://github.com/SquidBytes/LightningROD/tree/main/grafana)
 
+## Screenshot
+LightningROD Dashboard
+![[LightningROD.png]]
+
 ## Disclaimer
 
 Using these scripts could result in your account being locked out.
