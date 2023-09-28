@@ -1,12 +1,16 @@
 # LightningROD (Record of Docks)
 Lightning Record of Docks (logs) for your F-150 Lightning!
 
+## Info
+TO be clear. This is nothing special or new. It is how I store, and view, my charge logs.
+I am hoping to make it an easy setup for new users and work with others to expand this.
+
 This is my first public repo. I am not a developer. 
 This was created in my spare time because I wasn't happy with FordPass Charge Logs. 
 
 I am using it for my F-150 Lightning, but it *should* work with other Ford EV's like the Mustang Mach-E.
 
-These scripts are piggybacking off of the fordpass-ha integration.
+Currently, these scripts are piggybacking off of the fordpass-ha integration.
 I am using these scripts, in conjunction with HomeAssistant, to automate logging my docks (logs) into a self hosted database (postgresql).
 I am then using Grafana to make all that data pretty.
 
@@ -21,12 +25,12 @@ I am happy to collab with others to expand this!
 - It is known that Ford *may* lock out the account associated with a user using the API for "Unauthorized API/Third Party Access"
 - It is recommended to use a secondary account for any API Queries
 - Users have also reported being locked out for emails containing "+" in their email. Info [Here](https://github.com/itchannel/fordpass-ha#account-warning-sep-2023)
+
 ## Credit 
 - https://github.com/itchannel - API Authentication code, Home Assistant Integration.
 - TeslaMate - Inspiration
 
 ## Requirements
-
 My setup is as following:
 - Home Media Server running Unraid
 	- postgresql15 docker
@@ -37,9 +41,10 @@ My setup is as following:
 
 ## Goals
 - Easy all in one self hosted install
+- Easy log and display from HomeAssistant sensors (InfluxDB, Postgresql, etc)
 - ProPower Onboard Logs
 - "DrivingScore" Logs
-- OBD2 Logging Integration
+- OBD2 Logging Integration (example: Torque for Hass)
 
 ## Getting Started
 
@@ -93,6 +98,7 @@ Into the fordpass-ha directory:
 Yes, overwrite the existing `fordpass_new.py`
 This version contains the function I'm calling to download the charge logs.
 This might change later as `fordpass-ha` gets updates.
+
 ## Running
 From HomeAssistant open a terminal and run
 
