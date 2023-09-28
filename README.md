@@ -36,9 +36,10 @@ My setup is as following:
 		- fordpass-ha integration by [itchannel](https://github.com/itchannel )
 
 ## Goals
-Easy all in one self hosted install
-ProPower Onboard Logs
-OBD2 Logging Integration
+- Easy all in one self hosted install
+- ProPower Onboard Logs
+- "DrivingScore" Logs
+- OBD2 Logging Integration
 
 ## Getting Started
 
