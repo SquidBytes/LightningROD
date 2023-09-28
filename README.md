@@ -81,10 +81,12 @@ config.py
 fordpass_new.py
 lightningROD.py
 ```
-
 Into the fordpass-ha directory:
 ```/root/config/custom_components/fordpass```
 
+Yes, overwrite the existing `fordpass_new.py`
+This version contains the function I'm calling to download the charge logs.
+This might change later as `fordpass-ha` gets updates.
 ## Running
 From HomeAssistant open a terminal and run
 
