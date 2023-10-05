@@ -5,8 +5,9 @@ Lightning Record of Docks (logs) for your F-150 Lightning!
 Migrating from Postgresql to InfluxDB. 
  - This should make it easier for new users to setup
  - HomeAssistant talks to InfluxDB easily
-This would allow logs to be put into the database from HomeAssistant sensors. Which, depending on the sensors the user has, could expand the dashboard to include Trips or other information from HomeAssistant
- - I am also working on the `fordpass-ha` integration to implementing charging sensors, and charging actions
+This would allow logs to be put into the database from HomeAssistant sensors. Which, depending on the sensors the user has, could expand the dashboard to include Trips taken or other information from various sensors.
+
+ - I am also working on the `fordpass-ha` integration to implement charging sensors, and charging actions (Stop Charging, Start Charging, etc).
 This is why it makes the most sense to move to InfluxDB. This would make LightningROD mainly just be a collection of Grafana dashboards.
 However, if someone is not running HomeAssistant I will maintain the script downloading charge logs.
 
