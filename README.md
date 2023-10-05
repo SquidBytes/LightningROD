@@ -22,7 +22,7 @@ This was created in my spare time because I wasn't happy with FordPass Charge Lo
 
 I am using it for my F-150 Lightning, but it *should* work with other Ford EV's like the Mustang Mach-E.
 
-Currently, these scripts are piggybacking off of the fordpass-ha integration.
+Currently, these scripts are piggybacking off of the `fordpass-ha` integration.
 I am using these scripts, in conjunction with HomeAssistant, to automate logging my docks (logs) into a self hosted database (postgresql).
 I am then using Grafana to make all that data pretty.
 
@@ -49,7 +49,7 @@ My setup is as following:
 	- Grafana docker
 	- HomeAssistan OS VM
 		- HACS integration in HomeAssistant
-		- fordpass-ha integration by [itchannel](https://github.com/itchannel )
+		- `fordpass-ha` integration by [itchannel](https://github.com/itchannel )
 
 ## Goals
 - Easy all in one self hosted install
@@ -62,9 +62,9 @@ My setup is as following:
 
 Please check [Currently Working On](https://github.com/SquidBytes/LightningROD#currently-working-on) before installing anything
 
-Setup and configure the fordpass-ha integration
-Install `Postgresql15` (I used a docker on Unraid)
-Install `Grafana` (I used a docker on Unraid)
+- Setup and configure the `fordpass-ha` integration
+- Install `Postgresql15` (I used a docker on Unraid)
+- Install `Grafana` (I used a docker on Unraid)
 
 Input your details into config.py
 ```python
@@ -106,12 +106,12 @@ config.py
 fordpass_new.py
 lightningROD.py
 ```
-Into the fordpass-ha directory:
+Into the `fordpass-ha` directory:
 ```/root/config/custom_components/fordpass```
 
 Yes, overwrite the existing `fordpass_new.py`
 This version contains the function I'm calling to download the charge logs.
-This might change later as `fordpass-ha` gets updates.
+This might change later as ``fordpass-ha`` gets updates.
 
 ## Running
 From HomeAssistant open a terminal and run
@@ -141,29 +141,21 @@ NOT Charging
 Create, or update, your `automations.yaml`
 This automation triggers the script to run 2 hours after the charging state changes
 ```yaml
-  trigger:
-  - platform: state
-    entity_id:
-    - sensor.charging_status
-    to: NOT Charging
-    for:
-      hours: 0
-      minutes: 0
-      seconds: 0
-    from: Charging
-  condition:
-  - condition: state
-    entity_id: sensor.charging_status
-    state: NOT Charging
-    for:
-      hours: 2
-      minutes: 0
-      seconds: 0
-  action:
-  - service: shell_command.lightningrod
-    data: {}
-run
-  mode: single
+  trigger:
+  - platform: state
+    entity_id:
+    - sensor.charging_status
+    to: NOT Charging
+    for:
+      hours: 2
+      minutes: 0
+      seconds: 0
+    from: Charging
+  condition: []
+  action:
+  - service: shell_command.lightningrod
+    data: {}
+  mode: single
 ```
 
 ## Grafana
