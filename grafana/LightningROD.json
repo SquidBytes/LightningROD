@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Lightning Record of Docks (logs) for your F-150 Lightning!",
+  "description": "Charge Dock(logs) for your F-150 Lightning!",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -64,7 +64,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "targets": [
         {
           "datasource": {
@@ -73,7 +73,7 @@
           },
           "editorMode": "builder",
           "format": "table",
-          "rawSql": "SELECT time_stamp FROM energytransferlogs LIMIT 50 ",
+          "rawSql": "SELECT time_stamp FROM energytransferlogs ORDER BY time_stamp LIMIT 50 ",
           "refId": "A",
           "sql": {
             "columns": [
@@ -95,7 +95,16 @@
                 "type": "groupBy"
               }
             ],
-            "limit": 50
+            "limit": 50,
+            "orderBy": {
+              "property": {
+                "name": [
+                  "time_stamp"
+                ],
+                "type": "string"
+              },
+              "type": "property"
+            }
           },
           "table": "energytransferlogs"
         }
@@ -147,7 +156,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "targets": [
         {
           "datasource": {
@@ -157,7 +166,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH charging_intervals AS (\r\n  SELECT\r\n    plug_out_time AS previous_time,\r\n    LEAD(plug_in_time) OVER (ORDER BY plug_out_time) AS next_time\r\n  FROM\r\n    energytransferlogs\r\n)\r\nSELECT\r\n  ROUND(EXTRACT(EPOCH FROM AVG(next_time - previous_time))) AS avg_time_between_charges\r\nFROM\r\n  charging_intervals\r\nWHERE\r\n  next_time IS NOT NULL\r\n  AND previous_time IS NOT NULL;\r\n",
+          "rawSql": "WITH charging_intervals AS (\r\n  SELECT\r\n    plug_out_time AS previous_time,\r\n    LEAD(plug_in_time) OVER (ORDER BY plug_out_time) AS next_time\r\n  FROM\r\n    energytransferlogs\r\n)\r\nSELECT\r\n  ROUND(EXTRACT(EPOCH FROM AVG(next_time - previous_time))) AS avg_time_between_charges\r\nFROM\r\n  charging_intervals\r\nWHERE\r\n  next_time IS NOT NULL\r\n  AND previous_time IS NOT NULL;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -313,7 +322,7 @@
         "showUnfilled": true,
         "valueMode": "color"
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "targets": [
         {
           "datasource": {
@@ -322,7 +331,7 @@
           },
           "editorMode": "builder",
           "format": "table",
-          "rawSql": "SELECT soc_difference FROM energytransferlogs LIMIT 50 ",
+          "rawSql": "SELECT soc_difference FROM energytransferlogs ORDER BY time_stamp LIMIT 50 ",
           "refId": "charge",
           "sql": {
             "columns": [
@@ -344,7 +353,14 @@
                 "type": "groupBy"
               }
             ],
-            "limit": 50
+            "limit": 50,
+            "orderBy": {
+              "property": {
+                "name": "time_stamp",
+                "type": "string"
+              },
+              "type": "property"
+            }
           },
           "table": "energytransferlogs"
         },
@@ -356,7 +372,7 @@
           "editorMode": "builder",
           "format": "table",
           "hide": false,
-          "rawSql": "SELECT total_distance_added FROM energytransferlogs LIMIT 50 ",
+          "rawSql": "SELECT total_distance_added FROM energytransferlogs ORDER BY time_stamp LIMIT 50 ",
           "refId": "distance",
           "sql": {
             "columns": [
@@ -378,7 +394,14 @@
                 "type": "groupBy"
               }
             ],
-            "limit": 50
+            "limit": 50,
+            "orderBy": {
+              "property": {
+                "name": "time_stamp",
+                "type": "string"
+              },
+              "type": "property"
+            }
           },
           "table": "energytransferlogs"
         },
@@ -390,7 +413,7 @@
           "editorMode": "builder",
           "format": "table",
           "hide": false,
-          "rawSql": "SELECT total_time FROM energytransferlogs LIMIT 50 ",
+          "rawSql": "SELECT total_time FROM energytransferlogs ORDER BY time_stamp LIMIT 50 ",
           "refId": "time",
           "sql": {
             "columns": [
@@ -412,7 +435,14 @@
                 "type": "groupBy"
               }
             ],
-            "limit": 50
+            "limit": 50,
+            "orderBy": {
+              "property": {
+                "name": "time_stamp",
+                "type": "string"
+              },
+              "type": "property"
+            }
           },
           "table": "energytransferlogs"
         }
@@ -440,7 +470,46 @@
           "mappings": [],
           "unit": "s"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ac_time"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "AC Basic"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "shades"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dc_time"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "DC Fast"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "shades"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
@@ -465,11 +534,11 @@
         "pieType": "pie",
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
           "fields": "",
           "limit": 99,
-          "values": true
+          "values": false
         },
         "tooltip": {
           "mode": "single",
@@ -485,37 +554,8 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\r\n  charger_type,\r\n  SUM(CASE WHEN charger_type IN ('AC_BASIC') THEN total_plugged_in_time ELSE 0 END) AS total_duration_minutes\r\nFROM energyTransferLogs\r\nWHERE charger_type IN ('AC_BASIC')\r\nGROUP BY charger_type;\r\n",
+          "rawSql": "SELECT\r\n  time_stamp,\r\n  charger_type,\r\n  SUM(CASE WHEN charger_type = 'AC_BASIC' THEN total_plugged_in_time ELSE 0 END) AS AC_TIME,\r\n  SUM(CASE WHEN charger_type = 'DC_FAST' THEN total_plugged_in_time ELSE 0 END) AS DC_TIME\r\nFROM energyTransferLogs\r\nWHERE charger_type IN ('AC_BASIC', 'DC_FAST')\r\nGROUP BY time_stamp, charger_type;\r\n",
           "refId": "AC_Time",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        },
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "c9a74e16-5119-4227-82f9-765d3223da3c"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "hide": false,
-          "rawQuery": true,
-          "rawSql": "SELECT\r\n  charger_type,\r\n  SUM(CASE WHEN charger_type IN ('DC_FAST') THEN total_plugged_in_time ELSE 0 END) AS total_duration_minutes\r\nFROM energyTransferLogs\r\nWHERE charger_type IN ('DC_FAST')\r\nGROUP BY charger_type;\r\n",
-          "refId": "DC_Time",
           "sql": {
             "columns": [
               {
@@ -536,6 +576,7 @@
         }
       ],
       "title": "AC/DC - Duration",
+      "transformations": [],
       "type": "piechart"
     },
     {
@@ -579,31 +620,32 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "count"
           ],
-          "fields": "",
+          "fields": "/^id$/",
           "values": false
         },
         "textMode": "auto"
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "targets": [
         {
           "datasource": {
             "type": "postgres",
             "uid": "c9a74e16-5119-4227-82f9-765d3223da3c"
           },
-          "editorMode": "builder",
+          "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COUNT(*) FROM energytransferlogs LIMIT 50 ",
+          "hide": false,
+          "rawQuery": true,
+          "rawSql": "SELECT id FROM energytransferlogs ORDER BY time_stamp DESC;",
           "refId": "A",
           "sql": {
             "columns": [
               {
-                "name": "COUNT",
                 "parameters": [
                   {
-                    "name": "*",
+                    "name": "id",
                     "type": "functionParameter"
                   }
                 ],
@@ -618,12 +660,20 @@
                 "type": "groupBy"
               }
             ],
-            "limit": 50
+            "limit": 50,
+            "orderBy": {
+              "property": {
+                "name": "time_stamp",
+                "type": "string"
+              },
+              "type": "property"
+            }
           },
           "table": "energytransferlogs"
         }
       ],
       "title": "Logged Charges",
+      "transformations": [],
       "type": "stat"
     },
     {
@@ -669,14 +719,14 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
-          "fields": "",
+          "fields": "/^cost$/",
           "values": false
         },
         "textMode": "auto"
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "targets": [
         {
           "datasource": {
@@ -685,12 +735,11 @@
           },
           "editorMode": "builder",
           "format": "table",
-          "rawSql": "SELECT SUM(cost) FROM energytransferlogs LIMIT 50 ",
+          "rawSql": "SELECT cost FROM energytransferlogs ORDER BY time_stamp LIMIT 50 ",
           "refId": "A",
           "sql": {
             "columns": [
               {
-                "name": "SUM",
                 "parameters": [
                   {
                     "name": "cost",
@@ -708,7 +757,14 @@
                 "type": "groupBy"
               }
             ],
-            "limit": 50
+            "limit": 50,
+            "orderBy": {
+              "property": {
+                "name": "time_stamp",
+                "type": "string"
+              },
+              "type": "property"
+            }
           },
           "table": "energytransferlogs"
         }
@@ -765,7 +821,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "targets": [
         {
           "datasource": {
@@ -774,7 +830,7 @@
           },
           "editorMode": "builder",
           "format": "table",
-          "rawSql": "SELECT energy_consumed FROM energytransferlogs LIMIT 50 ",
+          "rawSql": "SELECT energy_consumed FROM energytransferlogs ORDER BY time_stamp LIMIT 50 ",
           "refId": "A",
           "sql": {
             "columns": [
@@ -796,7 +852,14 @@
                 "type": "groupBy"
               }
             ],
-            "limit": 50
+            "limit": 50,
+            "orderBy": {
+              "property": {
+                "name": "time_stamp",
+                "type": "string"
+              },
+              "type": "property"
+            }
           },
           "table": "energytransferlogs"
         }
@@ -850,14 +913,14 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
-          "fields": "",
+          "fields": "/^total_time$/",
           "values": false
         },
         "textMode": "auto"
       },
-      "pluginVersion": "10.1.2",
+      "pluginVersion": "10.1.4",
       "targets": [
         {
           "datasource": {
@@ -867,12 +930,11 @@
           "editorMode": "builder",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT SUM(total_time) FROM energytransferlogs LIMIT 50 ",
+          "rawSql": "SELECT total_time FROM energytransferlogs ORDER BY time_stamp LIMIT 50 ",
           "refId": "A",
           "sql": {
             "columns": [
               {
-                "name": "SUM",
                 "parameters": [
                   {
                     "name": "total_time",
@@ -890,7 +952,14 @@
                 "type": "groupBy"
               }
             ],
-            "limit": 50
+            "limit": 50,
+            "orderBy": {
+              "property": {
+                "name": "time_stamp",
+                "type": "string"
+              },
+              "type": "property"
+            }
           },
           "table": "energytransferlogs"
         }
@@ -981,7 +1050,7 @@
       "options": {
         "legend": {
           "calcs": [
-            "diff"
+            "stdDev"
           ],
           "displayMode": "list",
           "placement": "bottom",
@@ -1023,6 +1092,7 @@
         }
       ],
       "title": "Charging Graph",
+      "transformations": [],
       "type": "timeseries"
     },
     {
@@ -1159,7 +1229,7 @@
         },
         "xField": "time_stamp",
         "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "xTickLabelSpacing": 100
       },
       "pluginVersion": "10.1.2",
       "targets": [
@@ -1168,9 +1238,10 @@
             "type": "postgres",
             "uid": "c9a74e16-5119-4227-82f9-765d3223da3c"
           },
-          "editorMode": "builder",
+          "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT time_stamp, power_min, power_max, power_average FROM energytransferlogs WHERE charger_type = 'AC_BASIC' LIMIT 50 ",
+          "rawQuery": true,
+          "rawSql": "SELECT time_stamp, power_min, power_max, power_average\r\nFROM energytransferlogs\r\nWHERE\r\n  charger_type = 'AC_BASIC'\r\n  AND time_stamp >= $__timeFrom()\r\n  AND time_stamp <= $__timeTo()\r\nORDER BY time_stamp ASC\r\nLIMIT 50;\r\n",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1213,6 +1284,15 @@
             ],
             "groupBy": [],
             "limit": 50,
+            "orderBy": {
+              "property": {
+                "name": [
+                  "time_stamp"
+                ],
+                "type": "string"
+              },
+              "type": "property"
+            },
             "whereJsonTree": {
               "children1": [
                 {
@@ -1242,6 +1322,16 @@
         }
       ],
       "title": "AC Charging",
+      "transformations": [
+        {
+          "id": "formatTime",
+          "options": {
+            "outputFormat": "MM/DD",
+            "timeField": "time_stamp",
+            "useTimezone": true
+          }
+        }
+      ],
       "type": "barchart"
     },
     {
@@ -1264,7 +1354,39 @@
           "mappings": [],
           "unit": "kwatth"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "total_kwh_ac_basic"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "AC"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "shades"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "total_kwh_dc_fast"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "DC Fast"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
@@ -1272,7 +1394,7 @@
         "x": 12,
         "y": 15
       },
-      "id": 6,
+      "id": 15,
       "options": {
         "displayLabels": [
           "percent",
@@ -1282,7 +1404,7 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true,
+          "showLegend": false,
           "values": [
             "percent"
           ]
@@ -1290,11 +1412,10 @@
         "pieType": "pie",
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
           "fields": "",
-          "limit": 99,
-          "values": true
+          "values": false
         },
         "tooltip": {
           "mode": "single",
@@ -1310,43 +1431,8 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\r\n  charger_type,\r\n  SUM(CASE WHEN charger_type IN ('AC_BASIC') THEN energy_consumed ELSE 0 END) AS total_kWh\r\nFROM energyTransferLogs\r\nWHERE charger_type IN ('AC_BASIC')\r\nGROUP BY charger_type;\r\n",
-          "refId": "AC",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [
-                  {
-                    "name": "charger_type",
-                    "type": "functionParameter"
-                  }
-                ],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          },
-          "table": "energytransferlogs"
-        },
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "c9a74e16-5119-4227-82f9-765d3223da3c"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "hide": false,
-          "rawQuery": true,
-          "rawSql": "SELECT\r\n  charger_type,\r\n  SUM(CASE WHEN charger_type IN ('DC_FAST') THEN energy_consumed ELSE 0 END) AS total_kWh\r\nFROM energyTransferLogs\r\nWHERE charger_type IN ('DC_FAST')\r\nGROUP BY charger_type;\r\n",
-          "refId": "DC",
+          "rawSql": "SELECT\r\n  charger_type,\r\n  SUM(CASE WHEN charger_type = 'AC_BASIC' THEN energy_consumed ELSE 0 END) AS total_kWh_AC_BASIC,\r\n  SUM(CASE WHEN charger_type = 'DC_FAST' THEN energy_consumed ELSE 0 END) AS total_kWh_DC_FAST,\r\n  time_stamp\r\nFROM energyTransferLogs\r\nWHERE charger_type IN ('AC_BASIC', 'DC_FAST')\r\nGROUP BY charger_type, time_stamp\r\n",
+          "refId": "A",
           "sql": {
             "columns": [
               {
@@ -1405,7 +1491,7 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true,
+          "showLegend": false,
           "values": []
         },
         "pieType": "pie",
@@ -1500,7 +1586,7 @@
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
-            "axisPlacement": "auto",
+            "axisPlacement": "left",
             "fillOpacity": 80,
             "gradientMode": "none",
             "hideFrom": {
@@ -1601,10 +1687,10 @@
       },
       "id": 10,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
+        "barRadius": 0.05,
+        "barWidth": 0.85,
         "fullHighlight": false,
-        "groupWidth": 0.7,
+        "groupWidth": 0.6,
         "legend": {
           "calcs": [],
           "displayMode": "list",
@@ -1612,7 +1698,7 @@
           "showLegend": true
         },
         "orientation": "auto",
-        "showValue": "auto",
+        "showValue": "always",
         "stacking": "none",
         "tooltip": {
           "mode": "single",
@@ -1620,7 +1706,7 @@
         },
         "xField": "time_stamp",
         "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "xTickLabelSpacing": 100
       },
       "pluginVersion": "10.1.2",
       "targets": [
@@ -1629,9 +1715,10 @@
             "type": "postgres",
             "uid": "c9a74e16-5119-4227-82f9-765d3223da3c"
           },
-          "editorMode": "builder",
+          "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT time_stamp, power_min, power_max, power_average FROM energytransferlogs WHERE charger_type = 'DC_FAST' LIMIT 50 ",
+          "rawQuery": true,
+          "rawSql": "SELECT time_stamp, power_min, power_max, power_average\r\nFROM energytransferlogs\r\nWHERE\r\n  charger_type = 'DC_FAST'\r\n  AND time_stamp >= $__timeFrom()\r\n  AND time_stamp <= $__timeTo()\r\nORDER BY time_stamp ASC\r\nLIMIT 50;\r\n",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1674,6 +1761,15 @@
             ],
             "groupBy": [],
             "limit": 50,
+            "orderBy": {
+              "property": {
+                "name": [
+                  "time_stamp"
+                ],
+                "type": "string"
+              },
+              "type": "property"
+            },
             "whereJsonTree": {
               "children1": [
                 {
@@ -1703,6 +1799,16 @@
         }
       ],
       "title": "DC Charging",
+      "transformations": [
+        {
+          "id": "formatTime",
+          "options": {
+            "outputFormat": "MM/DD",
+            "timeField": "time_stamp",
+            "useTimezone": true
+          }
+        }
+      ],
       "type": "barchart"
     }
   ],
@@ -1714,13 +1820,13 @@
     "list": []
   },
   "time": {
-    "from": "2023-08-10T17:08:11.000Z",
-    "to": "2023-09-20T19:38:18.000Z"
+    "from": "2023-08-10T12:21:28.000Z",
+    "to": "2023-09-27T17:43:01.000Z"
   },
   "timepicker": {},
   "timezone": "",
   "title": "LightningROD",
   "uid": "bae6ae29-88a6-40d0-bc2b-f630848bb0a7",
-  "version": 12,
+  "version": 23,
   "weekStart": ""
 }
