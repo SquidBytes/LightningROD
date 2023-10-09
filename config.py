@@ -13,19 +13,23 @@ fp_token = 'token.txt'
 # Vehicle VIN to log
 fp_vin = 'your_vin'
 
-
 # Postgresql info
 psql_host = "postgresql_host_ip"
 psql_database= "charging_logs"
 psql_user= "postgresql_username"
 psql_password= "postgresql_password"
 
+# InfluxDB info
+idb_token = "API Token"
+idb_org = "ord"
+idb_url = "ip"
+idb_bucket="lightningrod"
 
 # Cost per kWh
-home_cost = 0.104550
-work_cost = 0.00
-other_cost = 0.40
+homeCostkWh = 0.104550
+workCostkWh = 0.00
+otherCostkWh = 0.40
 
-# Can be expanded on, examples
-# ea_cost = 0.0
-# chargepoint_cost = 0.0
+## Can be expanded on, examples
+# eaCostkWh = 0.0
+# chargepointCostkWh = 0.0
