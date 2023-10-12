@@ -2,6 +2,10 @@
 Lightning Record of Docks (logs) for your F-150 Lightning!
 
 ## Currently Working On
+
+Ford has moved over to thier newe API, currently LightningROD does not work.
+
+
 Migrating from Postgresql to InfluxDB. 
  - This should make it easier for new users to setup
  - HomeAssistant talks to InfluxDB easily
