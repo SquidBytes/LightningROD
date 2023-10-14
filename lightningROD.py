@@ -1,154 +1,197 @@
-import psycopg2
+import influxdb_client
 import json
 import os
-from fordpass_new import Vehicle
-from config import fp_username, fp_password, fp_vin, fp_region, fp_token
-from config import psql_database, psql_host, psql_password, psql_user
+import glob
+import sys
+import requests
+from datetime import datetime, timedelta
 from config import idb_bucket, idb_org, idb_token, idb_url
-from config import homeCostkWh, workCostkWh, otherCostkWh
+# from config import homeCostkWh, workCostkWh, otherCostkWh
 
-def downloadChargeLog():
 
-    my_vehicle = Vehicle(fp_username, fp_password, fp_vin, fp_region, True, fp_token)
-    log_data = my_vehicle.charge_log()
+class LightningROD:
+    def __init__(self, host, token, org, bucket):
+        self.bucket = bucket
+        self.org = org
+        self.host = host
+        self.token = token
 
-    os.chdir('/root/config/custom_components/fordpass/')
+        self.client = influxdb_client.InfluxDBClient(host, token=token, org=org, bucket=bucket)
 
-    try:
-        # Load the existing JSON data if the file exists
-        with open('charge_logs.json', 'r') as file:
-            existing_data = json.load(file)
-    except FileNotFoundError:
-        # If the file doesn't exist, initialize with an empty list
-        existing_data = []
+    def readData(self, measurement, time):
+        formatted_time = datetime.strptime(time, "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        start_time = (datetime.strptime(formatted_time, "%Y-%m-%dT%H:%M:%S.%fZ") - timedelta(seconds=5)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        stop_time = (datetime.strptime(formatted_time, "%Y-%m-%dT%H:%M:%S.%fZ") + timedelta(seconds=5)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-    # Extract unique identifiers (IDs) from existing data
-    existing_ids = set(entry.get("id") for entry in existing_data)
+        query = f'from(bucket: "{self.bucket}") |> range(start: {start_time}, stop: {stop_time}) |> filter(fn: (r) => r._measurement == "{measurement}")'
 
-    # Filter the new data to keep only entries with unique IDs not in existing data
-    new_data = [entry for entry in log_data if entry.get("id") not in existing_ids]
+        results = self.client.query_api().query(org=self.org, query=query)
+        print(results)
+        data = []
+        for table in results:
+            for record in table.records:
+                data.append(record)
 
-    # Append the new data to the existing data
-    existing_data.extend(new_data)
+        return data
 
-    # Write the updated JSON data to the file
-    with open('charge_logs.json', 'w') as file:
-        json.dump(existing_data, file, indent=4)
+    def writeData(self, measurement, fields, time):
+        point = influxdb_client.Point(measurement)
+        for field, value in fields.items():
+            point.field(field, value)
+        point.time(time)
 
-def insertPsql():
-    os.chdir('/root/config/custom_components/fordpass/')
-    conn = psycopg2.connect(
-        host=psql_host,
-        database=psql_database,
-        user=psql_user,
-        password=psql_password)
+        self.client.write_api().write(bucket=self.bucket, record=[point])
 
-    # Create a cursor object to interact with the database
-    cursor = conn.cursor()
+    def checkFordPassToken():
+        fordPassDir = "/config/custom_components/fordpass"
+        existingfordToken = os.path.join(fordPassDir, "*_fordpass_token.txt")
+        userToken = glob.glob(existingfordToken)
+        
+        if userToken:
+            for userTokenMatch in userToken:
+                with open(userTokenMatch, 'r') as file:
+                    fp_token_data = json.load(file)
+                return fp_token_data
+        else:
+            print(f"Error finding FordPass token text file: {existingfordToken}, {userToken}")
+            sys.exit()
 
-    with open('charge_logs.json', 'r') as json_file:
-        data = json.load(json_file)
+    def get_autonomic_token(fp_token_data):
+        if isinstance(fp_token_data, dict):
+            fordAccessToken = fp_token_data["access_token"]
+            fordRefreshToken = fp_token_data["refresh_token"]
+        url = "https://accounts.autonomic.ai/v1/auth/oidc/token"
+        headers = {
+            "accept": "*/*",
+            "content-type": "application/x-www-form-urlencoded"
+        }
+        data = {
+            "subject_token": fordAccessToken,
+            "subject_issuer": "fordpass",
+            "client_id": "fordpass-prod",
+            "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+            "subject_token_type": "urn:ietf:params:oauth:token-type:jwt"
+        }
 
-    for item in data:
-        # Check if the ID already exists in the database
-        cursor.execute("SELECT COUNT(*) FROM energyTransferLogs WHERE id = %s", (item['id'],))
-        count = cursor.fetchone()[0]
+        try:
+            response = requests.post(url, headers=headers, data=data)
+            response.raise_for_status()
+            autonomic_token_data = response.json()
+            return autonomic_token_data
 
-        # Calculate the cost based on kWh costs from const.py
-        cost = calculateCost(item["location"]["name"], item["energyConsumed"])
+        except requests.exceptions.HTTPError as errh:
+            print(f"HTTP Error: {errh}")
+            print(f"Trying refresh token")
+            get_autonomic_token(fordRefreshToken)
+        except requests.exceptions.ConnectionError as errc:
+            print(f"Error Connecting: {errc}")
+            sys.exit()
+        except requests.exceptions.Timeout as errt:
+            print(f"Timeout Error: {errt}")
+            sys.exit()
+        except requests.exceptions.RequestException as err:
+            print(f"Something went wrong: {err}")
+            sys.exit()
 
-        # If the ID does not exist, insert the new data
-        if count == 0:
-            sql_query = """
-                INSERT INTO energyTransferLogs (
-                    id, 
-                    device_id, 
-                    charger_type, 
-                    energy_consumed, 
-                    time_stamp,
-                    target_soc,
-                    plug_in_time, 
-                    plug_out_time, 
-                    total_plugged_in_time, 
-                    plug_in_dte, 
-                    total_distance_added,
-                    power_min, 
-                    power_max, 
-                    power_average, 
-                    weighted_average,
-                    soc_first, 
-                    soc_last, 
-                    soc_difference,
-                    energy_transfer_begin, 
-                    energy_transfer_end, 
-                    total_time,
-                    location_name,
-                    city,
-                    state,
-                    country,
-                    postal_code,
-                    latitude,
-                    longitude,
-                    cost
-                ) VALUES (
-                    %s, %s, %s, %s, %s, 
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s
-                )
-            """
-            values = (
-                item['id'], 
-                item['deviceId'], 
-                item['chargerType'], 
-                item['energyConsumed'], 
-                item['timeStamp'],
-                item['targetSoc'],
-                item['plugDetails']['plugInTime'], 
-                item['plugDetails']['plugOutTime'], 
-                item['plugDetails']['totalPluggedInTime'],
-                item['plugDetails']['plugInDte'], 
-                item['plugDetails']['totalDistanceAdded'],
-                item['power']['min'], 
-                item['power']['max'], 
-                item['power']['average'], 
-                item['power']['weightedAverage'],
-                item['stateOfCharge']['firstSOC'], 
-                item['stateOfCharge']['lastSOC'], 
-                item['stateOfCharge']['socDifference'],
-                item['energyTransferDuration']['begin'], 
-                item['energyTransferDuration']['end'], 
-                item['energyTransferDuration']['totalTime'],
-                item['location']['name'],
-                item['location']['address']['city'],
-                item['location']['address']['state'],
-                item['location']['address']['country'],
-                item['location']['address']['postalCode'],
-                item['location']['latitude'],
-                item['location']['longitude'],
-                cost
-            )
+    def get_vehicle_status(vin, access_token):
+        BASE_URL = "https://api.autonomic.ai/"
+        endpoint = f"v1beta/telemetry/sources/fordpass/vehicles/{vin}:query"
+        url = f"{BASE_URL}{endpoint}"
+        headers = {
+            "Authorization": f"Bearer {access_token}",  # Replace 'your_autonom_token' with the actual Autonomic API token
+            "Content-Type": "application/json",
+            "accept": "*/*"
+        }
 
-            cursor.execute(sql_query, values)
+        try:
+            response = requests.post(url, headers=headers, json={})
+            response.raise_for_status()  # Raise HTTPError for bad requests (4xx and 5xx status codes)
 
-    # Commit and close the database connection
-    conn.commit()
-    cursor.close()
-    conn.close()
+            # Parse the JSON response
+            vehicle_status_data = response.json()
+            return vehicle_status_data
 
-def calculateCost(locationName, energyConsumed):
-    # Implement your cost calculation logic here
-    if locationName == 'Work':
-        cost = workCostkWh * energyConsumed
-    elif locationName == 'Home':
-        cost = homeCostkWh * energyConsumed
-    else:
-        cost = otherCostkWh * energyConsumed
-    return cost
+        except requests.exceptions.HTTPError as errh:
+            print(f"HTTP Error: {errh}")
+        except requests.exceptions.ConnectionError as errc:
+            print(f"Error Connecting: {errc}")
+        except requests.exceptions.Timeout as errt:
+            print(f"Timeout Error: {errt}")
+        except requests.exceptions.RequestException as err:
+            print(f"Something went wrong: {err}")
+
+    def logThis(self, status, logMe):
+        vicMetrics = status["metrics"]
+        systemOfMeasure = vicMetrics["displaySystemOfMeasure"]["value"]
+        if logMe in vicMetrics:
+            if isinstance(vicMetrics[logMe]["value"], int):
+                if "Range" or "Distance" in logMe and systemOfMeasure == "IMPERIAL":
+                    print("CONVERT")
+                    fields = self.convertMiKm(vicMetrics[logMe]["value"])
+                elif "Temp" in logMe and systemOfMeasure == "IMPERIAL":
+                    fields = self.convertCF(vicMetrics[logMe]["value"])
+                else:
+                    fields = vicMetrics[logMe]["value"]
+            else:
+                fields = vicMetrics[logMe]["value"]
+            time = vicMetrics[logMe]["updateTime"]
+            # Check if the measurement exists in InfluxDB.
+
+            existingData = self.readData(measurement=logMe, time=time)
+            if len(existingData) == 0:
+                # The measurement does not exist, so write it to InfluxDB.
+                self.writeData(logMe, fields, time)
+ 
+    def convertMiKm(self, value):
+        return round(float(value) / 1.60934)
+
+    def convertCF(self, value):
+        return round(float(value * 9/5) + 32)
+
+
+
+
 
 if __name__ == "__main__":
-    os.chdir('/root/config/custom_components/fordpass/')
-    downloadChargeLog()
-    insertPsql()
+
+    lightningLog = LightningROD(idb_url, token=idb_token, org=idb_org, bucket=idb_bucket)
+    # fp_vin = ""
+
+    # autonomic_token = get_autonomic_token(fpToken)
+    # vehicle_status = get_vehicle_status(fp_vin, autonomic_token["access_token"])
+
+    currentDir = os.path.dirname(os.path.realpath(__file__))
+    testJson = os.path.join(currentDir, 'test.json')
+    with open(testJson, "r") as testJsonData:
+        data = json.load(testJsonData)
+    current_datetime = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+    itemsToLog = {
+        "ambientTemp",
+        "outsideTemperature",
+        "tripDistanceAccumulated",
+        "odometer",
+        "speed",
+        "xevPlugChargerStatus",
+        "xevBatteryCapacity",
+        "xevBatteryMaximumRange",
+        "xevBatteryStateOfCharge",
+        "xevBatteryPerformanceStatus,",
+        "tripXevBatteryRangeRegenerated",
+        "tripXevBatteryChargeRegenerated",
+        "xevBatteryEnergyRemaining",
+        "xevBatteryChargeDisplayStatus",
+        "xevChargeStationPowerType",
+        "xevChargeStationCommunicationStatus",
+        "tripXevBatteryDistanceAccumulated",
+        "xevBatteryTemperature",
+        "xevBatteryChargerCurrentOutput",
+        "xevBatteryChargerVoltageOutput",
+        "xevBatteryActualStateOfCharge",
+        "xevBatteryIoCurrent",
+        "xevBatteryVoltage",
+        "xevTractionMotorCurrent",
+        "xevTractionMotorVoltage"
+    }
+
+    for item in itemsToLog:
+        lightningLog.logThis(data, item)
