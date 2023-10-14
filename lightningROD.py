@@ -2,8 +2,10 @@ import psycopg2
 import json
 import os
 from fordpass_new import Vehicle
-from config import fp_username, fp_password, fp_vin, fp_region, fp_token, psql_database, psql_host, psql_password, psql_user
-from config import home_cost, work_cost, other_cost, ea_cost, fpl_cost, chargepoint_cost
+from config import fp_username, fp_password, fp_vin, fp_region, fp_token
+from config import psql_database, psql_host, psql_password, psql_user
+from config import idb_bucket, idb_org, idb_token, idb_url
+from config import homeCostkWh, workCostkWh, otherCostkWh
 
 def downloadChargeLog():
 
@@ -52,15 +54,8 @@ def insertPsql():
         cursor.execute("SELECT COUNT(*) FROM energyTransferLogs WHERE id = %s", (item['id'],))
         count = cursor.fetchone()[0]
 
-        # Set the cost for Work Location
-        if item["location"]["name"] == 'Work':
-            cost = work_cost
-        # Set the cost for Home: energyConsumed * price per kWh
-        elif item["location"]["name"] == 'Home':
-            cost = item["energyConsumed"] * home_cost
-        else:
-        # Set the generic cost for other chargers. 
-            cost = item["energyConsumed"] * other_cost
+        # Calculate the cost based on kWh costs from const.py
+        cost = calculateCost(item["location"]["name"], item["energyConsumed"])
 
         # If the ID does not exist, insert the new data
         if count == 0:
@@ -143,6 +138,17 @@ def insertPsql():
     cursor.close()
     conn.close()
 
-os.chdir('/root/config/custom_components/fordpass/')
-downloadChargeLog()
-insertPsql()
+def calculateCost(locationName, energyConsumed):
+    # Implement your cost calculation logic here
+    if locationName == 'Work':
+        cost = workCostkWh * energyConsumed
+    elif locationName == 'Home':
+        cost = homeCostkWh * energyConsumed
+    else:
+        cost = otherCostkWh * energyConsumed
+    return cost
+
+if __name__ == "__main__":
+    os.chdir('/root/config/custom_components/fordpass/')
+    downloadChargeLog()
+    insertPsql()
