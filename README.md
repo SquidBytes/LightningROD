@@ -2,20 +2,9 @@
 Lightning Record of Docks (logs) for your F-150 Lightning!
 
 ## Currently Working On
-
-Ford has moved over to thier newe API, currently LightningROD does not work.
-
-
-Migrating from Postgresql to InfluxDB. 
- - This should make it easier for new users to setup
- - HomeAssistant talks to InfluxDB easily
-This would allow logs to be put into the database from HomeAssistant sensors. Which, depending on the sensors the user has, could expand the dashboard to include Trips taken or other information from various sensors.
-
+ - New Grafana dashboard since the move to InfluxDB
+ - HomeAssistant automations
  - I am also working on the `fordpass-ha` integration to implement charging sensors, and charging actions (Stop Charging, Start Charging, etc).
-This is why it makes the most sense to move to InfluxDB. This would make LightningROD mainly just be a collection of Grafana dashboards.
-However, if someone is not running HomeAssistant I will maintain the script downloading charge logs.
-
-I DO NOT recommend setting this up currently.
 
 ## Info
 TO be clear. This is nothing special or new. It is how I store, and view, my charge logs.
@@ -26,11 +15,6 @@ This was created in my spare time because I wasn't happy with FordPass Charge Lo
 
 I am using it for my F-150 Lightning, but it *should* work with other Ford EV's like the Mustang Mach-E.
 
-Currently, these scripts are piggybacking off of the `fordpass-ha` integration.
-I am using these scripts, in conjunction with HomeAssistant, to automate logging my docks (logs) into a self hosted database (postgresql).
-I am then using Grafana to make all that data pretty.
-
-These *should* be able to integrate into different setups, but its probably best to use as a template. 
 I did my best to make this as new user friendly as I know, and have the ability to.
 
 I am happy to collab with others to expand this!
@@ -49,7 +33,7 @@ I am happy to collab with others to expand this!
 ## Requirements
 My setup is as following:
 - Home Media Server running Unraid
-	- postgresql15 docker
+	- InfluxDB v2.7.3 docker
 	- Grafana docker
 	- HomeAssistan OS VM
 		- HACS integration in HomeAssistant
@@ -66,40 +50,37 @@ My setup is as following:
 
 Please check [Currently Working On](https://github.com/SquidBytes/LightningROD#currently-working-on) before installing anything
 
-- Setup and configure the `fordpass-ha` integration
-- Install `Postgresql15` (I used a docker on Unraid)
+- Install `InfluxDB v2.7.3` (I used a docker on Unraid)
 - Install `Grafana` (I used a docker on Unraid)
 
 Input your details into config.py
 ```python
+# config.py
 # Ford Pass Username
-fp_username = "your_username"
+fordpass_username = "your_username"
 # Ford Pass Password
-fp_password = "your_password"
-fp_region = "North America & Canada"
-        # "UK&Europe"
-        # "Australia"
-        # "North America & Canada"
-# Token .txt file from fordpass-ha after setup
-fp_token = 'token.txt'
+fordpass_password = "your_password"
+fordpass_region = "North America & Canada"
+        # "UK&Europe"
+        # "Australia"
+        # "North America & Canada"
 # Vehicle VIN to log
-fp_vin = 'your_vin'
+fordpass_vin = 'your_vin'
 
-# Postgresql info
-psql_host = "postgresql_host_ip"
-psql_database= "charging_logs"
-psql_user= "postgresql_username"
-psql_password= "postgresql_password"
+# InfluxDB info
+influx_token = "your_API_token"
+influx_org = "org"
+influx_url = "API Token"
+influx_bucket="lightningrod"
 
 # Cost per kWh
-home_cost = 0.104550
-work_cost = 0.00
-other_cost = 0.40
-```
+homeCostkWh = 0.104550
+workCostkWh = 0.00
+otherCostkWh = 0.40
 
-Run **create_database.py** to create the database
-```python
-python3 create_database.py
+## Can be expanded on, examples
+# eaCostkWh = 0.0
+# chargepointCostkWh = 0.0
 ```
 
 ## Install
@@ -107,65 +88,25 @@ python3 create_database.py
 Place:
 ```python
 config.py
-fordpass_new.py
+auth.py
+influx.py
 lightningROD.py
 ```
-Into the `fordpass-ha` directory:
-```/root/config/custom_components/fordpass```
-
-Yes, overwrite the existing `fordpass_new.py`
-This version contains the function I'm calling to download the charge logs.
-This might change later as ``fordpass-ha`` gets updates.
+Into the a directory of your choosing:
 
 ## Running
-From HomeAssistant open a terminal and run
+From a terminal, in your directory, run
 
 ```python
-python3 ~/config/custom_components/fordpass/lightningROD.py
+python3 lightningROD.py
 ```
-
+a `charge_logs.json` file will be created with your logs, they will also be added to InfluxDB
 ## Optional Automation
 
-Create, or update your `shellcommand.yaml`:
-```yaml
-lightningrod: "python /root/config/custom_components/fordpass/lightningrod.py"
-```
-
-Create a `charging_status` sensor
-```yaml
-{% if state_attr('sensor.fordpass_elveh', 'Charging Status') == 'ChargingAC' %}
-Charging
-{% elif state_attr('sensor.fordpass_elveh', 'Charging Status') == 'ChargeTargetReached' %}
-Charging Complete
-{% else %}
-NOT Charging
-{% endif %}
-```
-
-Create, or update, your `automations.yaml`
-This automation triggers the script to run 2 hours after the charging state changes
-```yaml
-  trigger:
-  - platform: state
-    entity_id:
-    - sensor.charging_status
-    to: NOT Charging
-    for:
-      hours: 2
-      minutes: 0
-      seconds: 0
-    from: Charging
-  condition: []
-  action:
-  - service: shell_command.lightningrod
-    data: {}
-  mode: single
-```
+Work in progress
 
 ## Grafana
-- Setup your postgresql database as a connection
-- Create any graph you want
-- I have included my [Grafana Dashbaord Here](https://github.com/SquidBytes/LightningROD/tree/main/grafana)
+Work in progress since move to InfluxDB
 
 ## Screenshot
 LightningROD Dashboard
