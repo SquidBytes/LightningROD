@@ -1,29 +1,21 @@
 # config.py
 
 # Ford Pass Username
-fp_username = "your_username"
+fordpass_username = "your_username"
 # Ford Pass Password
-fp_password = "your_password"
-fp_region = "North America & Canada"
+fordpass_password = "your_password"
+fordpass_region = "North America & Canada"
         # "UK&Europe"
         # "Australia"
         # "North America & Canada"
-# Token .txt file from fordpass-ha after setup
-fp_token = 'token.txt'
 # Vehicle VIN to log
-fp_vin = 'your_vin'
-
-# Postgresql info
-psql_host = "postgresql_host_ip"
-psql_database= "charging_logs"
-psql_user= "postgresql_username"
-psql_password= "postgresql_password"
+fordpass_vin = 'your_vin'
 
 # InfluxDB info
-idb_token = "API Token"
-idb_org = "ord"
-idb_url = "ip"
-idb_bucket="lightningrod"
+influx_token = "your_API_token"
+influx_org = "org"
+influx_url = "API Token"
+influx_bucket="lightningrod"
 
 # Cost per kWh
 homeCostkWh = 0.104550
