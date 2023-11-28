@@ -14,7 +14,7 @@ fordpass_vin = 'your_vin'
 # InfluxDB info
 influx_token = "your_API_token"
 influx_org = "org"
-influx_url = "API Token"
+influx_url = "your_InfluxDB_host_IP"
 influx_bucket="lightningrod"
 
 # Cost per kWh
