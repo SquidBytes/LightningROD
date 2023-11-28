@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import pathlib
 import random
 import re
 import string
@@ -19,6 +20,13 @@ defaultHeaders = {
     "Accept-Encoding": "gzip, deflate, br",
 }
 
+loginHeaders = {
+    "Accept": "*/*",
+    "Accept-Language": "en-us",
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
+    "Accept-Encoding": "gzip, deflate, br",
+}
+
 apiHeaders = {
     **defaultHeaders,
     "Content-Type": "application/json",
@@ -30,9 +38,22 @@ region_lookup = {
     "North America & Canada": "71A3AD0A-CF46-4CCF-B473-FC7FE5BC4592",
 }
 
+locale_lookup = {
+    "UK&Europe": "EN-GB",
+    "Australia": "EN-AU",
+    "North America & Canada": "EN-US",
+}
+
+locale_short_lookup = {
+    "UK&Europe": "GB",
+    "Australia": "AUS",
+    "North America & Canada": "USA",
+}
+
 BASE_URL = "https://usapi.cv.ford.com/api"
 GUARD_URL = "https://api.mps.ford.com/api"
 SSO_URL = "https://sso.ci.ford.com"
+FORD_LOGIN_URL = "https://login.ford.com"
 
 session = requests.Session()
 
@@ -46,6 +67,8 @@ class FordPassAuthenticator:
         self.password = password
         self.save_token = save_token
         self.region = region_lookup[region]
+        self.country_code = locale_lookup[region]
+        self.short_code = locale_short_lookup[region]
         self.region2 = region
         self.vin = vin
         self.token = None
@@ -73,118 +96,134 @@ class FordPassAuthenticator:
 
     def auth(self):
         """New Authentication System """
-        # Auth Step1
+
+        # Run Step 1 auth
+        access_tokens = self.auth2_step1()
+
+        if access_tokens is None:
+            self.errors += 1
+            if self.errors <= 10:
+                self.auth()
+            else:
+                raise Exception("Step 1 has reached error limit")
+
+        # Run Step 5 auth
+        #success = self.auth_step5(access_tokens)
+        success = self.auth2_step2(access_tokens)
+        if success is False:
+            self.errors += 1
+            if self.errors <= 10:
+                self.auth()
+            else:
+                raise Exception("Step 2 has reached error limit")
+        else:
+            self.errors = 0
+            return True
+        return False
+
+    def auth2_step1(self):
+        """Auth2 step 1 obtain tokens"""
         headers = {
-            **defaultHeaders,
-            'Content-Type': 'application/json',
+            **loginHeaders,
         }
         code1 = ''.join(random.choice(string.ascii_lowercase) for i in range(43))
         code_verifier = self.generate_hash(code1)
-        url1 = f"{SSO_URL}/v1.0/endpoint/default/authorize?redirect_uri=fordapp://userauthorized&response_type=code&scope=openid&max_age=3600&client_id=9fb503e0-715b-47e8-adfd-ad4b7770f73b&code_challenge={code_verifier}&code_challenge_method=S256"
-        response = session.get(
-            url1,
+        step1_session = requests.session()
+        step1_url = f"{FORD_LOGIN_URL}/4566605f-43a7-400a-946e-89cc9fdb0bd7/B2C_1A_SignInSignUp_{self.country_code}/oauth2/v2.0/authorize?redirect_uri=fordapp://userauthorized&response_type=code&max_age=3600&scope=%2009852200-05fd-41f6-8c21-d36d3497dc64%20openid&client_id=09852200-05fd-41f6-8c21-d36d3497dc64&code_challenge={code_verifier}&code_challenge_method=S256&ui_locales={self.country_code}&language_code={self.country_code}&country_code={self.short_code}&ford_application_id=5C80A6BB-CF0D-4A30-BDBF-FC804B5C1A98"
+
+        step1get = step1_session.get(
+            step1_url,
             headers=headers,
         )
 
-        test = re.findall('data-ibm-login-url="(.*)"\s', response.text)[0]
-        next_url = SSO_URL + test
+        step1get.raise_for_status()
 
-        # Auth Step2
-        headers = {
-            **defaultHeaders,
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        #_LOGGER.debug(step1_session.text)
+        pattern = r'var SETTINGS = (\{[^;]*\});'
+        #_LOGGER.debug(step1get.text)
+        match = re.search(pattern, step1get.text)
+        transId = None
+        csrfToken = None
+        if match:
+            settings = match.group(1)
+            settings_json = json.loads(settings)
+            transId = settings_json["transId"]
+            csrfToken = settings_json["csrf"]
         data = {
-            "operation": "verify",
-            "login-form-type": "password",
-            "username": self.username,
-            "password": self.password
-
+            "request_type": "RESPONSE",
+            "signInName": self.username,
+            "password": self.password,
         }
-        response = session.post(
-            next_url,
-            headers=headers,
-            data=data,
-            allow_redirects=False
-        )
-
-        if response.status_code == 302:
-            next_url = response.headers["Location"]
-        else:
-            response.raise_for_status()
-
-        # Auth Step3
+        urlp = f"{FORD_LOGIN_URL}/4566605f-43a7-400a-946e-89cc9fdb0bd7/B2C_1A_SignInSignUp_{self.country_code}/SelfAsserted?tx={transId}&p=B2C_1A_SignInSignUp_en-AU"
         headers = {
-            **defaultHeaders,
-            'Content-Type': 'application/json',
+            **loginHeaders,
+            "Origin": "https://login.ford.com",
+            "Referer": step1_url,
+            "X-Csrf-Token": csrfToken
         }
-
-        response = session.get(
-            next_url,
-            headers=headers,
-            allow_redirects=False
-        )
-
-        if response.status_code == 302:
-            next_url = response.headers["Location"]
-            query = requests.utils.urlparse(next_url).query
-            params = dict(x.split('=') for x in query.split('&'))
-            code = params["code"]
-            grant_id = params["grant_id"]
-        else:
-            response.raise_for_status()
-
-        # Auth Step4
-        headers = {
-            **defaultHeaders,
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
-
-        data = {
-            "client_id": "9fb503e0-715b-47e8-adfd-ad4b7770f73b",
-            "grant_type": "authorization_code",
-            "redirect_uri": 'fordapp://userauthorized',
-            "grant_id": grant_id,
-            "code": code,
-            "code_verifier": code1
-        }
-
-        response = session.post(
-            f"{SSO_URL}/oidc/endpoint/default/token",
+        step1post = step1_session.post(
+            urlp,
             headers=headers,
             data=data
-
         )
+        step1post.raise_for_status()
+        cookie_dict = step1_session.cookies.get_dict()
 
-        if response.status_code == 200:
-            result = response.json()
-            if result["access_token"]:
-                access_token = result["access_token"]
+
+        step1pt2 = step1_session.get(
+            f"{FORD_LOGIN_URL}/4566605f-43a7-400a-946e-89cc9fdb0bd7/B2C_1A_SignInSignUp_{self.country_code}/api/CombinedSigninAndSignup/confirmed?rememberMe=false&csrf_token={csrfToken}",
+            headers=headers,
+            allow_redirects=False,
+        )
+        step1pt2.raise_for_status()
+
+        test = step1pt2.headers["Location"]
+
+        code_new = test.replace("fordapp://userauthorized/?code=","")
+
+        data = {
+            "client_id" : "09852200-05fd-41f6-8c21-d36d3497dc64",
+            "grant_type": "authorization_code",
+            "code_verifier": code1,
+            "code": code_new,
+            "redirect_uri": "fordapp://userauthorized"
+
+        }
+
+        step1pt3 = step1_session.post(
+            f"{FORD_LOGIN_URL}/4566605f-43a7-400a-946e-89cc9fdb0bd7/B2C_1A_SignInSignUp_{self.country_code}/oauth2/v2.0/token",
+            headers=headers,
+            data=data
+        )
+        step1pt3.raise_for_status()
+
+        tokens = step1pt3.json()
+        if tokens:
+            if self.auth2_step2(tokens):
+                return tokens
         else:
-            response.raise_for_status()
+            print('wrong')
 
-        # Auth Step5
-        data = {"ciToken": access_token}
+    def auth2_step2(self, result):
+
+        data = {"idpToken": result["access_token"]}
         headers = {**apiHeaders, "Application-Id": self.region}
         response = session.post(
-            f"{GUARD_URL}/token/v2/cat-with-ci-access-token",
+            f"{GUARD_URL}/token/v2/cat-with-b2c-access-token",
             data=json.dumps(data),
             headers=headers,
         )
-
-        if response.status_code == 200:
-            result = response.json()
-
-            self.token = result["access_token"]
-            self.refresh_token = result["refresh_token"]
-            self.expires_at = time.time() + result["expires_in"]
-            if self.save_token:
-                result["expiry_date"] = time.time() + result["expires_in"]
-                self.write_token(result)
-            session.cookies.clear()
-            return True
         response.raise_for_status()
-        return False
+        result = response.json()
+        self.token = result["access_token"]
+        self.refresh_token = result["refresh_token"]
+        self.expires_at = time.time() + result["expires_in"]
+        if self.save_token:
+            result["expiry_date"] = time.time() + result["expires_in"]
+
+            self.write_token(result)
+        session.cookies.clear()
+        return True
 
     def refresh_token_func(self, token):
         """Refresh token if still valid"""
@@ -231,7 +270,7 @@ class FordPassAuthenticator:
                 # self.auth()
         if self.token is None:
             # No existing token exists so refreshing library
-            self.auth()
+            self.auth2_step1()
 
     def write_token(self, token):
         """Save token to file for reuse"""
@@ -250,43 +289,6 @@ class FordPassAuthenticator:
             with open(self.token_location, encoding="utf-8") as token_file:
                 token = json.load(token_file)
                 return token
-
-
-    def vehicles(self):
-        """Get vehicle list from account"""
-        self.__acquire_token()
-
-        if self.region2 == "Australia":
-            countryheader = "AUS"
-        elif self.region2 == "North America & Canada":
-            countryheader = "USA"
-        elif self.region2 == "UK&Europe":
-            countryheader = "GBR"
-        else:
-            countryheader = "USA"
-        headers = {
-            **apiHeaders,
-            "Auth-Token": self.token,
-            "Application-Id": self.region,
-            "Countrycode": countryheader,
-            "Locale": "EN-US"
-        }
-
-        data = {
-            "dashboardRefreshRequest": "All"
-        }
-        response = session.post(
-            f"{GUARD_URL}/expdashboard/v1/details/",
-            headers=headers,
-            data=json.dumps(data)
-        )
-        if response.status_code == 207:
-            result = response.json()
-
-            return result
-        response.raise_for_status()
-        return None
-
 
     def charge_log(self):
         """Get Charge logs from account"""
@@ -311,9 +313,16 @@ class FordPassAuthenticator:
     
 
 class FordPassChargeLogsDownloader:
-    def __init__(self, vehicle, save_token=False):
+    def __init__(self, vehicle, log_location="", save_token=False):
         self.vehicle = vehicle
         self.save_token = save_token
+        if log_location == "":
+            lightningRDir = pathlib.Path(__file__).parent.resolve()
+            lightningRLogs = os.path.join(lightningRDir, "charge_logs.json")
+            self.log_location = lightningRLogs
+        else:
+            self.log_location = log_location
+            
 
     def download_charge_logs(self):
         my_vehicle = self.vehicle
@@ -321,7 +330,7 @@ class FordPassChargeLogsDownloader:
 
         try:
             # Load the existing JSON data if the file exists
-            with open("charge_logs.json", "r") as file:
+            with open(self.log_location, "r") as file:
                 existing_data = json.load(file)
         except FileNotFoundError:
             # If the file doesn't exist, initialize with an empty list
@@ -337,6 +346,6 @@ class FordPassChargeLogsDownloader:
         existing_data.extend(new_data)
 
         # Write the updated JSON data to the file
-        with open("charge_logs.json", "w") as file:
+        with open(self.log_location, "w") as file:
             json.dump(existing_data, file, indent=4)
 
