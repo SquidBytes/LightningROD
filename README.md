@@ -1,7 +1,16 @@
 # LightningROD (Record of Docks)
 Lightning Record of Docks (logs) for your F-150 Lightning!
 
-## Currently Working On
+> [!IMPORTANT]
+> # THIS IS CURRENTLY NOT WORKING
+> I have been busy with other things and haven't had any time to work on this.
+> I've also been working on the `fordpass-ha` repo.
+> Ford has also release their FordConnect API.
+> Hopefully I'll be able to get this back into a working state sometime.
+> 
+
+
+<!-- ## Currently Working On
  - New Grafana dashboard since the move to InfluxDB
  - HomeAssistant automations
  - I am also working on the `fordpass-ha` integration to implement charging sensors, and charging actions (Stop Charging, Start Charging, etc).
@@ -110,7 +119,7 @@ Work in progress since move to InfluxDB
 
 ## Screenshot
 LightningROD Dashboard
-![Alt text](/assets/LightningROD.png?raw=true "LightningROD Dashboard")
+![Alt text](/assets/LightningROD.png?raw=true "LightningROD Dashboard") -->
 
 
 ## Disclaimer
