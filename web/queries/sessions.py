@@ -8,6 +8,15 @@ from db.models.charging_session import EVChargingSession
 
 PAGE_SIZE = 25
 
+SORTABLE_COLUMNS = {
+    "date": EVChargingSession.session_start_utc,
+    "energy": EVChargingSession.energy_kwh,
+    "cost": EVChargingSession.cost,
+    "location": EVChargingSession.location_name,
+    "charge_type": EVChargingSession.charge_type,
+    "duration": EVChargingSession.charge_duration_seconds,
+}
+
 
 async def get_most_recent_location(db: AsyncSession) -> Optional[str]:
     """Return the location_name of the most recent session, or None."""
@@ -29,6 +38,8 @@ async def query_sessions(
     date_to: Optional[str] = None,
     charge_type: Optional[str] = None,
     location_type: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_dir: Optional[str] = None,
 ) -> tuple[list[EVChargingSession], int, dict]:
     """Query charging sessions with optional filters and pagination.
 
@@ -37,10 +48,15 @@ async def query_sessions(
     """
     now = datetime.now(timezone.utc)
 
-    # Base statement ordered by session_start_utc DESC
-    stmt = select(EVChargingSession).order_by(
-        EVChargingSession.session_start_utc.desc()
-    )
+    # Determine sort column and direction
+    sort_col = SORTABLE_COLUMNS.get(sort_by) if sort_by else None
+    if sort_col is not None:
+        order_expr = sort_col.asc() if sort_dir == "asc" else sort_col.desc()
+    else:
+        order_expr = EVChargingSession.session_start_utc.desc()
+
+    # Base statement with resolved order
+    stmt = select(EVChargingSession).order_by(order_expr)
 
     # Accumulate filter clauses
     filters = []

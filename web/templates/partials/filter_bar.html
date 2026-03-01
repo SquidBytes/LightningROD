@@ -1,0 +1,40 @@
+<form id="filter-form">
+  <div
+    hx-get="{{ filter_url }}"
+    hx-include="#filter-form"
+    hx-target="{{ filter_target }}"
+    hx-push-url="true"
+    hx-trigger="filterChanged from:body"
+    class="bg-gray-900/50 border border-gray-800 rounded-lg px-3 py-2 mb-4 flex flex-wrap gap-3 items-center"
+  >
+    <input type="hidden" id="date_preset_input" name="{{ date_param_name|default('date_preset') }}" value="{{ active_preset or '' }}">
+
+    <!-- Date presets: compact pill buttons -->
+    <div class="flex rounded-md overflow-hidden border border-gray-700">
+      {% set presets = [("7d", "7d"), ("30d", "30d"), ("90d", "90d"), ("ytd", "YTD"), ("1y", "1y"), ("all", "All")] %}
+      {% for value, label in presets %}
+      <button type="button"
+        onclick="setFilter('date_preset_input', '{{ value }}'); document.querySelector('[name=date_from]') && (document.querySelector('[name=date_from]').value=''); document.querySelector('[name=date_to]') && (document.querySelector('[name=date_to]').value=''); htmx.trigger(document.body, 'filterChanged')"
+        class="px-2.5 py-1 text-xs font-medium transition-colors {% if active_preset == value or (not active_preset and value == 'all') %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200{% endif %}"
+      >{{ label }}</button>
+      {% endfor %}
+    </div>
+
+    <!-- Custom date range -->
+    <div class="flex items-center gap-1.5">
+      <span class="text-gray-500 text-xs">From</span>
+      <input type="date" name="date_from" value="{{ date_from or '' }}"
+        onchange="document.getElementById('date_preset_input').value = ''; htmx.trigger(document.body, 'filterChanged')"
+        class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 w-28">
+      <span class="text-gray-500 text-xs">To</span>
+      <input type="date" name="date_to" value="{{ date_to or '' }}"
+        onchange="document.getElementById('date_preset_input').value = ''; htmx.trigger(document.body, 'filterChanged')"
+        class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 w-28">
+    </div>
+  </div>
+</form>
+<script>
+function setFilter(inputId, value) {
+  document.getElementById(inputId).value = value;
+}
+</script>
