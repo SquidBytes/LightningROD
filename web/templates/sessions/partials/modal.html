@@ -9,7 +9,14 @@
                     {% if modal_mode == 'add' %}New Session{% else %}Edit Session{% endif %}
                 </h2>
                 {% if modal_mode == 'edit' and session and session.session_start_utc %}
-                    <p class="text-gray-400 text-sm mt-0.5">{{ session.session_start_utc.strftime("%B %-d, %Y") }}{% if session.location_name %} &mdash; {{ session.location_name }}{% endif %}</p>
+                    <p class="text-gray-400 text-sm mt-0.5 flex items-center gap-1.5">
+                        {{ session.session_start_utc.strftime("%B %-d, %Y") }}
+                        {% if session.location_name %}
+                            &mdash;
+                            <span class="w-2 h-2 rounded-full inline-block flex-shrink-0" style="background-color: {{ network_color|default('#6B7280') }}"></span>
+                            {{ session.location_name }}
+                        {% endif %}
+                    </p>
                 {% endif %}
             </div>
             <button type="button" onclick="closeSessionModal()" class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800">

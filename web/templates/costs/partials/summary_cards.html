@@ -23,13 +23,17 @@
 </p>
 {% endif %}
 
-<!-- Network breakdown -->
+<!-- Network breakdown with color badges -->
 {% if summary.by_network %}
 <h2 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Cost by Network</h2>
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
     {% for net in summary.by_network %}
+    {% set net_color = network_colors.get(net.network, '#6B7280') if network_colors else '#6B7280' %}
     <div class="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4">
-        <p class="text-sm font-medium text-gray-200 mb-2 truncate">{{ net.network }}</p>
+        <div class="flex items-center gap-2 mb-2">
+            <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ net_color }}"></span>
+            <p class="text-sm font-medium text-gray-200 truncate">{{ net.network }}</p>
+        </div>
         <p class="text-xl font-bold text-white">${{ "%.2f"|format(net.total_cost) }}</p>
         <p class="text-xs text-gray-500 mt-1">{{ net.session_count }} sessions</p>
         <p class="text-xs text-gray-500">{{ "%.1f"|format(net.total_kwh) }} kWh</p>

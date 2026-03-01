@@ -213,15 +213,23 @@ async def query_monthly_costs(db: AsyncSession, time_range: str = "all") -> list
     ]
 
 
-def build_network_cost_chart(by_network: list[dict]) -> str:
-    """Build a Plotly bar chart of cost by network, returning HTML div string."""
+def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, str] = None) -> str:
+    """Build a Plotly bar chart of cost by network, returning HTML div string.
+
+    Args:
+        by_network: List of dicts with keys: network, total_cost, session_count, total_kwh.
+        network_colors: Optional dict mapping network name to hex color string.
+    """
     if not by_network:
         return ""
 
     pio.templates.default = "plotly_dark"
 
     df = pd.DataFrame(by_network)
-    fig = px.bar(df, x="network", y="total_cost", color="network")
+    kwargs = dict(x="network", y="total_cost", color="network")
+    if network_colors:
+        kwargs["color_discrete_map"] = network_colors
+    fig = px.bar(df, **kwargs)
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -232,15 +240,23 @@ def build_network_cost_chart(by_network: list[dict]) -> str:
     return fig.to_html(full_html=False, include_plotlyjs=False)
 
 
-def build_monthly_cost_chart(monthly_data: list[dict]) -> str:
-    """Build a Plotly stacked bar chart of cost by month and network."""
+def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str, str] = None) -> str:
+    """Build a Plotly stacked bar chart of cost by month and network.
+
+    Args:
+        monthly_data: List of dicts with keys: month, network, cost.
+        network_colors: Optional dict mapping network name to hex color string.
+    """
     if not monthly_data:
         return ""
 
     pio.templates.default = "plotly_dark"
 
     df = pd.DataFrame(monthly_data)
-    fig = px.bar(df, x="month", y="cost", color="network", barmode="stack")
+    kwargs = dict(x="month", y="cost", color="network", barmode="stack")
+    if network_colors:
+        kwargs["color_discrete_map"] = network_colors
+    fig = px.bar(df, **kwargs)
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",

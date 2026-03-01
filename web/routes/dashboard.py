@@ -36,12 +36,14 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     cost_summary = await query_cost_summary(db)
     monthly = await query_monthly_costs(db)
 
-    # Build monthly cost trend chart
-    monthly_cost_chart = build_monthly_cost_chart(monthly)
+    # Build network colors map for consistent chart coloring
+    networks = await get_all_networks(db)
+    network_colors = {n.network_name: (n.color or '#6B7280') for n in networks}
+
+    # Build monthly cost trend chart with network colors
+    monthly_cost_chart = build_monthly_cost_chart(monthly, network_colors=network_colors)
 
     # Build energy-by-network donut chart with network colors
-    networks = await get_all_networks(db)
-    network_colors = {n.network_name: n.color for n in networks if n.color}
     energy_by_network_chart = build_energy_by_network_chart(
         cost_summary["by_network"],
         network_colors=network_colors,

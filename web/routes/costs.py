@@ -28,8 +28,13 @@ async def costs(
 ):
     summary = await query_cost_summary(db, time_range=range or "all")
     monthly = await query_monthly_costs(db, time_range=range or "all")
-    network_chart = build_network_cost_chart(summary["by_network"])
-    monthly_chart = build_monthly_cost_chart(monthly)
+
+    # Build network colors map for consistent chart coloring
+    all_networks = await get_all_networks(db)
+    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
+
+    network_chart = build_network_cost_chart(summary["by_network"], network_colors=network_colors)
+    monthly_chart = build_monthly_cost_chart(monthly, network_colors=network_colors)
 
     # Load comparison settings
     toggle_keys = ["comparison_section_visible", "comparison_gas_enabled", "comparison_network_enabled"]
@@ -44,7 +49,7 @@ async def costs(
         if toggles.get("comparison_gas_enabled", "true") != "false":
             gas_comparison = await query_gas_comparison(db, time_range=range or "all")
 
-        networks = await get_all_networks(db)
+        networks = all_networks
         if toggles.get("comparison_network_enabled", "true") != "false":
             ref_rate_param = request.query_params.get("ref_rate")
             if ref_rate_param:
@@ -66,6 +71,7 @@ async def costs(
         "network_comparison": network_comparison,
         "networks": networks,
         "toggles": toggles,
+        "network_colors": network_colors,
     }
 
     if hx_request:

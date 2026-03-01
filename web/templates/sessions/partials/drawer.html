@@ -268,7 +268,10 @@
                     <!-- Read mode -->
                     <span data-read-field>
                         {% if session.location_name %}
-                            {{ session.location_name }}
+                            <span class="inline-flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ network_color|default('#6B7280') }}"></span>
+                                {{ session.location_name }}
+                            </span>
                         {% else %}
                             <span class="text-gray-500">—</span>
                         {% endif %}
