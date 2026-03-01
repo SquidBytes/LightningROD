@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from db.engine import engine
-from web.routes import dashboard, sessions, costs, energy, settings
+from web.routes import csv_import, dashboard, sessions, costs, energy, settings
 
 
 @asynccontextmanager
@@ -23,6 +23,7 @@ def create_app() -> FastAPI:
     app.include_router(costs.router)
     app.include_router(energy.router)
     app.include_router(settings.router)
+    app.include_router(csv_import.router)
     return app
 
 
