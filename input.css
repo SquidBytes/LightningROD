@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  /* LightningROD brand palette */
+  --color-brand-darkest: #081534;    /* Maastricht Blue */
+  --color-brand-dark: #133A7C;       /* Dark Cerulean */
+  --color-brand-mid: #2A6BAC;        /* Lapis Lazuli */
+  --color-brand-accent: #47A8E5;     /* Picton Blue / Lightning Blue */
+  --color-brand-silver: #C6C6C6;     /* Silver Sand */
+
+  --color-accent: #47A8E5;
+}
+
+/* HTMX loading state for sessions table region */
+#sessions-table-region.htmx-request { opacity: 0.4; }
+#sessions-table-region { transition: opacity 0.15s ease; }
+
+/* HTMX loading state for costs content region */
+#costs-content.htmx-request { opacity: 0.4; }
+#costs-content { transition: opacity 0.15s ease; }
+
+/* HTMX loading state for energy content region */
+#energy-content.htmx-request { opacity: 0.4; }
+#energy-content { transition: opacity 0.15s ease; }

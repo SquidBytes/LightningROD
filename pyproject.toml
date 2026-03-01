@@ -1,0 +1,28 @@
+[project]
+name = "lightningrod"
+version = "0.1.0"
+description = "Self-hosted charging analytics for Ford electric vehicles"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
+    "fastapi[standard]>=0.134.0",
+    "jinja2>=3.1.6",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.1",
+    "python-dotenv>=1.2.1",
+    "python-multipart>=0.0.22",
+    "sqlalchemy[asyncio]>=2.0.47",
+    "uvicorn[standard]>=0.41.0",
+    "plotly>=6.0.0",
+    "pandas>=2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.15.4",
+]

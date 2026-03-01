@@ -1,0 +1,31 @@
+{% if saved %}
+<div class="text-green-400 text-sm mb-3">Unit preference saved.</div>
+{% endif %}
+
+<form hx-post="/settings/units" hx-target="#unit-settings" hx-swap="innerHTML"
+      class="space-y-3">
+    <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-800/50 transition-colors">
+        <input type="radio" name="efficiency_unit" value="us"
+               {% if not settings.efficiency_unit or settings.efficiency_unit == 'us' %}checked{% endif %}
+               class="text-blue-500 focus:ring-blue-500 bg-gray-800 border-gray-600">
+        <div>
+            <span class="text-gray-200 text-sm font-medium">US Units</span>
+            <span class="text-gray-500 text-sm ml-2">mi/kWh (miles per kilowatt-hour)</span>
+        </div>
+    </label>
+    <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-800/50 transition-colors">
+        <input type="radio" name="efficiency_unit" value="eu"
+               {% if settings.efficiency_unit == 'eu' %}checked{% endif %}
+               class="text-blue-500 focus:ring-blue-500 bg-gray-800 border-gray-600">
+        <div>
+            <span class="text-gray-200 text-sm font-medium">EU Units</span>
+            <span class="text-gray-500 text-sm ml-2">km/kWh (kilometers per kilowatt-hour)</span>
+        </div>
+    </label>
+    <div class="pt-1">
+        <button type="submit"
+                class="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors">
+            Save
+        </button>
+    </div>
+</form>

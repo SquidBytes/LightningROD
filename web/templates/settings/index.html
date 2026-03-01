@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-100">Settings</h1>
+    <p class="text-gray-400 mt-1">Configure charging networks and comparison options.</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- Left column: Charging Networks -->
+    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
+        <h2 class="text-lg font-semibold text-gray-100 mb-1">Charging Networks</h2>
+        <p class="text-gray-400 text-sm mb-4">Set the $/kWh cost for each charging network. Costs are used to calculate session expenses.</p>
+        <div id="networks-table">
+            {% include "settings/partials/networks_table.html" %}
+        </div>
+    </div>
+
+    <!-- Right column: Comparison Settings -->
+    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
+        <h2 class="text-lg font-semibold text-gray-100 mb-1">Comparison Settings</h2>
+        <div id="gas-settings">
+            {% include "settings/partials/gas_settings.html" %}
+        </div>
+    </div>
+
+</div>
+
+<!-- Unit Preferences -->
+<div class="mt-6 bg-gray-900 rounded-xl border border-gray-800 p-6 max-w-lg">
+    <h2 class="text-lg font-semibold text-gray-100 mb-1">Unit Preferences</h2>
+    <p class="text-gray-400 text-sm mb-4">Choose how efficiency values display on the energy dashboard.</p>
+    <div id="unit-settings">
+        {% include "settings/partials/unit_settings.html" %}
+    </div>
+</div>
+{% endblock %}

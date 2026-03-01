@@ -1,0 +1,89 @@
+/* Ford brand colors
+ *
+ * Maastricht Blue   #081534
+ * Dark Cerulean     #133A7C
+ * Lapis Lazuli      #2A6BAC
+ * Picton Blue       #47A8E5  (Lightning Blue - primary accent)
+ * Silver Sand       #C6C6C6
+ */
+
+:root > * {
+  --md-primary-fg-color:        #133A7C;
+  --md-primary-fg-color--light: #2A6BAC;
+  --md-primary-fg-color--dark:  #081534;
+  --md-accent-fg-color:         #47A8E5;
+  --md-accent-fg-color--transparent: rgba(71, 168, 229, 0.1);
+}
+
+/* Slate (dark mode) overrides */
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color:        #0d1b2a;
+  --md-default-bg-color--light: #0f2035;
+  --md-default-bg-color--lighter: #132940;
+  --md-default-fg-color:        rgba(255, 255, 255, 0.87);
+  --md-default-fg-color--light: rgba(255, 255, 255, 0.54);
+  --md-default-fg-color--lighter: rgba(255, 255, 255, 0.32);
+  --md-primary-fg-color:        #133A7C;
+  --md-primary-fg-color--light: #2A6BAC;
+  --md-primary-fg-color--dark:  #081534;
+  --md-accent-fg-color:         #47A8E5;
+  --md-typeset-a-color:         #47A8E5;
+  --md-code-bg-color:           #0a1628;
+  --md-code-fg-color:           #c6c6c6;
+  --md-footer-bg-color:         #081534;
+  --md-footer-bg-color--dark:   #060f24;
+}
+
+/* Header bar */
+.md-header {
+  background-color: #081534;
+}
+
+/* Navigation tabs */
+.md-tabs {
+  background-color: #0a1a38;
+}
+
+/* Code blocks */
+[data-md-color-scheme="slate"] .highlight code,
+[data-md-color-scheme="slate"] .highlighttable code {
+  background-color: #0a1628;
+}
+
+/* Admonition accent colors using brand palette */
+.md-typeset .admonition.note,
+.md-typeset details.note {
+  border-color: #47A8E5;
+}
+
+.md-typeset .note > .admonition-title,
+.md-typeset .note > summary {
+  background-color: rgba(71, 168, 229, 0.1);
+}
+
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-color: #2A6BAC;
+}
+
+.md-typeset .tip > .admonition-title,
+.md-typeset .tip > summary {
+  background-color: rgba(42, 107, 172, 0.1);
+}
+
+/* Inline code */
+[data-md-color-scheme="slate"] .md-typeset code {
+  background-color: rgba(10, 22, 40, 0.7);
+  color: #c6c6c6;
+}
+
+/* Content tabs active indicator */
+.md-typeset .tabbed-labels > label.tabbed-label--active {
+  color: #47A8E5;
+  border-color: #47A8E5;
+}
+
+/* Scrollbar in code blocks */
+[data-md-color-scheme="slate"] .md-typeset pre::-webkit-scrollbar-thumb {
+  background-color: #2A6BAC;
+}
