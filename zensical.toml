@@ -2,7 +2,7 @@
 site_name = "LightningROD"
 site_description = "Self-hosted charging analytics for Ford electric vehicles"
 site_author = "SquidBytes"
-# site_url = "https://yourusername.github.io/LightningROD/"
+site_url = "https://SquidBytes.github.io/LightningROD/"
 extra_css = ["stylesheets/extra.css"]
 
 nav = [
