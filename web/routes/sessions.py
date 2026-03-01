@@ -31,6 +31,8 @@ async def sessions(
     date_to: Optional[str] = None,
     charge_type: Optional[str] = None,
     location_type: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_dir: Optional[str] = None,
     hx_request: Annotated[Optional[str], Header()] = None,
 ):
     session_list, total, summary = await query_sessions(
@@ -41,6 +43,8 @@ async def sessions(
         date_to=date_to,
         charge_type=charge_type,
         location_type=location_type,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
 
     total_pages = max(math.ceil(total / 25), 1)
@@ -64,6 +68,10 @@ async def sessions(
         filter_params["charge_type"] = charge_type
     if location_type:
         filter_params["location_type"] = location_type
+    if sort_by:
+        filter_params["sort_by"] = sort_by
+    if sort_dir:
+        filter_params["sort_dir"] = sort_dir
 
     context = {
         "sessions": enriched_sessions,
@@ -76,6 +84,8 @@ async def sessions(
         "date_to": date_to,
         "charge_type": charge_type,
         "location_type": location_type,
+        "sort_by": sort_by,
+        "sort_dir": sort_dir,
         "filter_params": filter_params,
         "active_page": "sessions",
         "page_title": "Sessions",
