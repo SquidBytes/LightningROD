@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,9 +30,11 @@ SETTINGS_KEYS = [
 async def settings_index(
     request: Request,
     db: AsyncSession = Depends(get_db),
+    tab: Optional[str] = Query(None),
 ):
     networks = await get_all_networks(db)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
+    active_tab = "import" if tab == "import" else "general"
     return templates.TemplateResponse(
         request,
         "settings/index.html",
@@ -41,6 +43,7 @@ async def settings_index(
             "settings": settings,
             "active_page": "settings",
             "page_title": "Settings",
+            "active_tab": active_tab,
         },
     )
 
