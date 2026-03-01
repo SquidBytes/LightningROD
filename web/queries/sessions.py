@@ -9,6 +9,18 @@ from db.models.charging_session import EVChargingSession
 PAGE_SIZE = 25
 
 
+async def get_most_recent_location(db: AsyncSession) -> Optional[str]:
+    """Return the location_name of the most recent session, or None."""
+    stmt = (
+        select(EVChargingSession.location_name)
+        .where(EVChargingSession.location_name.isnot(None))
+        .order_by(EVChargingSession.session_start_utc.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def query_sessions(
     db: AsyncSession,
     page: int = 1,
