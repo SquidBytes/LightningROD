@@ -1,0 +1,274 @@
+<!-- Advanced edit modal for session CRUD -->
+<div class="fixed inset-0 bg-black/60 z-50 flex items-start justify-center pt-8 pb-8 overflow-y-auto" onclick="if(event.target === this) closeSessionModal()">
+    <div class="bg-gray-900 rounded-xl border border-gray-800 shadow-2xl w-full max-w-2xl mx-4 flex flex-col" onclick="event.stopPropagation()">
+
+        <!-- Modal header -->
+        <div class="flex items-center justify-between p-5 border-b border-gray-800 shrink-0">
+            <div>
+                <h2 class="text-white font-semibold text-lg">
+                    {% if modal_mode == 'add' %}New Session{% else %}Edit Session{% endif %}
+                </h2>
+                {% if modal_mode == 'edit' and session and session.session_start_utc %}
+                    <p class="text-gray-400 text-sm mt-0.5">{{ session.session_start_utc.strftime("%B %-d, %Y") }}{% if session.location_name %} &mdash; {{ session.location_name }}{% endif %}</p>
+                {% endif %}
+            </div>
+            <button type="button" onclick="closeSessionModal()" class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Modal body: sidebar + content -->
+        <form id="modal-form" class="flex flex-1 min-h-0">
+
+            <!-- Left sidebar: vertical pill tabs -->
+            <nav class="w-44 shrink-0 border-r border-gray-800 p-4 space-y-1">
+                <button type="button" onclick="switchModalTab('session')" data-modal-tab="session"
+                    class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors modal-tab-btn bg-blue-600 text-white">
+                    Session
+                </button>
+                <button type="button" onclick="switchModalTab('charging')" data-modal-tab="charging"
+                    class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors modal-tab-btn text-gray-400 hover:bg-gray-800 hover:text-gray-200">
+                    Charging
+                </button>
+                <button type="button" onclick="switchModalTab('cost')" data-modal-tab="cost"
+                    class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors modal-tab-btn text-gray-400 hover:bg-gray-800 hover:text-gray-200">
+                    Cost
+                </button>
+                <button type="button" onclick="switchModalTab('notes')" data-modal-tab="notes"
+                    class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors modal-tab-btn text-gray-400 hover:bg-gray-800 hover:text-gray-200">
+                    Notes
+                </button>
+            </nav>
+
+            <!-- Right content area: tab panels -->
+            <div class="flex-1 flex flex-col min-h-0">
+                <div class="flex-1 p-5 overflow-y-auto space-y-4">
+
+                    <!-- Session tab panel -->
+                    <div data-modal-panel="session">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Date</label>
+                                <input
+                                    type="date"
+                                    name="session_date"
+                                    value="{% if modal_mode == 'edit' and session and session.session_start_utc %}{{ session.session_start_utc.strftime('%Y-%m-%d') }}{% elif default_date %}{{ default_date }}{% endif %}"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Time (UTC)</label>
+                                <input
+                                    type="time"
+                                    name="session_time"
+                                    value="{% if modal_mode == 'edit' and session and session.session_start_utc %}{{ session.session_start_utc.strftime('%H:%M') }}{% endif %}"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Charge Duration (minutes)</label>
+                                <input
+                                    type="number"
+                                    name="charge_duration_minutes"
+                                    step="1"
+                                    min="0"
+                                    value="{% if modal_mode == 'edit' and session and session.charge_duration_seconds is not none %}{{ (session.charge_duration_seconds / 60)|int }}{% endif %}"
+                                    placeholder="e.g., 45"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Location Name</label>
+                                <input
+                                    type="text"
+                                    name="location_name"
+                                    value="{% if modal_mode == 'edit' and session %}{{ session.location_name or '' }}{% elif default_location %}{{ default_location.location_name or '' }}{% endif %}"
+                                    placeholder="e.g., Home, EA Station"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Location Type</label>
+                                <select name="location_type" class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full">
+                                    <option value="">—</option>
+                                    <option value="home" {% if modal_mode == 'edit' and session and session.location_type == 'home' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'home' %}selected{% endif %}>Home</option>
+                                    <option value="work" {% if modal_mode == 'edit' and session and session.location_type == 'work' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'work' %}selected{% endif %}>Work</option>
+                                    <option value="public" {% if modal_mode == 'edit' and session and session.location_type == 'public' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'public' %}selected{% endif %}>Public</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charging tab panel -->
+                    <div data-modal-panel="charging" class="hidden">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Energy (kWh)</label>
+                                <input
+                                    type="number"
+                                    name="energy_kwh"
+                                    step="0.01"
+                                    min="0"
+                                    value="{% if modal_mode == 'edit' and session and session.energy_kwh is not none %}{{ '%.2f'|format(session.energy_kwh) }}{% endif %}"
+                                    placeholder="e.g., 25.5"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Charge Type</label>
+                                <select name="charge_type" class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full">
+                                    <option value="">—</option>
+                                    <option value="AC" {% if modal_mode == 'edit' and session and session.charge_type == 'AC' %}selected{% endif %}>AC</option>
+                                    <option value="DC" {% if modal_mode == 'edit' and session and session.charge_type == 'DC' %}selected{% endif %}>DC</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Network</label>
+                                <input
+                                    type="text"
+                                    name="network"
+                                    list="network-datalist"
+                                    placeholder="e.g., Electrify America, ChargePoint"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                >
+                                <datalist id="network-datalist">
+                                    <option value="Electrify America">
+                                    <option value="ChargePoint">
+                                    <option value="EVgo">
+                                    <option value="Tesla Supercharger">
+                                    <option value="Blink">
+                                    <option value="Ford BlueOval">
+                                </datalist>
+                            </div>
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Connector Type</label>
+                                <input
+                                    type="text"
+                                    name="connector_type"
+                                    placeholder="e.g., CCS, CHAdeMO, J1772"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                >
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cost tab panel -->
+                    <div data-modal-panel="cost" class="hidden">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Cost ($)</label>
+                                <input
+                                    type="number"
+                                    name="cost"
+                                    step="0.01"
+                                    min="0"
+                                    value="{% if modal_mode == 'edit' and session and session.cost is not none %}{{ '%.2f'|format(session.cost) }}{% endif %}"
+                                    placeholder="0.00"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                    id="modal-cost-input"
+                                >
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <input
+                                    type="checkbox"
+                                    name="is_free"
+                                    id="modal-is-free"
+                                    value="1"
+                                    {% if modal_mode == 'edit' and session and session.is_free %}checked{% endif %}
+                                    class="rounded border-gray-700 bg-gray-800 text-blue-600"
+                                    onchange="if(this.checked) { document.getElementById('modal-cost-input').value = '0.00'; }"
+                                >
+                                <label for="modal-is-free" class="text-sm text-gray-300">Free charging session</label>
+                            </div>
+                            {% if modal_mode == 'edit' and cost_info %}
+                                <div class="bg-gray-800/50 rounded-lg p-3 text-sm">
+                                    <p class="text-gray-500 text-xs uppercase tracking-wide mb-2">Current Cost Info</p>
+                                    {% if cost_info.is_free %}
+                                        <p class="text-green-400 font-medium">Free</p>
+                                    {% elif cost_info.display_cost is not none %}
+                                        <p class="text-white font-medium">${{ "%.2f"|format(cost_info.display_cost) }}</p>
+                                        {% if cost_info.calculation %}
+                                            <p class="text-gray-500 text-xs mt-1">{{ cost_info.calculation }}</p>
+                                        {% endif %}
+                                    {% else %}
+                                        <p class="text-gray-500">No cost data</p>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Notes tab panel -->
+                    <div data-modal-panel="notes" class="hidden">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Notes</label>
+                                <textarea
+                                    name="notes_text"
+                                    rows="6"
+                                    placeholder="Add notes about this session..."
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full resize-none"
+                                ></textarea>
+                                <p class="text-gray-600 text-xs mt-1">Notes are informational — saved for future use when the data model supports them.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Modal footer -->
+                <div class="flex items-center justify-between p-5 border-t border-gray-800 shrink-0">
+                    <!-- Delete button (edit mode only) -->
+                    <div>
+                        {% if modal_mode == 'edit' and session %}
+                            <button
+                                type="button"
+                                onclick="confirmDeleteFromModal({{ session.id }})"
+                                class="px-3 py-1.5 text-sm bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900/50 rounded-lg transition-colors"
+                            >
+                                Delete
+                            </button>
+                        {% endif %}
+                    </div>
+
+                    <!-- Cancel + Save buttons -->
+                    <div class="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onclick="closeSessionModal()"
+                            class="px-4 py-1.5 text-sm bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        {% if modal_mode == 'edit' and session %}
+                            <button
+                                type="button"
+                                hx-put="/sessions/{{ session.id }}"
+                                hx-target="#drawer-content"
+                                hx-swap="innerHTML"
+                                hx-include="#modal-form"
+                                class="px-4 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                            >
+                                Save
+                            </button>
+                        {% else %}
+                            <button
+                                type="button"
+                                hx-post="/sessions"
+                                hx-target="#drawer-content"
+                                hx-swap="innerHTML"
+                                hx-include="#modal-form"
+                                class="px-4 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                            >
+                                Save
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+        </form>
+    </div>
+</div>
