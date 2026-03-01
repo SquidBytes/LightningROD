@@ -1,0 +1,62 @@
+{% if saved %}
+<div class="text-green-400 text-sm mb-3">Settings saved.</div>
+{% endif %}
+
+<!-- Gasoline Comparison Form -->
+<h3 class="text-sm font-semibold text-gray-300 mb-3">Gasoline Comparison</h3>
+<form hx-post="/settings/gas" hx-target="#gas-settings" hx-swap="innerHTML"
+      class="space-y-3 mb-6">
+    <div class="flex items-center gap-3">
+        <label class="text-gray-400 text-sm w-28 flex-shrink-0">Price / gallon</label>
+        <div class="flex items-center gap-2">
+            <span class="text-gray-500 text-sm">$</span>
+            <input type="number" name="gas_price"
+                   value="{{ settings.gas_price_per_gallon or '3.50' }}"
+                   step="0.01" min="0"
+                   class="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 text-right">
+        </div>
+    </div>
+    <div class="flex items-center gap-3">
+        <label class="text-gray-400 text-sm w-28 flex-shrink-0">Vehicle MPG</label>
+        <input type="number" name="vehicle_mpg"
+               value="{{ settings.vehicle_mpg or '28.0' }}"
+               step="0.1" min="1"
+               class="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 text-right">
+    </div>
+    <div>
+        <button type="submit"
+                class="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors">
+            Save
+        </button>
+    </div>
+</form>
+
+<!-- Display Toggle Options -->
+<h3 class="text-sm font-semibold text-gray-300 mb-3">Display Options</h3>
+<form hx-post="/settings/toggles" hx-target="#gas-settings" hx-swap="innerHTML"
+      class="space-y-2">
+    <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" name="comparison_section_visible"
+               {% if settings.comparison_section_visible == 'true' %}checked{% endif %}
+               class="rounded bg-gray-800 border-gray-600 text-blue-500 focus:ring-blue-500">
+        <span class="text-gray-300 text-sm">Show comparison section</span>
+    </label>
+    <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" name="comparison_gas_enabled"
+               {% if settings.comparison_gas_enabled == 'true' %}checked{% endif %}
+               class="rounded bg-gray-800 border-gray-600 text-blue-500 focus:ring-blue-500">
+        <span class="text-gray-300 text-sm">Gasoline comparison</span>
+    </label>
+    <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" name="comparison_network_enabled"
+               {% if settings.comparison_network_enabled == 'true' %}checked{% endif %}
+               class="rounded bg-gray-800 border-gray-600 text-blue-500 focus:ring-blue-500">
+        <span class="text-gray-300 text-sm">Network rate comparison</span>
+    </label>
+    <div class="pt-1">
+        <button type="submit"
+                class="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors">
+            Save
+        </button>
+    </div>
+</form>

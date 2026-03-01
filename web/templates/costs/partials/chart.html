@@ -1,0 +1,5 @@
+{% if chart_html %}
+    {{ chart_html | safe }}
+{% else %}
+    <p class="text-gray-500 text-sm py-8 text-center">No data for this time range.</p>
+{% endif %}

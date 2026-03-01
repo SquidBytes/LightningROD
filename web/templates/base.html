@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if page_title %}LightningROD - {{ page_title }}{% else %}LightningROD{% endif %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/output.css') }}">
+    <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+    <script src="https://cdn.plot.ly/plotly-3.0.0.min.js" charset="utf-8"></script>
+</head>
+<body class="bg-gray-950 text-gray-100 flex h-screen overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-200" id="sidebar">
+        <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+            <div class="flex items-center gap-2 sidebar-label">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 flex-shrink-0" viewBox="0 0 48 48" fill="none">
+                    <path d="M26 4L10 26h12l-4 18 16-22H22l4-18z" fill="#47A8E5" stroke="#47A8E5" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+                <span class="text-brand-accent font-bold text-xl">LightningROD</span>
+            </div>
+            <button
+                id="sidebar-toggle"
+                class="text-gray-400 hover:text-gray-200 transition-colors ml-2"
+                onclick="toggleSidebar()"
+                aria-label="Toggle sidebar"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+        </div>
+        <nav class="flex-1 p-3 space-y-1">
+            <a href="/" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors {% if active_page == 'dashboard' %}bg-gray-800 text-brand-accent{% else %}text-gray-400{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                <span class="sidebar-label">Dashboard</span>
+            </a>
+            <a href="/sessions" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors {% if active_page == 'sessions' %}bg-gray-800 text-brand-accent{% else %}text-gray-400{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span class="sidebar-label">Sessions</span>
+            </a>
+            <a href="/costs" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors {% if active_page == 'costs' %}bg-gray-800 text-brand-accent{% else %}text-gray-400{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="sidebar-label">Costs</span>
+            </a>
+            <a href="/energy" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors {% if active_page == 'energy' %}bg-gray-800 text-brand-accent{% else %}text-gray-400{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span class="sidebar-label">Energy</span>
+            </a>
+            <a href="/settings" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors {% if active_page == 'settings' %}bg-gray-800 text-brand-accent{% else %}text-gray-400{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span class="sidebar-label">Settings</span>
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main content -->
+    <main class="flex-1 overflow-y-auto p-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const labels = sidebar.querySelectorAll('.sidebar-label');
+            const isCollapsed = sidebar.classList.contains('w-16');
+            if (isCollapsed) {
+                sidebar.classList.remove('w-16');
+                sidebar.classList.add('w-64');
+                labels.forEach(el => el.classList.remove('hidden'));
+            } else {
+                sidebar.classList.remove('w-64');
+                sidebar.classList.add('w-16');
+                labels.forEach(el => el.classList.add('hidden'));
+            }
+        }
+    </script>
+
+</body>
+</html>
