@@ -1,0 +1,85 @@
+<!-- Add session form — rendered inside drawer content -->
+<div class="flex items-center justify-between p-4 border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
+    <span class="text-white font-semibold">New Session</span>
+    <div class="flex items-center gap-2">
+        <button
+            hx-post="/sessions"
+            hx-target="#drawer-content"
+            hx-swap="innerHTML"
+            hx-include="#add-form"
+            class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >Save</button>
+        <button onclick="closeDrawer()" class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+    </div>
+</div>
+
+<form id="add-form" class="p-4 space-y-4">
+    <!-- Date (required) -->
+    <div>
+        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Date *</label>
+        <input type="date" name="session_date" value="{{ default_date }}" required
+               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
+    </div>
+
+    <!-- Energy kWh (required) -->
+    <div>
+        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Energy (kWh) *</label>
+        <input type="number" name="energy_kwh" step="0.1" min="0.1" required placeholder="0.0"
+               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
+    </div>
+
+    <!-- Cost (optional) -->
+    <div>
+        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Cost ($)</label>
+        <input type="number" name="cost" step="0.01" min="0" placeholder="0.00"
+               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
+    </div>
+
+    <!-- Location Name (optional, smart default) -->
+    <div>
+        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Location</label>
+        <input type="text" name="location_name" value="{{ default_location or '' }}" placeholder="e.g., Home, EA Station"
+               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
+    </div>
+
+    <!-- Location Type -->
+    <div>
+        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Location Type</label>
+        <select name="location_type"
+                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
+            <option value="">—</option>
+            <option value="home">Home</option>
+            <option value="work">Work</option>
+            <option value="public">Public</option>
+        </select>
+    </div>
+
+    <!-- Charge Type -->
+    <div>
+        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Charge Type</label>
+        <select name="charge_type"
+                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
+            <option value="">—</option>
+            <option value="AC">AC</option>
+            <option value="DC">DC</option>
+        </select>
+    </div>
+
+    <!-- Duration (minutes) -->
+    <div>
+        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Duration (minutes)</label>
+        <input type="number" name="duration_minutes" step="1" min="0" placeholder="0"
+               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
+    </div>
+
+    <!-- Notes (accepted by form, silently ignored — model has no notes column) -->
+    <div>
+        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Notes</label>
+        <textarea name="notes" rows="2" placeholder="Optional notes..."
+                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm resize-none"></textarea>
+    </div>
+</form>
