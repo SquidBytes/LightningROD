@@ -12,6 +12,7 @@ from web.services.csv_parser import (
     auto_detect_mappings,
     detect_duplicates,
     get_db_field_options,
+    import_rows,
     parse_csv_file,
     transform_rows,
 )
@@ -143,6 +144,118 @@ async def preview_import(
             "import_data_json": json.dumps(import_data),
         },
     )
+
+
+@router.post("/settings/import/execute", response_class=HTMLResponse)
+async def execute_import(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Accept the confirmed import form, commit selected rows, and return summary.
+
+    Reads import_data (JSON string of all transformed rows), selected_rows (list of
+    checked row indices), and action_{row_index} fields for duplicate row actions.
+    Calls import_rows, then renders the summary partial.
+    """
+    form = await request.form()
+
+    # Parse the full rows payload from the hidden import_data field
+    import_data_raw = form.get("import_data", "")
+    try:
+        rows: list[dict] = json.loads(import_data_raw) if import_data_raw else []
+    except (json.JSONDecodeError, ValueError):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Invalid import data — please restart the import."},
+        )
+
+    # Collect selected row indices from repeated checkbox values
+    selected_rows_raw = form.getlist("selected_rows")
+    selected_indices: set[int] = set()
+    for val in selected_rows_raw:
+        try:
+            selected_indices.add(int(val))
+        except (ValueError, TypeError):
+            pass
+
+    # Collect per-row duplicate actions: action_{row_index} -> "skip"|"insert"|"update"
+    duplicate_actions: dict[int, str] = {}
+    for key, value in form.items():
+        if key.startswith("action_"):
+            try:
+                row_idx = int(key[len("action_"):])
+                duplicate_actions[row_idx] = str(value)
+            except (ValueError, TypeError):
+                pass
+
+    # Re-parse row values from JSON serialized form (datetimes are ISO strings)
+    # The rows are already in serialized form; import_rows handles string UUIDs/datetimes
+    # via the EVChargingSession model accepting strings for UUID columns
+    # We need to convert back to proper types for the model
+    rows = _deserialize_rows(rows)
+
+    # Execute the import
+    counts = await import_rows(rows, selected_indices, duplicate_actions, db)
+
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/import_summary.html",
+        {
+            "added": counts["added"],
+            "skipped": counts["skipped"],
+            "updated": counts["updated"],
+            "failed": counts["failed"],
+        },
+    )
+
+
+@router.get("/settings/import/reset", response_class=HTMLResponse)
+async def reset_import(request: Request) -> HTMLResponse:
+    """Return the initial import file picker so the user can start a new import.
+
+    Called by the 'Import Another File' button on the summary page via HTMX.
+    """
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/import_tab.html",
+        {},
+    )
+
+
+def _deserialize_rows(rows: list[dict]) -> list[dict]:
+    """Convert JSON-serialized row dicts back to typed values for DB insertion.
+
+    Converts ISO datetime strings back to aware datetime objects and UUID strings
+    back to uuid.UUID instances.
+    """
+    from datetime import datetime
+    import uuid as _uuid
+
+    result = []
+    for row in rows:
+        deserialized = {}
+        for k, v in row.items():
+            if isinstance(v, str) and k in (
+                "session_start_utc",
+                "session_end_utc",
+                "recorded_at",
+                "estimated_end_utc",
+                "original_timestamp",
+            ):
+                try:
+                    dt = datetime.fromisoformat(v)
+                    deserialized[k] = dt
+                except (ValueError, TypeError):
+                    deserialized[k] = None
+            elif isinstance(v, str) and k == "session_id":
+                try:
+                    deserialized[k] = _uuid.UUID(v)
+                except (ValueError, AttributeError):
+                    deserialized[k] = None
+            else:
+                deserialized[k] = v
+        result.append(deserialized)
+    return result
 
 
 def _serialize_rows(rows: list[dict]) -> list[dict]:

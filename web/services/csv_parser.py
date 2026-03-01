@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # ---------------------------------------------------------------------------
@@ -677,3 +678,104 @@ async def detect_duplicates(rows: list[dict], db_session: AsyncSession) -> list[
                 break
 
     return rows
+
+
+# ---------------------------------------------------------------------------
+# Internal fields that should not be passed to EVChargingSession constructor
+# ---------------------------------------------------------------------------
+
+_INTERNAL_FIELDS = {"_status", "_row_index", "_error", "_matched_id"}
+
+
+async def import_rows(
+    rows: list[dict],
+    selected_indices: set[int],
+    duplicate_actions: dict[int, str],
+    db_session: AsyncSession,
+) -> dict:
+    """Commit selected rows to the database and return result counts.
+
+    Args:
+        rows: List of transformed row dicts (from transform_rows / detect_duplicates).
+        selected_indices: Set of _row_index values the user selected for import.
+        duplicate_actions: Mapping of row_index -> action string ("skip", "insert", "update")
+                           for rows that were detected as duplicates. New rows default to "insert".
+        db_session: Active SQLAlchemy AsyncSession.
+
+    Returns:
+        Dict with keys: added, skipped, updated, failed.
+
+    Partial success: each row is wrapped in a savepoint (SAVEPOINT via begin_nested).
+    A failed row is rolled back to the savepoint and counted as failed; successful
+    rows remain in the transaction. A single commit at the end persists all successes.
+    """
+    from db.models.charging_session import EVChargingSession
+
+    added = 0
+    skipped = 0
+    updated = 0
+    failed = 0
+
+    for row in rows:
+        row_index = row.get("_row_index", -1)
+
+        # Row not selected — skip
+        if row_index not in selected_indices:
+            skipped += 1
+            continue
+
+        # Error rows cannot be imported
+        if row.get("_status") == "error":
+            failed += 1
+            continue
+
+        # Determine action: duplicate_actions overrides; new rows default to insert
+        row_status = row.get("_status", "new")
+        if row_index in duplicate_actions:
+            action = duplicate_actions[row_index]
+        elif row_status == "new":
+            action = "insert"
+        else:
+            # duplicate/fuzzy_duplicate with no explicit action -> skip
+            action = "skip"
+
+        if action == "skip":
+            skipped += 1
+            continue
+
+        # Strip internal fields before DB operations
+        clean_row = {k: v for k, v in row.items() if k not in _INTERNAL_FIELDS}
+
+        if action == "insert":
+            try:
+                async with await db_session.begin_nested():
+                    # Ensure device_id has a fallback (model requires NOT NULL)
+                    if not clean_row.get("device_id"):
+                        clean_row["device_id"] = "csv_import"
+                    session_obj = EVChargingSession(**clean_row)
+                    db_session.add(session_obj)
+                added += 1
+            except (IntegrityError, Exception):
+                failed += 1
+
+        elif action == "update":
+            matched_id = row.get("_matched_id")
+            if matched_id is None:
+                failed += 1
+                continue
+            try:
+                async with await db_session.begin_nested():
+                    existing = await db_session.get(EVChargingSession, matched_id)
+                    if existing is None:
+                        failed += 1
+                        continue
+                    for field, value in clean_row.items():
+                        if hasattr(existing, field):
+                            setattr(existing, field, value)
+                updated += 1
+            except (IntegrityError, Exception):
+                failed += 1
+
+    await db_session.commit()
+
+    return {"added": added, "skipped": skipped, "updated": updated, "failed": failed}
