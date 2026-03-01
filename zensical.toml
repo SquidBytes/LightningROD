@@ -3,6 +3,7 @@ site_name = "LightningROD"
 site_description = "Self-hosted charging analytics for Ford electric vehicles"
 site_author = "SquidBytes"
 site_url = "https://SquidBytes.github.io/LightningROD/"
+repo_url = "https://github.com/SquidBytes/LightningROD"
 extra_css = ["stylesheets/extra.css"]
 
 nav = [
@@ -32,6 +33,7 @@ variant = "modern"
 logo = "assets/logo.svg"
 favicon = "assets/favicon.svg"
 features = [
+  "content.action.view",
   "content.code.copy",
   "content.code.annotate",
   "content.tabs.link",
