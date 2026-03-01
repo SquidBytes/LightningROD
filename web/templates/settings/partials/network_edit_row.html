@@ -1,0 +1,51 @@
+{# Inline edit row for a single network — swaps into the table body in place of the read row #}
+<tr id="network-row-{{ network.id }}">
+    <td class="py-2 pr-3">
+        <input type="color" name="color" form="edit-form-{{ network.id }}"
+               value="{{ network.color or '#6B7280' }}"
+               class="h-6 w-6 rounded border-0 bg-transparent cursor-pointer p-0">
+    </td>
+    <td class="py-2">
+        <input type="text" name="network_name" form="edit-form-{{ network.id }}"
+               value="{{ network.network_name }}" required
+               class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-blue-500 w-full min-w-32">
+    </td>
+    <td class="py-2">
+        <div class="flex items-center gap-1">
+            <span class="text-gray-500 text-xs">$</span>
+            <input type="number" name="cost_per_kwh" form="edit-form-{{ network.id }}"
+                   value="{{ '%.3f'|format(network.cost_per_kwh or 0) }}" step="0.001" min="0"
+                   class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-blue-500 w-24 text-right">
+        </div>
+    </td>
+    <td class="py-2">
+        <input type="checkbox" name="is_free" form="edit-form-{{ network.id }}"
+               {% if network.is_free %}checked{% endif %}
+               class="rounded bg-gray-800 border-gray-600 text-green-500 focus:ring-green-500">
+    </td>
+    <td class="py-2 text-right">
+        <div class="flex justify-end gap-2">
+            <button type="submit" form="edit-form-{{ network.id }}"
+                    class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors">
+                Save
+            </button>
+            <button type="button"
+                    hx-get="/settings/networks"
+                    hx-target="#network-management-table"
+                    hx-swap="outerHTML"
+                    class="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors">
+                Cancel
+            </button>
+        </div>
+    </td>
+</tr>
+{# Hidden form outside td (forms inside tables have quirky HTML behavior) #}
+<tr style="display:none">
+    <td>
+        <form id="edit-form-{{ network.id }}"
+              hx-put="/settings/networks/{{ network.id }}"
+              hx-target="#network-management-table"
+              hx-swap="outerHTML">
+        </form>
+    </td>
+</tr>

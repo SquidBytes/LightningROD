@@ -7,10 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
 from web.queries.settings import (
+    create_network,
+    delete_network,
     get_all_networks,
     get_app_settings_dict,
     set_app_setting,
-    upsert_network,
+    update_network,
 )
 
 router = APIRouter()
@@ -34,7 +36,12 @@ async def settings_index(
 ):
     networks = await get_all_networks(db)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
-    active_tab = "import" if tab == "import" else "general"
+    if tab == "import":
+        active_tab = "import"
+    elif tab == "networks":
+        active_tab = "networks"
+    else:
+        active_tab = "general"
     return templates.TemplateResponse(
         request,
         "settings/index.html",
@@ -49,21 +56,100 @@ async def settings_index(
 
 
 @router.post("/settings/networks", response_class=HTMLResponse)
-async def update_network(
+async def create_network_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    network_id: int = Form(...),
-    cost_per_kwh: float = Form(...),
+    network_name: str = Form(...),
+    cost_per_kwh: Optional[float] = Form(None),
+    color: Optional[str] = Form(None),
     is_free: Optional[str] = Form(None),
 ):
-    # HTML checkbox sends "on" when checked, nothing when unchecked
     is_free_bool = is_free is not None
-    await upsert_network(db, network_id, cost_per_kwh, is_free_bool)
+    await create_network(
+        db,
+        name=network_name,
+        cost_per_kwh=cost_per_kwh,
+        is_free=is_free_bool,
+        color=color,
+    )
     networks = await get_all_networks(db)
     return templates.TemplateResponse(
         request,
-        "settings/partials/networks_table.html",
-        {"networks": networks, "saved": True},
+        "settings/partials/network_management.html",
+        {"networks": networks},
+    )
+
+
+@router.get("/settings/networks", response_class=HTMLResponse)
+async def networks_partial(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the network management partial (used by cancel button to revert edits)."""
+    networks = await get_all_networks(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/network_management.html",
+        {"networks": networks},
+    )
+
+
+@router.get("/settings/networks/{network_id}/edit", response_class=HTMLResponse)
+async def edit_network_row(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    networks = await get_all_networks(db)
+    network = next((n for n in networks if n.id == network_id), None)
+    if network is None:
+        return HTMLResponse(status_code=404)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/network_edit_row.html",
+        {"network": network},
+    )
+
+
+@router.put("/settings/networks/{network_id}", response_class=HTMLResponse)
+async def update_network_route(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    network_name: str = Form(...),
+    cost_per_kwh: Optional[float] = Form(None),
+    color: Optional[str] = Form(None),
+    is_free: Optional[str] = Form(None),
+):
+    is_free_bool = is_free is not None
+    await update_network(
+        db,
+        network_id=network_id,
+        name=network_name,
+        cost_per_kwh=cost_per_kwh,
+        is_free=is_free_bool,
+        color=color,
+    )
+    networks = await get_all_networks(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/network_management.html",
+        {"networks": networks},
+    )
+
+
+@router.delete("/settings/networks/{network_id}", response_class=HTMLResponse)
+async def delete_network_route(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await delete_network(db, network_id=network_id)
+    networks = await get_all_networks(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/network_management.html",
+        {"networks": networks},
     )
 
 

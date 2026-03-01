@@ -13,9 +13,17 @@
             id="tab-btn-general"
             onclick="switchTab('general')"
             class="pb-3 text-sm font-medium border-b-2 transition-colors
-                   {% if active_tab == 'import' %}border-transparent text-gray-400 hover:text-gray-200{% else %}border-blue-500 text-white{% endif %}"
+                   {% if active_tab == 'general' %}border-blue-500 text-white{% else %}border-transparent text-gray-400 hover:text-gray-200{% endif %}"
         >
             General
+        </button>
+        <button
+            id="tab-btn-networks"
+            onclick="switchTab('networks')"
+            class="pb-3 text-sm font-medium border-b-2 transition-colors
+                   {% if active_tab == 'networks' %}border-blue-500 text-white{% else %}border-transparent text-gray-400 hover:text-gray-200{% endif %}"
+        >
+            Networks
         </button>
         <button
             id="tab-btn-import"
@@ -29,19 +37,10 @@
 </div>
 
 {# General tab content #}
-<div id="tab-general" {% if active_tab == 'import' %}class="hidden"{% endif %}>
+<div id="tab-general" {% if active_tab != 'general' %}class="hidden"{% endif %}>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        <!-- Left column: Charging Networks -->
-        <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-            <h2 class="text-lg font-semibold text-gray-100 mb-1">Charging Networks</h2>
-            <p class="text-gray-400 text-sm mb-4">Set the $/kWh cost for each charging network. Costs are used to calculate session expenses.</p>
-            <div id="networks-table">
-                {% include "settings/partials/networks_table.html" %}
-            </div>
-        </div>
-
-        <!-- Right column: Comparison Settings -->
+        <!-- Comparison Settings -->
         <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
             <h2 class="text-lg font-semibold text-gray-100 mb-1">Comparison Settings</h2>
             <div id="gas-settings">
@@ -61,6 +60,11 @@
     </div>
 </div>
 
+{# Networks tab content #}
+<div id="tab-networks" {% if active_tab != 'networks' %}class="hidden"{% endif %}>
+    {% include "settings/partials/network_management.html" %}
+</div>
+
 {# CSV Import tab content #}
 <div id="tab-import" {% if active_tab != 'import' %}class="hidden"{% endif %}>
     {% include "settings/partials/import_tab.html" %}
@@ -69,7 +73,7 @@
 <script>
 function switchTab(tabName) {
     // All tab content divs
-    var tabs = ['general', 'import'];
+    var tabs = ['general', 'networks', 'import'];
     tabs.forEach(function(t) {
         var content = document.getElementById('tab-' + t);
         var btn = document.getElementById('tab-btn-' + t);
