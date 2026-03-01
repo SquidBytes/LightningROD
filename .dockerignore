@@ -1,0 +1,11 @@
+.git
+.env
+.venv
+__pycache__
+*.pyc
+.planning
+.claude
+docs
+*.md
+!requirements.txt
+.ruff_cache
