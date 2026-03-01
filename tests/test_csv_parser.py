@@ -266,3 +266,150 @@ async def test_detect_duplicates_error_rows_unchanged():
     result = await detect_duplicates(rows, mock_db)
 
     assert result[0]["_status"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# import_rows tests (async, uses mocked DB session)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_import_rows_skip_action_does_not_insert():
+    """import_rows with action 'skip' for a row does not insert and increments skipped."""
+    from web.services.csv_parser import import_rows
+    import uuid
+
+    rows = [
+        {
+            "_row_index": 0,
+            "_status": "duplicate",
+            "session_id": uuid.uuid4(),
+            "energy_kwh": 25.5,
+            "source_system": "csv_import",
+            "is_complete": True,
+            "device_id": "TEST_DEVICE",
+        }
+    ]
+    selected_indices = {0}
+    duplicate_actions = {0: "skip"}
+
+    mock_db = AsyncMock()
+    mock_db.begin_nested = AsyncMock()
+
+    result = await import_rows(rows, selected_indices, duplicate_actions, mock_db)
+
+    assert result["skipped"] == 1
+    assert result["added"] == 0
+    assert result["updated"] == 0
+    assert result["failed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_import_rows_unselected_row_is_skipped():
+    """import_rows skips rows not in selected_indices and increments skipped."""
+    from web.services.csv_parser import import_rows
+    import uuid
+
+    rows = [
+        {
+            "_row_index": 0,
+            "_status": "new",
+            "session_id": uuid.uuid4(),
+            "energy_kwh": 25.5,
+            "source_system": "csv_import",
+            "is_complete": True,
+            "device_id": "TEST_DEVICE",
+        }
+    ]
+    selected_indices = set()  # nothing selected
+    duplicate_actions = {}
+
+    mock_db = AsyncMock()
+
+    result = await import_rows(rows, selected_indices, duplicate_actions, mock_db)
+
+    assert result["skipped"] == 1
+    assert result["added"] == 0
+
+
+@pytest.mark.asyncio
+async def test_import_rows_error_row_counted_as_failed():
+    """import_rows counts rows with _status='error' as failed."""
+    from web.services.csv_parser import import_rows
+    import uuid
+
+    rows = [
+        {
+            "_row_index": 0,
+            "_status": "error",
+            "_error": "Missing energy and start time",
+            "session_id": None,
+            "energy_kwh": None,
+            "source_system": "csv_import",
+            "is_complete": True,
+            "device_id": "TEST_DEVICE",
+        }
+    ]
+    selected_indices = {0}
+    duplicate_actions = {}
+
+    mock_db = AsyncMock()
+
+    result = await import_rows(rows, selected_indices, duplicate_actions, mock_db)
+
+    assert result["failed"] == 1
+    assert result["added"] == 0
+
+
+@pytest.mark.asyncio
+async def test_import_rows_insert_new_row():
+    """import_rows with action 'insert' adds an EVChargingSession and increments added."""
+    from web.services.csv_parser import import_rows
+    import uuid
+
+    rows = [
+        {
+            "_row_index": 0,
+            "_status": "new",
+            "session_id": uuid.uuid4(),
+            "energy_kwh": 25.5,
+            "source_system": "csv_import",
+            "is_complete": True,
+            "device_id": "TEST_DEVICE",
+        }
+    ]
+    selected_indices = {0}
+    duplicate_actions = {}  # new row defaults to insert
+
+    mock_savepoint = AsyncMock()
+    mock_savepoint.__aenter__ = AsyncMock(return_value=mock_savepoint)
+    mock_savepoint.__aexit__ = AsyncMock(return_value=False)
+
+    mock_db = AsyncMock()
+    mock_db.begin_nested = AsyncMock(return_value=mock_savepoint)
+    mock_db.add = MagicMock()
+
+    result = await import_rows(rows, selected_indices, duplicate_actions, mock_db)
+
+    assert result["added"] == 1
+    assert result["failed"] == 0
+    mock_db.add.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_import_rows_returns_correct_counts():
+    """import_rows returns dict with added, skipped, updated, failed keys."""
+    from web.services.csv_parser import import_rows
+
+    rows = []
+    selected_indices = set()
+    duplicate_actions = {}
+
+    mock_db = AsyncMock()
+
+    result = await import_rows(rows, selected_indices, duplicate_actions, mock_db)
+
+    assert "added" in result
+    assert "skipped" in result
+    assert "updated" in result
+    assert "failed" in result
