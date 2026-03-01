@@ -9,18 +9,49 @@
     </span>
 </div>
 
+<!-- Hidden sort state inputs (inside filter-form via hx-include) -->
+<input type="hidden" id="sort_by_input" name="sort_by" value="{{ sort_by or '' }}">
+<input type="hidden" id="sort_dir_input" name="sort_dir" value="{{ sort_dir or '' }}">
+
+<!-- Hidden charge_type filter input (managed by column dropdown JS) -->
+<input type="hidden" id="filter_charge_type" name="charge_type" value="{{ charge_type or '' }}">
+
 {% if sessions %}
 <!-- Data table -->
-<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden overflow-x-auto">
     <table class="w-full text-sm">
         <thead>
             <tr class="border-b border-gray-800">
-                <th class="text-left px-4 py-3 text-gray-400 font-medium">Date</th>
-                <th class="text-left px-4 py-3 text-gray-400 font-medium">Location</th>
-                <th class="text-left px-4 py-3 text-gray-400 font-medium">Type</th>
-                <th class="text-right px-4 py-3 text-gray-400 font-medium">kWh</th>
-                <th class="text-right px-4 py-3 text-gray-400 font-medium">Duration</th>
-                <th class="text-right px-4 py-3 text-gray-400 font-medium">Cost</th>
+                {% set current_sort_by = sort_by %}
+                {% set current_sort_dir = sort_dir %}
+
+                {% with col_id="date", col_label="Date", sort_key="date", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% with col_id="location", col_label="Location", sort_key="location", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% set charge_type_filter_values = [
+                    {"value": "AC", "label": "AC", "checked": charge_type != "DC"},
+                    {"value": "DC", "label": "DC", "checked": charge_type != "AC"}
+                ] %}
+                {% with col_id="charge_type", col_label="Type", sort_key="charge_type", filter_key="charge_type", filter_values=charge_type_filter_values, filter_form_id="filter-form" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% with col_id="energy", col_label="kWh", sort_key="energy", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% with col_id="duration", col_label="Duration", sort_key="duration", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% with col_id="cost", col_label="Cost", sort_key="cost", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-800/60">
@@ -43,10 +74,14 @@
                     {% endif %}
                 </td>
 
-                <!-- Location -->
+                <!-- Location with network color badge -->
                 <td class="px-4 py-3 text-gray-300">
                     {% if session.location_name %}
-                        {{ session.location_name }}
+                        {% set net_color = network_colors.get(session.location_name, '#6B7280') %}
+                        <span class="inline-flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ net_color }}"></span>
+                            {{ session.location_name }}
+                        </span>
                     {% elif session.location_type %}
                         <span class="capitalize">{{ session.location_type }}</span>
                     {% else %}

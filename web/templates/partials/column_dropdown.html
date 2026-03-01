@@ -1,0 +1,171 @@
+<!-- Reusable column header dropdown component.
+     Required context variables:
+       col_id        — unique column identifier (e.g., "charge_type")
+       col_label     — display label (e.g., "Type")
+       sort_key      — sort_by value for this column (e.g., "charge_type")
+       current_sort_by  — current sort state (from template context)
+       current_sort_dir — current sort direction ("asc" or "desc")
+       filter_key    — query param name for value filtering, or None if not filterable
+       filter_values — list of {value, label, checked} dicts, or empty list
+       filter_form_id — id of the filter form to trigger (e.g., "filter-form")
+-->
+<th class="text-left px-4 py-3 text-gray-400 font-medium whitespace-nowrap">
+    <div class="relative inline-block col-header-wrapper">
+        <button
+            type="button"
+            onclick="toggleColumnDropdown('{{ col_id }}')"
+            class="flex items-center gap-1 hover:text-gray-200 transition-colors group"
+        >
+            <span>{{ col_label }}</span>
+            <!-- Sort indicator -->
+            {% if current_sort_by == sort_key %}
+                {% if current_sort_dir == 'asc' %}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                    </svg>
+                {% else %}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                {% endif %}
+            {% else %}
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-600 group-hover:text-gray-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+            {% endif %}
+        </button>
+
+        <!-- Dropdown panel -->
+        <div
+            id="col-dropdown-{{ col_id }}"
+            class="col-dropdown hidden absolute top-full left-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-2 z-30 min-w-max"
+        >
+            <!-- Sort section -->
+            <div class="mb-1">
+                <p class="text-xs uppercase tracking-wide text-gray-500 px-2 py-1">Sort</p>
+                <button
+                    type="button"
+                    onclick="setSortAndFilter('{{ sort_key }}', 'asc', '{{ filter_form_id }}')"
+                    class="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded transition-colors"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                    </svg>
+                    Sort Ascending
+                </button>
+                <button
+                    type="button"
+                    onclick="setSortAndFilter('{{ sort_key }}', 'desc', '{{ filter_form_id }}')"
+                    class="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded transition-colors"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                    Sort Descending
+                </button>
+            </div>
+
+            <!-- Filter section (only if filter_values provided) -->
+            {% if filter_values %}
+                <div class="border-t border-gray-700 mt-1 pt-1">
+                    <div class="flex items-center justify-between px-2 py-1">
+                        <p class="text-xs uppercase tracking-wide text-gray-500">Filter</p>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="selectAllFilter('{{ filter_key }}', '{{ filter_form_id }}')" class="text-xs text-blue-400 hover:text-blue-300">All</button>
+                            <span class="text-gray-600">|</span>
+                            <button type="button" onclick="deselectAllFilter('{{ filter_key }}', '{{ filter_form_id }}')" class="text-xs text-blue-400 hover:text-blue-300">None</button>
+                        </div>
+                    </div>
+                    {% for fv in filter_values %}
+                    <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-700 rounded cursor-pointer">
+                        <input
+                            type="checkbox"
+                            class="col-filter-checkbox rounded border-gray-600 bg-gray-700 text-blue-600"
+                            data-filter-key="{{ filter_key }}"
+                            data-filter-value="{{ fv.value }}"
+                            {% if fv.checked %}checked{% endif %}
+                            onchange="applyColumnFilter('{{ filter_key }}', '{{ filter_form_id }}')"
+                        >
+                        <span class="text-sm text-gray-300">{{ fv.label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</th>
+
+<script>
+(function() {
+    // Only define these functions once on the page
+    if (window._colDropdownInit) return;
+    window._colDropdownInit = true;
+
+    window.toggleColumnDropdown = function(colId) {
+        var dd = document.getElementById('col-dropdown-' + colId);
+        // Close all other dropdowns first
+        document.querySelectorAll('.col-dropdown').forEach(function(d) {
+            if (d.id !== 'col-dropdown-' + colId) d.classList.add('hidden');
+        });
+        dd.classList.toggle('hidden');
+    };
+
+    // Close on click outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.col-header-wrapper')) {
+            document.querySelectorAll('.col-dropdown').forEach(function(d) {
+                d.classList.add('hidden');
+            });
+        }
+    });
+
+    window.setSortAndFilter = function(sortKey, sortDir, formId) {
+        var sortByInput = document.getElementById('sort_by_input');
+        var sortDirInput = document.getElementById('sort_dir_input');
+        if (sortByInput) sortByInput.value = sortKey;
+        if (sortDirInput) sortDirInput.value = sortDir;
+        // Close all dropdowns
+        document.querySelectorAll('.col-dropdown').forEach(function(d) {
+            d.classList.add('hidden');
+        });
+        // Trigger filter change
+        document.dispatchEvent(new Event('filterChanged'));
+    };
+
+    window.applyColumnFilter = function(filterKey, formId) {
+        // Collect all checked values for this filter key
+        var checkboxes = document.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]');
+        var checked = [];
+        checkboxes.forEach(function(cb) {
+            if (cb.checked) checked.push(cb.dataset.filterValue);
+        });
+
+        // Update hidden input for this filter
+        var hiddenInput = document.getElementById('filter_' + filterKey);
+        if (hiddenInput) {
+            if (checked.length === 0 || checked.length === checkboxes.length) {
+                // All or none checked — clear the filter (show all)
+                hiddenInput.value = '';
+            } else {
+                // Exactly one value selected
+                hiddenInput.value = checked[0];
+            }
+        }
+        document.dispatchEvent(new Event('filterChanged'));
+    };
+
+    window.selectAllFilter = function(filterKey, formId) {
+        document.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]').forEach(function(cb) {
+            cb.checked = true;
+        });
+        applyColumnFilter(filterKey, formId);
+    };
+
+    window.deselectAllFilter = function(filterKey, formId) {
+        document.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]').forEach(function(cb) {
+            cb.checked = false;
+        });
+        applyColumnFilter(filterKey, formId);
+    };
+})();
+</script>

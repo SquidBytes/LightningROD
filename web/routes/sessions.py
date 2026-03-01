@@ -13,6 +13,7 @@ from db.models.charging_session import EVChargingSession
 from web.dependencies import get_db
 from web.queries.costs import compute_session_cost, get_networks_by_name
 from web.queries.sessions import get_most_recent_location, query_sessions
+from web.queries.settings import get_all_networks
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -49,8 +50,11 @@ async def sessions(
 
     total_pages = max(math.ceil(total / 25), 1)
 
-    # Enrich sessions with cost data
+    # Enrich sessions with cost data and build network colors map
     networks_by_name = await get_networks_by_name(db)
+    all_networks = await get_all_networks(db)
+    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
+
     enriched_sessions = []
     for s in session_list:
         cost_info = compute_session_cost(s, networks_by_name)
@@ -87,6 +91,7 @@ async def sessions(
         "sort_by": sort_by,
         "sort_dir": sort_dir,
         "filter_params": filter_params,
+        "network_colors": network_colors,
         "active_page": "sessions",
         "page_title": "Sessions",
     }
@@ -198,11 +203,17 @@ async def create_session(
     networks_by_name = await get_networks_by_name(db)
     cost_info = compute_session_cost(new_session, networks_by_name)
 
+    all_networks = await get_all_networks(db)
+    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
+    network_color = network_colors.get(new_session.location_name, '#6B7280') if new_session.location_name else '#6B7280'
+
     context = {
         "session": new_session,
         "cost_info": cost_info,
         "prev_id": None,
         "next_id": None,
+        "network_color": network_color,
+        "network_colors": network_colors,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
     response.headers["HX-Trigger"] = "session-created, closeModal"
@@ -272,11 +283,17 @@ async def update_session(
     networks_by_name = await get_networks_by_name(db)
     cost_info = compute_session_cost(session, networks_by_name)
 
+    all_networks = await get_all_networks(db)
+    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
+    network_color = network_colors.get(session.location_name, '#6B7280') if session.location_name else '#6B7280'
+
     context = {
         "session": session,
         "cost_info": cost_info,
         "prev_id": None,
         "next_id": None,
+        "network_color": network_color,
+        "network_colors": network_colors,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
     response.headers["HX-Trigger"] = "session-updated, closeModal"
@@ -327,11 +344,17 @@ async def session_detail(
     networks_by_name = await get_networks_by_name(db)
     cost_info = compute_session_cost(session, networks_by_name)
 
+    all_networks = await get_all_networks(db)
+    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
+    network_color = network_colors.get(session.location_name, '#6B7280') if session.location_name else '#6B7280'
+
     context = {
         "session": session,
         "cost_info": cost_info,
         "prev_id": prev_id,
         "next_id": next_id,
+        "network_color": network_color,
+        "network_colors": network_colors,
     }
     return templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
 
@@ -354,11 +377,17 @@ async def session_modal(
     networks_by_name = await get_networks_by_name(db)
     cost_info = compute_session_cost(session, networks_by_name)
 
+    all_networks = await get_all_networks(db)
+    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
+    network_color = network_colors.get(session.location_name, '#6B7280') if session.location_name else '#6B7280'
+
     context = {
         "session": session,
         "cost_info": cost_info,
         "modal_mode": "edit",
         "default_date": None,
         "default_location": None,
+        "network_color": network_color,
+        "network_colors": network_colors,
     }
     return templates.TemplateResponse(request, "sessions/partials/modal.html", context)
