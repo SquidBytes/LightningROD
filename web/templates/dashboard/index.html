@@ -1,22 +1,87 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-4xl">
+<div class="max-w-6xl">
     <h1 class="text-3xl font-bold text-white mb-2">Dashboard</h1>
     <p class="text-gray-400 mb-8">Your EV charging analytics at a glance.</p>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+    {% if summary.total_sessions == 0 %}
+    {# ── Empty state ─────────────────────────────────────────────────── #}
+    <div class="bg-gray-900 rounded-xl p-10 border border-gray-800 text-center">
+        <p class="text-gray-400 text-lg mb-2">No charging sessions yet.</p>
+        <p class="text-gray-500 text-sm">Import your data via <a href="/settings" class="text-blue-400 hover:underline">Settings → Import</a> to see your stats here.</p>
+    </div>
+
+    {% else %}
+    {# ── Summary cards ────────────────────────────────────────────────── #}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+
+        {# Total Sessions #}
         <div class="bg-gray-900 rounded-xl p-6 border border-gray-800">
             <p class="text-sm text-gray-400">Total Sessions</p>
-            <p class="text-2xl font-bold text-white mt-1">--</p>
+            <p class="text-2xl font-bold text-white mt-1">{{ summary.total_sessions }}</p>
+            {% if summary.avg_cost_per_session is not none %}
+            <p class="text-xs text-gray-500 mt-1">avg ${{ "%.2f"|format(summary.avg_cost_per_session) }} / session</p>
+            {% endif %}
         </div>
+
+        {# Total Energy — auto-scale to MWh when >= 1000 kWh #}
         <div class="bg-gray-900 rounded-xl p-6 border border-gray-800">
             <p class="text-sm text-gray-400">Total Energy</p>
-            <p class="text-2xl font-bold text-white mt-1">-- kWh</p>
+            {% if summary.total_kwh >= 1000 %}
+            <p class="text-2xl font-bold text-white mt-1">{{ "%.2f"|format(summary.total_kwh / 1000) }} MWh</p>
+            <p class="text-xs text-gray-500 mt-1">{{ "%.1f"|format(summary.total_kwh) }} kWh total</p>
+            {% else %}
+            <p class="text-2xl font-bold text-white mt-1">{{ "%.1f"|format(summary.total_kwh) }} kWh</p>
+            {% endif %}
+            {% if summary.avg_kwh_per_session is not none %}
+            <p class="text-xs text-gray-500 mt-1">avg {{ "%.1f"|format(summary.avg_kwh_per_session) }} kWh / session</p>
+            {% endif %}
         </div>
+
+        {# Total Cost #}
         <div class="bg-gray-900 rounded-xl p-6 border border-gray-800">
             <p class="text-sm text-gray-400">Total Cost</p>
-            <p class="text-2xl font-bold text-white mt-1">$--</p>
+            <p class="text-2xl font-bold text-white mt-1">${{ "%.2f"|format(summary.total_cost) }}</p>
+            {% if summary.avg_kwh_per_session is not none and summary.total_kwh > 0 %}
+            <p class="text-xs text-gray-500 mt-1">avg ${{ "%.3f"|format(summary.total_cost / summary.total_kwh) }} / kWh</p>
+            {% endif %}
         </div>
     </div>
-    <p class="text-gray-500 text-sm mt-8">Data will populated upon availability</p>
+
+    {# ── Charts ───────────────────────────────────────────────────────── #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+        {# Monthly Cost Trend #}
+        <div class="bg-gray-900 rounded-xl border border-gray-800 p-4">
+            <h3 class="text-sm font-medium uppercase tracking-wide text-gray-500 mb-2">Monthly Cost Trend</h3>
+            {% if monthly_cost_chart %}
+            {{ monthly_cost_chart|safe }}
+            {% else %}
+            <p class="text-gray-600 text-sm py-8 text-center">No cost data available.</p>
+            {% endif %}
+        </div>
+
+        {# Energy by Network #}
+        <div class="bg-gray-900 rounded-xl border border-gray-800 p-4">
+            <h3 class="text-sm font-medium uppercase tracking-wide text-gray-500 mb-2">Energy by Network</h3>
+            {% if energy_by_network_chart %}
+            {{ energy_by_network_chart|safe }}
+            {% else %}
+            <p class="text-gray-600 text-sm py-8 text-center">No network data available.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Efficiency Trend — full width #}
+    <div class="bg-gray-900 rounded-xl border border-gray-800 p-4">
+        <h3 class="text-sm font-medium uppercase tracking-wide text-gray-500 mb-2">Charging Efficiency Trend</h3>
+        {% if efficiency_chart %}
+        {{ efficiency_chart|safe }}
+        {% else %}
+        <p class="text-gray-600 text-sm py-8 text-center">No efficiency data available — requires sessions with miles added.</p>
+        {% endif %}
+    </div>
+
+    {% endif %}
 </div>
 {% endblock %}
