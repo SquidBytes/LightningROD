@@ -110,17 +110,36 @@ async def new_session_form(
     return templates.TemplateResponse(request, "sessions/partials/add_form.html", context)
 
 
+@router.get("/sessions/new/modal", response_class=HTMLResponse)
+async def new_session_modal(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Render advanced edit modal in add mode with smart defaults."""
+    default_location = await get_most_recent_location(db)
+    context = {
+        "session": None,
+        "cost_info": None,
+        "modal_mode": "add",
+        "default_date": date.today().isoformat(),
+        "default_location": default_location,
+    }
+    return templates.TemplateResponse(request, "sessions/partials/modal.html", context)
+
+
 @router.post("/sessions", response_class=HTMLResponse)
 async def create_session(
     request: Request,
     db: AsyncSession = Depends(get_db),
     session_date: Annotated[Optional[str], Form()] = None,
+    session_time: Annotated[Optional[str], Form()] = None,
     energy_kwh: Annotated[Optional[float], Form()] = None,
     cost: Annotated[Optional[float], Form()] = None,
     location_name: Annotated[Optional[str], Form()] = None,
     location_type: Annotated[Optional[str], Form()] = None,
     charge_type: Annotated[Optional[str], Form()] = None,
     duration_minutes: Annotated[Optional[float], Form()] = None,
+    charge_duration_minutes: Annotated[Optional[float], Form()] = None,
 ):
     errors: dict[str, str] = {}
 
@@ -129,7 +148,8 @@ async def create_session(
         errors["session_date"] = "Date is required."
     else:
         try:
-            parsed_date = datetime.fromisoformat(session_date).replace(tzinfo=timezone.utc)
+            time_part = session_time or "00:00"
+            parsed_date = datetime.fromisoformat(f"{session_date}T{time_part}").replace(tzinfo=timezone.utc)
         except ValueError:
             errors["session_date"] = "Invalid date format. Use YYYY-MM-DD."
 
@@ -152,6 +172,9 @@ async def create_session(
     if cost is not None:
         is_free = cost == 0
 
+    # Support both old form name (duration_minutes) and new modal name (charge_duration_minutes)
+    effective_duration = duration_minutes if duration_minutes is not None else charge_duration_minutes
+
     new_session = EVChargingSession(
         session_id=uuid.uuid4(),
         device_id="manual",
@@ -162,7 +185,7 @@ async def create_session(
         location_name=location_name or None,
         location_type=location_type or None,
         charge_type=charge_type or None,
-        charge_duration_seconds=duration_minutes * 60 if duration_minutes is not None else None,
+        charge_duration_seconds=effective_duration * 60 if effective_duration is not None else None,
         is_complete=True,
         source_system="manual_entry",
         is_free=is_free,
@@ -182,7 +205,7 @@ async def create_session(
         "next_id": None,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
-    response.headers["HX-Trigger"] = "session-created"
+    response.headers["HX-Trigger"] = "session-created, closeModal"
     return response
 
 
@@ -196,6 +219,9 @@ async def update_session(
     location_type: Annotated[Optional[str], Form()] = None,
     charge_type: Annotated[Optional[str], Form()] = None,
     charge_duration_minutes: Annotated[Optional[float], Form()] = None,
+    energy_kwh: Annotated[Optional[float], Form()] = None,
+    session_date: Annotated[Optional[str], Form()] = None,
+    session_time: Annotated[Optional[str], Form()] = None,
 ):
     # Validate enum fields
     errors: dict[str, str] = {}
@@ -203,6 +229,11 @@ async def update_session(
         errors["location_type"] = f"Must be one of: {', '.join(sorted(VALID_LOCATION_TYPES))}"
     if charge_type and charge_type not in VALID_CHARGE_TYPES:
         errors["charge_type"] = f"Must be one of: {', '.join(VALID_CHARGE_TYPES)}"
+    if session_date:
+        try:
+            datetime.fromisoformat(session_date)
+        except ValueError:
+            errors["session_date"] = "Invalid date format. Use YYYY-MM-DD."
     if errors:
         return JSONResponse(status_code=422, content={"errors": errors})
 
@@ -225,6 +256,15 @@ async def update_session(
         session.charge_type = charge_type or None
     if charge_duration_minutes is not None:
         session.charge_duration_seconds = charge_duration_minutes * 60
+    if energy_kwh is not None:
+        session.energy_kwh = energy_kwh
+    if session_date:
+        time_part = session_time or "00:00"
+        try:
+            new_start = datetime.fromisoformat(f"{session_date}T{time_part}").replace(tzinfo=timezone.utc)
+            session.session_start_utc = new_start
+        except ValueError:
+            pass  # Keep existing value on parse error
 
     await db.commit()
     await db.refresh(session)
@@ -239,7 +279,7 @@ async def update_session(
         "next_id": None,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
-    response.headers["HX-Trigger"] = "session-updated"
+    response.headers["HX-Trigger"] = "session-updated, closeModal"
     return response
 
 
@@ -294,3 +334,31 @@ async def session_detail(
         "next_id": next_id,
     }
     return templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
+
+
+@router.get("/sessions/{session_id}/modal", response_class=HTMLResponse)
+async def session_modal(
+    request: Request,
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Render advanced edit modal in edit mode for an existing session."""
+    result = await db.execute(
+        select(EVChargingSession).where(EVChargingSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if session is None:
+        return HTMLResponse(content="<p class='text-gray-400 p-4'>Session not found.</p>", status_code=404)
+
+    networks_by_name = await get_networks_by_name(db)
+    cost_info = compute_session_cost(session, networks_by_name)
+
+    context = {
+        "session": session,
+        "cost_info": cost_info,
+        "modal_mode": "edit",
+        "default_date": None,
+        "default_location": None,
+    }
+    return templates.TemplateResponse(request, "sessions/partials/modal.html", context)

@@ -20,10 +20,21 @@
             type="button"
             onclick="toggleEditMode()"
             class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800"
-            title="Edit session"
+            title="Quick edit"
         >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+        </button>
+        <!-- Advanced Edit button -->
+        <button
+            type="button"
+            onclick="openSessionModal({{ session.id }})"
+            class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800"
+            title="Advanced edit"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
             </svg>
         </button>
         <!-- Save button (edit mode, hidden by default) -->
@@ -54,9 +65,9 @@
 
 <div class="p-4 space-y-6">
 
-    <!-- Charging Info -->
+    <!-- Charging -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Charging Info</h3>
+        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Charging</h3>
         <dl class="space-y-2">
             <div class="flex justify-between items-center">
                 <dt class="text-gray-400 text-sm">Charge Type</dt>
@@ -172,9 +183,9 @@
         </dl>
     </div>
 
-    <!-- Timing -->
+    <!-- Session -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Timing</h3>
+        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Session</h3>
         <dl class="space-y-2">
             <div class="flex justify-between">
                 <dt class="text-gray-400 text-sm">Start Time</dt>
@@ -484,7 +495,7 @@
     <div class="pt-2">
         <button
             type="button"
-            onclick="showDeleteModal({{ session.id }}, '{{ session.session_start_utc.strftime('%b %-d, %Y') if session.session_start_utc else 'Unknown Date' }}', '{{ session.location_name or 'Unknown' }}', '{{ cost_info.display_cost }}')"
+            onclick="if(confirm('Delete this session?')) { htmx.ajax('DELETE', '/sessions/{{ session.id }}', {swap:'none'}); closeDrawer(); }"
             class="bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900/50 rounded-lg px-4 py-2 text-sm w-full"
         >
             Delete Session
