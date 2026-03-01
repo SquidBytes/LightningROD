@@ -1,6 +1,9 @@
-# :lucide-file-input: Data Import
+# :lucide-file-input: Data Import (Seed Script)
 
-LightningROD starts with an empty database. The seed script imports charging session history from CSV files into PostgreSQL.
+!!! note "Importing via the web UI?"
+    To import CSV files through the browser with column mapping and duplicate detection, see the [CSV Import guide](../guide/csv-import.md).
+
+LightningROD starts with an empty database. The seed script imports charging session history from CSV files directly into PostgreSQL. This is best for initial setup and large bulk imports.
 
 ## Running the Seed Script
 

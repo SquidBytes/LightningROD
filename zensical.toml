@@ -18,6 +18,7 @@ nav = [
     "guide/costs.md",
     "guide/energy.md",
     "guide/settings.md",
+    "guide/csv-import.md",
   ]},
   {"Development" = [
     "development/setup.md",
