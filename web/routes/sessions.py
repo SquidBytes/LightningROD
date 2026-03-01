@@ -111,7 +111,6 @@ async def create_session(
     location_type: Annotated[Optional[str], Form()] = None,
     charge_type: Annotated[Optional[str], Form()] = None,
     duration_minutes: Annotated[Optional[float], Form()] = None,
-    notes: Annotated[Optional[str], Form()] = None,
 ):
     errors: dict[str, str] = {}
 
@@ -187,7 +186,6 @@ async def update_session(
     location_type: Annotated[Optional[str], Form()] = None,
     charge_type: Annotated[Optional[str], Form()] = None,
     charge_duration_minutes: Annotated[Optional[float], Form()] = None,
-    notes: Annotated[Optional[str], Form()] = None,
 ):
     # Validate enum fields
     errors: dict[str, str] = {}
@@ -217,7 +215,6 @@ async def update_session(
         session.charge_type = charge_type or None
     if charge_duration_minutes is not None:
         session.charge_duration_seconds = charge_duration_minutes * 60
-    # notes is accepted as a form field but the model has no notes column — silently ignored
 
     await db.commit()
     await db.refresh(session)
