@@ -9,10 +9,13 @@ Built for the Ford F-150 Lightning, but should work with any Ford EV.
 
 Currently using session data from a CSV file seeded at the start, but I have plans for alternative data sources
 - Ultimate goal is to ingest all vehicle related data from Home Assistant
+- Long term goal is to support data ingestion via OBD dongle
 
-This is my own personal project. If you would like to, please consider buying me a coffee.
+This is my own personal project, using it for fun and for learning. 
 
-<a href="https://www.buymeacoffee.com/SquidBytes"><img src="https://img.buymeacoffee.com/button-api/?text=Coffee&emoji=☕&slug=SquidBytes&button_colour=5F7FFF&font_colour=ffffff&font_family=Inter&outline_colour=000000&coffee_colour=FFDD00" /></a>
+If you would like to, please consider buying me a coffee.
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/SquidBytes)
 
 ## What It Does
 
