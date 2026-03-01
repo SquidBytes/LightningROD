@@ -1,8 +1,22 @@
+from typing import Optional
+
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import AppSettings, EVChargingNetwork
+
+# Predefined network colors for auto-assignment
+NETWORK_COLORS = {
+    "Tesla": "#E31937",
+    "Electrify America": "#00B140",
+    "ChargePoint": "#FF6600",
+    "EVgo": "#00AEEF",
+    "Blink": "#39B54A",
+    "Home": "#6366F1",
+    "FordPass": "#003478",
+}
+DEFAULT_COLOR = "#6B7280"  # gray-500
 
 
 async def get_all_networks(db: AsyncSession) -> list[EVChargingNetwork]:
@@ -13,18 +27,72 @@ async def get_all_networks(db: AsyncSession) -> list[EVChargingNetwork]:
     return list(result.scalars().all())
 
 
-async def upsert_network(
-    db: AsyncSession, network_id: int, cost_per_kwh: float, is_free: bool
-) -> None:
-    """Update cost_per_kwh and is_free for an existing charging network row."""
+async def create_network(
+    db: AsyncSession,
+    name: str,
+    cost_per_kwh: Optional[float],
+    is_free: bool,
+    color: Optional[str],
+) -> EVChargingNetwork:
+    """Create a new charging network row.
+
+    If color is None or empty, auto-assign from NETWORK_COLORS lookup by name,
+    falling back to DEFAULT_COLOR.
+    """
+    resolved_color = color if color else NETWORK_COLORS.get(name, DEFAULT_COLOR)
+    network = EVChargingNetwork(
+        network_name=name,
+        cost_per_kwh=cost_per_kwh,
+        is_free=is_free,
+        color=resolved_color,
+    )
+    db.add(network)
+    await db.commit()
+    await db.refresh(network)
+    return network
+
+
+async def update_network(
+    db: AsyncSession,
+    network_id: int,
+    name: str,
+    cost_per_kwh: Optional[float],
+    is_free: bool,
+    color: Optional[str],
+) -> Optional[EVChargingNetwork]:
+    """Update all fields of an existing charging network.
+
+    Returns the updated network or None if not found.
+    """
     result = await db.execute(
         select(EVChargingNetwork).where(EVChargingNetwork.id == network_id)
     )
     network = result.scalar_one_or_none()
-    if network is not None:
-        network.cost_per_kwh = cost_per_kwh
-        network.is_free = is_free
-        await db.commit()
+    if network is None:
+        return None
+    network.network_name = name
+    network.cost_per_kwh = cost_per_kwh
+    network.is_free = is_free
+    network.color = color if color else NETWORK_COLORS.get(name, DEFAULT_COLOR)
+    await db.commit()
+    await db.refresh(network)
+    return network
+
+
+async def delete_network(db: AsyncSession, network_id: int) -> bool:
+    """Delete a charging network by id.
+
+    Returns True if deleted, False if not found.
+    """
+    result = await db.execute(
+        select(EVChargingNetwork).where(EVChargingNetwork.id == network_id)
+    )
+    network = result.scalar_one_or_none()
+    if network is None:
+        return False
+    await db.delete(network)
+    await db.commit()
+    return True
 
 
 async def get_app_setting(

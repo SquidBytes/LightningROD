@@ -26,6 +26,7 @@ class EVChargingNetwork(Base):
     effective_date: Mapped[Optional[date]] = mapped_column(Date)
     notes: Mapped[Optional[str]] = mapped_column(Text)
     is_free: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    color: Mapped[Optional[str]] = mapped_column(String(7))  # hex color e.g. '#FF0000'
 
 
 class EVLocationLookup(Base):
