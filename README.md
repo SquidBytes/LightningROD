@@ -34,6 +34,27 @@ This is my own personal project. If you would like to, please consider buying me
 | Frontend | HTMX, Tailwind CSS, Plotly |
 | Deployment | Docker Compose |
 
+## Gallery
+
+### Session List and drawer
+
+![Screenshot of the main session page v0.1.5](docs/assets/images/lr_sessions.png)
+
+![Screenshot of the per session drawer v0.1.5](docs/assets/images/lr_sessions_drawer.png)
+
+### Cost Page
+
+![Screenshot of the cost page v0.1.5](docs/assets/images/lr_costs.png)
+
+### Energy Page
+
+![Screenshot of the energy page v0.1.5](docs/assets/images/lr_energy.png)
+
+### Settings Page
+
+![Screenshot of the settings page v0.1.5](docs/assets/images/lr_settings.png)
+
+
 ## Quick Start
 
 ### Docker Compose (recommended)
@@ -176,8 +197,7 @@ LightningROD uses 8 tables designed around the ha-fordpass data model. Only char
 
 ## Documentation
 
-<!-- TODO: Update URL once GitHub Pages is deployed -->
-Full documentation is available at the [documentation site](docs/index.md).
+Full documentation is available at the [documentation site](https://SquidBytes.github.io/LightningROD/).
 
 - [Installation](docs/getting-started/installation.md) -- Docker Compose setup and startup
 - [Configuration](docs/getting-started/configuration.md) -- Environment variables and in-app settings
