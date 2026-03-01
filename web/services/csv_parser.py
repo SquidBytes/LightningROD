@@ -8,8 +8,11 @@ import csv
 import hashlib
 import io
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # ---------------------------------------------------------------------------
 # CSV field options — descriptors for all mappable EVChargingSession columns
@@ -383,14 +386,294 @@ def make_session_id(
     return uuid.UUID(bytes=hashlib.md5(key.encode()).digest())
 
 
-def detect_duplicates(rows: list[dict], db_session: object) -> list[dict]:
-    """Stub: mark all rows as 'new'. Full implementation in Plan 02.
+# ---------------------------------------------------------------------------
+# Parsing helpers (adapted from scripts/seed.py)
+# ---------------------------------------------------------------------------
 
-    Returns rows unchanged with a '_status' field set to 'new'.
+_FREE_LOCATIONS = {"Work", "Dealership"}
+_WORK_LOCATIONS = {"Work"}
+_HOME_LOCATIONS = {"Home"}
+
+
+def _str_or_none(v: str) -> Optional[str]:
+    """Return stripped string or None if empty."""
+    v = v.strip() if v else ""
+    return v if v else None
+
+
+def _float_or_none(v: str) -> Optional[float]:
+    """Return float or None if empty/invalid."""
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_bool(v: str) -> bool:
+    """Return True for 'True'/'1'/'true'/'yes', False otherwise."""
+    return v.strip().lower() in ("true", "1", "yes") if v else False
+
+
+def _parse_timestamp(v: str) -> Optional[datetime]:
+    """Parse ISO timestamp string to timezone-aware datetime.
+
+    If result is naive (no tzinfo), treats as UTC.
     """
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    try:
+        dt = datetime.fromisoformat(v)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_uuid(v: str) -> Optional[uuid.UUID]:
+    """Parse a UUID string, returning None if empty or invalid."""
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    try:
+        return uuid.UUID(v)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _normalize_charge_type(charger_type: str, location_name: str) -> Optional[str]:
+    """Normalize charger type to 'AC' or 'DC'."""
+    ct = charger_type.strip() if charger_type else ""
+    if ct in ("AC Level 2", "AC_BASIC", "level_2", "ac_charging", "AC Level 1"):
+        return "AC"
+    if ct in ("DC_FAST", "dc_fast", "dc_charging"):
+        return "DC"
+    loc = location_name.strip() if location_name else ""
+    if not ct and loc == "Work":
+        return "AC"
+    return None
+
+
+def _classify_location_type(location_name: str) -> str:
+    """Classify location as 'home', 'work', or 'public'."""
+    loc = location_name.strip() if location_name else ""
+    if loc in _HOME_LOCATIONS or loc.lower() == "home":
+        return "home"
+    if loc in _WORK_LOCATIONS:
+        return "work"
+    return "public"
+
+
+def _classify_is_free(location_name: str) -> bool:
+    """Return True if the location is a free charging location."""
+    loc = location_name.strip() if location_name else ""
+    return loc in _FREE_LOCATIONS
+
+
+# ---------------------------------------------------------------------------
+# Per-DB-field parse functions for transform_rows
+# ---------------------------------------------------------------------------
+
+# Maps db_field_name -> parse function for each column that needs type conversion
+_DB_FIELD_PARSERS: dict[str, object] = {
+    "session_start_utc": _parse_timestamp,
+    "session_end_utc": _parse_timestamp,
+    "recorded_at": _parse_timestamp,
+    "energy_kwh": _float_or_none,
+    "cost": _float_or_none,
+    "cost_without_overrides": _float_or_none,
+    "charging_kw": _float_or_none,
+    "max_power": _float_or_none,
+    "min_power": _float_or_none,
+    "start_soc": _float_or_none,
+    "end_soc": _float_or_none,
+    "miles_added": _float_or_none,
+    "charging_voltage": _float_or_none,
+    "charging_amperage": _float_or_none,
+    "is_complete": _parse_bool,
+    "is_free": _parse_bool,
+    "location_name": _str_or_none,
+    "charge_type": _str_or_none,
+    "location_type": _str_or_none,
+    "device_id": _str_or_none,
+    "source_system": _str_or_none,
+    "session_id": _parse_uuid,
+    # charge_duration_seconds is handled specially (may come as minutes)
+}
+
+
+def transform_rows(raw_rows: list[dict], column_mapping: dict[str, str]) -> list[dict]:
+    """Transform raw CSV rows into DB-ready dicts using the given column mapping.
+
+    Args:
+        raw_rows: List of raw string dicts from parse_csv_file.
+        column_mapping: Dict mapping CSV header names to DB field names.
+                        Empty string values mean "skip this column".
+
+    Returns:
+        List of transformed row dicts with:
+        - DB field names and parsed values
+        - _row_index: 0-based position in input
+        - _status: 'new' | 'error'
+        - _error: error message (only on error rows)
+        - session_id: deterministic UUID
+        - source_system: 'csv_import'
+        - is_complete: True
+    """
+    # Build effective mapping (exclude skip entries)
+    effective_mapping = {k: v for k, v in column_mapping.items() if v}
+
+    # Identify if duration_minutes is being mapped to charge_duration_seconds
+    # (needs * 60 conversion like seed.py)
+    duration_csv_cols = {
+        csv_col
+        for csv_col, db_col in effective_mapping.items()
+        if db_col == "charge_duration_seconds"
+        and _normalize_key(csv_col) in (_normalize_key("duration_minutes"),)
+    }
+
     result = []
-    for row in rows:
-        row_copy = dict(row)
-        row_copy["_status"] = "new"
-        result.append(row_copy)
+    for idx, raw_row in enumerate(raw_rows):
+        db_row: dict = {}
+
+        for csv_col, db_col in effective_mapping.items():
+            raw_val = raw_row.get(csv_col, "")
+
+            # Special case: duration in minutes -> seconds
+            if csv_col in duration_csv_cols and db_col == "charge_duration_seconds":
+                stripped = raw_val.strip() if raw_val else ""
+                db_row[db_col] = float(stripped) * 60 if stripped else None
+                continue
+
+            # Use registered parser or fall through as string
+            parser = _DB_FIELD_PARSERS.get(db_col)
+            if parser is not None:
+                db_row[db_col] = parser(raw_val)  # type: ignore[operator]
+            else:
+                # Numeric fallback for any unmapped field
+                db_row[db_col] = _str_or_none(raw_val)
+
+        # --- Computed / override fields ---
+        location_name = db_row.get("location_name") or ""
+        charger_type_raw = db_row.get("charge_type") or ""
+
+        # Normalize charge_type (overwrite whatever was parsed from CSV)
+        db_row["charge_type"] = _normalize_charge_type(charger_type_raw, location_name)
+        db_row["location_type"] = _classify_location_type(location_name)
+        db_row["is_free"] = _classify_is_free(location_name)
+        db_row["source_system"] = "csv_import"
+        db_row["is_complete"] = True
+
+        # Generate deterministic session_id if not provided as a valid UUID
+        existing_session_id = db_row.get("session_id")
+        if existing_session_id is None:
+            db_row["session_id"] = make_session_id(
+                db_row.get("session_start_utc"),
+                location_name or None,
+                db_row.get("energy_kwh"),
+            )
+
+        # --- Status ---
+        db_row["_row_index"] = idx
+        energy = db_row.get("energy_kwh")
+        start = db_row.get("session_start_utc")
+        if energy is None and start is None:
+            db_row["_status"] = "error"
+            db_row["_error"] = "Missing energy and start time"
+        else:
+            db_row["_status"] = "new"
+
+        result.append(db_row)
+
     return result
+
+
+async def detect_duplicates(rows: list[dict], db_session: AsyncSession) -> list[dict]:
+    """Mark rows as duplicate or fuzzy_duplicate by querying the database.
+
+    Layer 1 (deterministic): Match by session_id.
+    Layer 2 (fuzzy): Match by timestamp window (±1 hour), location, and energy (±10%).
+
+    Args:
+        rows: List of transformed row dicts from transform_rows.
+        db_session: Active SQLAlchemy AsyncSession.
+
+    Returns:
+        Updated rows list with _status and optional _matched_id set.
+    """
+    # Collect session_ids from non-error rows
+    session_ids = [
+        str(row["session_id"])
+        for row in rows
+        if row.get("_status") != "error" and row.get("session_id") is not None
+    ]
+
+    # Layer 1: deterministic session_id match
+    matched_ids: set[str] = set()
+    if session_ids:
+        result = await db_session.execute(
+            text(
+                "SELECT session_id FROM ev_charging_session "
+                "WHERE session_id = ANY(:ids)"
+            ),
+            {"ids": session_ids},
+        )
+        for (sid,) in result.fetchall():
+            matched_ids.add(str(sid))
+
+    # Apply Layer 1 matches
+    for row in rows:
+        if row.get("_status") == "error":
+            continue
+        sid = str(row.get("session_id", ""))
+        if sid in matched_ids:
+            row["_status"] = "duplicate"
+
+    # Layer 2: fuzzy matching for remaining 'new' rows that have a start time
+    for row in rows:
+        if row.get("_status") != "new":
+            continue
+        start = row.get("session_start_utc")
+        if start is None:
+            continue
+        location = row.get("location_name") or ""
+        energy = row.get("energy_kwh")
+
+        window_start = start - timedelta(hours=1)
+        window_end = start + timedelta(hours=1)
+
+        fuzzy_result = await db_session.execute(
+            text(
+                """
+                SELECT id, energy_kwh
+                FROM ev_charging_session
+                WHERE session_start_utc BETWEEN :window_start AND :window_end
+                  AND location_name = :location
+                """
+            ),
+            {
+                "window_start": window_start,
+                "window_end": window_end,
+                "location": location,
+            },
+        )
+        fuzzy_matches = fuzzy_result.fetchall()
+
+        for match_id, match_energy in fuzzy_matches:
+            # Check energy within 10% tolerance
+            if energy is not None and match_energy is not None:
+                tolerance = abs(float(match_energy)) * 0.1
+                if abs(float(energy) - float(match_energy)) <= tolerance:
+                    row["_status"] = "fuzzy_duplicate"
+                    row["_matched_id"] = match_id
+                    break
+            elif energy is None and match_energy is None:
+                row["_status"] = "fuzzy_duplicate"
+                row["_matched_id"] = match_id
+                break
+
+    return rows

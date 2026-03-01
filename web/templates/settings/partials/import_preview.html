@@ -1,0 +1,237 @@
+{# Import Preview — rendered after column mapping, before final import.
+   Receives: preview_rows, total_rows, new_count, dup_count, error_count,
+             import_data_json
+   Submits to: POST /settings/import/execute #}
+<div class="space-y-6">
+
+    {# Header #}
+    <div>
+        <h3 class="text-lg font-semibold text-gray-100">Preview Import</h3>
+        <p class="text-gray-400 text-sm mt-1">
+            Review the parsed rows before importing. Select which rows to import.
+        </p>
+    </div>
+
+    <form id="import-preview-form" class="space-y-4">
+
+        {# Hidden field carrying ALL transformed row data for the import step #}
+        <input type="hidden" name="import_data" value="{{ import_data_json | e }}">
+
+        {# Summary bar #}
+        <div class="bg-gray-900 rounded-xl border border-gray-800 px-6 py-4 flex flex-wrap items-center gap-4 text-sm">
+            <span class="text-gray-400">
+                Showing
+                <span class="text-white font-medium">{{ preview_rows | length }}</span>
+                of
+                <span class="text-white font-medium">{{ total_rows }}</span>
+                rows
+            </span>
+            <span class="text-green-400 font-medium">{{ new_count }} new</span>
+            {% if dup_count > 0 %}
+            <span class="text-yellow-400 font-medium">{{ dup_count }} duplicate{{ 's' if dup_count != 1 else '' }}</span>
+            {% endif %}
+            {% if error_count > 0 %}
+            <span class="text-red-400 font-medium">{{ error_count }} error{{ 's' if error_count != 1 else '' }}</span>
+            {% endif %}
+        </div>
+
+        {# Bulk selection controls #}
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-400">Select:</span>
+            <button
+                type="button"
+                onclick="selectPreset('non_duplicates')"
+                class="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 rounded transition-colors"
+            >
+                All Non-Duplicates
+            </button>
+            <button
+                type="button"
+                onclick="selectPreset('all')"
+                class="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 rounded transition-colors"
+            >
+                All
+            </button>
+            <button
+                type="button"
+                onclick="selectPreset('none')"
+                class="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 rounded transition-colors"
+            >
+                None
+            </button>
+        </div>
+
+        {# Preview table #}
+        <div class="bg-gray-900 rounded-xl border border-gray-800 overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-gray-400 border-b border-gray-800">
+                        <th class="px-4 py-3 font-medium w-8"></th>
+                        <th class="px-4 py-3 font-medium w-8">#</th>
+                        <th class="px-4 py-3 font-medium">Date</th>
+                        <th class="px-4 py-3 font-medium">Location</th>
+                        <th class="px-4 py-3 font-medium text-right">Energy (kWh)</th>
+                        <th class="px-4 py-3 font-medium text-right">Cost</th>
+                        <th class="px-4 py-3 font-medium">Type</th>
+                        <th class="px-4 py-3 font-medium">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">
+                    {% for row in preview_rows %}
+                    {% set row_status = row.get('_status', 'new') %}
+                    {% set is_error = row_status == 'error' %}
+                    {% set is_dup = row_status in ('duplicate', 'fuzzy_duplicate') %}
+                    <tr
+                        class="{% if is_error %}bg-red-950/20{% elif is_dup %}bg-yellow-950/10{% else %}hover:bg-gray-800/50{% endif %} transition-colors"
+                        data-row-status="{{ row_status }}"
+                        data-row-index="{{ row.get('_row_index', loop.index0) }}"
+                    >
+                        {# Checkbox — pre-checked for 'new', unchecked for duplicates/errors #}
+                        <td class="px-4 py-3">
+                            <input
+                                type="checkbox"
+                                name="selected_rows"
+                                value="{{ row.get('_row_index', loop.index0) }}"
+                                {% if row_status == 'new' %}checked{% endif %}
+                                class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
+                            >
+                        </td>
+
+                        {# Row number #}
+                        <td class="px-4 py-3 text-gray-500 text-xs">
+                            {{ row.get('_row_index', loop.index0) + 1 }}
+                        </td>
+
+                        {# Date #}
+                        <td class="px-4 py-3 text-gray-200 text-xs whitespace-nowrap">
+                            {% set start = row.get('session_start_utc') %}
+                            {% if start %}
+                                {% if start is string %}
+                                    {{ start[:10] }}
+                                {% else %}
+                                    {{ start.strftime('%Y-%m-%d') }}
+                                {% endif %}
+                            {% else %}
+                                <span class="text-gray-500">—</span>
+                            {% endif %}
+                        </td>
+
+                        {# Location #}
+                        <td class="px-4 py-3 text-gray-200 text-xs">
+                            {{ row.get('location_name') or '—' }}
+                        </td>
+
+                        {# Energy #}
+                        <td class="px-4 py-3 text-gray-200 text-xs text-right">
+                            {% set kwh = row.get('energy_kwh') %}
+                            {% if kwh is not none %}
+                                {{ "%.2f"|format(kwh) }}
+                            {% else %}
+                                <span class="text-gray-500">—</span>
+                            {% endif %}
+                        </td>
+
+                        {# Cost #}
+                        <td class="px-4 py-3 text-gray-200 text-xs text-right">
+                            {% set cost = row.get('cost') %}
+                            {% if cost is not none %}
+                                ${{ "%.2f"|format(cost) }}
+                            {% else %}
+                                <span class="text-gray-500">—</span>
+                            {% endif %}
+                        </td>
+
+                        {# Charge Type #}
+                        <td class="px-4 py-3 text-gray-400 text-xs">
+                            {{ row.get('charge_type') or '—' }}
+                        </td>
+
+                        {# Status badge #}
+                        <td class="px-4 py-3">
+                            {% if row_status == 'new' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-300 border border-green-800">
+                                    New
+                                </span>
+                            {% elif row_status == 'duplicate' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-900/50 text-yellow-300 border border-yellow-800">
+                                    Duplicate
+                                </span>
+                            {% elif row_status == 'fuzzy_duplicate' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-900/50 text-orange-300 border border-orange-800">
+                                    Fuzzy Match
+                                </span>
+                            {% elif row_status == 'error' %}
+                                <span
+                                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-900/50 text-red-300 border border-red-800"
+                                    title="{{ row.get('_error', 'Unknown error') }}"
+                                >
+                                    Error
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {# "... and N more rows" message #}
+            {% if total_rows > 25 %}
+            <div class="px-6 py-3 border-t border-gray-800 text-sm text-gray-500 text-center">
+                ... and {{ total_rows - 25 }} more row{{ 's' if (total_rows - 25) != 1 else '' }} not shown
+                (all rows will be available for import based on your selection above)
+            </div>
+            {% endif %}
+        </div>
+
+        {# Action buttons #}
+        <div class="flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <button
+                    type="button"
+                    hx-post="/settings/import/upload"
+                    class="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors"
+                    onclick="document.getElementById('import-flow-container').innerHTML = ''"
+                >
+                    Back to Column Mapping
+                </button>
+                <button
+                    type="button"
+                    onclick="document.getElementById('import-flow-container').innerHTML = ''"
+                    class="px-4 py-2 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                    Cancel
+                </button>
+            </div>
+
+            <button
+                type="button"
+                hx-post="/settings/import/execute"
+                hx-target="#import-flow-container"
+                hx-swap="innerHTML"
+                hx-include="#import-preview-form"
+                class="px-5 py-2 bg-green-700 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+                Import Selected Rows
+            </button>
+        </div>
+
+    </form>
+</div>
+
+<script>
+function selectPreset(mode) {
+    var checkboxes = document.querySelectorAll('#import-preview-form input[name="selected_rows"]');
+    checkboxes.forEach(function(cb) {
+        var row = cb.closest('tr');
+        var status = row ? row.getAttribute('data-row-status') : 'new';
+        if (mode === 'all') {
+            cb.checked = true;
+        } else if (mode === 'none') {
+            cb.checked = false;
+        } else if (mode === 'non_duplicates') {
+            // Select only 'new' rows; uncheck duplicates and errors
+            cb.checked = (status === 'new');
+        }
+    });
+}
+</script>
