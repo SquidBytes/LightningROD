@@ -1,54 +1,58 @@
-{# Column Mapper — rendered after CSV upload, before import confirmation.
+{# Column Mapper — rendered after CSV upload, before import preview.
    Receives: csv_headers, db_fields, auto_mappings, row_count, rows_json, headers_json, filename
-   Full implementation in Phase 7 Plan 02. #}
+   Submits to: POST /settings/import/preview #}
 <div class="space-y-6">
     <div class="flex items-center justify-between">
         <div>
-            <h3 class="text-lg font-semibold text-gray-100">Map Columns</h3>
+            <h3 class="text-lg font-semibold text-gray-100">Map CSV Columns</h3>
             <p class="text-gray-400 text-sm mt-1">
+                Match your CSV columns to the database fields.
+                Auto-detected mappings are pre-selected.
                 Parsed <span class="text-white font-medium">{{ row_count }}</span> rows
                 from <span class="text-white font-medium">{{ filename }}</span>.
-                Map your CSV columns to the charging session fields below.
             </p>
         </div>
     </div>
 
     <form
-        hx-post="/settings/import/confirm"
+        id="column-mapper-form"
+        hx-post="/settings/import/preview"
         hx-target="#import-flow-container"
         hx-swap="innerHTML"
+        hx-include="closest form"
         class="space-y-4"
     >
-        {# Pass serialized data through as hidden fields for stateless flow #}
-        <input type="hidden" name="rows_json" value="{{ rows_json | e }}">
-        <input type="hidden" name="headers_json" value="{{ headers_json | e }}">
+        {# Pass serialized CSV data through as hidden fields for stateless flow #}
+        <input type="hidden" name="csv_data" value="{{ rows_json | e }}">
+        <input type="hidden" name="csv_headers" value="{{ headers_json | e }}">
 
-        {# Column mapping dropdowns #}
+        {# Column mapping dropdowns — one row per CSV column #}
         <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-left text-gray-400 border-b border-gray-800">
-                        <th class="pb-3 font-medium">CSV Column</th>
+                        <th class="pb-3 font-medium w-1/3">CSV Column</th>
                         <th class="pb-3 font-medium">Maps To</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-800">
                     {% for header in csv_headers %}
                     <tr>
-                        <td class="py-3 pr-4 text-gray-200 font-mono text-xs">{{ header }}</td>
+                        <td class="py-3 pr-4">
+                            <span class="text-gray-200 font-mono text-xs font-bold">{{ header }}</span>
+                        </td>
                         <td class="py-3">
                             <select
-                                name="mapping_{{ loop.index0 }}"
-                                data-csv-header="{{ header }}"
-                                class="bg-gray-800 border border-gray-700 text-gray-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500 w-full"
+                                name="mapping_{{ header }}"
+                                class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 text-sm w-full focus:outline-none focus:border-blue-500"
                             >
-                                <option value="">-- Skip this column --</option>
+                                <option value="">— Skip this column —</option>
                                 {% for field in db_fields %}
                                 <option
                                     value="{{ field.field }}"
                                     {% if auto_mappings.get(header) == field.field %}selected{% endif %}
                                 >
-                                    {{ field.label }}{% if field.important %} *{% endif %}
+                                    {{ field.label }} — {{ field.description }}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -59,7 +63,8 @@
             </table>
         </div>
 
-        <div class="flex justify-end gap-3">
+        {# Action buttons #}
+        <div class="flex justify-between items-center">
             <button
                 type="button"
                 onclick="document.getElementById('import-flow-container').innerHTML = ''"
@@ -71,7 +76,7 @@
                 type="submit"
                 class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
             >
-                Preview Import
+                Continue to Preview
             </button>
         </div>
     </form>
