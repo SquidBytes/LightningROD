@@ -1,10 +1,8 @@
 """Dashboard query layer and chart builders.
 
 Provides summary aggregation for the landing dashboard page.
-Reuses chart builders from costs and energy queries where possible.
 """
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 from sqlalchemy import select
@@ -12,14 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
 from web.queries.costs import (
-    build_monthly_cost_chart,
     compute_session_cost,
     get_networks_by_name,
     query_cost_summary,
-    query_monthly_costs,
 )
 
-MOVING_AVG_WINDOW = 10
+# Shared Plotly modebar config — show minimal controls, hide logo
+_PLOTLY_CONFIG = {
+    "displayModeBar": True,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
+    "displaylogo": False,
+}
 
 
 async def query_dashboard_summary(db: AsyncSession) -> dict:
@@ -109,6 +110,7 @@ def build_energy_by_network_chart(
                 values=values,
                 hole=0.45,
                 textinfo="percent+label",
+                hovertemplate="<b>%{label}</b><br>%{value:.1f} kWh (%{percent})<extra></extra>",
                 **marker_kwargs,
             )
         ]
@@ -119,68 +121,57 @@ def build_energy_by_network_chart(
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
         margin=dict(l=20, r=20, t=20, b=40),
+        hovermode="closest",
     )
-    return fig.to_html(full_html=False, include_plotlyjs=False)
+    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
 
 
-def build_dashboard_efficiency_chart(
+def build_cumulative_energy_chart(
     sessions: list,
-    unit_label: str = "mi/kWh",
-    unit_factor: float = 1.0,
+    network_colors: dict[str, str] | None = None,
 ) -> str:
-    """Build a Plotly scatter+line efficiency trend chart from raw session objects.
+    """Build a Plotly area chart showing cumulative kWh over time.
+
+    Shows running total of energy consumed, colored by network when possible.
 
     Args:
-        sessions: List of EVChargingSession ORM objects. Sessions without
-                  miles_added or energy_kwh are skipped automatically.
-        unit_label: Y-axis label (e.g. 'mi/kWh' or 'km/kWh').
-        unit_factor: Conversion multiplier (1.0 for US, 1.60934 for EU).
+        sessions: List of EVChargingSession ORM objects.
+        network_colors: Optional dict (unused for area, reserved for future use).
 
     Returns:
-        HTML div string (include_plotlyjs=False). Empty string if no valid sessions.
+        HTML div string (include_plotlyjs=False). Empty string if no data.
     """
-    # Build data points from raw session objects
-    data_points = []
-    for s in sessions:
-        if s.energy_kwh is None or float(s.energy_kwh) == 0:
-            continue
-        if s.miles_added is None:
-            continue
-        eff = float(s.miles_added) / float(s.energy_kwh) * unit_factor
-        data_points.append(
-            {
-                "date": s.session_start_utc,
-                "efficiency": eff,
-            }
-        )
-
-    if not data_points:
+    if not sessions:
         return ""
 
     pio.templates.default = "plotly_dark"
 
-    df = pd.DataFrame(data_points)
-    df = df.sort_values("date").dropna(subset=["efficiency"])
+    data_points = []
+    for s in sessions:
+        if s.session_start_utc is None or s.energy_kwh is None:
+            continue
+        data_points.append({
+            "date": s.session_start_utc,
+            "kwh": float(s.energy_kwh),
+        })
 
-    window = min(MOVING_AVG_WINDOW, len(df))
-    df["rolling_avg"] = df["efficiency"].rolling(window=window, min_periods=1).mean()
+    if not data_points:
+        return ""
 
-    fig = px.scatter(
-        df,
-        x="date",
-        y="efficiency",
-        labels={"efficiency": unit_label, "date": ""},
-        color_discrete_sequence=["#60a5fa"],
-    )
+    df = pd.DataFrame(data_points).sort_values("date")
+    df["cumulative_kwh"] = df["kwh"].cumsum()
 
-    # Add rolling average line
+    fig = go.Figure()
     fig.add_trace(
         go.Scatter(
             x=df["date"],
-            y=df["rolling_avg"],
+            y=df["cumulative_kwh"],
             mode="lines",
-            name=f"{MOVING_AVG_WINDOW}-session avg",
-            line=dict(color="#facc15", width=2, dash="dash"),
+            fill="tozeroy",
+            name="Cumulative kWh",
+            line=dict(color="#60a5fa", width=2),
+            fillcolor="rgba(96, 165, 250, 0.15)",
+            hovertemplate="<b>%{x|%b %d, %Y}</b><br>Total: %{y:.1f} kWh<extra></extra>",
         )
     )
 
@@ -188,8 +179,10 @@ def build_dashboard_efficiency_chart(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=20, b=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        yaxis_title=unit_label,
+        yaxis_title="Total kWh",
+        xaxis_title="",
+        showlegend=False,
+        hovermode="x unified",
     )
 
-    return fig.to_html(full_html=False, include_plotlyjs=False)
+    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)

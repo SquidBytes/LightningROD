@@ -51,13 +51,13 @@
     {# ── Charts ───────────────────────────────────────────────────────── #}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
-        {# Monthly Cost Trend #}
+        {# Cumulative Energy Over Time #}
         <div class="bg-gray-900 rounded-xl border border-gray-800 p-4">
-            <h3 class="text-sm font-medium uppercase tracking-wide text-gray-500 mb-2">Monthly Cost Trend</h3>
-            {% if monthly_cost_chart %}
-            {{ monthly_cost_chart|safe }}
+            <h3 class="text-sm font-medium uppercase tracking-wide text-gray-500 mb-2">Energy Over Time</h3>
+            {% if cumulative_chart %}
+            {{ cumulative_chart|safe }}
             {% else %}
-            <p class="text-gray-600 text-sm py-8 text-center">No cost data available.</p>
+            <p class="text-gray-600 text-sm py-8 text-center">No energy data available.</p>
             {% endif %}
         </div>
 
@@ -70,16 +70,6 @@
             <p class="text-gray-600 text-sm py-8 text-center">No network data available.</p>
             {% endif %}
         </div>
-    </div>
-
-    {# Efficiency Trend — full width #}
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-4">
-        <h3 class="text-sm font-medium uppercase tracking-wide text-gray-500 mb-2">Charging Efficiency Trend</h3>
-        {% if efficiency_chart %}
-        {{ efficiency_chart|safe }}
-        {% else %}
-        <p class="text-gray-600 text-sm py-8 text-center">No efficiency data available — requires sessions with miles added.</p>
-        {% endif %}
     </div>
 
     {% endif %}
