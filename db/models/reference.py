@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, Integer, Numeric, String, Text, text
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -44,6 +44,9 @@ class EVLocationLookup(Base):
     longitude: Mapped[Optional[float]] = mapped_column(Numeric)
     location_type: Mapped[Optional[str]] = mapped_column(String)
     notes: Mapped[Optional[str]] = mapped_column(Text)
+    network_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ev_charging_networks.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class EVStatistics(Base):
