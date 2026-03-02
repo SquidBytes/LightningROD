@@ -13,6 +13,7 @@ SORTABLE_COLUMNS = {
     "energy": EVChargingSession.energy_kwh,
     "cost": EVChargingSession.cost,
     "location": EVChargingSession.location_name,
+    "network": EVChargingSession.network_id,
     "charge_type": EVChargingSession.charge_type,
     "duration": EVChargingSession.charge_duration_seconds,
 }
@@ -38,6 +39,7 @@ async def query_sessions(
     date_to: Optional[str] = None,
     charge_type: Optional[str] = None,
     location_type: Optional[str] = None,
+    network_id: Optional[int] = None,
     sort_by: Optional[str] = None,
     sort_dir: Optional[str] = None,
 ) -> tuple[list[EVChargingSession], int, dict]:
@@ -103,6 +105,10 @@ async def query_sessions(
     # Location type filter
     if location_type:
         filters.append(EVChargingSession.location_type == location_type)
+
+    # Network filter
+    if network_id:
+        filters.append(EVChargingSession.network_id == network_id)
 
     # Apply all filters
     for f in filters:

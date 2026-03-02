@@ -32,6 +32,7 @@ async def sessions(
     date_to: Optional[str] = None,
     charge_type: Optional[str] = None,
     location_type: Optional[str] = None,
+    network_id: Optional[int] = None,
     sort_by: Optional[str] = None,
     sort_dir: Optional[str] = None,
     hx_request: Annotated[Optional[str], Header()] = None,
@@ -44,6 +45,7 @@ async def sessions(
         date_to=date_to,
         charge_type=charge_type,
         location_type=location_type,
+        network_id=network_id,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
@@ -54,6 +56,7 @@ async def sessions(
     networks_by_name = await get_networks_by_name(db)
     all_networks = await get_all_networks(db)
     network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
+    network_map = {n.id: n for n in all_networks}
 
     enriched_sessions = []
     for s in session_list:
@@ -72,6 +75,8 @@ async def sessions(
         filter_params["charge_type"] = charge_type
     if location_type:
         filter_params["location_type"] = location_type
+    if network_id:
+        filter_params["network_id"] = network_id
     if sort_by:
         filter_params["sort_by"] = sort_by
     if sort_dir:
@@ -88,10 +93,13 @@ async def sessions(
         "date_to": date_to,
         "charge_type": charge_type,
         "location_type": location_type,
+        "network_id": network_id,
         "sort_by": sort_by,
         "sort_dir": sort_dir,
         "filter_params": filter_params,
         "network_colors": network_colors,
+        "network_map": network_map,
+        "networks": all_networks,
         "active_page": "sessions",
         "page_title": "Sessions",
     }
@@ -161,6 +169,7 @@ async def create_session(
     location_id: Annotated[Optional[int], Form()] = None,
     plug_status: Annotated[Optional[str], Form()] = None,
     charging_status: Annotated[Optional[str], Form()] = None,
+    network_id: Annotated[Optional[int], Form()] = None,
     is_free_form: Annotated[Optional[str], Form(alias="is_free")] = None,
 ):
     errors: dict[str, str] = {}
@@ -219,6 +228,7 @@ async def create_session(
         location_name=location_name or None,
         location_type=location_type or None,
         location_id=location_id or None,
+        network_id=network_id or None,
         charge_type=charge_type or None,
         charge_duration_seconds=effective_duration * 60 if effective_duration is not None else None,
         plugged_in_duration_seconds=plugged_in_duration_minutes * 60 if plugged_in_duration_minutes is not None else None,
@@ -255,6 +265,7 @@ async def create_session(
         "next_id": None,
         "network_color": network_color,
         "network_colors": network_colors,
+        "networks": all_networks,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
     response.headers["HX-Trigger"] = "session-created, closeModal"
@@ -288,6 +299,7 @@ async def update_session(
     location_id: Annotated[Optional[int], Form()] = None,
     plug_status: Annotated[Optional[str], Form()] = None,
     charging_status: Annotated[Optional[str], Form()] = None,
+    network_id: Annotated[Optional[int], Form()] = None,
     is_free: Annotated[Optional[str], Form()] = None,
 ):
     # Validate enum fields
@@ -363,6 +375,8 @@ async def update_session(
         session.plug_status = plug_status or None
     if charging_status is not None:
         session.charging_status = charging_status or None
+    if network_id is not None:
+        session.network_id = network_id or None
     if is_free is not None:
         session.is_free = is_free in ('1', 'on', 'true')
 
@@ -383,6 +397,7 @@ async def update_session(
         "next_id": None,
         "network_color": network_color,
         "network_colors": network_colors,
+        "networks": all_networks,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
     response.headers["HX-Trigger"] = "session-updated, closeModal"
@@ -444,6 +459,7 @@ async def session_detail(
         "next_id": next_id,
         "network_color": network_color,
         "network_colors": network_colors,
+        "networks": all_networks,
     }
     return templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
 
