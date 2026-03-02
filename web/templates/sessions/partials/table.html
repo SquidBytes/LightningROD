@@ -144,12 +144,12 @@
                 </td>
 
                 <!-- Cost -->
-                <td class="px-4 py-3 text-right">
+                <td class="px-4 py-3 text-right w-[90px]">
                     {% if cost_info.is_free %}
                         <span class="text-green-400">Free</span>
                     {% elif cost_info.display_cost is not none %}
                         <span class="text-gray-200">${{ "%.2f"|format(cost_info.display_cost) }}</span>
-                        {% if cost_info.cost_source == 'manual' %}
+                        {% if session.source_system == 'manual_entry' %}
                             <span class="text-xs text-blue-400 ml-1" title="Manual entry">&#9998;</span>
                         {% elif cost_info.cost_source == 'calculated' %}
                             <span class="text-xs text-gray-500 ml-1" title="Estimated from network cost">~</span>

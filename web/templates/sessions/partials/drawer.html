@@ -510,6 +510,18 @@
                 </dd>
             </div>
             <div class="flex justify-between">
+                <dt class="text-gray-400 text-sm">Edit Status</dt>
+                <dd class="text-gray-200 text-sm">
+                    {% if session.source_system == 'manual_entry' %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">Manual Entry</span>
+                    {% elif session.cost_source == 'manual' %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-900/50 text-yellow-300">Edited</span>
+                    {% else %}
+                        <span class="text-gray-500">Original</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
                 <dt class="text-gray-400 text-sm">Ingested At</dt>
                 <dd class="text-gray-200 text-sm">
                     {% if session.ingested_at %}
