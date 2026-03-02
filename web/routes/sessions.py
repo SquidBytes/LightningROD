@@ -122,12 +122,14 @@ async def new_session_modal(
 ):
     """Render advanced edit modal in add mode with smart defaults."""
     default_location = await get_most_recent_location(db)
+    all_networks = await get_all_networks(db)
     context = {
         "session": None,
         "cost_info": None,
         "modal_mode": "add",
         "default_date": date.today().isoformat(),
         "default_location": default_location,
+        "networks": all_networks,
     }
     return templates.TemplateResponse(request, "sessions/partials/modal.html", context)
 
@@ -145,6 +147,21 @@ async def create_session(
     charge_type: Annotated[Optional[str], Form()] = None,
     duration_minutes: Annotated[Optional[float], Form()] = None,
     charge_duration_minutes: Annotated[Optional[float], Form()] = None,
+    max_power: Annotated[Optional[float], Form()] = None,
+    min_power: Annotated[Optional[float], Form()] = None,
+    charging_kw: Annotated[Optional[float], Form()] = None,
+    charging_voltage: Annotated[Optional[float], Form()] = None,
+    charging_amperage: Annotated[Optional[float], Form()] = None,
+    start_soc: Annotated[Optional[float], Form()] = None,
+    end_soc: Annotated[Optional[float], Form()] = None,
+    miles_added: Annotated[Optional[float], Form()] = None,
+    end_date: Annotated[Optional[str], Form()] = None,
+    end_time: Annotated[Optional[str], Form()] = None,
+    plugged_in_duration_minutes: Annotated[Optional[float], Form()] = None,
+    location_id: Annotated[Optional[int], Form()] = None,
+    plug_status: Annotated[Optional[str], Form()] = None,
+    charging_status: Annotated[Optional[str], Form()] = None,
+    is_free_form: Annotated[Optional[str], Form(alias="is_free")] = None,
 ):
     errors: dict[str, str] = {}
 
@@ -172,25 +189,49 @@ async def create_session(
     if errors:
         return JSONResponse(status_code=422, content={"errors": errors})
 
-    # Determine is_free based on cost
+    # Determine is_free: checkbox form value takes precedence; fall back to cost == 0
     is_free: Optional[bool] = None
-    if cost is not None:
+    if is_free_form is not None:
+        is_free = is_free_form in ('1', 'on', 'true')
+    elif cost is not None:
         is_free = cost == 0
 
     # Support both old form name (duration_minutes) and new modal name (charge_duration_minutes)
     effective_duration = duration_minutes if duration_minutes is not None else charge_duration_minutes
 
+    # Parse session_end_utc if end_date provided
+    session_end_utc = None
+    if end_date:
+        end_time_part = end_time or "00:00"
+        try:
+            session_end_utc = datetime.fromisoformat(f"{end_date}T{end_time_part}").replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+
     new_session = EVChargingSession(
         session_id=uuid.uuid4(),
         device_id="manual",
         session_start_utc=parsed_date,
+        session_end_utc=session_end_utc,
         energy_kwh=energy_kwh,
         cost=cost if cost is not None else None,
         cost_source="manual" if cost is not None else None,
         location_name=location_name or None,
         location_type=location_type or None,
+        location_id=location_id or None,
         charge_type=charge_type or None,
         charge_duration_seconds=effective_duration * 60 if effective_duration is not None else None,
+        plugged_in_duration_seconds=plugged_in_duration_minutes * 60 if plugged_in_duration_minutes is not None else None,
+        max_power=max_power or None,
+        min_power=min_power or None,
+        charging_kw=charging_kw or None,
+        charging_voltage=charging_voltage or None,
+        charging_amperage=charging_amperage or None,
+        start_soc=start_soc,
+        end_soc=end_soc,
+        miles_added=miles_added or None,
+        plug_status=plug_status or None,
+        charging_status=charging_status or None,
         is_complete=True,
         source_system="manual_entry",
         is_free=is_free,
@@ -233,6 +274,21 @@ async def update_session(
     energy_kwh: Annotated[Optional[float], Form()] = None,
     session_date: Annotated[Optional[str], Form()] = None,
     session_time: Annotated[Optional[str], Form()] = None,
+    max_power: Annotated[Optional[float], Form()] = None,
+    min_power: Annotated[Optional[float], Form()] = None,
+    charging_kw: Annotated[Optional[float], Form()] = None,
+    charging_voltage: Annotated[Optional[float], Form()] = None,
+    charging_amperage: Annotated[Optional[float], Form()] = None,
+    start_soc: Annotated[Optional[float], Form()] = None,
+    end_soc: Annotated[Optional[float], Form()] = None,
+    miles_added: Annotated[Optional[float], Form()] = None,
+    end_date: Annotated[Optional[str], Form()] = None,
+    end_time: Annotated[Optional[str], Form()] = None,
+    plugged_in_duration_minutes: Annotated[Optional[float], Form()] = None,
+    location_id: Annotated[Optional[int], Form()] = None,
+    plug_status: Annotated[Optional[str], Form()] = None,
+    charging_status: Annotated[Optional[str], Form()] = None,
+    is_free: Annotated[Optional[str], Form()] = None,
 ):
     # Validate enum fields
     errors: dict[str, str] = {}
@@ -276,6 +332,39 @@ async def update_session(
             session.session_start_utc = new_start
         except ValueError:
             pass  # Keep existing value on parse error
+    if end_date:
+        end_time_part = end_time or "00:00"
+        try:
+            new_end = datetime.fromisoformat(f"{end_date}T{end_time_part}").replace(tzinfo=timezone.utc)
+            session.session_end_utc = new_end
+        except ValueError:
+            pass
+    if max_power is not None:
+        session.max_power = max_power or None
+    if min_power is not None:
+        session.min_power = min_power or None
+    if charging_kw is not None:
+        session.charging_kw = charging_kw or None
+    if charging_voltage is not None:
+        session.charging_voltage = charging_voltage or None
+    if charging_amperage is not None:
+        session.charging_amperage = charging_amperage or None
+    if start_soc is not None:
+        session.start_soc = start_soc
+    if end_soc is not None:
+        session.end_soc = end_soc
+    if miles_added is not None:
+        session.miles_added = miles_added or None
+    if plugged_in_duration_minutes is not None:
+        session.plugged_in_duration_seconds = plugged_in_duration_minutes * 60
+    if location_id is not None:
+        session.location_id = location_id or None
+    if plug_status is not None:
+        session.plug_status = plug_status or None
+    if charging_status is not None:
+        session.charging_status = charging_status or None
+    if is_free is not None:
+        session.is_free = is_free in ('1', 'on', 'true')
 
     await db.commit()
     await db.refresh(session)
@@ -389,5 +478,6 @@ async def session_modal(
         "default_location": None,
         "network_color": network_color,
         "network_colors": network_colors,
+        "networks": all_networks,
     }
     return templates.TemplateResponse(request, "sessions/partials/modal.html", context)
