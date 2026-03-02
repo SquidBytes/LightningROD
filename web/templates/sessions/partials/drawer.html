@@ -311,6 +311,44 @@
                     </select>
                 </dd>
             </div>
+            <div class="flex justify-between items-center">
+                <dt class="text-gray-400 text-sm">Network</dt>
+                <dd class="text-gray-200 text-sm">
+                    <!-- Read mode -->
+                    <span data-read-field>
+                        {% if session.network_id and networks %}
+                            {% set current_net = namespace(obj=None) %}
+                            {% for net in networks %}
+                                {% if net.id == session.network_id %}
+                                    {% set current_net.obj = net %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if current_net.obj %}
+                                <span class="inline-flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ current_net.obj.color or '#6B7280' }}"></span>
+                                    {{ current_net.obj.network_name }}
+                                </span>
+                            {% else %}
+                                <span class="text-gray-500">—</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-gray-500">—</span>
+                        {% endif %}
+                    </span>
+                    <!-- Edit mode -->
+                    <select name="network_id" data-edit-field class="hidden bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 text-sm w-full">
+                        <option value="">— None —</option>
+                        {% if networks %}
+                            {% for net in networks %}
+                                <option value="{{ net.id }}"
+                                    {% if session.network_id == net.id %}selected{% endif %}
+                                    style="color: {{ net.color or '#6B7280' }}"
+                                >{{ net.network_name }}</option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                </dd>
+            </div>
             <div class="flex justify-between">
                 <dt class="text-gray-400 text-sm">Location ID</dt>
                 <dd class="text-gray-200 text-sm">

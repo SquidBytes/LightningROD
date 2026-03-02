@@ -16,6 +16,9 @@
 <!-- Hidden charge_type filter input (managed by column dropdown JS) -->
 <input type="hidden" id="filter_charge_type" name="charge_type" value="{{ charge_type or '' }}">
 
+<!-- Hidden network_id filter input (managed by column dropdown JS) -->
+<input type="hidden" id="filter_network_id" name="network_id" value="{{ network_id or '' }}">
+
 {% if sessions %}
 <!-- Data table -->
 <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden overflow-x-auto">
@@ -30,6 +33,14 @@
                 {% endwith %}
 
                 {% with col_id="location", col_label="Location", sort_key="location", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% set network_filter_values = [] %}
+                {% for net in networks %}
+                    {% set _ = network_filter_values.append({"value": net.id|string, "label": net.network_name, "checked": not network_id or network_id|string == net.id|string}) %}
+                {% endfor %}
+                {% with col_id="network", col_label="Network", sort_key="network", filter_key="network_id", filter_values=network_filter_values, filter_form_id="filter-form" %}
                     {% include "partials/column_dropdown.html" %}
                 {% endwith %}
 
@@ -84,6 +95,23 @@
                         </span>
                     {% elif session.location_type %}
                         <span class="capitalize">{{ session.location_type }}</span>
+                    {% else %}
+                        <span class="text-gray-500">—</span>
+                    {% endif %}
+                </td>
+
+                <!-- Network -->
+                <td class="px-4 py-3 text-gray-300">
+                    {% if session.network_id and network_map %}
+                        {% set net = network_map.get(session.network_id) %}
+                        {% if net %}
+                            <span class="inline-flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ net.color or '#6B7280' }}"></span>
+                                <span class="text-sm">{{ net.network_name }}</span>
+                            </span>
+                        {% else %}
+                            <span class="text-gray-500">—</span>
+                        {% endif %}
                     {% else %}
                         <span class="text-gray-500">—</span>
                     {% endif %}

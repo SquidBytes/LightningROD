@@ -195,19 +195,15 @@
                             </div>
                             <div>
                                 <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Network</label>
-                                <input
-                                    type="text"
-                                    name="network"
-                                    list="network-datalist"
-                                    value="{% if modal_mode == 'edit' and session %}{{ session.location_name or '' }}{% endif %}"
-                                    placeholder="e.g., Electrify America, ChargePoint"
-                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
-                                >
-                                <datalist id="network-datalist">
-                                    {% for network in networks %}
-                                        <option value="{{ network.network_name }}">
+                                <select name="network_id" class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full">
+                                    <option value="">— None —</option>
+                                    {% for net in networks %}
+                                        <option value="{{ net.id }}"
+                                            {% if modal_mode == 'edit' and session and session.network_id == net.id %}selected{% endif %}
+                                            style="color: {{ net.color or '#6B7280' }}"
+                                        >{{ net.network_name }}</option>
                                     {% endfor %}
-                                </datalist>
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Connector Type</label>
