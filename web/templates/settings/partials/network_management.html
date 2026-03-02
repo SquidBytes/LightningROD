@@ -14,6 +14,7 @@
                     <th class="text-left pb-2 text-gray-400 font-medium">Name</th>
                     <th class="text-left pb-2 text-gray-400 font-medium w-28">Cost/kWh</th>
                     <th class="text-left pb-2 text-gray-400 font-medium w-12">Free</th>
+                    <th class="text-left pb-2 text-gray-400 font-medium w-20">Locations</th>
                     <th class="text-right pb-2 text-gray-400 font-medium w-28">Actions</th>
                 </tr>
             </thead>
@@ -41,23 +42,12 @@
                             <span class="text-gray-500 text-xs">No</span>
                         {% endif %}
                     </td>
+                    <td class="py-2 text-gray-400 text-sm">{{ location_counts.get(network.id, 0) }}</td>
                     <td class="py-2 text-right">
                         <div class="flex justify-end gap-2">
                             <button
                                 type="button"
-                                onclick="toggleNetworkLocations({{ network.id }})"
-                                class="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
-                                title="Manage locations"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                            </button>
-                            <button
-                                hx-get="/settings/networks/{{ network.id }}/edit"
-                                hx-target="#network-row-{{ network.id }}"
-                                hx-swap="outerHTML"
+                                onclick="openNetworkModal({{ network.id }})"
                                 class="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors">
                                 Edit
                             </button>
@@ -72,16 +62,9 @@
                         </div>
                     </td>
                 </tr>
-                <tr id="network-locations-{{ network.id }}" class="hidden">
-                    <td colspan="5" class="py-0">
-                        <div id="locations-content-{{ network.id }}" class="bg-gray-800/30 px-6 py-3">
-                            {# Loaded via HTMX when expanded #}
-                        </div>
-                    </td>
-                </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5" class="py-4 text-center text-gray-500">No networks configured yet.</td>
+                    <td colspan="6" class="py-4 text-center text-gray-500">No networks configured yet.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -132,19 +115,3 @@
         </form>
     </div>
 </div>
-
-<script>
-function toggleNetworkLocations(networkId) {
-    var row = document.getElementById('network-locations-' + networkId);
-    var content = document.getElementById('locations-content-' + networkId);
-    if (row.classList.contains('hidden')) {
-        row.classList.remove('hidden');
-        if (!content.dataset.loaded) {
-            htmx.ajax('GET', '/settings/networks/' + networkId + '/locations', {target: content, swap: 'innerHTML'});
-            content.dataset.loaded = 'true';
-        }
-    } else {
-        row.classList.add('hidden');
-    }
-}
-</script>

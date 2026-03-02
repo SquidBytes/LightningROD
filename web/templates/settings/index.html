@@ -70,6 +70,13 @@
     {% include "settings/partials/import_tab.html" %}
 </div>
 
+{# Network edit modal shell — content loaded via HTMX when Edit is clicked #}
+<div id="network-modal" class="hidden z-[60]">
+  <div id="network-modal-content">
+    {# Modal content injected by openNetworkModal() #}
+  </div>
+</div>
+
 <script>
 function switchTab(tabName) {
     // All tab content divs
@@ -88,5 +95,21 @@ function switchTab(tabName) {
         }
     });
 }
+
+function openNetworkModal(networkId) {
+    htmx.ajax('GET', '/settings/networks/' + networkId + '/edit-modal',
+        {target: '#network-modal-content', swap: 'innerHTML'});
+    document.getElementById('network-modal').classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+}
+
+function closeNetworkModal() {
+    document.getElementById('network-modal').classList.add('hidden');
+    document.getElementById('network-modal-content').innerHTML = '';
+    document.body.classList.remove('overflow-hidden');
+}
+
+// Listen for closeNetworkModal HX-Trigger event (fired by PUT on save)
+document.body.addEventListener('closeNetworkModal', closeNetworkModal);
 </script>
 {% endblock %}
