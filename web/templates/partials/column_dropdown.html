@@ -126,7 +126,7 @@
             sortByInput.value = '';
             sortDirInput.value = '';
         }
-        document.dispatchEvent(new Event('filterChanged'));
+        htmx.trigger(document.body, 'filterChanged');
     };
 
     window.setSortAndFilter = function(sortKey, sortDir, formId) {
@@ -139,7 +139,7 @@
             d.classList.add('hidden');
         });
         // Trigger filter change
-        document.dispatchEvent(new Event('filterChanged'));
+        htmx.trigger(document.body, 'filterChanged');
     };
 
     window.applyColumnFilter = function(filterKey, formId) {
@@ -161,7 +161,7 @@
                 hiddenInput.value = checked[0];
             }
         }
-        document.dispatchEvent(new Event('filterChanged'));
+        htmx.trigger(document.body, 'filterChanged');
     };
 
     window.selectAllFilter = function(filterKey, formId) {
