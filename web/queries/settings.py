@@ -8,17 +8,17 @@ from db.models.reference import AppSettings, EVChargingNetwork, EVLocationLookup
 
 # Predefined EV charging networks with brand-accurate colors
 PREDEFINED_NETWORKS = [
-    {"name": "Tesla Supercharger", "color": "#E31937", "cost_per_kwh": None, "is_free": False},
-    {"name": "Electrify America", "color": "#00B140", "cost_per_kwh": None, "is_free": False},
-    {"name": "ChargePoint", "color": "#00A4E4", "cost_per_kwh": None, "is_free": False},
-    {"name": "EVgo", "color": "#F7941D", "cost_per_kwh": None, "is_free": False},
-    {"name": "Blink", "color": "#0072CE", "cost_per_kwh": None, "is_free": False},
-    {"name": "Flo", "color": "#6CBE45", "cost_per_kwh": None, "is_free": False},
-    {"name": "Ford BlueOval", "color": "#003478", "cost_per_kwh": None, "is_free": False},
-    {"name": "Rivian Adventure Network", "color": "#4DB848", "cost_per_kwh": None, "is_free": False},
-    {"name": "Shell Recharge", "color": "#FFD500", "cost_per_kwh": None, "is_free": False},
-    {"name": "BP Pulse", "color": "#009B3A", "cost_per_kwh": None, "is_free": False},
-    {"name": "Home", "color": "#6366F1", "cost_per_kwh": None, "is_free": True},
+    {"name": "Tesla Supercharger", "color": "#E31937", "cost_per_kwh": 0.35, "is_free": False},
+    {"name": "Electrify America", "color": "#00B140", "cost_per_kwh": 0.48, "is_free": False},
+    {"name": "ChargePoint", "color": "#00A4E4", "cost_per_kwh": 0.39, "is_free": False},
+    {"name": "EVgo", "color": "#F7941D", "cost_per_kwh": 0.35, "is_free": False},
+    {"name": "Blink", "color": "#0072CE", "cost_per_kwh": 0.49, "is_free": False},
+    {"name": "Flo", "color": "#6CBE45", "cost_per_kwh": 0.35, "is_free": False},
+    {"name": "Ford BlueOval", "color": "#003478", "cost_per_kwh": 0.33, "is_free": False},
+    {"name": "Rivian Adventure Network", "color": "#4DB848", "cost_per_kwh": 0.35, "is_free": False},
+    {"name": "Shell Recharge", "color": "#FFD500", "cost_per_kwh": 0.39, "is_free": False},
+    {"name": "BP Pulse", "color": "#009B3A", "cost_per_kwh": 0.36, "is_free": False},
+    {"name": "Home", "color": "#6366F1", "cost_per_kwh": 0.12, "is_free": True},
 ]
 
 # Derived color lookup for backward compatibility

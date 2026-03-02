@@ -3,13 +3,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from db.engine import engine
+from db.engine import AsyncSessionLocal, engine
+from web.queries.settings import seed_predefined_networks
 from web.routes import csv_import, dashboard, sessions, costs, energy, settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: engine is created at module import; nothing extra needed here
+    # Startup: seed predefined networks (idempotent — skips existing by name)
+    async with AsyncSessionLocal() as session:
+        await seed_predefined_networks(session)
     yield
     # Shutdown: dispose engine connections
     await engine.dispose()
