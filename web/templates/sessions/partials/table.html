@@ -12,7 +12,7 @@
 {% if sessions %}
 <!-- Data table -->
 <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden overflow-x-auto">
-    <table class="w-full text-sm">
+    <table class="w-full text-sm table-fixed">
         <thead>
             <tr class="border-b border-gray-800">
                 {% set current_sort_by = sort_by %}
@@ -67,7 +67,7 @@
                 onclick="openDrawer()"
             >
                 <!-- Date -->
-                <td class="px-4 py-3 text-gray-200">
+                <td class="px-4 py-3 text-gray-200 w-[120px]">
                     {% if session.session_start_utc %}
                         {{ session.session_start_utc.strftime("%b %-d, %Y") }}
                     {% else %}
@@ -76,9 +76,10 @@
                 </td>
 
                 <!-- Location with network color badge -->
-                <td class="px-4 py-3 text-gray-300">
+                <td class="px-4 py-3 text-gray-300 max-w-[160px] truncate">
                     {% if session.location_name %}
-                        {% set net_color = network_colors.get(session.location_name, '#6B7280') %}
+                        {% set net = network_map.get(session.network_id) if session.network_id else None %}
+                        {% set net_color = net.color if net and net.color else '#6B7280' %}
                         <span class="inline-flex items-center gap-1.5">
                             <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ net_color }}"></span>
                             {{ session.location_name }}
@@ -91,7 +92,7 @@
                 </td>
 
                 <!-- Network -->
-                <td class="px-4 py-3 text-gray-300">
+                <td class="px-4 py-3 text-gray-300 max-w-[140px] truncate">
                     {% if session.network_id and network_map %}
                         {% set net = network_map.get(session.network_id) %}
                         {% if net %}
@@ -108,7 +109,7 @@
                 </td>
 
                 <!-- Type badge -->
-                <td class="px-4 py-3">
+                <td class="px-4 py-3 w-[60px]">
                     {% if session.charge_type == 'DC' %}
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">DC</span>
                     {% elif session.charge_type == 'AC' %}
@@ -119,7 +120,7 @@
                 </td>
 
                 <!-- kWh -->
-                <td class="px-4 py-3 text-right text-gray-200">
+                <td class="px-4 py-3 text-right text-gray-200 w-[70px]">
                     {% if session.energy_kwh is not none %}
                         {{ "%.1f"|format(session.energy_kwh) }}
                     {% else %}
@@ -128,7 +129,7 @@
                 </td>
 
                 <!-- Duration -->
-                <td class="px-4 py-3 text-right text-gray-300">
+                <td class="px-4 py-3 text-right text-gray-300 w-[90px]">
                     {% if session.charge_duration_seconds is not none %}
                         {% set total_seconds = session.charge_duration_seconds|int %}
                         {% set hours = total_seconds // 3600 %}
