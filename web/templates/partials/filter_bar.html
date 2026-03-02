@@ -14,8 +14,8 @@
       {% set presets = [("7d", "7d"), ("30d", "30d"), ("90d", "90d"), ("ytd", "YTD"), ("1y", "1y"), ("all", "All")] %}
       {% for value, label in presets %}
       <button type="button"
-        onclick="setFilter('date_preset_input', '{{ value }}'); document.querySelector('[name=date_from]') && (document.querySelector('[name=date_from]').value=''); document.querySelector('[name=date_to]') && (document.querySelector('[name=date_to]').value=''); htmx.trigger(document.body, 'filterChanged')"
-        class="px-3 py-1 text-xs font-medium rounded-full transition-colors {% if active_preset == value or (not active_preset and value == 'all') %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200 border border-gray-700{% endif %}"
+        onclick="activatePreset(this, '{{ value }}')"
+        class="filter-preset-btn px-3 py-1 text-xs font-medium rounded-full transition-colors {% if active_preset == value or (not active_preset and value == 'all') %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200 border border-gray-700{% endif %}"
       >{{ label }}</button>
       {% endfor %}
     </div>
@@ -24,11 +24,11 @@
     <div class="flex items-center gap-1.5">
       <span class="text-gray-500 text-xs">From</span>
       <input type="date" name="date_from" value="{{ date_from or '' }}"
-        onchange="document.getElementById('date_preset_input').value = ''; htmx.trigger(document.body, 'filterChanged')"
+        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('bg-blue-600','text-white'); b.classList.add('bg-gray-800','text-gray-400','border','border-gray-700'); }); htmx.trigger(document.body, 'filterChanged')"
         class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 w-28">
       <span class="text-gray-500 text-xs">To</span>
       <input type="date" name="date_to" value="{{ date_to or '' }}"
-        onchange="document.getElementById('date_preset_input').value = ''; htmx.trigger(document.body, 'filterChanged')"
+        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('bg-blue-600','text-white'); b.classList.add('bg-gray-800','text-gray-400','border','border-gray-700'); }); htmx.trigger(document.body, 'filterChanged')"
         class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 w-28">
     </div>
   </div>
@@ -36,5 +36,24 @@
 <script>
 function setFilter(inputId, value) {
   document.getElementById(inputId).value = value;
+}
+
+function activatePreset(btn, value) {
+    // Update hidden input
+    document.getElementById('date_preset_input').value = value;
+    // Clear custom date inputs
+    var fromInput = document.querySelector('[name=date_from]');
+    var toInput = document.querySelector('[name=date_to]');
+    if (fromInput) fromInput.value = '';
+    if (toInput) toInput.value = '';
+    // Toggle visual active state
+    btn.closest('.flex.flex-wrap').querySelectorAll('button').forEach(function(b) {
+        b.classList.remove('bg-blue-600', 'text-white');
+        b.classList.add('bg-gray-800', 'text-gray-400', 'border', 'border-gray-700');
+    });
+    btn.classList.remove('bg-gray-800', 'text-gray-400', 'border', 'border-gray-700');
+    btn.classList.add('bg-blue-600', 'text-white');
+    // Trigger filter
+    htmx.trigger(document.body, 'filterChanged');
 }
 </script>
