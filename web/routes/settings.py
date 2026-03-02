@@ -7,11 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
 from web.queries.settings import (
+    create_location,
     create_network,
+    delete_location,
     delete_network,
     get_all_networks,
     get_app_settings_dict,
+    get_locations_for_network,
+    seed_predefined_networks,
     set_app_setting,
+    update_location,
     update_network,
 )
 
@@ -151,6 +156,87 @@ async def delete_network_route(
         "settings/partials/network_management.html",
         {"networks": networks},
     )
+
+
+@router.post("/settings/networks/seed", response_class=HTMLResponse)
+async def seed_networks(request: Request, db: AsyncSession = Depends(get_db)):
+    """Seed predefined networks + merge session-discovered networks."""
+    await seed_predefined_networks(db)
+    networks = await get_all_networks(db)
+    return templates.TemplateResponse(
+        request, "settings/partials/network_management.html", {"networks": networks}
+    )
+
+
+@router.get("/settings/networks/{network_id}/locations", response_class=HTMLResponse)
+async def network_locations(
+    network_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
+    """Return location rows partial for a given network."""
+    locations = await get_locations_for_network(db, network_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/location_rows.html",
+        {"locations": locations, "network_id": network_id},
+    )
+
+
+@router.post("/settings/networks/{network_id}/locations", response_class=HTMLResponse)
+async def create_location_route(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    location_name: str = Form(...),
+    location_type: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+):
+    """Add a location under a network."""
+    await create_location(db, network_id, location_name, location_type, notes)
+    locations = await get_locations_for_network(db, network_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/location_rows.html",
+        {"locations": locations, "network_id": network_id},
+    )
+
+
+@router.put("/settings/locations/{location_id}", response_class=HTMLResponse)
+async def update_location_route(
+    location_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    location_name: str = Form(...),
+    location_type: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    network_id: int = Form(...),
+):
+    """Update a location and return the refreshed location list."""
+    await update_location(db, location_id, location_name, location_type, notes)
+    locations = await get_locations_for_network(db, network_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/location_rows.html",
+        {"locations": locations, "network_id": network_id},
+    )
+
+
+@router.delete("/settings/locations/{location_id}", response_class=HTMLResponse)
+async def delete_location_route(
+    location_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    network_id: int = 0,
+):
+    """Delete a location and return the refreshed location list."""
+    await delete_location(db, location_id)
+    if network_id:
+        locations = await get_locations_for_network(db, network_id)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/location_rows.html",
+            {"locations": locations, "network_id": network_id},
+        )
+    return HTMLResponse("")
 
 
 @router.post("/settings/gas", response_class=HTMLResponse)

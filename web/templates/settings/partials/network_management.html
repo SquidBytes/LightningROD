@@ -1,7 +1,19 @@
 {# Network management partial — full CRUD for ev_charging_networks #}
 <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-    <h2 class="text-lg font-semibold text-gray-100 mb-1">Charging Networks</h2>
-    <p class="text-gray-400 text-sm mb-4">Manage your charging networks, costs, and color badges.</p>
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <h2 class="text-lg font-semibold text-gray-100 mb-1">Charging Networks</h2>
+            <p class="text-gray-400 text-sm">Manage your charging networks, costs, and color badges.</p>
+        </div>
+        <button
+            hx-post="/settings/networks/seed"
+            hx-target="closest .bg-gray-900"
+            hx-swap="outerHTML"
+            class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors"
+        >
+            Seed Popular Networks
+        </button>
+    </div>
 
     {# Network table #}
     <div id="network-management-table">
@@ -12,7 +24,7 @@
                     <th class="text-left pb-2 text-gray-400 font-medium">Name</th>
                     <th class="text-left pb-2 text-gray-400 font-medium w-28">Cost/kWh</th>
                     <th class="text-left pb-2 text-gray-400 font-medium w-12">Free</th>
-                    <th class="text-right pb-2 text-gray-400 font-medium w-24">Actions</th>
+                    <th class="text-right pb-2 text-gray-400 font-medium w-28">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -42,6 +54,17 @@
                     <td class="py-2 text-right">
                         <div class="flex justify-end gap-2">
                             <button
+                                type="button"
+                                onclick="toggleNetworkLocations({{ network.id }})"
+                                class="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                                title="Manage locations"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </button>
+                            <button
                                 hx-get="/settings/networks/{{ network.id }}/edit"
                                 hx-target="#network-row-{{ network.id }}"
                                 hx-swap="outerHTML"
@@ -56,6 +79,13 @@
                                 class="px-2 py-1 text-xs bg-red-900/60 hover:bg-red-800 text-red-300 rounded transition-colors">
                                 Delete
                             </button>
+                        </div>
+                    </td>
+                </tr>
+                <tr id="network-locations-{{ network.id }}" class="hidden">
+                    <td colspan="5" class="py-0">
+                        <div id="locations-content-{{ network.id }}" class="bg-gray-800/30 px-6 py-3">
+                            {# Loaded via HTMX when expanded #}
                         </div>
                     </td>
                 </tr>
@@ -112,3 +142,19 @@
         </form>
     </div>
 </div>
+
+<script>
+function toggleNetworkLocations(networkId) {
+    var row = document.getElementById('network-locations-' + networkId);
+    var content = document.getElementById('locations-content-' + networkId);
+    if (row.classList.contains('hidden')) {
+        row.classList.remove('hidden');
+        if (!content.dataset.loaded) {
+            htmx.ajax('GET', '/settings/networks/' + networkId + '/locations', {target: content, swap: 'innerHTML'});
+            content.dataset.loaded = 'true';
+        }
+    } else {
+        row.classList.add('hidden');
+    }
+}
+</script>

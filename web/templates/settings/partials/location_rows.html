@@ -1,0 +1,43 @@
+<div class="space-y-2">
+    <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Locations</p>
+    {% for loc in locations %}
+    <div class="flex items-center justify-between bg-gray-800/50 rounded px-3 py-2 text-sm">
+        <div class="flex items-center gap-3">
+            <span class="text-gray-200">{{ loc.location_name }}</span>
+            {% if loc.location_type %}
+                <span class="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded">{{ loc.location_type }}</span>
+            {% endif %}
+        </div>
+        <div class="flex gap-2">
+            <button
+                hx-delete="/settings/locations/{{ loc.id }}?network_id={{ network_id }}"
+                hx-target="closest div.space-y-2"
+                hx-swap="outerHTML"
+                hx-confirm="Delete location {{ loc.location_name }}?"
+                class="text-xs text-red-400 hover:text-red-300"
+            >Delete</button>
+        </div>
+    </div>
+    {% else %}
+    <p class="text-gray-500 text-sm">No locations yet.</p>
+    {% endfor %}
+
+    {# Add location form #}
+    <form
+        hx-post="/settings/networks/{{ network_id }}/locations"
+        hx-target="closest div.space-y-2"
+        hx-swap="outerHTML"
+        hx-on::after-request="if(event.detail.successful) this.reset()"
+        class="flex items-end gap-2 mt-2"
+    >
+        <input type="text" name="location_name" required placeholder="Location name"
+               class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 flex-1">
+        <select name="location_type" class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200">
+            <option value="">Type</option>
+            <option value="home">Home</option>
+            <option value="work">Work</option>
+            <option value="public">Public</option>
+        </select>
+        <button type="submit" class="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded">Add</button>
+    </form>
+</div>
