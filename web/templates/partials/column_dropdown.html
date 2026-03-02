@@ -11,87 +11,79 @@
 -->
 <th class="text-left px-4 py-3 text-gray-400 font-medium whitespace-nowrap">
     <div class="relative inline-block col-header-wrapper">
-        <button
-            type="button"
-            onclick="toggleColumnDropdown('{{ col_id }}')"
-            class="flex items-center gap-1 hover:text-gray-200 transition-colors group"
-        >
-            <span>{{ col_label }}</span>
-            <!-- Sort indicator -->
-            {% if current_sort_by == sort_key %}
-                {% if current_sort_dir == 'asc' %}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
-                    </svg>
+        <div class="flex items-center gap-1">
+            <!-- Header click button for sort cycling -->
+            <button
+                type="button"
+                onclick="cycleSortColumn('{{ sort_key }}', '{{ filter_form_id }}')"
+                class="flex items-center gap-1 cursor-pointer hover:text-gray-200 transition-colors group"
+            >
+                <span>{{ col_label }}</span>
+                <!-- Sort indicator -->
+                {% if current_sort_by == sort_key %}
+                    {% if current_sort_dir == 'asc' %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                        </svg>
+                    {% else %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    {% endif %}
                 {% else %}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-600 group-hover:text-gray-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                 {% endif %}
-            {% else %}
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-600 group-hover:text-gray-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            {% endif %}
-        </button>
+            </button>
 
-        <!-- Dropdown panel -->
+            <!-- Filter icon button (only if there are filter values) -->
+            {% if filter_values %}
+            <button
+                type="button"
+                onclick="toggleColumnDropdown('{{ col_id }}')"
+                class="flex items-center text-gray-600 hover:text-gray-400 transition-colors ml-0.5"
+                title="Filter"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+                </svg>
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- Dropdown panel (filter-only, no sort section) -->
+        {% if filter_values %}
         <div
             id="col-dropdown-{{ col_id }}"
             class="col-dropdown hidden absolute top-full left-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-2 z-30 min-w-max"
         >
-            <!-- Sort section -->
-            <div class="mb-1">
-                <p class="text-xs uppercase tracking-wide text-gray-500 px-2 py-1">Sort</p>
-                <button
-                    type="button"
-                    onclick="setSortAndFilter('{{ sort_key }}', 'asc', '{{ filter_form_id }}')"
-                    class="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded transition-colors"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
-                    </svg>
-                    Sort Ascending
-                </button>
-                <button
-                    type="button"
-                    onclick="setSortAndFilter('{{ sort_key }}', 'desc', '{{ filter_form_id }}')"
-                    class="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded transition-colors"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                    Sort Descending
-                </button>
-            </div>
-
-            <!-- Filter section (only if filter_values provided) -->
-            {% if filter_values %}
-                <div class="border-t border-gray-700 mt-1 pt-1">
-                    <div class="flex items-center justify-between px-2 py-1">
-                        <p class="text-xs uppercase tracking-wide text-gray-500">Filter</p>
-                        <div class="flex gap-2">
-                            <button type="button" onclick="selectAllFilter('{{ filter_key }}', '{{ filter_form_id }}')" class="text-xs text-blue-400 hover:text-blue-300">All</button>
-                            <span class="text-gray-600">|</span>
-                            <button type="button" onclick="deselectAllFilter('{{ filter_key }}', '{{ filter_form_id }}')" class="text-xs text-blue-400 hover:text-blue-300">None</button>
-                        </div>
+            <!-- Filter section -->
+            <div>
+                <div class="flex items-center justify-between px-2 py-1">
+                    <p class="text-xs uppercase tracking-wide text-gray-500">Filter</p>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="selectAllFilter('{{ filter_key }}', '{{ filter_form_id }}')" class="text-xs text-blue-400 hover:text-blue-300">All</button>
+                        <span class="text-gray-600">|</span>
+                        <button type="button" onclick="deselectAllFilter('{{ filter_key }}', '{{ filter_form_id }}')" class="text-xs text-blue-400 hover:text-blue-300">None</button>
                     </div>
-                    {% for fv in filter_values %}
-                    <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-700 rounded cursor-pointer">
-                        <input
-                            type="checkbox"
-                            class="col-filter-checkbox rounded border-gray-600 bg-gray-700 text-blue-600"
-                            data-filter-key="{{ filter_key }}"
-                            data-filter-value="{{ fv.value }}"
-                            {% if fv.checked %}checked{% endif %}
-                            onchange="applyColumnFilter('{{ filter_key }}', '{{ filter_form_id }}')"
-                        >
-                        <span class="text-sm text-gray-300">{{ fv.label }}</span>
-                    </label>
-                    {% endfor %}
                 </div>
-            {% endif %}
+                {% for fv in filter_values %}
+                <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-700 rounded cursor-pointer">
+                    <input
+                        type="checkbox"
+                        class="col-filter-checkbox rounded border-gray-600 bg-gray-700 text-blue-600"
+                        data-filter-key="{{ filter_key }}"
+                        data-filter-value="{{ fv.value }}"
+                        {% if fv.checked %}checked{% endif %}
+                        onchange="applyColumnFilter('{{ filter_key }}', '{{ filter_form_id }}')"
+                    >
+                    <span class="text-sm text-gray-300">{{ fv.label }}</span>
+                </label>
+                {% endfor %}
+            </div>
         </div>
+        {% endif %}
     </div>
 </th>
 
@@ -118,6 +110,24 @@
             });
         }
     });
+
+    window.cycleSortColumn = function(sortKey, formId) {
+        var sortByInput = document.getElementById('sort_by_input');
+        var sortDirInput = document.getElementById('sort_dir_input');
+        var currentSortBy = sortByInput ? sortByInput.value : '';
+        var currentSortDir = sortDirInput ? sortDirInput.value : '';
+
+        if (currentSortBy !== sortKey) {
+            sortByInput.value = sortKey;
+            sortDirInput.value = 'asc';
+        } else if (currentSortDir === 'asc') {
+            sortDirInput.value = 'desc';
+        } else {
+            sortByInput.value = '';
+            sortDirInput.value = '';
+        }
+        document.dispatchEvent(new Event('filterChanged'));
+    };
 
     window.setSortAndFilter = function(sortKey, sortDir, formId) {
         var sortByInput = document.getElementById('sort_by_input');
