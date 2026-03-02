@@ -3,8 +3,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.reference import EVLocationLookup
 from web.dependencies import get_db
 from web.queries.settings import (
     create_location,
@@ -22,6 +24,18 @@ from web.queries.settings import (
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
 
+
+async def _network_management_context(db: AsyncSession) -> dict:
+    """Build context dict for network_management.html — networks + per-network location counts."""
+    networks = await get_all_networks(db)
+    loc_count_result = await db.execute(
+        select(EVLocationLookup.network_id, func.count().label("cnt"))
+        .group_by(EVLocationLookup.network_id)
+    )
+    location_counts = {row.network_id: row.cnt for row in loc_count_result.all()}
+    return {"networks": networks, "location_counts": location_counts}
+
+
 SETTINGS_KEYS = [
     "gas_price_per_gallon",
     "vehicle_mpg",
@@ -38,7 +52,7 @@ async def settings_index(
     db: AsyncSession = Depends(get_db),
     tab: Optional[str] = Query(None),
 ):
-    networks = await get_all_networks(db)
+    net_ctx = await _network_management_context(db)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
     if tab == "import":
         active_tab = "import"
@@ -50,7 +64,7 @@ async def settings_index(
         request,
         "settings/index.html",
         {
-            "networks": networks,
+            **net_ctx,
             "settings": settings,
             "active_page": "settings",
             "page_title": "Settings",
@@ -76,11 +90,11 @@ async def create_network_route(
         is_free=is_free_bool,
         color=color,
     )
-    networks = await get_all_networks(db)
+    net_ctx = await _network_management_context(db)
     return templates.TemplateResponse(
         request,
         "settings/partials/network_management.html",
-        {"networks": networks},
+        net_ctx,
     )
 
 
@@ -90,11 +104,11 @@ async def networks_partial(
     db: AsyncSession = Depends(get_db),
 ):
     """Return the network management partial (used by cancel button to revert edits)."""
-    networks = await get_all_networks(db)
+    net_ctx = await _network_management_context(db)
     return templates.TemplateResponse(
         request,
         "settings/partials/network_management.html",
-        {"networks": networks},
+        net_ctx,
     )
 
 
@@ -111,6 +125,24 @@ async def edit_network_row(
     return templates.TemplateResponse(
         request,
         "settings/partials/network_edit_row.html",
+        {"network": network},
+    )
+
+
+@router.get("/settings/networks/{network_id}/edit-modal", response_class=HTMLResponse)
+async def edit_network_modal(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the tabbed network edit modal for the given network."""
+    networks = await get_all_networks(db)
+    network = next((n for n in networks if n.id == network_id), None)
+    if network is None:
+        return HTMLResponse(status_code=404)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/network_edit_modal.html",
         {"network": network},
     )
 
@@ -134,12 +166,14 @@ async def update_network_route(
         is_free=is_free_bool,
         color=color,
     )
-    networks = await get_all_networks(db)
-    return templates.TemplateResponse(
+    net_ctx = await _network_management_context(db)
+    response = templates.TemplateResponse(
         request,
         "settings/partials/network_management.html",
-        {"networks": networks},
+        net_ctx,
     )
+    response.headers["HX-Trigger"] = "closeNetworkModal"
+    return response
 
 
 @router.delete("/settings/networks/{network_id}", response_class=HTMLResponse)
@@ -149,11 +183,11 @@ async def delete_network_route(
     db: AsyncSession = Depends(get_db),
 ):
     await delete_network(db, network_id=network_id)
-    networks = await get_all_networks(db)
+    net_ctx = await _network_management_context(db)
     return templates.TemplateResponse(
         request,
         "settings/partials/network_management.html",
-        {"networks": networks},
+        net_ctx,
     )
 
 

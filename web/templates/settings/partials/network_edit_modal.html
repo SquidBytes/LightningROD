@@ -1,0 +1,132 @@
+{# Network edit modal — tabbed modal for editing a network's details and managing its locations #}
+<div class="fixed inset-0 bg-black/60 z-50 flex items-start justify-center pt-8 pb-8 overflow-y-auto"
+     onclick="if(event.target === this) closeNetworkModal()">
+  <div class="bg-gray-900 rounded-xl border border-gray-800 shadow-2xl w-full max-w-2xl mx-4 flex flex-col"
+       onclick="event.stopPropagation()">
+
+    {# Header #}
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
+      <div>
+        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Edit Network</p>
+        <h2 class="text-lg font-semibold text-gray-100">{{ network.network_name }}</h2>
+      </div>
+      <button type="button" onclick="closeNetworkModal()"
+              class="text-gray-500 hover:text-gray-300 transition-colors p-1 rounded">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    {# Body: sidebar nav + content panels #}
+    <form id="network-modal-form" class="flex flex-1 min-h-0" style="min-height: 380px;">
+      {# Left sidebar #}
+      <nav class="w-44 shrink-0 border-r border-gray-800 p-4 space-y-1">
+        <button type="button" onclick="switchNetworkTab('details')" data-net-tab="details"
+          class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors net-tab-btn bg-blue-600 text-white">
+          Details
+        </button>
+        <button type="button" onclick="switchNetworkTab('locations')" data-net-tab="locations"
+          class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors net-tab-btn text-gray-400 hover:bg-gray-800 hover:text-gray-200">
+          Locations
+        </button>
+      </nav>
+
+      {# Right content #}
+      <div class="flex-1 flex flex-col min-h-0">
+        <div class="flex-1 p-5 overflow-y-auto space-y-4">
+
+          {# Details panel #}
+          <div data-net-panel="details">
+
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-400 font-medium">Network Name</label>
+              <input type="text" name="network_name" required
+                     value="{{ network.network_name }}"
+                     class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 w-full">
+            </div>
+
+            <div class="flex gap-4 mt-4">
+              <div class="flex flex-col gap-1">
+                <label class="text-xs text-gray-400 font-medium">Color Badge</label>
+                <input type="color" name="color"
+                       value="{{ network.color or '#6B7280' }}"
+                       class="h-8 w-14 rounded border border-gray-700 bg-gray-800 cursor-pointer p-0.5">
+              </div>
+
+              <div class="flex flex-col gap-1 flex-1">
+                <label class="text-xs text-gray-400 font-medium">Cost per kWh</label>
+                <input type="number" name="cost_per_kwh" step="0.001" min="0" placeholder="0.000"
+                       value="{{ '%.3f'|format(network.cost_per_kwh) if network.cost_per_kwh is not none else '' }}"
+                       class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 w-full text-right">
+              </div>
+
+              <div class="flex flex-col gap-1">
+                <label class="text-xs text-gray-400 font-medium">Free</label>
+                <label class="flex items-center gap-1.5 cursor-pointer h-8">
+                  <input type="checkbox" name="is_free"
+                         {% if network.is_free %}checked{% endif %}
+                         class="rounded bg-gray-800 border-gray-600 text-green-500 focus:ring-green-500">
+                  <span class="text-gray-400 text-xs">Is free</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-1 mt-4">
+              <label class="text-xs text-gray-400 font-medium">Notes</label>
+              <textarea name="notes" rows="3" placeholder="Optional notes..."
+                        class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 w-full resize-none">{{ network.notes or '' }}</textarea>
+            </div>
+
+          </div>
+
+          {# Locations panel — hidden by default #}
+          <div data-net-panel="locations" class="hidden">
+            <div id="network-locations-list"
+                 hx-get="/settings/networks/{{ network.id }}/locations"
+                 hx-trigger="intersect once"
+                 hx-swap="innerHTML">
+              <p class="text-gray-500 text-sm">Loading locations...</p>
+            </div>
+          </div>
+
+        </div>
+
+        {# Footer: Cancel + Save #}
+        <div class="flex items-center justify-end p-5 border-t border-gray-800 shrink-0">
+          <div class="flex items-center gap-3">
+            <button type="button" onclick="closeNetworkModal()"
+                    class="px-4 py-1.5 text-sm bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="button"
+                    hx-put="/settings/networks/{{ network.id }}"
+                    hx-target="#network-management-card"
+                    hx-swap="outerHTML"
+                    hx-include="#network-modal-form"
+                    class="px-4 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<script>
+function switchNetworkTab(tabName) {
+  document.querySelectorAll('[data-net-panel]').forEach(function(p) {
+    p.classList.add('hidden');
+  });
+  document.querySelector('[data-net-panel="' + tabName + '"]').classList.remove('hidden');
+  document.querySelectorAll('.net-tab-btn').forEach(function(b) {
+    b.classList.remove('bg-blue-600', 'text-white');
+    b.classList.add('text-gray-400', 'hover:bg-gray-800', 'hover:text-gray-200');
+  });
+  var active = document.querySelector('[data-net-tab="' + tabName + '"]');
+  active.classList.add('bg-blue-600', 'text-white');
+  active.classList.remove('text-gray-400', 'hover:bg-gray-800', 'hover:text-gray-200');
+}
+</script>
