@@ -9,13 +9,13 @@
   >
     <input type="hidden" id="date_preset_input" name="{{ date_param_name|default('date_preset') }}" value="{{ active_preset or '' }}">
 
-    <!-- Date presets: compact pill buttons -->
-    <div class="flex rounded-md overflow-hidden border border-gray-700">
+    <!-- Date presets: spaced pill buttons -->
+    <div class="flex flex-wrap gap-1.5">
       {% set presets = [("7d", "7d"), ("30d", "30d"), ("90d", "90d"), ("ytd", "YTD"), ("1y", "1y"), ("all", "All")] %}
       {% for value, label in presets %}
       <button type="button"
         onclick="setFilter('date_preset_input', '{{ value }}'); document.querySelector('[name=date_from]') && (document.querySelector('[name=date_from]').value=''); document.querySelector('[name=date_to]') && (document.querySelector('[name=date_to]').value=''); htmx.trigger(document.body, 'filterChanged')"
-        class="px-2.5 py-1 text-xs font-medium transition-colors {% if active_preset == value or (not active_preset and value == 'all') %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200{% endif %}"
+        class="px-3 py-1 text-xs font-medium rounded-full transition-colors {% if active_preset == value or (not active_preset and value == 'all') %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200 border border-gray-700{% endif %}"
       >{{ label }}</button>
       {% endfor %}
     </div>
