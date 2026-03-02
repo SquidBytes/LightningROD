@@ -18,6 +18,13 @@ MOVING_AVG_WINDOW = 10
 # DB values -> display labels
 CHARGE_TYPE_LABELS = {"AC": "AC (L1/L2)", "DC": "DC Fast"}
 
+# Shared Plotly modebar config — show minimal controls, hide logo
+_PLOTLY_CONFIG = {
+    "displayModeBar": True,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
+    "displaylogo": False,
+}
+
 
 def build_time_filter_trip(range_str: str):
     """Return a SQLAlchemy where clause for EVTripMetrics.start_time.
@@ -202,6 +209,74 @@ async def query_regen_for_chart(
     ]
 
 
+async def query_monthly_energy(db: AsyncSession, time_range: str = "all") -> list[dict]:
+    """Return monthly kWh grouped by charge type for stacked area chart.
+
+    Returns list of dicts: [{"month": "2025-01", "charge_type": "AC", "kwh": 45.2}, ...]
+    """
+    stmt = select(EVChargingSession).where(EVChargingSession.energy_kwh.isnot(None))
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+
+    result = await db.execute(stmt)
+    sessions = result.scalars().all()
+
+    monthly: dict[tuple, float] = {}
+    for s in sessions:
+        if s.session_start_utc is None:
+            continue
+        month = s.session_start_utc.strftime("%Y-%m")
+        ct = s.charge_type or "Unknown"
+        key = (month, ct)
+        monthly[key] = monthly.get(key, 0.0) + float(s.energy_kwh or 0)
+
+    return [
+        {"month": month, "charge_type": ct, "kwh": kwh}
+        for (month, ct), kwh in sorted(monthly.items())
+    ]
+
+
+def build_monthly_energy_chart(monthly_data: list[dict]) -> str:
+    """Build stacked area chart of monthly kWh by charge type.
+
+    Args:
+        monthly_data: List of dicts with keys: month, charge_type, kwh.
+
+    Returns:
+        HTML div string (include_plotlyjs=False). Empty string if no data.
+    """
+    if not monthly_data:
+        return ""
+
+    pio.templates.default = "plotly_dark"
+
+    df = pd.DataFrame(monthly_data)
+    color_map = {"AC": "#60a5fa", "DC": "#f97316", "Unknown": "#9ca3af"}
+
+    fig = px.area(
+        df,
+        x="month",
+        y="kwh",
+        color="charge_type",
+        color_discrete_map=color_map,
+        labels={"kwh": "kWh", "month": "", "charge_type": "Type"},
+    )
+
+    fig.update_traces(hovertemplate="<b>%{data.name}</b><br>%{x}: %{y:.1f} kWh<extra></extra>")
+
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=20, r=20, t=20, b=20),
+        yaxis_title="kWh",
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+
+    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+
+
 def build_efficiency_chart(
     sessions: list[dict],
     regen_data: list[dict] | None,
@@ -259,6 +334,10 @@ def build_efficiency_chart(
                     mode="markers",
                     name=CHARGE_TYPE_LABELS.get(ct, ct),
                     marker=dict(color=color),
+                    hovertemplate=(
+                        "<b>%{x|%b %d, %Y}</b><br>"
+                        "%{y:.2f} " + unit_label + "<extra>%{data.name}</extra>"
+                    ),
                 ),
                 secondary_y=False,
             )
@@ -302,6 +381,14 @@ def build_efficiency_chart(
             labels={"efficiency": unit_label, "date": ""},
         )
 
+        # Improve hover on scatter traces
+        fig.update_traces(
+            hovertemplate=(
+                "<b>%{x|%b %d, %Y}</b><br>"
+                "%{y:.2f} " + unit_label + "<extra>%{data.name}</extra>"
+            )
+        )
+
         # Add rolling average as a single overall line
         fig.add_trace(
             go.Scatter(
@@ -321,4 +408,4 @@ def build_efficiency_chart(
         yaxis_title=unit_label,
     )
 
-    return fig.to_html(full_html=False, include_plotlyjs=False)
+    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)

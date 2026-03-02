@@ -57,7 +57,7 @@
 {% endif %}
 
 <!-- Section 3: Efficiency Trend Chart -->
-<div class="bg-gray-900 rounded-xl border border-gray-800 p-4">
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-4 mb-4">
     <h3 class="text-sm font-medium text-gray-400 mb-3">Efficiency Trend</h3>
     {% if chart_html %}
         {{ chart_html | safe }}
@@ -65,3 +65,11 @@
         <p class="text-gray-500 text-sm py-8 text-center">No efficiency data available for this time range.</p>
     {% endif %}
 </div>
+
+<!-- Section 4: Monthly Energy by Charge Type -->
+{% if monthly_energy_chart %}
+<div class="bg-gray-900 rounded-xl border border-gray-800 p-4">
+    <h3 class="text-sm font-medium text-gray-400 mb-3">Monthly Energy by Type</h3>
+    {{ monthly_energy_chart | safe }}
+</div>
+{% endif %}

@@ -10,6 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargingNetwork
 
+# Shared Plotly modebar config — show minimal controls, hide logo
+_PLOTLY_CONFIG = {
+    "displayModeBar": True,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
+    "displaylogo": False,
+}
+
 
 def build_time_filter(range_str: str):
     """Return a SQLAlchemy where clause for EVChargingSession.session_start_utc.
@@ -214,7 +221,7 @@ async def query_monthly_costs(db: AsyncSession, time_range: str = "all") -> list
 
 
 def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, str] = None) -> str:
-    """Build a Plotly bar chart of cost by network, returning HTML div string.
+    """Build a Plotly horizontal bar chart of cost by network, returning HTML div string.
 
     Args:
         by_network: List of dicts with keys: network, total_cost, session_count, total_kwh.
@@ -226,18 +233,20 @@ def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, s
     pio.templates.default = "plotly_dark"
 
     df = pd.DataFrame(by_network)
-    kwargs = dict(x="network", y="total_cost", color="network")
+    kwargs = dict(x="total_cost", y="network", color="network", orientation="h")
     if network_colors:
         kwargs["color_discrete_map"] = network_colors
     fig = px.bar(df, **kwargs)
+    fig.update_traces(hovertemplate="<b>%{y}</b><br>$%{x:.2f}<extra></extra>")
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         showlegend=False,
         margin=dict(l=20, r=20, t=20, b=20),
-        yaxis_tickprefix="$",
+        xaxis_tickprefix="$",
+        yaxis_title="",
     )
-    return fig.to_html(full_html=False, include_plotlyjs=False)
+    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
 
 
 def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str, str] = None) -> str:
@@ -257,6 +266,7 @@ def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str,
     if network_colors:
         kwargs["color_discrete_map"] = network_colors
     fig = px.bar(df, **kwargs)
+    fig.update_traces(hovertemplate="<b>%{data.name}</b><br>%{x}: $%{y:.2f}<extra></extra>")
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -265,5 +275,6 @@ def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str,
         yaxis_tickprefix="$",
         xaxis_title="",
         yaxis_title="Cost ($)",
+        hovermode="x unified",
     )
-    return fig.to_html(full_html=False, include_plotlyjs=False)
+    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
