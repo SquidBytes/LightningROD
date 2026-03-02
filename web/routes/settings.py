@@ -14,7 +14,6 @@ from web.queries.settings import (
     get_all_networks,
     get_app_settings_dict,
     get_locations_for_network,
-    seed_predefined_networks,
     set_app_setting,
     update_location,
     update_network,
@@ -155,16 +154,6 @@ async def delete_network_route(
         request,
         "settings/partials/network_management.html",
         {"networks": networks},
-    )
-
-
-@router.post("/settings/networks/seed", response_class=HTMLResponse)
-async def seed_networks(request: Request, db: AsyncSession = Depends(get_db)):
-    """Seed predefined networks + merge session-discovered networks."""
-    await seed_predefined_networks(db)
-    networks = await get_all_networks(db)
-    return templates.TemplateResponse(
-        request, "settings/partials/network_management.html", {"networks": networks}
     )
 
 

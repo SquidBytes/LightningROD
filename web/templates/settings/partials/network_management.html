@@ -1,18 +1,8 @@
 {# Network management partial — full CRUD for ev_charging_networks #}
-<div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-    <div class="flex justify-between items-center mb-4">
-        <div>
-            <h2 class="text-lg font-semibold text-gray-100 mb-1">Charging Networks</h2>
-            <p class="text-gray-400 text-sm">Manage your charging networks, costs, and color badges.</p>
-        </div>
-        <button
-            hx-post="/settings/networks/seed"
-            hx-target="closest .bg-gray-900"
-            hx-swap="outerHTML"
-            class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors"
-        >
-            Seed Popular Networks
-        </button>
+<div id="network-management-card" class="bg-gray-900 rounded-xl border border-gray-800 p-6">
+    <div class="mb-4">
+        <h2 class="text-lg font-semibold text-gray-100 mb-1">Charging Networks</h2>
+        <p class="text-gray-400 text-sm">Manage your charging networks, costs, and color badges.</p>
     </div>
 
     {# Network table #}
@@ -73,7 +63,7 @@
                             </button>
                             <button
                                 hx-delete="/settings/networks/{{ network.id }}"
-                                hx-target="#network-management-table"
+                                hx-target="#network-management-card"
                                 hx-swap="outerHTML"
                                 hx-confirm="Delete {{ network.network_name }}?"
                                 class="px-2 py-1 text-xs bg-red-900/60 hover:bg-red-800 text-red-300 rounded transition-colors">
@@ -103,7 +93,7 @@
         <h3 class="text-sm font-semibold text-gray-300 mb-3">Add Network</h3>
         <form
             hx-post="/settings/networks"
-            hx-target="#network-management-table"
+            hx-target="#network-management-card"
             hx-swap="outerHTML"
             hx-on::after-request="if(event.detail.successful) this.reset()"
             class="flex flex-wrap gap-3 items-end">
