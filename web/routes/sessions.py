@@ -277,7 +277,6 @@ async def update_session(
     request: Request,
     session_id: int,
     db: AsyncSession = Depends(get_db),
-    cost: Annotated[Optional[float], Form()] = None,
     location_name: Annotated[Optional[str], Form()] = None,
     location_type: Annotated[Optional[str], Form()] = None,
     charge_type: Annotated[Optional[str], Form()] = None,
@@ -324,9 +323,14 @@ async def update_session(
         return HTMLResponse(content="<p class='text-gray-400 p-4'>Session not found.</p>", status_code=404)
 
     # Update editable fields — only apply fields that were submitted
-    if cost is not None:
-        session.cost = cost
-        session.cost_source = "manual"
+    # Only update cost if user explicitly changed it (not just re-submitted prefilled value)
+    form_data = await request.form()
+    submitted_cost = form_data.get("cost")
+    if submitted_cost is not None and submitted_cost != "":
+        new_cost = float(submitted_cost)
+        if session.cost is None or abs(new_cost - float(session.cost)) > 0.001:
+            session.cost = new_cost
+            session.cost_source = "manual"
     if location_name is not None:
         session.location_name = location_name or None
     if location_type is not None:
