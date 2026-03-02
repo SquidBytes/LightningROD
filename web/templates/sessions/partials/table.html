@@ -9,16 +9,6 @@
     </span>
 </div>
 
-<!-- Hidden sort state inputs (inside filter-form via hx-include) -->
-<input type="hidden" id="sort_by_input" name="sort_by" value="{{ sort_by or '' }}">
-<input type="hidden" id="sort_dir_input" name="sort_dir" value="{{ sort_dir or '' }}">
-
-<!-- Hidden charge_type filter input (managed by column dropdown JS) -->
-<input type="hidden" id="filter_charge_type" name="charge_type" value="{{ charge_type or '' }}">
-
-<!-- Hidden network_id filter input (managed by column dropdown JS) -->
-<input type="hidden" id="filter_network_id" name="network_id" value="{{ network_id or '' }}">
-
 {% if sessions %}
 <!-- Data table -->
 <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden overflow-x-auto">

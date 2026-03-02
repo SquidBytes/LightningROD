@@ -1,4 +1,9 @@
 <form id="filter-form">
+  <!-- Sort/filter hidden inputs must be inside #filter-form for hx-include to capture them -->
+  <input type="hidden" id="sort_by_input" name="sort_by" value="{{ sort_by or '' }}">
+  <input type="hidden" id="sort_dir_input" name="sort_dir" value="{{ sort_dir or '' }}">
+  <input type="hidden" id="filter_charge_type" name="charge_type" value="{{ charge_type or '' }}">
+  <input type="hidden" id="filter_network_id" name="network_id" value="{{ network_id or '' }}">
   <div
     hx-get="{{ filter_url }}"
     hx-include="#filter-form"

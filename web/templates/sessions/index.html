@@ -27,6 +27,7 @@
          hx-trigger="session-updated from:body, session-deleted from:body, session-created from:body"
          hx-target="#sessions-table-region"
          hx-swap="innerHTML"
+         hx-include="#filter-form"
          class="transition-opacity">
         {% include "sessions/partials/table.html" %}
     </div>
