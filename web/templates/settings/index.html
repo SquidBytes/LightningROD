@@ -70,8 +70,8 @@
     {% include "settings/partials/import_tab.html" %}
 </div>
 
-{# Network edit modal shell — content loaded via HTMX when Edit is clicked #}
-<div id="network-modal" class="hidden z-[60]">
+{# Network edit modal shell — shell IS the fixed overlay (backdrop + centering) #}
+<div id="network-modal" class="hidden fixed inset-0 z-[60] flex items-start justify-center pt-8 pb-8 overflow-y-auto bg-black/60" onclick="if(event.target === this) closeNetworkModal()">
   <div id="network-modal-content">
     {# Modal content injected by openNetworkModal() #}
   </div>

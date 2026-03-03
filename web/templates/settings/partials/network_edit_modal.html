@@ -1,8 +1,6 @@
 {# Network edit modal — tabbed modal for editing a network's details and managing its locations #}
-<div class="fixed inset-0 bg-black/60 z-50 flex items-start justify-center pt-8 pb-8 overflow-y-auto"
-     onclick="if(event.target === this) closeNetworkModal()">
-  <div class="bg-gray-900 rounded-xl border border-gray-800 shadow-2xl w-full max-w-2xl mx-4 flex flex-col"
-       onclick="event.stopPropagation()">
+<div class="bg-gray-900 rounded-xl border border-gray-800 shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[85vh]"
+     onclick="event.stopPropagation()">
 
     {# Header #}
     <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
@@ -112,7 +110,6 @@
       </div>
     </form>
 
-  </div>
 </div>
 
 <script>

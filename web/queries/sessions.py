@@ -39,7 +39,7 @@ async def query_sessions(
     date_to: Optional[str] = None,
     charge_type: Optional[str] = None,
     location_type: Optional[str] = None,
-    network_id: Optional[int] = None,
+    network_ids: Optional[list[int]] = None,
     sort_by: Optional[str] = None,
     sort_dir: Optional[str] = None,
 ) -> tuple[list[EVChargingSession], int, dict]:
@@ -98,17 +98,24 @@ async def query_sessions(
             except ValueError:
                 pass
 
-    # Charge type filter
+    # Charge type filter — supports comma-separated multi-select (e.g. "AC,DC")
     if charge_type:
-        filters.append(EVChargingSession.charge_type == charge_type)
+        charge_types = [ct.strip() for ct in charge_type.split(",") if ct.strip()]
+        if len(charge_types) == 1:
+            filters.append(EVChargingSession.charge_type == charge_types[0])
+        elif len(charge_types) > 1:
+            filters.append(EVChargingSession.charge_type.in_(charge_types))
 
     # Location type filter
     if location_type:
         filters.append(EVChargingSession.location_type == location_type)
 
-    # Network filter
-    if network_id:
-        filters.append(EVChargingSession.network_id == network_id)
+    # Network filter — supports multi-select via list of ints
+    if network_ids:
+        if len(network_ids) == 1:
+            filters.append(EVChargingSession.network_id == network_ids[0])
+        else:
+            filters.append(EVChargingSession.network_id.in_(network_ids))
 
     # Apply all filters
     for f in filters:

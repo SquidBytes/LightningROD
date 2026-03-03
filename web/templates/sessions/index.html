@@ -48,8 +48,8 @@
     onclick="closeDrawer()"
 ></div>
 
-<!-- Advanced session modal shell -->
-<div id="session-modal" class="hidden z-[60]">
+<!-- Advanced session modal shell — shell IS the fixed overlay (backdrop + centering) -->
+<div id="session-modal" class="hidden fixed inset-0 z-[60] flex items-start justify-center pt-8 pb-8 overflow-y-auto bg-black/60" onclick="if(event.target === this) closeSessionModal()">
     <div id="session-modal-content">
         <!-- Modal content loaded via HTMX -->
     </div>

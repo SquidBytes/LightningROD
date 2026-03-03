@@ -27,16 +27,18 @@
                 {% endwith %}
 
                 {% set network_filter_values = [] %}
+                {% set network_id_list = (network_id|string).split(',') if network_id else [] %}
                 {% for net in networks %}
-                    {% set _ = network_filter_values.append({"value": net.id|string, "label": net.network_name, "checked": not network_id or network_id|string == net.id|string}) %}
+                    {% set _ = network_filter_values.append({"value": net.id|string, "label": net.network_name, "checked": not network_id or net.id|string in network_id_list}) %}
                 {% endfor %}
                 {% with col_id="network", col_label="Network", sort_key="network", filter_key="network_id", filter_values=network_filter_values, filter_form_id="filter-form" %}
                     {% include "partials/column_dropdown.html" %}
                 {% endwith %}
 
+                {% set charge_type_list = (charge_type|string).split(',') if charge_type else [] %}
                 {% set charge_type_filter_values = [
-                    {"value": "AC", "label": "AC", "checked": charge_type != "DC"},
-                    {"value": "DC", "label": "DC", "checked": charge_type != "AC"}
+                    {"value": "AC", "label": "AC", "checked": not charge_type or "AC" in charge_type_list},
+                    {"value": "DC", "label": "DC", "checked": not charge_type or "DC" in charge_type_list}
                 ] %}
                 {% with col_id="charge_type", col_label="Type", sort_key="charge_type", filter_key="charge_type", filter_values=charge_type_filter_values, filter_form_id="filter-form" %}
                     {% include "partials/column_dropdown.html" %}

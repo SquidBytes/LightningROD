@@ -157,10 +157,11 @@
                 // All or none checked — clear the filter (show all)
                 hiddenInput.value = '';
             } else {
-                // Exactly one value selected
-                hiddenInput.value = checked[0];
+                // One or more values — store as comma-separated
+                hiddenInput.value = checked.join(',');
             }
         }
+        if (typeof renderFilterChips === 'function') renderFilterChips();
         htmx.trigger(document.body, 'filterChanged');
     };
 
@@ -177,5 +178,12 @@
         });
         applyColumnFilter(filterKey, formId);
     };
+
+    // Re-render filter chips after HTMX table swap
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target && evt.detail.target.id === 'sessions-table-region') {
+            if (typeof renderFilterChips === 'function') renderFilterChips();
+        }
+    });
 })();
 </script>

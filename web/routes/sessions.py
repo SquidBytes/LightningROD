@@ -32,11 +32,19 @@ async def sessions(
     date_to: Optional[str] = None,
     charge_type: Optional[str] = None,
     location_type: Optional[str] = None,
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     sort_by: Optional[str] = None,
     sort_dir: Optional[str] = None,
     hx_request: Annotated[Optional[str], Header()] = None,
 ):
+    # Parse comma-separated network_id values (e.g. "1,3,5") into a list of ints
+    network_ids: Optional[list[int]] = None
+    if network_id:
+        try:
+            network_ids = [int(v.strip()) for v in network_id.split(",") if v.strip()]
+        except ValueError:
+            network_ids = None
+
     session_list, total, summary = await query_sessions(
         db=db,
         page=page,
@@ -45,7 +53,7 @@ async def sessions(
         date_to=date_to,
         charge_type=charge_type,
         location_type=location_type,
-        network_id=network_id,
+        network_ids=network_ids,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
@@ -76,7 +84,7 @@ async def sessions(
     if location_type:
         filter_params["location_type"] = location_type
     if network_id:
-        filter_params["network_id"] = network_id
+        filter_params["network_id"] = network_id  # already a string (comma-separated)
     if sort_by:
         filter_params["sort_by"] = sort_by
     if sort_dir:

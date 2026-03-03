@@ -1,0 +1,16 @@
+{#
+  Modal Shell Pattern
+  ==================
+  The modal shell div IS the fixed overlay (backdrop + centering).
+  Usage: Copy this pattern into the page. HTMX loads the modal partial
+  into the inner content div. The partial starts directly with the card div
+  (no fixed inset-0 wrapper of its own).
+
+  Shell classes:
+    hidden fixed inset-0 z-[60] flex items-start justify-center pt-8 pb-8 overflow-y-auto bg-black/60
+
+  Click-outside-to-close: onclick="if(event.target === this) closeXxxModal()"
+
+  The card partial must have onclick="event.stopPropagation()" to prevent
+  the backdrop click handler from firing when clicking inside the modal.
+#}

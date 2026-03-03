@@ -11,8 +11,7 @@
     }
 })();
 </script>
-<div class="fixed inset-0 bg-black/60 z-50 flex items-start justify-center pt-8 pb-8 overflow-y-auto" onclick="if(event.target === this) closeSessionModal()">
-    <div class="bg-gray-900 rounded-xl border border-gray-800 shadow-2xl w-full max-w-2xl mx-4 flex flex-col" onclick="event.stopPropagation()">
+<div class="bg-gray-900 rounded-xl border border-gray-800 shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
 
         <!-- Modal header -->
         <div class="flex items-center justify-between p-5 border-b border-gray-800 shrink-0">
@@ -445,7 +444,6 @@
             </div>
 
         </form>
-    </div>
 </div>
 <script>
 // Re-open drawer when modal closes (if it was open before)
