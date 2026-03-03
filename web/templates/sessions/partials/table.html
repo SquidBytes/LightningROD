@@ -168,30 +168,7 @@
 </div>
 
 <!-- Pagination -->
-<div class="flex items-center justify-between mt-4 px-1">
-    <div class="text-sm text-gray-400">
-        Page {{ page }} of {{ total_pages }}
-    </div>
-    <div class="flex items-center gap-2">
-        {% if page > 1 %}
-            <a
-                href="/sessions?page={{ page - 1 }}{% if filter_params %}&{{ filter_params | urlencode }}{% endif %}"
-                class="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
-            >Prev</a>
-        {% else %}
-            <span class="px-4 py-2 text-sm bg-gray-800/40 text-gray-600 rounded-lg cursor-not-allowed">Prev</span>
-        {% endif %}
-
-        {% if page < total_pages %}
-            <a
-                href="/sessions?page={{ page + 1 }}{% if filter_params %}&{{ filter_params | urlencode }}{% endif %}"
-                class="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
-            >Next</a>
-        {% else %}
-            <span class="px-4 py-2 text-sm bg-gray-800/40 text-gray-600 rounded-lg cursor-not-allowed">Next</span>
-        {% endif %}
-    </div>
-</div>
+{% include "partials/pagination.html" %}
 
 {% else %}
 <!-- Empty state -->
