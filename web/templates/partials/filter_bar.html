@@ -10,7 +10,7 @@
     hx-target="{{ filter_target }}"
     hx-push-url="true"
     hx-trigger="filterChanged from:body"
-    class="bg-gray-900/50 border border-gray-800 rounded-lg px-3 py-2 mb-4 flex flex-wrap gap-3 items-center"
+    class="bg-gray-900/50 border border-gray-800 rounded-lg px-3 py-2 mb-2 flex flex-wrap gap-3 items-center"
   >
     <input type="hidden" id="date_preset_input" name="{{ date_param_name|default('date_preset') }}" value="{{ active_preset or '' }}">
 
@@ -37,6 +37,9 @@
         class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 w-28">
     </div>
   </div>
+
+  <!-- Filter chips: dismissible pills for active column filters -->
+  <div id="filter-chips" class="flex flex-wrap gap-1.5 mb-4 empty:hidden min-h-0"></div>
 </form>
 <script>
 function setFilter(inputId, value) {
@@ -61,4 +64,71 @@ function activatePreset(btn, value) {
     // Trigger filter
     htmx.trigger(document.body, 'filterChanged');
 }
+
+function createFilterChip(text, filterKey, filterValue) {
+    var chip = document.createElement('span');
+    chip.className = 'inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-blue-900/50 text-blue-300 rounded-full border border-blue-800/50';
+    var label = document.createTextNode(text + ' ');
+    chip.appendChild(label);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ml-0.5 text-blue-400 hover:text-white transition-colors leading-none';
+    btn.setAttribute('aria-label', 'Remove filter');
+    btn.innerHTML = '&times;';
+    btn.onclick = function() { removeFilter(filterKey, filterValue); };
+    chip.appendChild(btn);
+    return chip;
+}
+
+function renderFilterChips() {
+    var container = document.getElementById('filter-chips');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Network filter chips
+    var networkInput = document.getElementById('filter_network_id');
+    if (networkInput && networkInput.value) {
+        var ids = networkInput.value.split(',').filter(function(v) { return v; });
+        ids.forEach(function(id) {
+            // Find display name from checkbox label
+            var cb = document.querySelector('.col-filter-checkbox[data-filter-key="network_id"][data-filter-value="' + id + '"]');
+            var labelText = 'Network ' + id;
+            if (cb) {
+                var labelEl = cb.closest('label');
+                if (labelEl) {
+                    var span = labelEl.querySelector('span');
+                    if (span) labelText = span.textContent.trim();
+                }
+            }
+            container.appendChild(createFilterChip('Network: ' + labelText, 'network_id', id));
+        });
+    }
+
+    // Charge type filter chips
+    var chargeInput = document.getElementById('filter_charge_type');
+    if (chargeInput && chargeInput.value) {
+        var types = chargeInput.value.split(',').filter(function(v) { return v; });
+        types.forEach(function(type) {
+            container.appendChild(createFilterChip('Type: ' + type, 'charge_type', type));
+        });
+    }
+}
+
+function removeFilter(filterKey, filterValue) {
+    var hiddenInput = document.getElementById('filter_' + filterKey);
+    if (hiddenInput) {
+        var values = hiddenInput.value.split(',').filter(function(v) { return v && v !== filterValue; });
+        hiddenInput.value = values.join(',');
+    }
+    // Uncheck the corresponding checkbox
+    var cb = document.querySelector('.col-filter-checkbox[data-filter-key="' + filterKey + '"][data-filter-value="' + filterValue + '"]');
+    if (cb) cb.checked = false;
+    renderFilterChips();
+    htmx.trigger(document.body, 'filterChanged');
+}
+
+// Render chips on page load (handles server-rendered initial filter state)
+document.addEventListener('DOMContentLoaded', function() {
+    renderFilterChips();
+});
 </script>
