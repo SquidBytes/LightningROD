@@ -38,29 +38,29 @@
           <div data-net-panel="details">
 
             <div class="flex flex-col gap-1">
-              <label class="text-xs text-gray-400 font-medium">Network Name</label>
+              <label class="text-sm text-gray-400 font-medium">Network Name</label>
               <input type="text" name="network_name" required
                      value="{{ network.network_name }}"
-                     class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 w-full">
+                     class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-base text-gray-200 focus:outline-none focus:border-blue-500 w-full">
             </div>
 
             <div class="flex gap-4 mt-4">
               <div class="flex flex-col gap-1">
-                <label class="text-xs text-gray-400 font-medium">Color Badge</label>
+                <label class="text-sm text-gray-400 font-medium">Color Badge</label>
                 <input type="color" name="color"
                        value="{{ network.color or '#6B7280' }}"
                        class="h-8 w-14 rounded border border-gray-700 bg-gray-800 cursor-pointer p-0.5">
               </div>
 
               <div class="flex flex-col gap-1 flex-1">
-                <label class="text-xs text-gray-400 font-medium">Cost per kWh</label>
+                <label class="text-sm text-gray-400 font-medium">Cost per kWh</label>
                 <input type="number" name="cost_per_kwh" step="0.001" min="0" placeholder="0.000"
                        value="{{ '%.3f'|format(network.cost_per_kwh) if network.cost_per_kwh is not none else '' }}"
-                       class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 w-full text-right">
+                       class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-base text-gray-200 focus:outline-none focus:border-blue-500 w-full text-right">
               </div>
 
               <div class="flex flex-col gap-1">
-                <label class="text-xs text-gray-400 font-medium">Free</label>
+                <label class="text-sm text-gray-400 font-medium">Free</label>
                 <label class="flex items-center gap-1.5 cursor-pointer h-8">
                   <input type="checkbox" name="is_free"
                          {% if network.is_free %}checked{% endif %}
@@ -71,9 +71,9 @@
             </div>
 
             <div class="flex flex-col gap-1 mt-4">
-              <label class="text-xs text-gray-400 font-medium">Notes</label>
+              <label class="text-sm text-gray-400 font-medium">Notes</label>
               <textarea name="notes" rows="3" placeholder="Optional notes..."
-                        class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 w-full resize-none">{{ network.notes or '' }}</textarea>
+                        class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-base text-gray-200 focus:outline-none focus:border-blue-500 w-full resize-none">{{ network.notes or '' }}</textarea>
             </div>
 
           </div>

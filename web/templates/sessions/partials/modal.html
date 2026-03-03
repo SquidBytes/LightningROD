@@ -69,47 +69,47 @@
                         <div class="space-y-4">
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Start Date</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Start Date</label>
                                     <input
                                         type="date"
                                         name="session_date"
                                         value="{% if modal_mode == 'edit' and session and session.session_start_utc %}{{ session.session_start_utc.strftime('%Y-%m-%d') }}{% elif default_date %}{{ default_date }}{% endif %}"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Start Time (UTC)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Start Time (UTC)</label>
                                     <input
                                         type="time"
                                         name="session_time"
                                         value="{% if modal_mode == 'edit' and session and session.session_start_utc %}{{ session.session_start_utc.strftime('%H:%M') }}{% endif %}"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">End Date</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">End Date</label>
                                     <input
                                         type="date"
                                         name="end_date"
                                         value="{% if modal_mode == 'edit' and session and session.session_end_utc %}{{ session.session_end_utc.strftime('%Y-%m-%d') }}{% endif %}"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">End Time (UTC)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">End Time (UTC)</label>
                                     <input
                                         type="time"
                                         name="end_time"
                                         value="{% if modal_mode == 'edit' and session and session.session_end_utc %}{{ session.session_end_utc.strftime('%H:%M') }}{% endif %}"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Charge Duration (min)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Charge Duration (min)</label>
                                     <input
                                         type="number"
                                         name="charge_duration_minutes"
@@ -117,11 +117,11 @@
                                         min="0"
                                         value="{% if modal_mode == 'edit' and session and session.charge_duration_seconds is not none %}{{ (session.charge_duration_seconds / 60)|int }}{% endif %}"
                                         placeholder="e.g., 45"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Plugged-in Duration (min)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Plugged-in Duration (min)</label>
                                     <input
                                         type="number"
                                         name="plugged_in_duration_minutes"
@@ -129,24 +129,24 @@
                                         min="0"
                                         value="{% if modal_mode == 'edit' and session and session.plugged_in_duration_seconds is not none %}{{ (session.plugged_in_duration_seconds / 60)|int }}{% endif %}"
                                         placeholder="e.g., 50"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Location Name</label>
+                                <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Location Name</label>
                                 <input
                                     type="text"
                                     name="location_name"
                                     value="{% if modal_mode == 'edit' and session %}{{ session.location_name or '' }}{% elif default_location %}{{ default_location.location_name or '' }}{% endif %}"
                                     placeholder="e.g., Home, EA Station"
-                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                 >
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Location Type</label>
-                                    <select name="location_type" class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full">
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Location Type</label>
+                                    <select name="location_type" class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full">
                                         <option value="">—</option>
                                         <option value="home" {% if modal_mode == 'edit' and session and session.location_type == 'home' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'home' %}selected{% endif %}>Home</option>
                                         <option value="work" {% if modal_mode == 'edit' and session and session.location_type == 'work' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'work' %}selected{% endif %}>Work</option>
@@ -154,13 +154,13 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Location ID</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Location ID</label>
                                     <input
                                         type="number"
                                         name="location_id"
                                         value="{% if modal_mode == 'edit' and session and session.location_id is not none %}{{ session.location_id }}{% endif %}"
                                         placeholder="DB location ID"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                             </div>
@@ -172,7 +172,7 @@
                         <div class="space-y-4">
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Energy (kWh)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Energy (kWh)</label>
                                     <input
                                         type="number"
                                         name="energy_kwh"
@@ -180,12 +180,12 @@
                                         min="0"
                                         value="{% if modal_mode == 'edit' and session and session.energy_kwh is not none %}{{ '%.2f'|format(session.energy_kwh) }}{% endif %}"
                                         placeholder="e.g., 25.5"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Charge Type</label>
-                                    <select name="charge_type" class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full">
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Charge Type</label>
+                                    <select name="charge_type" class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full">
                                         <option value="">—</option>
                                         <option value="AC" {% if modal_mode == 'edit' and session and session.charge_type == 'AC' %}selected{% endif %}>AC</option>
                                         <option value="DC" {% if modal_mode == 'edit' and session and session.charge_type == 'DC' %}selected{% endif %}>DC</option>
@@ -193,8 +193,8 @@
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Network</label>
-                                <select name="network_id" class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full">
+                                <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Network</label>
+                                <select name="network_id" class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full">
                                     <option value="">— None —</option>
                                     {% for net in networks %}
                                         <option value="{{ net.id }}"
@@ -205,77 +205,77 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Connector Type</label>
+                                <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Connector Type</label>
                                 <input
                                     type="text"
                                     name="connector_type"
                                     value="{% if modal_mode == 'edit' and session %}{{ session.charge_type or '' }}{% endif %}"
                                     placeholder="e.g., CCS, CHAdeMO, J1772"
-                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                 >
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Max Power (kW)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Max Power (kW)</label>
                                     <input
                                         type="number"
                                         name="max_power"
                                         step="0.1"
                                         value="{% if modal_mode == 'edit' and session and session.max_power is not none %}{{ session.max_power }}{% endif %}"
                                         placeholder="e.g., 150.0"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Min Power (kW)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Min Power (kW)</label>
                                     <input
                                         type="number"
                                         name="min_power"
                                         step="0.1"
                                         value="{% if modal_mode == 'edit' and session and session.min_power is not none %}{{ session.min_power }}{% endif %}"
                                         placeholder="e.g., 10.0"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                             </div>
                             <div class="grid grid-cols-3 gap-3">
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Avg kW</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Avg kW</label>
                                     <input
                                         type="number"
                                         name="charging_kw"
                                         step="0.1"
                                         value="{% if modal_mode == 'edit' and session and session.charging_kw is not none %}{{ session.charging_kw }}{% endif %}"
                                         placeholder="e.g., 75.0"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Voltage (V)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Voltage (V)</label>
                                     <input
                                         type="number"
                                         name="charging_voltage"
                                         step="1"
                                         value="{% if modal_mode == 'edit' and session and session.charging_voltage is not none %}{{ session.charging_voltage }}{% endif %}"
                                         placeholder="e.g., 400"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Amperage (A)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Amperage (A)</label>
                                     <input
                                         type="number"
                                         name="charging_amperage"
                                         step="1"
                                         value="{% if modal_mode == 'edit' and session and session.charging_amperage is not none %}{{ session.charging_amperage }}{% endif %}"
                                         placeholder="e.g., 375"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                             </div>
                             <div class="grid grid-cols-3 gap-3">
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Start SOC (%)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Start SOC (%)</label>
                                     <input
                                         type="number"
                                         name="start_soc"
@@ -284,11 +284,11 @@
                                         max="100"
                                         value="{% if modal_mode == 'edit' and session and session.start_soc is not none %}{{ session.start_soc }}{% endif %}"
                                         placeholder="e.g., 20"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">End SOC (%)</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">End SOC (%)</label>
                                     <input
                                         type="number"
                                         name="end_soc"
@@ -297,18 +297,18 @@
                                         max="100"
                                         value="{% if modal_mode == 'edit' and session and session.end_soc is not none %}{{ session.end_soc }}{% endif %}"
                                         placeholder="e.g., 80"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                                 <div>
-                                    <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Miles Added</label>
+                                    <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Miles Added</label>
                                     <input
                                         type="number"
                                         name="miles_added"
                                         step="0.1"
                                         value="{% if modal_mode == 'edit' and session and session.miles_added is not none %}{{ session.miles_added }}{% endif %}"
                                         placeholder="e.g., 120.5"
-                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                        class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     >
                                 </div>
                             </div>
@@ -319,7 +319,7 @@
                     <div data-modal-panel="cost" class="hidden">
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Cost ($)</label>
+                                <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Cost ($)</label>
                                 <input
                                     type="number"
                                     name="cost"
@@ -327,7 +327,7 @@
                                     min="0"
                                     value="{% if modal_mode == 'edit' and session and session.cost is not none %}{{ '%.2f'|format(session.cost) }}{% endif %}"
                                     placeholder="0.00"
-                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-sm w-full"
+                                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-gray-200 text-base w-full"
                                     id="modal-cost-input"
                                 >
                             </div>
@@ -345,7 +345,7 @@
                             </div>
                             {% if modal_mode == 'edit' and cost_info %}
                                 <div class="bg-gray-800/50 rounded-lg p-3 text-sm">
-                                    <p class="text-gray-500 text-xs uppercase tracking-wide mb-2">Current Cost Info</p>
+                                    <p class="text-gray-500 text-sm uppercase tracking-wide mb-2">Current Cost Info</p>
                                     {% if cost_info.is_free %}
                                         <p class="text-green-400 font-medium">Free</p>
                                     {% elif cost_info.display_cost is not none %}
@@ -365,7 +365,7 @@
                     <div data-modal-panel="notes" class="hidden">
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Notes</label>
+                                <label class="block text-sm uppercase tracking-wide text-gray-500 mb-1">Notes</label>
                                 <textarea
                                     name="notes_text"
                                     rows="6"
@@ -376,7 +376,7 @@
                             </div>
                             {% if modal_mode == 'edit' and session %}
                                 <div class="bg-gray-800/50 rounded-lg p-3 text-sm space-y-2">
-                                    <p class="text-gray-500 text-xs uppercase tracking-wide mb-2">Session Status (read-only)</p>
+                                    <p class="text-gray-500 text-sm uppercase tracking-wide mb-2">Session Status (read-only)</p>
                                     <div class="flex items-center justify-between">
                                         <span class="text-gray-400 text-xs">Plug Status</span>
                                         <span class="text-gray-200 text-xs font-medium">{{ session.plug_status or '—' }}</span>
