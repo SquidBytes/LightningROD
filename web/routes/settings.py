@@ -212,9 +212,15 @@ async def create_location_route(
     location_name: str = Form(...),
     location_type: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
+    address: Optional[str] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
 ):
     """Add a location under a network."""
-    await create_location(db, network_id, location_name, location_type, notes)
+    await create_location(
+        db, network_id, location_name, location_type, notes,
+        address=address or None, latitude=latitude, longitude=longitude,
+    )
     locations = await get_locations_for_network(db, network_id)
     return templates.TemplateResponse(
         request,
@@ -232,9 +238,15 @@ async def update_location_route(
     location_type: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     network_id: int = Form(...),
+    address: Optional[str] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
 ):
     """Update a location and return the refreshed location list."""
-    await update_location(db, location_id, location_name, location_type, notes)
+    await update_location(
+        db, location_id, location_name, location_type, notes,
+        address=address or None, latitude=latitude, longitude=longitude,
+    )
     locations = await get_locations_for_network(db, network_id)
     return templates.TemplateResponse(
         request,

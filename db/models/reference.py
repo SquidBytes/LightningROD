@@ -40,6 +40,7 @@ class EVLocationLookup(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     location_name: Mapped[str] = mapped_column(String, nullable=False)
+    address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     latitude: Mapped[Optional[float]] = mapped_column(Numeric)
     longitude: Mapped[Optional[float]] = mapped_column(Numeric)
     location_type: Mapped[Optional[str]] = mapped_column(String)
