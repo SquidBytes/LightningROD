@@ -9,7 +9,7 @@
        filter_values — list of {value, label, checked} dicts, or empty list
        filter_form_id — id of the filter form to trigger (e.g., "filter-form")
 -->
-<th class="text-left px-4 py-3 text-gray-400 font-medium whitespace-nowrap">
+<th class="text-left px-4 py-3 text-gray-400 font-medium whitespace-nowrap {{ col_width|default('') }}">
     <div class="relative inline-block col-header-wrapper">
         <div class="flex items-center gap-1">
             <!-- Header click button for sort cycling -->
