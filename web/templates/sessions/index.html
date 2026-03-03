@@ -157,17 +157,44 @@ function showToast(message, type) {
     }, 3000);
 }
 
+function highlightRow(sessionId) {
+    var rows = document.querySelectorAll('#sessions-table-region tbody tr');
+    rows.forEach(function(row) {
+        var hxGet = row.getAttribute('hx-get');
+        if (hxGet && hxGet.includes('/sessions/' + sessionId + '/detail')) {
+            row.classList.add('bg-blue-900/30');
+            setTimeout(function() {
+                row.style.transition = 'background-color 2s ease-out';
+                row.classList.remove('bg-blue-900/30');
+                row.style.backgroundColor = '';
+            }, 100);
+        }
+    });
+}
+
 // Listen for HTMX trigger events for toasts
-document.body.addEventListener('session-updated', () => {
+document.body.addEventListener('session-updated', function(evt) {
     showToast('Session saved', 'success');
+    var sessionId = evt.detail ? evt.detail.sessionId : null;
+    if (sessionId) {
+        setTimeout(function() {
+            highlightRow(sessionId);
+        }, 200);
+    }
 });
 document.body.addEventListener('session-deleted', () => {
     showToast('Session deleted', 'success');
     closeDrawer();
     closeSessionModal();
 });
-document.body.addEventListener('session-created', () => {
+document.body.addEventListener('session-created', function(evt) {
     showToast('Session added', 'success');
+    var sessionId = evt.detail ? evt.detail.sessionId : null;
+    if (sessionId) {
+        setTimeout(function() {
+            highlightRow(sessionId);
+        }, 200);
+    }
 });
 
 // Handle validation errors (422 responses)
