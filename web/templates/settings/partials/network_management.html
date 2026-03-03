@@ -20,10 +20,21 @@
             </thead>
             <tbody>
                 {% for network in networks %}
-                <tr id="network-row-{{ network.id }}" class="border-b border-gray-800/50">
+                <tr id="network-row-{{ network.id }}"
+                    class="border-b border-gray-800/50 cursor-pointer hover:bg-gray-800/20 transition-colors"
+                    onclick="toggleNetworkLocations({{ network.id }})">
                     <td class="py-2 pr-3">
-                        <div style="width:20px; height:20px; border-radius:50%; background-color:{{ network.color or '#6B7280' }};"
-                             title="{{ network.color or '#6B7280' }}"></div>
+                        <div class="flex items-center gap-1.5">
+                            <svg id="chevron-{{ network.id }}"
+                                 class="h-3 w-3 text-gray-500 transition-transform duration-200 flex-shrink-0"
+                                 viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd"
+                                      d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                                      clip-rule="evenodd"/>
+                            </svg>
+                            <div style="width:20px; height:20px; border-radius:50%; background-color:{{ network.color or '#6B7280' }};"
+                                 title="{{ network.color or '#6B7280' }}"></div>
+                        </div>
                     </td>
                     <td class="py-2 text-gray-200">{{ network.network_name }}</td>
                     <td class="py-2 text-gray-300">
@@ -43,7 +54,7 @@
                         {% endif %}
                     </td>
                     <td class="py-2 text-gray-400 text-sm">{{ location_counts.get(network.id, 0) }}</td>
-                    <td class="py-2 text-right">
+                    <td class="py-2 text-right" onclick="event.stopPropagation()">
                         <div class="flex justify-end gap-2">
                             <button
                                 type="button"
@@ -59,6 +70,17 @@
                                 class="px-2 py-1 text-xs bg-red-900/60 hover:bg-red-800 text-red-300 rounded transition-colors">
                                 Delete
                             </button>
+                        </div>
+                    </td>
+                </tr>
+                {# Expandable locations row — hidden by default, lazy-loaded on first expand #}
+                <tr id="network-locations-{{ network.id }}" class="hidden">
+                    <td colspan="6" class="px-4 py-3 bg-gray-800/30">
+                        <div id="network-locations-content-{{ network.id }}"
+                             hx-get="/settings/networks/{{ network.id }}/locations"
+                             hx-trigger="intersect once"
+                             hx-swap="innerHTML">
+                            <p class="text-gray-500 text-sm">Loading locations...</p>
                         </div>
                     </td>
                 </tr>
@@ -115,3 +137,17 @@
         </form>
     </div>
 </div>
+
+<script>
+function toggleNetworkLocations(networkId) {
+    var row = document.getElementById('network-locations-' + networkId);
+    var chevron = document.getElementById('chevron-' + networkId);
+    if (row.classList.contains('hidden')) {
+        row.classList.remove('hidden');
+        chevron.classList.add('rotate-90');
+    } else {
+        row.classList.add('hidden');
+        chevron.classList.remove('rotate-90');
+    }
+}
+</script>

@@ -1,22 +1,65 @@
 <div class="space-y-2">
     <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Locations</p>
     {% for loc in locations %}
-    <div class="flex items-center justify-between bg-gray-800/50 rounded px-3 py-2 text-sm">
-        <div class="flex items-center gap-3">
-            <span class="text-gray-200">{{ loc.location_name }}</span>
-            {% if loc.location_type %}
-                <span class="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded">{{ loc.location_type }}</span>
-            {% endif %}
+    <div class="bg-gray-800/50 rounded px-3 py-2 text-sm" id="location-{{ loc.id }}">
+        {# Read mode #}
+        <div class="flex items-center justify-between location-read" data-loc="{{ loc.id }}">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <span class="text-gray-200">{{ loc.location_name }}</span>
+                {% if loc.location_type %}
+                    <span class="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded capitalize flex-shrink-0">{{ loc.location_type }}</span>
+                {% endif %}
+                {% if loc.address %}
+                    <span class="text-xs text-gray-500 truncate">{{ loc.address }}</span>
+                {% endif %}
+            </div>
+            <div class="flex gap-2 flex-shrink-0 ml-3">
+                <button type="button"
+                        onclick="editLocation({{ loc.id }})"
+                        class="text-xs text-blue-400 hover:text-blue-300">Edit</button>
+                <button
+                    hx-delete="/settings/locations/{{ loc.id }}?network_id={{ network_id }}"
+                    hx-target="closest div.space-y-2"
+                    hx-swap="outerHTML"
+                    hx-confirm="Delete location {{ loc.location_name }}?"
+                    class="text-xs text-red-400 hover:text-red-300">Delete</button>
+            </div>
         </div>
-        <div class="flex gap-2">
-            <button
-                hx-delete="/settings/locations/{{ loc.id }}?network_id={{ network_id }}"
-                hx-target="closest div.space-y-2"
-                hx-swap="outerHTML"
-                hx-confirm="Delete location {{ loc.location_name }}?"
-                class="text-xs text-red-400 hover:text-red-300"
-            >Delete</button>
-        </div>
+        {# Edit mode — hidden by default #}
+        <form class="hidden location-edit" data-loc="{{ loc.id }}"
+              hx-put="/settings/locations/{{ loc.id }}"
+              hx-target="closest div.space-y-2"
+              hx-swap="outerHTML">
+            <input type="hidden" name="network_id" value="{{ network_id }}">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+                <input type="text" name="location_name" value="{{ loc.location_name }}" required
+                       class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-gray-200 flex-1 min-w-32">
+                <select name="location_type"
+                        class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-gray-200">
+                    <option value="">Type</option>
+                    <option value="home" {% if loc.location_type == 'home' %}selected{% endif %}>Home</option>
+                    <option value="work" {% if loc.location_type == 'work' %}selected{% endif %}>Work</option>
+                    <option value="public" {% if loc.location_type == 'public' %}selected{% endif %}>Public</option>
+                    <option value="retail" {% if loc.location_type == 'retail' %}selected{% endif %}>Retail</option>
+                    <option value="destination" {% if loc.location_type == 'destination' %}selected{% endif %}>Destination</option>
+                    <option value="highway" {% if loc.location_type == 'highway' %}selected{% endif %}>Highway</option>
+                    <option value="other" {% if loc.location_type == 'other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+                <input type="text" name="address" value="{{ loc.address or '' }}" placeholder="Address (optional)"
+                       class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-gray-200 flex-1 min-w-40">
+                <input type="number" name="latitude" step="0.000001" value="{{ loc.latitude or '' }}" placeholder="Lat"
+                       class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-gray-200 w-24">
+                <input type="number" name="longitude" step="0.000001" value="{{ loc.longitude or '' }}" placeholder="Lon"
+                       class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-gray-200 w-24">
+            </div>
+            <div class="flex gap-2">
+                <button type="submit" class="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-900/30 rounded">Save</button>
+                <button type="button" onclick="cancelLocationEdit({{ loc.id }})"
+                        class="text-xs text-gray-400 hover:text-gray-300 px-2 py-1">Cancel</button>
+            </div>
+        </form>
     </div>
     {% else %}
     <p class="text-gray-500 text-sm">No locations yet.</p>
@@ -28,16 +71,37 @@
         hx-target="closest div.space-y-2"
         hx-swap="outerHTML"
         hx-on::after-request="if(event.detail.successful) this.reset()"
-        class="flex items-end gap-2 mt-2"
+        class="flex flex-wrap items-end gap-2 mt-2"
     >
         <input type="text" name="location_name" required placeholder="Location name"
-               class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 flex-1">
+               class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 flex-1 min-w-32">
         <select name="location_type" class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200">
             <option value="">Type</option>
             <option value="home">Home</option>
             <option value="work">Work</option>
             <option value="public">Public</option>
+            <option value="retail">Retail</option>
+            <option value="destination">Destination</option>
+            <option value="highway">Highway</option>
+            <option value="other">Other</option>
         </select>
+        <input type="text" name="address" placeholder="Address (optional)"
+               class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 flex-1 min-w-40">
         <button type="submit" class="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded">Add</button>
     </form>
 </div>
+
+<script>
+function editLocation(locId) {
+    var readEls = document.querySelectorAll('.location-read[data-loc="' + locId + '"]');
+    var editEls = document.querySelectorAll('.location-edit[data-loc="' + locId + '"]');
+    readEls.forEach(function(el) { el.classList.add('hidden'); });
+    editEls.forEach(function(el) { el.classList.remove('hidden'); });
+}
+function cancelLocationEdit(locId) {
+    var readEls = document.querySelectorAll('.location-read[data-loc="' + locId + '"]');
+    var editEls = document.querySelectorAll('.location-edit[data-loc="' + locId + '"]');
+    readEls.forEach(function(el) { el.classList.remove('hidden'); });
+    editEls.forEach(function(el) { el.classList.add('hidden'); });
+}
+</script>
