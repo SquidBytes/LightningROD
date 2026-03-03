@@ -1,3 +1,4 @@
+import json
 import math
 import uuid
 from datetime import date, datetime, timezone
@@ -18,8 +19,11 @@ from web.queries.settings import get_all_networks
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
 
-VALID_LOCATION_TYPES = {"home", "work", "public"}
+VALID_LOCATION_TYPES = {"home", "work", "public", "retail", "destination", "highway", "other"}
 VALID_CHARGE_TYPES = {"AC", "DC"}
+
+
+VALID_PER_PAGE = {25, 50, 100}
 
 
 @router.get("/sessions", response_class=HTMLResponse)
@@ -27,6 +31,7 @@ async def sessions(
     request: Request,
     db: AsyncSession = Depends(get_db),
     page: int = 1,
+    per_page: int = 25,
     date_preset: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -37,6 +42,10 @@ async def sessions(
     sort_dir: Optional[str] = None,
     hx_request: Annotated[Optional[str], Header()] = None,
 ):
+    # Clamp per_page to allowed values
+    if per_page not in VALID_PER_PAGE:
+        per_page = 25
+
     # Parse comma-separated network_id values (e.g. "1,3,5") into a list of ints
     network_ids: Optional[list[int]] = None
     if network_id:
@@ -48,6 +57,7 @@ async def sessions(
     session_list, total, summary = await query_sessions(
         db=db,
         page=page,
+        per_page=per_page,
         date_preset=date_preset,
         date_from=date_from,
         date_to=date_to,
@@ -58,7 +68,7 @@ async def sessions(
         sort_dir=sort_dir,
     )
 
-    total_pages = max(math.ceil(total / 25), 1)
+    total_pages = max(math.ceil(total / per_page), 1)
 
     # Enrich sessions with cost data and build network colors map
     networks_by_name = await get_networks_by_name(db)
@@ -89,11 +99,14 @@ async def sessions(
         filter_params["sort_by"] = sort_by
     if sort_dir:
         filter_params["sort_dir"] = sort_dir
+    if per_page != 25:
+        filter_params["per_page"] = per_page
 
     context = {
         "sessions": enriched_sessions,
         "total": total,
         "page": page,
+        "per_page": per_page,
         "total_pages": total_pages,
         "summary": summary,
         "date_preset": date_preset,
@@ -276,7 +289,10 @@ async def create_session(
         "networks": all_networks,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
-    response.headers["HX-Trigger"] = "session-created, closeModal"
+    response.headers["HX-Trigger"] = json.dumps({
+        "session-created": {"sessionId": new_session.id},
+        "closeModal": None,
+    })
     return response
 
 
@@ -329,6 +345,9 @@ async def update_session(
     session = result.scalar_one_or_none()
     if session is None:
         return HTMLResponse(content="<p class='text-gray-400 p-4'>Session not found.</p>", status_code=404)
+
+    # Capture old network_id before any updates (for cost recalculation check)
+    old_network_id = session.network_id
 
     # Update editable fields — only apply fields that were submitted
     # Only update cost if user explicitly changed it (not just re-submitted prefilled value)
@@ -392,6 +411,14 @@ async def update_session(
     if is_free is not None:
         session.is_free = is_free in ('1', 'on', 'true')
 
+    # Recalculate cost when network changes and cost was not manually set
+    if session.network_id != old_network_id and session.cost_source != 'manual':
+        all_networks_pre = await get_all_networks(db)
+        new_network = next((n for n in all_networks_pre if n.id == session.network_id), None)
+        if new_network and new_network.cost_per_kwh and session.energy_kwh:
+            session.cost = float(new_network.cost_per_kwh) * float(session.energy_kwh)
+            session.cost_source = 'calculated'
+
     await db.commit()
     await db.refresh(session)
 
@@ -412,7 +439,10 @@ async def update_session(
         "networks": all_networks,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
-    response.headers["HX-Trigger"] = "session-updated, closeModal"
+    response.headers["HX-Trigger"] = json.dumps({
+        "session-updated": {"sessionId": session.id},
+        "closeModal": None,
+    })
     return response
 
 

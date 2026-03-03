@@ -161,6 +161,9 @@
                 hiddenInput.value = checked.join(',');
             }
         }
+        // Reset to page 1 when filters change
+        var pageInput = document.getElementById('page_input');
+        if (pageInput) pageInput.value = '1';
         if (typeof renderFilterChips === 'function') renderFilterChips();
         htmx.trigger(document.body, 'filterChanged');
     };

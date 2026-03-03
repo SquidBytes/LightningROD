@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.charging_session import EVChargingSession
 
 PAGE_SIZE = 25
+VALID_PER_PAGE = {25, 50, 100}
 
 SORTABLE_COLUMNS = {
     "date": EVChargingSession.session_start_utc,
@@ -34,6 +35,7 @@ async def get_most_recent_location(db: AsyncSession) -> Optional[str]:
 async def query_sessions(
     db: AsyncSession,
     page: int = 1,
+    per_page: int = 25,
     date_preset: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -141,7 +143,10 @@ async def query_sessions(
     }
 
     # Data query with pagination
-    data_stmt = stmt.limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE)
+    # Clamp per_page to allowed values, defaulting to PAGE_SIZE
+    effective_per_page = per_page if per_page in VALID_PER_PAGE else PAGE_SIZE
+    offset = (page - 1) * effective_per_page
+    data_stmt = stmt.limit(effective_per_page).offset(offset)
     data_result = await db.execute(data_stmt)
     sessions = list(data_result.scalars().all())
 

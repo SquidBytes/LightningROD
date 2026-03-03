@@ -4,6 +4,8 @@
   <input type="hidden" id="sort_dir_input" name="sort_dir" value="{{ sort_dir or '' }}">
   <input type="hidden" id="filter_charge_type" name="charge_type" value="{{ charge_type or '' }}">
   <input type="hidden" id="filter_network_id" name="network_id" value="{{ network_id or '' }}">
+  <input type="hidden" id="page_input" name="page" value="{{ page|default(1) }}">
+  <input type="hidden" id="per_page_input" name="per_page" value="{{ per_page|default(25) }}">
   <div
     hx-get="{{ filter_url }}"
     hx-include="#filter-form"
@@ -29,11 +31,11 @@
     <div class="flex items-center gap-1.5">
       <span class="text-gray-500 text-xs">From</span>
       <input type="date" name="date_from" value="{{ date_from or '' }}"
-        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('bg-blue-600','text-white'); b.classList.add('bg-gray-800','text-gray-400','border','border-gray-700'); }); htmx.trigger(document.body, 'filterChanged')"
+        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('bg-blue-600','text-white'); b.classList.add('bg-gray-800','text-gray-400','border','border-gray-700'); }); var pi=document.getElementById('page_input'); if(pi) pi.value='1'; htmx.trigger(document.body, 'filterChanged')"
         class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 w-28">
       <span class="text-gray-500 text-xs">To</span>
       <input type="date" name="date_to" value="{{ date_to or '' }}"
-        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('bg-blue-600','text-white'); b.classList.add('bg-gray-800','text-gray-400','border','border-gray-700'); }); htmx.trigger(document.body, 'filterChanged')"
+        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('bg-blue-600','text-white'); b.classList.add('bg-gray-800','text-gray-400','border','border-gray-700'); }); var pi=document.getElementById('page_input'); if(pi) pi.value='1'; htmx.trigger(document.body, 'filterChanged')"
         class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 w-28">
     </div>
   </div>
@@ -54,6 +56,9 @@ function activatePreset(btn, value) {
     var toInput = document.querySelector('[name=date_to]');
     if (fromInput) fromInput.value = '';
     if (toInput) toInput.value = '';
+    // Reset to page 1 when filters change
+    var pageInput = document.getElementById('page_input');
+    if (pageInput) pageInput.value = '1';
     // Toggle visual active state
     btn.closest('.flex.flex-wrap').querySelectorAll('button').forEach(function(b) {
         b.classList.remove('bg-blue-600', 'text-white');
