@@ -41,6 +41,7 @@
             {% if filter_values %}
             <button
                 type="button"
+                data-dropdown-id="col-dropdown-{{ col_id }}"
                 onclick="toggleColumnDropdown('{{ col_id }}', this)"
                 class="col-filter-btn flex items-center text-gray-400 hover:text-blue-400 transition-colors ml-1 p-0.5 rounded hover:bg-gray-800"
                 title="Filter {{ col_label }}"
@@ -52,56 +53,49 @@
             {% endif %}
         </div>
 
-        <!-- Dropdown panel (filter-only, no sort section) -->
+        <!-- Dropdown source (hidden, used as template — portaled to body on open) -->
         {% if filter_values %}
-        <div
-            id="col-dropdown-{{ col_id }}"
-            class="col-dropdown hidden fixed bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-2 z-50 min-w-max max-h-80 overflow-y-auto"
-        >
-            <!-- Filter section -->
-            <div>
-                <div class="flex items-center justify-between px-2 py-1">
-                    <p class="text-xs uppercase tracking-wide text-gray-500">Filter</p>
-                    <div class="flex gap-2">
-                        <button type="button" onclick="selectAllFilter('{{ filter_key }}')" class="text-xs text-blue-400 hover:text-blue-300">All</button>
-                        <span class="text-gray-600">|</span>
-                        <button type="button" onclick="deselectAllFilter('{{ filter_key }}')" class="text-xs text-blue-400 hover:text-blue-300">None</button>
-                    </div>
+        <template id="col-dropdown-{{ col_id }}">
+            <div class="sticky top-0 bg-gray-800 z-10 px-2 py-1.5 border-b border-gray-700 flex items-center justify-between">
+                <p class="text-xs uppercase tracking-wide text-gray-500">Filter</p>
+                <div class="flex gap-2">
+                    <button type="button" onclick="selectAllFilter('{{ filter_key }}')" class="text-xs text-blue-400 hover:text-blue-300">All</button>
+                    <span class="text-gray-600">|</span>
+                    <button type="button" onclick="deselectAllFilter('{{ filter_key }}')" class="text-xs text-blue-400 hover:text-blue-300">None</button>
                 </div>
-                {% for fv in filter_values %}
-                <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-700 rounded cursor-pointer">
-                    <input
-                        type="checkbox"
-                        class="col-filter-checkbox rounded border-gray-600 bg-gray-700 text-blue-600"
-                        data-filter-key="{{ filter_key }}"
-                        data-filter-value="{{ fv.value }}"
-                        {% if fv.checked %}checked{% endif %}
-                        onchange="stageColumnFilter('{{ filter_key }}')"
-                    >
-                    <span class="text-sm text-gray-300">{{ fv.label }}</span>
-                </label>
-                {% endfor %}
             </div>
-        </div>
+            {% for fv in filter_values %}
+            <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-700 rounded cursor-pointer">
+                <input
+                    type="checkbox"
+                    class="col-filter-checkbox rounded border-gray-600 bg-gray-700 text-blue-600"
+                    data-filter-key="{{ filter_key }}"
+                    data-filter-value="{{ fv.value }}"
+                    {% if fv.checked %}checked{% endif %}
+                    onchange="stageColumnFilter('{{ filter_key }}')"
+                >
+                <span class="text-sm text-gray-300">{{ fv.label }}</span>
+            </label>
+            {% endfor %}
+        </template>
         {% endif %}
     </div>
 </th>
 
 <script>
 (function() {
-    // Only define these functions once on the page
     if (window._colDropdownInit) return;
     window._colDropdownInit = true;
 
-    // Track whether any filter changed while dropdown was open
     window._filterDirty = false;
+    var _activePortal = null;  // currently open portal element on body
 
-    function closeAllDropdowns() {
+    function closeActivePortal() {
         var wasDirty = window._filterDirty;
-        document.querySelectorAll('.col-dropdown').forEach(function(d) {
-            d.classList.add('hidden');
-        });
-        // Apply pending filter changes when closing
+        if (_activePortal) {
+            _activePortal.remove();
+            _activePortal = null;
+        }
         if (wasDirty) {
             window._filterDirty = false;
             var pageInput = document.getElementById('page_input');
@@ -112,33 +106,72 @@
     }
 
     window.toggleColumnDropdown = function(colId, btnEl) {
-        var dd = document.getElementById('col-dropdown-' + colId);
-        var wasOpen = !dd.classList.contains('hidden');
+        var wasOpen = _activePortal && _activePortal.dataset.colId === colId;
 
-        // Close all dropdowns (triggers apply if dirty)
-        closeAllDropdowns();
+        // Close any open portal (applies staged filters if dirty)
+        closeActivePortal();
 
-        // If it was closed, open it
-        if (!wasOpen) {
-            dd.classList.remove('hidden');
-            window._filterDirty = false;
-            // Position fixed dropdown below the button
-            if (btnEl) {
-                var rect = btnEl.getBoundingClientRect();
-                dd.style.top = (rect.bottom + 4) + 'px';
-                dd.style.left = rect.left + 'px';
-            }
+        if (wasOpen) return;  // toggle off — already closed above
+
+        // Clone from <template> and create portal on document.body
+        var tmpl = document.getElementById('col-dropdown-' + colId);
+        if (!tmpl) return;
+
+        var portal = document.createElement('div');
+        portal.className = 'col-dropdown-portal fixed bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto';
+        portal.dataset.colId = colId;
+        portal.style.minWidth = '200px';
+        portal.appendChild(tmpl.content.cloneNode(true));
+
+        // Sync checkbox state from hidden inputs to the cloned checkboxes
+        var filterKey = portal.querySelector('.col-filter-checkbox') ?
+            portal.querySelector('.col-filter-checkbox').dataset.filterKey : null;
+        if (filterKey) {
+            var hiddenInput = document.getElementById('filter_' + filterKey);
+            var activeValues = (hiddenInput && hiddenInput.value) ? hiddenInput.value.split(',') : [];
+            portal.querySelectorAll('.col-filter-checkbox').forEach(function(cb) {
+                if (activeValues.length === 0) {
+                    cb.checked = true;  // no filter = all checked
+                } else {
+                    cb.checked = activeValues.indexOf(cb.dataset.filterValue) !== -1;
+                }
+            });
         }
+
+        document.body.appendChild(portal);
+
+        // Position below the button
+        var rect = btnEl.getBoundingClientRect();
+        var portalHeight = portal.offsetHeight;
+        var spaceBelow = window.innerHeight - rect.bottom - 8;
+        var spaceAbove = rect.top - 8;
+
+        // Prefer below, flip above if not enough room
+        if (spaceBelow >= Math.min(portalHeight, 320)) {
+            portal.style.top = (rect.bottom + 4) + 'px';
+        } else if (spaceAbove >= Math.min(portalHeight, 320)) {
+            portal.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        } else {
+            // Neither fits well — anchor below with constrained height
+            portal.style.top = (rect.bottom + 4) + 'px';
+            portal.style.maxHeight = (spaceBelow - 4) + 'px';
+        }
+        portal.style.left = Math.min(rect.left, window.innerWidth - 240) + 'px';
+
+        _activePortal = portal;
+        window._filterDirty = false;
     };
 
-    // Close on click outside — but not if clicking inside a dropdown
+    // Close on click outside — but not inside the portal
     document.addEventListener('click', function(e) {
-        if (!e.target.closest('.col-header-wrapper') && !e.target.closest('.col-dropdown')) {
-            closeAllDropdowns();
-        }
+        if (!_activePortal) return;
+        if (e.target.closest('.col-dropdown-portal')) return;
+        if (e.target.closest('.col-filter-btn')) return;  // handled by toggle
+        closeActivePortal();
     });
 
     window.cycleSortColumn = function(sortKey, formId) {
+        closeActivePortal();  // close any open filter dropdown
         var sortByInput = document.getElementById('sort_by_input');
         var sortDirInput = document.getElementById('sort_dir_input');
         var currentSortBy = sortByInput ? sortByInput.value : '';
@@ -161,18 +194,14 @@
         var sortDirInput = document.getElementById('sort_dir_input');
         if (sortByInput) sortByInput.value = sortKey;
         if (sortDirInput) sortDirInput.value = sortDir;
-        // Close all dropdowns
-        document.querySelectorAll('.col-dropdown').forEach(function(d) {
-            d.classList.add('hidden');
-        });
-        // Trigger filter change
+        closeActivePortal();
         htmx.trigger(document.body, 'filterChanged');
     };
 
-    // Stage filter change — updates hidden input but does NOT trigger HTMX.
-    // The actual refresh happens when the dropdown closes (closeAllDropdowns).
+    // Stage filter change — updates hidden input, marks dirty, no HTMX trigger
     window.stageColumnFilter = function(filterKey) {
-        var checkboxes = document.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]');
+        if (!_activePortal) return;
+        var checkboxes = _activePortal.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]');
         var checked = [];
         checkboxes.forEach(function(cb) {
             if (cb.checked) checked.push(cb.dataset.filterValue);
@@ -189,10 +218,10 @@
         window._filterDirty = true;
     };
 
-    // Legacy wrapper for external callers (e.g. removeFilter in filter_bar)
+    // Immediate apply — used by chip removal outside dropdown context
     window.applyColumnFilter = function(filterKey) {
-        stageColumnFilter(filterKey);
-        // Immediately apply — used by chip removal which happens outside dropdown
+        // Collect from the source template's original state won't work,
+        // so just use the hidden input directly and trigger
         window._filterDirty = false;
         var pageInput = document.getElementById('page_input');
         if (pageInput) pageInput.value = '1';
@@ -201,14 +230,16 @@
     };
 
     window.selectAllFilter = function(filterKey) {
-        document.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]').forEach(function(cb) {
+        if (!_activePortal) return;
+        _activePortal.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]').forEach(function(cb) {
             cb.checked = true;
         });
         stageColumnFilter(filterKey);
     };
 
     window.deselectAllFilter = function(filterKey) {
-        document.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]').forEach(function(cb) {
+        if (!_activePortal) return;
+        _activePortal.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]').forEach(function(cb) {
             cb.checked = false;
         });
         stageColumnFilter(filterKey);
