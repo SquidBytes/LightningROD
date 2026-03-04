@@ -65,19 +65,20 @@ def compute_session_cost(session, networks_by_name: dict) -> dict:
         "calculation": None,
     }
 
-    # (a) Manual entry — use stored cost
-    if session.cost_source == "manual":
-        result["display_cost"] = float(session.cost) if session.cost is not None else 0.0
-        result["cost_source"] = "manual"
+    # (a) Session-level is_free flag — always honor this
+    if session.is_free:
+        result["display_cost"] = 0.0
+        result["cost_source"] = "calculated"
+        result["is_free"] = True
         return result
 
-    # (b) Imported cost — use stored cost if present
-    if session.cost_source == "imported" and session.cost is not None:
+    # (b) Stored cost — user-set or imported cost always takes priority
+    if session.cost is not None:
         result["display_cost"] = float(session.cost)
-        result["cost_source"] = "imported"
+        result["cost_source"] = session.cost_source or "imported"
         return result
 
-    # (c) Network lookup by location_name
+    # (c) Network lookup — only when no stored cost exists
     if session.location_name and session.location_name in networks_by_name:
         network = networks_by_name[session.location_name]
         if network.is_free:
@@ -94,20 +95,8 @@ def compute_session_cost(session, networks_by_name: dict) -> dict:
             result["cost_per_kwh"] = cost_val
             result["calculation"] = f"{kwh} kWh x ${cost_val}/kWh"
             return result
-        elif session.cost is not None:
-            # Network matched but has no rate configured — use session's stored cost
-            result["display_cost"] = float(session.cost)
-            result["cost_source"] = session.cost_source or "imported"
-            return result
 
-    # (d) Session-level is_free flag
-    if session.is_free:
-        result["display_cost"] = 0.0
-        result["cost_source"] = "calculated"
-        result["is_free"] = True
-        return result
-
-    # (e) No network match — excluded from totals
+    # (d) No cost data available
     return result
 
 
