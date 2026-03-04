@@ -85,14 +85,19 @@ def compute_session_cost(session, networks_by_name: dict) -> dict:
             result["cost_source"] = "calculated"
             result["is_free"] = True
             return result
-        else:
+        elif network.cost_per_kwh:
             kwh = float(session.energy_kwh or 0)
-            cost_val = float(network.cost_per_kwh or 0)
+            cost_val = float(network.cost_per_kwh)
             calculated = kwh * cost_val
             result["display_cost"] = calculated
             result["cost_source"] = "calculated"
             result["cost_per_kwh"] = cost_val
             result["calculation"] = f"{kwh} kWh x ${cost_val}/kWh"
+            return result
+        elif session.cost is not None:
+            # Network matched but has no rate configured — use session's stored cost
+            result["display_cost"] = float(session.cost)
+            result["cost_source"] = session.cost_source or "imported"
             return result
 
     # (d) Session-level is_free flag

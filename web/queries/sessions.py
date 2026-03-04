@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
@@ -9,10 +9,15 @@ from db.models.charging_session import EVChargingSession
 PAGE_SIZE = 25
 VALID_PER_PAGE = {25, 50, 100}
 
+_COST_SORT_EXPR = case(
+    (EVChargingSession.is_free.is_(True), 0),
+    else_=func.coalesce(EVChargingSession.cost, 0),
+)
+
 SORTABLE_COLUMNS = {
     "date": EVChargingSession.session_start_utc,
     "energy": EVChargingSession.energy_kwh,
-    "cost": EVChargingSession.cost,
+    "cost": _COST_SORT_EXPR,
     "location": EVChargingSession.location_name,
     "network": EVChargingSession.network_id,
     "charge_type": EVChargingSession.charge_type,
@@ -55,7 +60,11 @@ async def query_sessions(
     # Determine sort column and direction
     sort_col = SORTABLE_COLUMNS.get(sort_by) if sort_by else None
     if sort_col is not None:
-        order_expr = sort_col.asc() if sort_dir == "asc" else sort_col.desc()
+        order_expr = (
+            sort_col.asc().nulls_last()
+            if sort_dir == "asc"
+            else sort_col.desc().nulls_last()
+        )
     else:
         order_expr = EVChargingSession.session_start_utc.desc()
 
