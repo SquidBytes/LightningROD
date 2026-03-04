@@ -138,12 +138,6 @@
         }
     });
 
-    // Close on page scroll — but not when scrolling inside the dropdown itself
-    window.addEventListener('scroll', function(e) {
-        if (e.target && e.target.closest && e.target.closest('.col-dropdown')) return;
-        closeAllDropdowns();
-    }, true);
-
     window.cycleSortColumn = function(sortKey, formId) {
         var sortByInput = document.getElementById('sort_by_input');
         var sortDirInput = document.getElementById('sort_dir_input');
