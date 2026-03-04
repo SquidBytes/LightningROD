@@ -56,7 +56,7 @@
         <!-- Dropdown source (hidden, used as template — portaled to body on open) -->
         {% if filter_values %}
         <template id="col-dropdown-{{ col_id }}">
-            <div class="sticky top-0 bg-gray-800 z-10 px-2 py-1.5 border-b border-gray-700 flex items-center justify-between">
+            <div class="px-2 py-1.5 border-b border-gray-700 flex items-center justify-between">
                 <p class="text-xs uppercase tracking-wide text-gray-500">Filter</p>
                 <div class="flex gap-2">
                     <button type="button" onclick="selectAllFilter('{{ filter_key }}')" class="text-xs text-blue-400 hover:text-blue-300">All</button>
@@ -64,19 +64,23 @@
                     <button type="button" onclick="deselectAllFilter('{{ filter_key }}')" class="text-xs text-blue-400 hover:text-blue-300">None</button>
                 </div>
             </div>
+            <ul class="h-64 p-1 overflow-y-auto">
             {% for fv in filter_values %}
-            <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-700 rounded cursor-pointer">
-                <input
-                    type="checkbox"
-                    class="col-filter-checkbox rounded border-gray-600 bg-gray-700 text-blue-600"
-                    data-filter-key="{{ filter_key }}"
-                    data-filter-value="{{ fv.value }}"
-                    {% if fv.checked %}checked{% endif %}
-                    onchange="stageColumnFilter('{{ filter_key }}')"
-                >
-                <span class="text-sm text-gray-300">{{ fv.label }}</span>
-            </label>
+                <li>
+                <label class="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-700 rounded cursor-pointer">
+                    <input
+                        type="checkbox"
+                        class="col-filter-checkbox w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600"
+                        data-filter-key="{{ filter_key }}"
+                        data-filter-value="{{ fv.value }}"
+                        {% if fv.checked %}checked{% endif %}
+                        onchange="stageColumnFilter('{{ filter_key }}')"
+                    >
+                    <span class="text-sm text-gray-300">{{ fv.label }}</span>
+                </label>
+                </li>
             {% endfor %}
+            </ul>
         </template>
         {% endif %}
     </div>
@@ -118,7 +122,7 @@
         if (!tmpl) return;
 
         var portal = document.createElement('div');
-        portal.className = 'col-dropdown-portal fixed bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto';
+        portal.className = 'col-dropdown-portal fixed bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50';
         portal.dataset.colId = colId;
         portal.style.minWidth = '200px';
         portal.appendChild(tmpl.content.cloneNode(true));
