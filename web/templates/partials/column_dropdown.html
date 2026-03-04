@@ -138,8 +138,9 @@
         }
     });
 
-    // Close on page scroll — fixed dropdown can't track scroll position
-    window.addEventListener('scroll', function() {
+    // Close on page scroll — but not when scrolling inside the dropdown itself
+    window.addEventListener('scroll', function(e) {
+        if (e.target && e.target.closest && e.target.closest('.col-dropdown')) return;
         closeAllDropdowns();
     }, true);
 
