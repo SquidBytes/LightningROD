@@ -56,7 +56,7 @@
         {% if filter_values %}
         <div
             id="col-dropdown-{{ col_id }}"
-            class="col-dropdown hidden fixed bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-2 z-50 min-w-max"
+            class="col-dropdown hidden fixed bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-2 z-50 min-w-max max-h-80 overflow-y-auto"
         >
             <!-- Filter section -->
             <div>
@@ -137,6 +137,11 @@
             closeAllDropdowns();
         }
     });
+
+    // Close on page scroll — fixed dropdown can't track scroll position
+    window.addEventListener('scroll', function() {
+        closeAllDropdowns();
+    }, true);
 
     window.cycleSortColumn = function(sortKey, formId) {
         var sortByInput = document.getElementById('sort_by_input');
