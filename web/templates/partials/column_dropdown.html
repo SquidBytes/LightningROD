@@ -9,29 +9,29 @@
        filter_values — list of {value, label, checked} dicts, or empty list
        filter_form_id — id of the filter form to trigger (e.g., "filter-form")
 -->
-<th class="text-left px-4 py-3 text-gray-400 font-medium whitespace-nowrap {{ col_width|default('') }}">
+<th class="text-left px-4 py-3 font-medium whitespace-nowrap {{ col_width|default('') }}">
     <div class="relative inline-block col-header-wrapper">
         <div class="flex items-center gap-1">
             <!-- Header click button for sort cycling -->
             <button
                 type="button"
                 onclick="cycleSortColumn('{{ sort_key }}', '{{ filter_form_id }}')"
-                class="flex items-center gap-1 cursor-pointer hover:text-gray-200 transition-colors group"
+                class="btn btn-ghost btn-xs gap-1"
             >
                 <span>{{ col_label }}</span>
                 <!-- Sort indicator -->
                 {% if current_sort_by == sort_key %}
                     {% if current_sort_dir == 'asc' %}
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
                         </svg>
                     {% else %}
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
                     {% endif %}
                 {% else %}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500 group-hover:text-gray-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                 {% endif %}
@@ -43,7 +43,7 @@
                 type="button"
                 data-dropdown-id="col-dropdown-{{ col_id }}"
                 onclick="toggleColumnDropdown('{{ col_id }}', this)"
-                class="col-filter-btn flex items-center text-gray-400 hover:text-blue-400 transition-colors ml-1 p-0.5 rounded hover:bg-gray-800"
+                class="col-filter-btn btn btn-ghost btn-xs btn-square"
                 title="Filter {{ col_label }}"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -56,27 +56,27 @@
         <!-- Dropdown source (hidden, used as template — portaled to body on open) -->
         {% if filter_values %}
         <template id="col-dropdown-{{ col_id }}">
-            <div class="px-2 py-1.5 border-b border-gray-700 flex items-center justify-between">
-                <p class="text-xs uppercase tracking-wide text-gray-500">Filter</p>
+            <div class="px-2 py-1.5 border-b border-base-300 flex items-center justify-between">
+                <p class="text-xs uppercase tracking-wide text-base-content/50">Filter</p>
                 <div class="flex gap-2">
-                    <button type="button" onclick="selectAllFilter('{{ filter_key }}')" class="text-xs text-blue-400 hover:text-blue-300">All</button>
-                    <span class="text-gray-600">|</span>
-                    <button type="button" onclick="deselectAllFilter('{{ filter_key }}')" class="text-xs text-blue-400 hover:text-blue-300">None</button>
+                    <button type="button" onclick="selectAllFilter('{{ filter_key }}')" class="text-xs text-primary hover:text-primary/80">All</button>
+                    <span class="text-base-content/30">|</span>
+                    <button type="button" onclick="deselectAllFilter('{{ filter_key }}')" class="text-xs text-primary hover:text-primary/80">None</button>
                 </div>
             </div>
             <ul class="h-64 p-1 overflow-y-auto">
             {% for fv in filter_values %}
                 <li>
-                <label class="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-700 rounded cursor-pointer">
+                <label class="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-base-300 rounded cursor-pointer">
                     <input
                         type="checkbox"
-                        class="col-filter-checkbox w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600"
+                        class="checkbox checkbox-sm col-filter-checkbox"
                         data-filter-key="{{ filter_key }}"
                         data-filter-value="{{ fv.value }}"
                         {% if fv.checked %}checked{% endif %}
                         onchange="stageColumnFilter('{{ filter_key }}')"
                     >
-                    <span class="text-sm text-gray-300">{{ fv.label }}</span>
+                    <span class="label-text">{{ fv.label }}</span>
                 </label>
                 </li>
             {% endfor %}
@@ -122,7 +122,7 @@
         if (!tmpl) return;
 
         var portal = document.createElement('div');
-        portal.className = 'col-dropdown-portal fixed bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50';
+        portal.className = 'col-dropdown-portal dropdown-content fixed z-50 bg-base-200 rounded-box w-52 p-2 shadow-xl';
         portal.dataset.colId = colId;
         portal.style.minWidth = '200px';
         portal.appendChild(tmpl.content.cloneNode(true));

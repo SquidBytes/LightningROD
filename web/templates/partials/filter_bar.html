@@ -12,31 +12,31 @@
     hx-target="{{ filter_target }}"
     hx-push-url="true"
     hx-trigger="filterChanged from:body"
-    class="bg-gray-900/50 border border-gray-800 rounded-lg px-3 py-2 mb-2 flex flex-wrap gap-3 items-center"
+    class="bg-base-200 rounded-box px-3 py-2 mb-2 flex flex-wrap gap-3 items-center"
   >
     <input type="hidden" id="date_preset_input" name="{{ date_param_name|default('date_preset') }}" value="{{ active_preset or '' }}">
 
-    <!-- Date presets: spaced pill buttons -->
-    <div class="flex flex-wrap gap-1.5">
+    <!-- Date presets: DaisyUI join group -->
+    <div class="join">
       {% set presets = [("7d", "7d"), ("30d", "30d"), ("90d", "90d"), ("ytd", "YTD"), ("1y", "1y"), ("all", "All")] %}
       {% for value, label in presets %}
       <button type="button"
         onclick="activatePreset(this, '{{ value }}')"
-        class="filter-preset-btn px-3 py-1 text-xs font-medium rounded-full transition-colors {% if active_preset == value or (not active_preset and value == 'all') %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200 border border-gray-700{% endif %}"
+        class="filter-preset-btn join-item btn btn-sm {% if active_preset == value or (not active_preset and value == 'all') %}btn-primary{% else %}btn-ghost{% endif %}"
       >{{ label }}</button>
       {% endfor %}
     </div>
 
     <!-- Custom date range -->
     <div class="flex items-center gap-1.5">
-      <span class="text-gray-500 text-xs">From</span>
+      <span class="text-base-content/60 text-xs">From</span>
       <input type="date" name="date_from" value="{{ date_from or '' }}"
-        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('bg-blue-600','text-white'); b.classList.add('bg-gray-800','text-gray-400','border','border-gray-700'); }); var pi=document.getElementById('page_input'); if(pi) pi.value='1'; htmx.trigger(document.body, 'filterChanged')"
-        class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 w-28">
-      <span class="text-gray-500 text-xs">To</span>
+        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('btn-primary'); b.classList.add('btn-ghost'); }); var pi=document.getElementById('page_input'); if(pi) pi.value='1'; htmx.trigger(document.body, 'filterChanged')"
+        class="input input-sm input-bordered w-28">
+      <span class="text-base-content/60 text-xs">To</span>
       <input type="date" name="date_to" value="{{ date_to or '' }}"
-        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('bg-blue-600','text-white'); b.classList.add('bg-gray-800','text-gray-400','border','border-gray-700'); }); var pi=document.getElementById('page_input'); if(pi) pi.value='1'; htmx.trigger(document.body, 'filterChanged')"
-        class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 w-28">
+        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('btn-primary'); b.classList.add('btn-ghost'); }); var pi=document.getElementById('page_input'); if(pi) pi.value='1'; htmx.trigger(document.body, 'filterChanged')"
+        class="input input-sm input-bordered w-28">
     </div>
   </div>
 
@@ -59,25 +59,25 @@ function activatePreset(btn, value) {
     // Reset to page 1 when filters change
     var pageInput = document.getElementById('page_input');
     if (pageInput) pageInput.value = '1';
-    // Toggle visual active state
-    btn.closest('.flex.flex-wrap').querySelectorAll('button').forEach(function(b) {
-        b.classList.remove('bg-blue-600', 'text-white');
-        b.classList.add('bg-gray-800', 'text-gray-400', 'border', 'border-gray-700');
+    // Toggle visual active state — DaisyUI btn-primary / btn-ghost
+    btn.closest('.join').querySelectorAll('button').forEach(function(b) {
+        b.classList.remove('btn-primary');
+        b.classList.add('btn-ghost');
     });
-    btn.classList.remove('bg-gray-800', 'text-gray-400', 'border', 'border-gray-700');
-    btn.classList.add('bg-blue-600', 'text-white');
+    btn.classList.remove('btn-ghost');
+    btn.classList.add('btn-primary');
     // Trigger filter
     htmx.trigger(document.body, 'filterChanged');
 }
 
 function createFilterChip(text, filterKey, filterValue) {
     var chip = document.createElement('span');
-    chip.className = 'inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-blue-900/50 text-blue-300 rounded-full border border-blue-800/50';
+    chip.className = 'badge badge-sm gap-1';
     var label = document.createTextNode(text + ' ');
     chip.appendChild(label);
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'ml-0.5 text-blue-400 hover:text-white transition-colors leading-none';
+    btn.className = 'ml-0.5 hover:text-white transition-colors leading-none';
     btn.setAttribute('aria-label', 'Remove filter');
     btn.innerHTML = '&times;';
     btn.onclick = function() { removeFilter(filterKey, filterValue); };
