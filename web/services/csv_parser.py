@@ -63,6 +63,13 @@ DB_FIELD_OPTIONS = [
         "important": False,
     },
     {
+        "field": "network_id",
+        "label": "Network",
+        "description": "Charging Network Name",
+        "required": False,
+        "important": False,
+    },
+    {
         "field": "is_free",
         "label": "Is Free",
         "description": "Whether the session was at a free charging location",
@@ -211,6 +218,7 @@ _SEED_COLUMN_MAP: dict[str, str] = {
     "charge_type": "charge_type",
     "charger_type": "charge_type",
     "location_type": "location_type",
+    "network_id": "network_id",
     "is_free": "is_free",
     "device_id": "device_id",
     "vin": "device_id",
@@ -259,6 +267,8 @@ _KEYWORD_HINTS: list[tuple[list[str], str]] = [
     (["amperage"], "charging_amperage"),
     (["location", "name"], "location_name"),
     (["location", "type"], "location_type"),
+    (["network", "id"], "network_id"),
+    (["network", "name"], "network_id"),
     (["charge", "type"], "charge_type"),
     (["charger", "type"], "charge_type"),
     (["is", "free"], "is_free"),
@@ -394,7 +404,7 @@ def make_session_id(
 _FREE_LOCATIONS = {"Work", "Dealership"}
 _WORK_LOCATIONS = {"Work"}
 _HOME_LOCATIONS = {"Home"}
-
+_NETWORK_NAMES = {"Tesla", "Supercharger", "Electrify America", "ElectrifyAmerica", "EA", "EVgo", "Charge Point", "ChargePoint"}
 
 def _str_or_none(v: str) -> Optional[str]:
     """Return stripped string or None if empty."""
@@ -468,6 +478,13 @@ def _classify_location_type(location_name: str) -> str:
         return "work"
     return "public"
 
+def _classify_network_name(network_id: str) -> str:
+    """Classify network name as most popular options 'Tesla', 'Electrify America'."""
+    net = network_id.strip() if network_id else ""
+    for names in _NETWORK_NAMES:
+        if net.lower() == names.lower():
+            return names
+    return "Unknown"
 
 def _classify_is_free(location_name: str) -> bool:
     """Return True if the location is a free charging location."""
@@ -498,6 +515,7 @@ _DB_FIELD_PARSERS: dict[str, object] = {
     "is_complete": _parse_bool,
     "is_free": _parse_bool,
     "location_name": _str_or_none,
+    "network_id": _str_or_none,
     "charge_type": _str_or_none,
     "location_type": _str_or_none,
     "device_id": _str_or_none,

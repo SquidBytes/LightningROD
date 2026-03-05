@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="LightningROD", lifespan=lifespan)
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount("/static", StaticFiles(directory="web/static"), name="static")
     app.include_router(dashboard.router)
     app.include_router(sessions.router)
     app.include_router(costs.router)
