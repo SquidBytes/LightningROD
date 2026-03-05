@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-6xl">
-    <h1 class="text-3xl font-bold text-white mb-2">Energy Dashboard</h1>
-    <p class="text-gray-400 mb-6">Track your total energy consumption, efficiency trends, and regenerative braking.</p>
+    <h1 class="text-3xl font-bold text-base-content mb-2">Energy Dashboard</h1>
+    <p class="text-base-content/60 mb-6">Track your total energy consumption, efficiency trends, and regenerative braking.</p>
 
     {% with filter_url="/energy", filter_target="#energy-content", active_preset=active_range, date_param_name="range" %}
       {% include "partials/filter_bar.html" %}

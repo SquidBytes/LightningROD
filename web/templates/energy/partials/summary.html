@@ -2,74 +2,86 @@
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
     <!-- Card 1: Total Energy -->
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Total Energy</p>
-        <p class="text-3xl font-bold text-white">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-gray-400">kWh</span></p>
-        <p class="text-sm text-gray-400 mt-1">{{ summary.total_sessions }} sessions</p>
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Energy</p>
+            <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
+            <p class="text-sm text-base-content/60 mt-1">{{ summary.total_sessions }} sessions</p>
+        </div>
     </div>
 
     <!-- Card 2: Regen Energy — shows empty state when ev_trip_metrics is empty -->
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Range Recovered (Regen)</p>
-        {% if regen %}
-            <p class="text-3xl font-bold text-green-400">{{ "%.1f"|format(regen.regen_total) }} <span class="text-xl font-normal text-gray-400">range units</span></p>
-            <p class="text-sm text-gray-400 mt-1">
-                from {{ regen.trip_count }} trips
-                {% if summary.total_kwh > 0 %}
-                    &middot; {{ "%.1f"|format(regen.regen_total / summary.total_kwh * 100) }}% of total
-                {% endif %}
-            </p>
-        {% else %}
-            <p class="text-2xl font-semibold text-gray-600">No data available</p>
-            <p class="text-xs text-gray-600 mt-1">Populates when trip data is ingested</p>
-        {% endif %}
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Range Recovered (Regen)</p>
+            {% if regen %}
+                <p class="text-3xl font-bold text-green-400">{{ "%.1f"|format(regen.regen_total) }} <span class="text-xl font-normal text-base-content/60">range units</span></p>
+                <p class="text-sm text-base-content/60 mt-1">
+                    from {{ regen.trip_count }} trips
+                    {% if summary.total_kwh > 0 %}
+                        &middot; {{ "%.1f"|format(regen.regen_total / summary.total_kwh * 100) }}% of total
+                    {% endif %}
+                </p>
+            {% else %}
+                <p class="text-2xl font-semibold text-base-content/30">No data available</p>
+                <p class="text-xs text-base-content/30 mt-1">Populates when trip data is ingested</p>
+            {% endif %}
+        </div>
     </div>
 
     <!-- Card 3: Avg Efficiency — with best/worst supporting detail -->
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Avg Efficiency</p>
-        {% if summary.avg_efficiency is not none %}
-            <p class="text-3xl font-bold text-white">{{ "%.2f"|format(summary.avg_efficiency) }} <span class="text-xl font-normal text-gray-400">{{ unit_label }}</span></p>
-            <p class="text-sm text-gray-400 mt-1">
-                Best: {{ "%.2f"|format(summary.best_efficiency) }} &middot;
-                Worst: {{ "%.2f"|format(summary.worst_efficiency) }}
-            </p>
-        {% else %}
-            <p class="text-2xl font-semibold text-gray-600">No data</p>
-            <p class="text-xs text-gray-600 mt-1">Requires sessions with miles added</p>
-        {% endif %}
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Avg Efficiency</p>
+            {% if summary.avg_efficiency is not none %}
+                <p class="text-3xl font-bold">{{ "%.2f"|format(summary.avg_efficiency) }} <span class="text-xl font-normal text-base-content/60">{{ unit_label }}</span></p>
+                <p class="text-sm text-base-content/60 mt-1">
+                    Best: {{ "%.2f"|format(summary.best_efficiency) }} &middot;
+                    Worst: {{ "%.2f"|format(summary.worst_efficiency) }}
+                </p>
+            {% else %}
+                <p class="text-2xl font-semibold text-base-content/30">No data</p>
+                <p class="text-xs text-base-content/30 mt-1">Requires sessions with miles added</p>
+            {% endif %}
+        </div>
     </div>
 
 </div>
 
 <!-- Section 2: Charge Type Breakdown -->
 {% if summary.by_charge_type %}
-<h2 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Energy by Charge Type</h2>
+<h2 class="text-sm font-medium text-base-content/60 uppercase tracking-wide mb-3">Energy by Charge Type</h2>
 <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
     {% for ct in summary.by_charge_type %}
-    <div class="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4">
-        <p class="text-sm font-medium text-gray-200 mb-2">{{ charge_type_labels.get(ct.charge_type, ct.charge_type) }}</p>
-        <p class="text-xl font-bold text-white">{{ "%.1f"|format(ct.kwh) }} <span class="text-sm font-normal text-gray-400">kWh</span></p>
-        <p class="text-xs text-gray-500 mt-1">{{ ct.session_count }} sessions</p>
+    <div class="card bg-base-200/50">
+        <div class="card-body p-4">
+            <p class="text-sm font-medium text-base-content mb-2">{{ charge_type_labels.get(ct.charge_type, ct.charge_type) }}</p>
+            <p class="text-xl font-bold">{{ "%.1f"|format(ct.kwh) }} <span class="text-sm font-normal text-base-content/60">kWh</span></p>
+            <p class="text-xs text-base-content/40 mt-1">{{ ct.session_count }} sessions</p>
+        </div>
     </div>
     {% endfor %}
 </div>
 {% endif %}
 
 <!-- Section 3: Efficiency Trend Chart -->
-<div class="bg-gray-900 rounded-xl border border-gray-800 p-4 mb-4">
-    <h3 class="text-sm font-medium text-gray-400 mb-3">Efficiency Trend</h3>
-    {% if chart_html %}
-        {{ chart_html | safe }}
-    {% else %}
-        <p class="text-gray-500 text-sm py-8 text-center">No efficiency data available for this time range.</p>
-    {% endif %}
+<div class="card bg-base-200 mb-4">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Efficiency Trend</h3>
+        {% if chart_html %}
+            {{ chart_html | safe }}
+        {% else %}
+            <p class="text-base-content/40 text-sm py-8 text-center">No efficiency data available for this time range.</p>
+        {% endif %}
+    </div>
 </div>
 
 <!-- Section 4: Monthly Energy by Charge Type -->
 {% if monthly_energy_chart %}
-<div class="bg-gray-900 rounded-xl border border-gray-800 p-4">
-    <h3 class="text-sm font-medium text-gray-400 mb-3">Monthly Energy by Type</h3>
-    {{ monthly_energy_chart | safe }}
+<div class="card bg-base-200">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Monthly Energy by Type</h3>
+        {{ monthly_energy_chart | safe }}
+    </div>
 </div>
 {% endif %}

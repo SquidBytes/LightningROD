@@ -1,42 +1,50 @@
 <!-- Headline summary cards -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Total Spent</p>
-        <p class="text-3xl font-bold text-white">${{ "%.2f"|format(summary.total_cost) }}</p>
-        <p class="text-sm text-gray-400 mt-1">{{ summary.total_sessions }} sessions</p>
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Spent</p>
+            <p class="text-3xl font-bold">${{ "%.2f"|format(summary.total_cost) }}</p>
+            <p class="text-sm text-base-content/60 mt-1">{{ summary.total_sessions }} sessions</p>
+        </div>
     </div>
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Total Energy</p>
-        <p class="text-3xl font-bold text-white">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-gray-400">kWh</span></p>
-        <p class="text-sm text-gray-400 mt-1">across {{ summary.total_sessions }} sessions</p>
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Energy</p>
+            <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
+            <p class="text-sm text-base-content/60 mt-1">across {{ summary.total_sessions }} sessions</p>
+        </div>
     </div>
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Free Charging</p>
-        <p class="text-3xl font-bold text-green-400">{{ summary.free_session_count }} <span class="text-xl font-normal text-gray-400">sessions</span></p>
-        <p class="text-sm text-gray-400 mt-1">{{ "%.1f"|format(summary.free_total_kwh) }} kWh free</p>
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Free Charging</p>
+            <p class="text-3xl font-bold text-green-400">{{ summary.free_session_count }} <span class="text-xl font-normal text-base-content/60">sessions</span></p>
+            <p class="text-sm text-base-content/60 mt-1">{{ "%.1f"|format(summary.free_total_kwh) }} kWh free</p>
+        </div>
     </div>
 </div>
 
 {% if summary.unconfigured_count > 0 %}
-<p class="text-xs text-gray-500 mb-4">
+<p class="text-xs text-base-content/40 mb-4">
     {{ summary.unconfigured_count }} {{ "session" if summary.unconfigured_count == 1 else "sessions" }} excluded (no configured network)
 </p>
 {% endif %}
 
 <!-- Network breakdown with color badges -->
 {% if summary.by_network %}
-<h2 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Cost by Network</h2>
+<h2 class="text-sm font-medium text-base-content/60 uppercase tracking-wide mb-3">Cost by Network</h2>
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
     {% for net in summary.by_network %}
     {% set net_color = network_colors.get(net.network, '#6B7280') if network_colors else '#6B7280' %}
-    <div class="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4">
-        <div class="flex items-center gap-2 mb-2">
-            <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ net_color }}"></span>
-            <p class="text-sm font-medium text-gray-200 truncate">{{ net.network }}</p>
+    <div class="card bg-base-200/50">
+        <div class="card-body p-4">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ net_color }}"></span>
+                <p class="text-sm font-medium text-base-content truncate">{{ net.network }}</p>
+            </div>
+            <p class="text-xl font-bold">${{ "%.2f"|format(net.total_cost) }}</p>
+            <p class="text-xs text-base-content/40 mt-1">{{ net.session_count }} sessions</p>
+            <p class="text-xs text-base-content/40">{{ "%.1f"|format(net.total_kwh) }} kWh</p>
         </div>
-        <p class="text-xl font-bold text-white">${{ "%.2f"|format(net.total_cost) }}</p>
-        <p class="text-xs text-gray-500 mt-1">{{ net.session_count }} sessions</p>
-        <p class="text-xs text-gray-500">{{ "%.1f"|format(net.total_kwh) }} kWh</p>
     </div>
     {% endfor %}
 </div>
@@ -45,23 +53,27 @@
 <!-- Charts -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <!-- Cost by Network chart -->
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-4">
-        <h3 class="text-sm font-medium text-gray-400 mb-3">Cost by Network</h3>
-        {% if network_chart %}
-            {{ network_chart | safe }}
-        {% else %}
-            <p class="text-gray-500 text-sm py-8 text-center">No cost data available.</p>
-        {% endif %}
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Cost by Network</h3>
+            {% if network_chart %}
+                {{ network_chart | safe }}
+            {% else %}
+                <p class="text-base-content/40 text-sm py-8 text-center">No cost data available.</p>
+            {% endif %}
+        </div>
     </div>
 
     <!-- Monthly cost chart -->
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-4">
-        <h3 class="text-sm font-medium text-gray-400 mb-3">Monthly Cost</h3>
-        {% if monthly_chart %}
-            {{ monthly_chart | safe }}
-        {% else %}
-            <p class="text-gray-500 text-sm py-8 text-center">No cost data available.</p>
-        {% endif %}
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Monthly Cost</h3>
+            {% if monthly_chart %}
+                {{ monthly_chart | safe }}
+            {% else %}
+                <p class="text-base-content/40 text-sm py-8 text-center">No cost data available.</p>
+            {% endif %}
+        </div>
     </div>
 </div>
 
