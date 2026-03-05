@@ -3,13 +3,13 @@
 <div class="max-w-6xl">
     <div class="flex items-center justify-between mb-6">
         <div>
-            <h1 class="text-3xl font-bold text-white mb-2">Charging Sessions</h1>
-            <p class="text-gray-400">Browse and filter your complete EV charging history.</p>
+            <h1 class="text-3xl font-bold text-base-content mb-2">Charging Sessions</h1>
+            <p class="text-base-content/60">Browse and filter your complete EV charging history.</p>
         </div>
         <button
             type="button"
             onclick="openNewSessionModal()"
-            class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            class="btn btn-primary btn-sm gap-2"
         >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -18,87 +18,86 @@
         </button>
     </div>
 
-    <!-- Filter bar — always present, not HTMX-swapped -->
+    <!-- Filter bar -- always present, not HTMX-swapped -->
     {% include "sessions/partials/filters.html" %}
 
-    <!-- Table region — HTMX swap target, auto-refreshes on CRUD events -->
-    <div id="sessions-table-region"
-         hx-get="/sessions"
-         hx-trigger="session-updated from:body, session-deleted from:body, session-created from:body"
-         hx-target="#sessions-table-region"
-         hx-swap="innerHTML"
-         hx-include="#filter-form"
-         class="transition-opacity">
-        {% include "sessions/partials/table.html" %}
+    <!-- Drawer wrapper for session detail panel -->
+    <div class="drawer drawer-end">
+        <input id="session-drawer" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content">
+            <!-- Table region -- HTMX swap target, auto-refreshes on CRUD events -->
+            <div id="sessions-table-region"
+                 hx-get="/sessions"
+                 hx-trigger="session-updated from:body, session-deleted from:body, session-created from:body"
+                 hx-target="#sessions-table-region"
+                 hx-swap="innerHTML"
+                 hx-include="#filter-form"
+                 class="transition-opacity">
+                {% include "sessions/partials/table.html" %}
+            </div>
+        </div>
+        <div class="drawer-side z-40">
+            <label for="session-drawer" class="drawer-overlay" aria-label="close drawer"></label>
+            <div class="bg-base-200 min-h-full w-96 overflow-y-auto" id="drawer-body">
+                <!-- HTMX loads drawer content here -->
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Drawer shell -->
-<div
-    id="drawer"
-    class="fixed top-0 right-0 h-full w-96 bg-gray-900 border-l border-gray-800 z-50 transform translate-x-full transition-transform duration-300 overflow-y-auto"
->
-    <div id="drawer-content">
-        <!-- HTMX swap target for session detail -->
+<!-- Session modal using DaisyUI dialog -->
+<dialog id="session-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="session-modal-content">
+            <!-- HTMX loads modal content here -->
+        </div>
     </div>
-</div>
-<div
-    id="drawer-backdrop"
-    class="fixed inset-0 bg-black/50 z-40 hidden"
-    onclick="closeDrawer()"
-></div>
-
-<!-- Advanced session modal shell — shell IS the fixed overlay (backdrop + centering) -->
-<div id="session-modal" class="hidden fixed inset-0 z-[60] flex items-start justify-center pt-8 pb-8 overflow-y-auto bg-black/60" onclick="if(event.target === this) closeSessionModal()">
-    <div id="session-modal-content">
-        <!-- Modal content loaded via HTMX -->
-    </div>
-</div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
 
 <!-- Toast container -->
 <div id="toast-container" class="fixed top-4 right-4 z-[70] space-y-2"></div>
 
 <script>
 function openDrawer() {
-    const drawer = document.getElementById('drawer');
-    const backdrop = document.getElementById('drawer-backdrop');
-    drawer.classList.remove('translate-x-full');
-    backdrop.classList.remove('hidden');
+    document.getElementById('session-drawer').checked = true;
 }
 
 function closeDrawer() {
-    const drawer = document.getElementById('drawer');
-    const backdrop = document.getElementById('drawer-backdrop');
-    drawer.classList.add('translate-x-full');
-    backdrop.classList.add('hidden');
+    document.getElementById('session-drawer').checked = false;
 }
 
 // Auto-open drawer when HTMX loads content into it
 document.body.addEventListener('htmx:afterSettle', function(evt) {
-    if (evt.target.id === 'drawer-content') {
+    if (evt.target.id === 'drawer-body') {
         openDrawer();
     }
 });
 
 function toggleEditMode() {
-    const readFields = document.querySelectorAll('[data-read-field]');
-    const editFields = document.querySelectorAll('[data-edit-field]');
-    const editBtn = document.getElementById('edit-btn');
-    const saveBtn = document.getElementById('save-btn');
-    const cancelBtn = document.getElementById('cancel-btn');
+    var readFields = document.querySelectorAll('[data-read-field]');
+    var editFields = document.querySelectorAll('[data-edit-field]');
+    var editBtn = document.getElementById('edit-btn');
+    var saveBtn = document.getElementById('save-btn');
+    var cancelBtn = document.getElementById('cancel-btn');
 
-    const isEditing = editBtn.classList.contains('hidden');
+    var isEditing = editBtn.classList.contains('hidden');
     if (isEditing) {
         // Switch to read mode
-        readFields.forEach(el => el.classList.remove('hidden'));
-        editFields.forEach(el => el.classList.add('hidden'));
+        readFields.forEach(function(el) { el.classList.remove('hidden'); });
+        editFields.forEach(function(el) { el.classList.add('hidden'); });
         editBtn.classList.remove('hidden');
         saveBtn.classList.add('hidden');
         cancelBtn.classList.add('hidden');
     } else {
         // Switch to edit mode
-        readFields.forEach(el => el.classList.add('hidden'));
-        editFields.forEach(el => el.classList.remove('hidden'));
+        readFields.forEach(function(el) { el.classList.add('hidden'); });
+        editFields.forEach(function(el) { el.classList.remove('hidden'); });
         editBtn.classList.add('hidden');
         saveBtn.classList.remove('hidden');
         cancelBtn.classList.remove('hidden');
@@ -107,36 +106,22 @@ function toggleEditMode() {
 
 function openSessionModal(sessionId) {
     htmx.ajax('GET', '/sessions/' + sessionId + '/modal', {target: '#session-modal-content', swap: 'innerHTML'});
-    document.getElementById('session-modal').classList.remove('hidden');
-    document.body.classList.add('overflow-hidden');
+    document.getElementById('session-modal').showModal();
 }
 
 function openNewSessionModal() {
     htmx.ajax('GET', '/sessions/new/modal', {target: '#session-modal-content', swap: 'innerHTML'});
-    document.getElementById('session-modal').classList.remove('hidden');
-    document.body.classList.add('overflow-hidden');
+    document.getElementById('session-modal').showModal();
 }
 
 function closeSessionModal() {
-    document.getElementById('session-modal').classList.add('hidden');
+    document.getElementById('session-modal').close();
     document.getElementById('session-modal-content').innerHTML = '';
-    document.body.classList.remove('overflow-hidden');
-}
-
-function switchModalTab(tabName) {
-    document.querySelectorAll('[data-modal-panel]').forEach(p => p.classList.add('hidden'));
-    document.querySelector('[data-modal-panel="' + tabName + '"]').classList.remove('hidden');
-    document.querySelectorAll('.modal-tab-btn').forEach(b => {
-        b.classList.remove('bg-blue-600', 'text-white');
-        b.classList.add('text-gray-400');
-    });
-    document.querySelector('[data-modal-tab="' + tabName + '"]').classList.add('bg-blue-600', 'text-white');
-    document.querySelector('[data-modal-tab="' + tabName + '"]').classList.remove('text-gray-400');
 }
 
 function confirmDeleteFromModal(sessionId) {
     if (confirm('Are you sure you want to delete this session?')) {
-        htmx.ajax('DELETE', '/sessions/' + sessionId, {target: '#drawer-content', swap: 'innerHTML'});
+        htmx.ajax('DELETE', '/sessions/' + sessionId, {target: '#drawer-body', swap: 'innerHTML'});
         closeSessionModal();
     }
 }
@@ -145,15 +130,15 @@ function confirmDeleteFromModal(sessionId) {
 document.body.addEventListener('closeModal', closeSessionModal);
 
 function showToast(message, type) {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    const bgColor = type === 'success' ? 'bg-green-900/90 border-green-700 text-green-200' : 'bg-red-900/90 border-red-700 text-red-200';
-    toast.className = `${bgColor} border rounded-lg px-4 py-3 text-sm shadow-lg transform transition-all duration-300`;
+    var container = document.getElementById('toast-container');
+    var toast = document.createElement('div');
+    var cls = type === 'success' ? 'alert alert-success' : 'alert alert-error';
+    toast.className = cls + ' text-sm shadow-lg transform transition-all duration-300';
     toast.textContent = message;
     container.appendChild(toast);
-    setTimeout(() => {
+    setTimeout(function() {
         toast.classList.add('opacity-0', 'translate-x-4');
-        setTimeout(() => toast.remove(), 300);
+        setTimeout(function() { toast.remove(); }, 300);
     }, 3000);
 }
 
@@ -182,7 +167,7 @@ document.body.addEventListener('session-updated', function(evt) {
         }, 200);
     }
 });
-document.body.addEventListener('session-deleted', () => {
+document.body.addEventListener('session-deleted', function() {
     showToast('Session deleted', 'success');
     closeDrawer();
     closeSessionModal();
@@ -201,16 +186,16 @@ document.body.addEventListener('session-created', function(evt) {
 document.body.addEventListener('htmx:responseError', function(evt) {
     if (evt.detail.xhr.status === 422) {
         try {
-            const errors = JSON.parse(evt.detail.xhr.responseText).errors;
+            var errors = JSON.parse(evt.detail.xhr.responseText).errors;
             // Clear previous errors
-            document.querySelectorAll('.field-error').forEach(el => el.remove());
+            document.querySelectorAll('.field-error').forEach(function(el) { el.remove(); });
             // Show new errors
-            for (const [field, msg] of Object.entries(errors)) {
-                const input = document.querySelector(`[name="${field}"]`);
+            for (var field in errors) {
+                var input = document.querySelector('[name="' + field + '"]');
                 if (input) {
-                    const errorEl = document.createElement('p');
-                    errorEl.className = 'field-error text-red-400 text-xs mt-1';
-                    errorEl.textContent = msg;
+                    var errorEl = document.createElement('p');
+                    errorEl.className = 'field-error text-error text-xs mt-1';
+                    errorEl.textContent = errors[field];
                     input.parentNode.appendChild(errorEl);
                 }
             }

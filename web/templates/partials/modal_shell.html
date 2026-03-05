@@ -1,16 +1,27 @@
 {#
-  Modal Shell Pattern
-  ==================
-  The modal shell div IS the fixed overlay (backdrop + centering).
-  Usage: Copy this pattern into the page. HTMX loads the modal partial
-  into the inner content div. The partial starts directly with the card div
-  (no fixed inset-0 wrapper of its own).
+  Modal Shell Pattern (DaisyUI dialog)
+  =====================================
+  Use a native <dialog> element with DaisyUI modal classes.
+  HTMX loads the modal partial into the inner content div.
 
-  Shell classes:
-    hidden fixed inset-0 z-[60] flex items-start justify-center pt-8 pb-8 overflow-y-auto bg-black/60
+  Shell structure:
+    <dialog id="xxx-modal" class="modal">
+      <div class="modal-box w-11/12 max-w-2xl">
+        <form method="dialog">
+          <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="xxx-modal-content">
+          <!-- HTMX loads content here -->
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
 
-  Click-outside-to-close: onclick="if(event.target === this) closeXxxModal()"
+  Open: document.getElementById('xxx-modal').showModal();
+  Close: document.getElementById('xxx-modal').close();
 
-  The card partial must have onclick="event.stopPropagation()" to prevent
-  the backdrop click handler from firing when clicking inside the modal.
+  Click-outside-to-close and Escape key are handled natively by <dialog>.
+  The modal-backdrop form handles the click-outside behavior.
 #}

@@ -1,15 +1,15 @@
-<!-- Add session form — rendered inside drawer content -->
-<div class="flex items-center justify-between p-4 border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
-    <span class="text-white font-semibold">New Session</span>
+<!-- Add session form -- rendered inside drawer content -->
+<div class="flex items-center justify-between p-4 border-b border-base-300 sticky top-0 bg-base-200 z-10">
+    <span class="text-base-content font-semibold">New Session</span>
     <div class="flex items-center gap-2">
         <button
             hx-post="/sessions"
-            hx-target="#drawer-content"
+            hx-target="#drawer-body"
             hx-swap="innerHTML"
             hx-include="#add-form"
-            class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            class="btn btn-primary btn-sm"
         >Save</button>
-        <button onclick="closeDrawer()" class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800">
+        <button onclick="closeDrawer()" class="btn btn-ghost btn-sm btn-circle">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -19,61 +19,59 @@
 
 <form id="add-form" class="p-4 space-y-4">
     <!-- Date (required) -->
-    <div>
-        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Date *</label>
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Date *</span></div>
         <input type="date" name="session_date" value="{{ default_date }}" required
-               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
-    </div>
+               class="input input-bordered w-full">
+    </label>
 
     <!-- Energy kWh (required) -->
-    <div>
-        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Energy (kWh) *</label>
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Energy (kWh) *</span></div>
         <input type="number" name="energy_kwh" step="0.1" min="0.1" required placeholder="0.0"
-               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
-    </div>
+               class="input input-bordered w-full">
+    </label>
 
     <!-- Cost (optional) -->
-    <div>
-        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Cost ($)</label>
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Cost ($)</span></div>
         <input type="number" name="cost" step="0.01" min="0" placeholder="0.00"
-               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
-    </div>
+               class="input input-bordered w-full">
+    </label>
 
     <!-- Location Name (optional, smart default) -->
-    <div>
-        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Location</label>
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Location</span></div>
         <input type="text" name="location_name" value="{{ default_location or '' }}" placeholder="e.g., Home, EA Station"
-               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
-    </div>
+               class="input input-bordered w-full">
+    </label>
 
     <!-- Location Type -->
-    <div>
-        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Location Type</label>
-        <select name="location_type"
-                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Location Type</span></div>
+        <select name="location_type" class="select select-bordered w-full">
             <option value="">—</option>
             <option value="home">Home</option>
             <option value="work">Work</option>
             <option value="public">Public</option>
         </select>
-    </div>
+    </label>
 
     <!-- Charge Type -->
-    <div>
-        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Charge Type</label>
-        <select name="charge_type"
-                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Charge Type</span></div>
+        <select name="charge_type" class="select select-bordered w-full">
             <option value="">—</option>
             <option value="AC">AC</option>
             <option value="DC">DC</option>
         </select>
-    </div>
+    </label>
 
     <!-- Duration (minutes) -->
-    <div>
-        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Duration (minutes)</label>
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Duration (minutes)</span></div>
         <input type="number" name="duration_minutes" step="1" min="0" placeholder="0"
-               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm">
-    </div>
+               class="input input-bordered w-full">
+    </label>
 
 </form>

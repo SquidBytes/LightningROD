@@ -1,16 +1,16 @@
 <!-- Session detail drawer content -->
 <form id="edit-form">
-<div class="flex items-center justify-between p-4 border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
+<div class="flex items-center justify-between p-4 border-b border-base-300 sticky top-0 bg-base-200 z-10">
     <div class="flex items-center gap-3">
         {% if session.session_start_utc %}
-            <span class="text-white font-semibold">{{ session.session_start_utc.strftime("%b %-d, %Y") }}</span>
+            <span class="text-base-content font-semibold">{{ session.session_start_utc.strftime("%b %-d, %Y") }}</span>
         {% else %}
-            <span class="text-gray-400 font-semibold">Unknown Date</span>
+            <span class="text-base-content/60 font-semibold">Unknown Date</span>
         {% endif %}
         {% if session.charge_type == 'DC' %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">DC</span>
+            <span class="badge badge-info badge-sm">DC</span>
         {% elif session.charge_type == 'AC' %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400">AC</span>
+            <span class="badge badge-ghost badge-sm">AC</span>
         {% endif %}
     </div>
     <div class="flex items-center gap-2">
@@ -19,7 +19,7 @@
             id="edit-btn"
             type="button"
             onclick="toggleEditMode()"
-            class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800"
+            class="btn btn-ghost btn-sm btn-square"
             title="Quick edit"
         >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -30,7 +30,7 @@
         <button
             type="button"
             onclick="openSessionModal({{ session.id }})"
-            class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800"
+            class="btn btn-ghost btn-sm btn-square"
             title="Advanced edit"
         >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -42,20 +42,20 @@
             id="save-btn"
             type="button"
             hx-put="/sessions/{{ session.id }}"
-            hx-target="#drawer-content"
+            hx-target="#drawer-body"
             hx-swap="innerHTML"
             hx-include="#edit-form"
-            class="hidden px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            class="hidden btn btn-primary btn-sm"
         >Save</button>
         <!-- Cancel button (edit mode, hidden by default) -->
         <button
             id="cancel-btn"
             type="button"
             onclick="toggleEditMode()"
-            class="hidden px-3 py-1.5 text-sm bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+            class="hidden btn btn-ghost btn-sm"
         >Cancel</button>
         <!-- Close button -->
-        <button type="button" onclick="closeDrawer()" class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800">
+        <button type="button" onclick="closeDrawer()" class="btn btn-ghost btn-sm btn-circle">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -67,23 +67,23 @@
 
     <!-- Charging -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Charging</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Charging</h3>
         <dl class="space-y-2">
             <div class="flex justify-between items-center">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Charge Type</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Charge Type</dt>
+                <dd class="text-base-content text-base">
                     <!-- Read mode -->
                     <span data-read-field>
                         {% if session.charge_type == 'DC' %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">DC</span>
+                            <span class="badge badge-info badge-sm">DC</span>
                         {% elif session.charge_type == 'AC' %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400">AC</span>
+                            <span class="badge badge-ghost badge-sm">AC</span>
                         {% else %}
-                            <span class="text-gray-500">—</span>
+                            <span class="text-base-content/40">—</span>
                         {% endif %}
                     </span>
                     <!-- Edit mode -->
-                    <select name="charge_type" data-edit-field class="hidden bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 text-base w-full">
+                    <select name="charge_type" data-edit-field class="hidden select select-sm select-bordered w-full">
                         <option value="" {% if not session.charge_type %}selected{% endif %}>—</option>
                         <option value="AC" {% if session.charge_type == 'AC' %}selected{% endif %}>AC</option>
                         <option value="DC" {% if session.charge_type == 'DC' %}selected{% endif %}>DC</option>
@@ -91,92 +91,92 @@
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Energy</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Energy</dt>
+                <dd class="text-base-content text-base">
                     {% if session.energy_kwh is not none %}
                         {{ "%.1f"|format(session.energy_kwh) }} kWh
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Max Power</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Max Power</dt>
+                <dd class="text-base-content text-base">
                     {% if session.max_power is not none %}
                         {{ "%.1f"|format(session.max_power) }} kW
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Min Power</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Min Power</dt>
+                <dd class="text-base-content text-base">
                     {% if session.min_power is not none %}
                         {{ "%.1f"|format(session.min_power) }} kW
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Charging kW (avg)</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Charging kW (avg)</dt>
+                <dd class="text-base-content text-base">
                     {% if session.charging_kw is not none %}
                         {{ "%.1f"|format(session.charging_kw) }} kW
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Charging Voltage</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Charging Voltage</dt>
+                <dd class="text-base-content text-base">
                     {% if session.charging_voltage is not none %}
                         {{ "%.0f"|format(session.charging_voltage) }} V
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Charging Amperage</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Charging Amperage</dt>
+                <dd class="text-base-content text-base">
                     {% if session.charging_amperage is not none %}
                         {{ "%.0f"|format(session.charging_amperage) }} A
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Start SOC</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Start SOC</dt>
+                <dd class="text-base-content text-base">
                     {% if session.start_soc is not none %}
                         {{ "%.0f"|format(session.start_soc) }}%
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">End SOC</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">End SOC</dt>
+                <dd class="text-base-content text-base">
                     {% if session.end_soc is not none %}
                         {{ "%.0f"|format(session.end_soc) }}%
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Miles Added</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Miles Added</dt>
+                <dd class="text-base-content text-base">
                     {% if session.miles_added is not none %}
                         {{ "%.1f"|format(session.miles_added) }} mi
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
@@ -185,31 +185,31 @@
 
     <!-- Session -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Session</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Session</h3>
         <dl class="space-y-2">
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Start Time</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Start Time</dt>
+                <dd class="text-base-content text-base">
                     {% if session.session_start_utc %}
                         {{ session.session_start_utc.strftime("%b %-d, %Y %H:%M") }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">End Time</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">End Time</dt>
+                <dd class="text-base-content text-base">
                     {% if session.session_end_utc %}
                         {{ session.session_end_utc.strftime("%b %-d, %Y %H:%M") }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between items-center">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Charge Duration</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Charge Duration</dt>
+                <dd class="text-base-content text-base">
                     <!-- Read mode -->
                     <span data-read-field>
                         {% if session.charge_duration_seconds is not none %}
@@ -222,7 +222,7 @@
                                 {{ minutes }} min
                             {% endif %}
                         {% else %}
-                            <span class="text-gray-500">—</span>
+                            <span class="text-base-content/40">—</span>
                         {% endif %}
                     </span>
                     <!-- Edit mode: input accepts minutes, endpoint stores seconds -->
@@ -234,13 +234,13 @@
                         min="0"
                         value="{{ (session.charge_duration_seconds / 60)|int if session.charge_duration_seconds is not none else '' }}"
                         placeholder="minutes"
-                        class="hidden bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 text-base w-full"
+                        class="hidden input input-sm input-bordered w-full"
                     >
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Plugged-in Duration</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Plugged-in Duration</dt>
+                <dd class="text-base-content text-base">
                     {% if session.plugged_in_duration_seconds is not none %}
                         {% set total_seconds = session.plugged_in_duration_seconds|int %}
                         {% set hours = total_seconds // 3600 %}
@@ -251,7 +251,7 @@
                             {{ minutes }} min
                         {% endif %}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
@@ -260,11 +260,11 @@
 
     <!-- Location -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Location</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Location</h3>
         <dl class="space-y-2">
             <div class="flex justify-between items-center">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Location Name</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Location Name</dt>
+                <dd class="text-base-content text-base">
                     <!-- Read mode -->
                     <span data-read-field>
                         {% if session.location_name %}
@@ -273,7 +273,7 @@
                                 {{ session.location_name }}
                             </span>
                         {% else %}
-                            <span class="text-gray-500">—</span>
+                            <span class="text-base-content/40">—</span>
                         {% endif %}
                     </span>
                     <!-- Edit mode -->
@@ -283,27 +283,27 @@
                         data-edit-field
                         value="{{ session.location_name or '' }}"
                         placeholder="e.g., Home, EA Station"
-                        class="hidden bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 text-base w-full"
+                        class="hidden input input-sm input-bordered w-full"
                     >
                 </dd>
             </div>
             <div class="flex justify-between items-center">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Location Type</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Location Type</dt>
+                <dd class="text-base-content text-base">
                     <!-- Read mode -->
                     <span data-read-field>
                         {% if session.location_type == 'home' %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-300">Home</span>
+                            <span class="badge badge-success badge-sm">Home</span>
                         {% elif session.location_type == 'work' %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-900/50 text-yellow-300">Work</span>
+                            <span class="badge badge-warning badge-sm">Work</span>
                         {% elif session.location_type == 'public' %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-900/50 text-purple-300">Public</span>
+                            <span class="badge badge-secondary badge-sm">Public</span>
                         {% else %}
-                            <span class="text-gray-500">—</span>
+                            <span class="text-base-content/40">—</span>
                         {% endif %}
                     </span>
                     <!-- Edit mode -->
-                    <select name="location_type" data-edit-field class="hidden bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 text-base w-full">
+                    <select name="location_type" data-edit-field class="hidden select select-sm select-bordered w-full">
                         <option value="" {% if not session.location_type %}selected{% endif %}>—</option>
                         <option value="home" {% if session.location_type == 'home' %}selected{% endif %}>Home</option>
                         <option value="work" {% if session.location_type == 'work' %}selected{% endif %}>Work</option>
@@ -312,8 +312,8 @@
                 </dd>
             </div>
             <div class="flex justify-between items-center">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Network</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Network</dt>
+                <dd class="text-base-content text-base">
                     <!-- Read mode -->
                     <span data-read-field>
                         {% if session.network_id and networks %}
@@ -329,14 +329,14 @@
                                     {{ current_net.obj.network_name }}
                                 </span>
                             {% else %}
-                                <span class="text-gray-500">—</span>
+                                <span class="text-base-content/40">—</span>
                             {% endif %}
                         {% else %}
-                            <span class="text-gray-500">—</span>
+                            <span class="text-base-content/40">—</span>
                         {% endif %}
                     </span>
                     <!-- Edit mode -->
-                    <select name="network_id" data-edit-field class="hidden bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 text-base w-full">
+                    <select name="network_id" data-edit-field class="hidden select select-sm select-bordered w-full">
                         <option value="">— None —</option>
                         {% if networks %}
                             {% for net in networks %}
@@ -350,12 +350,12 @@
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Location ID</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Location ID</dt>
+                <dd class="text-base-content text-base">
                     {% if session.location_id is not none %}
                         {{ session.location_id }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
@@ -364,36 +364,36 @@
 
     <!-- Cost -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Cost</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Cost</h3>
         <!-- Read mode cost display -->
         <div data-read-field>
             {% if cost_info.is_free %}
                 <div class="text-center py-3">
-                    <span class="text-2xl font-bold text-green-400">Free</span>
-                    <p class="text-gray-500 text-xs mt-1">Free charging session</p>
+                    <span class="text-2xl font-bold text-success">Free</span>
+                    <p class="text-base-content/40 text-xs mt-1">Free charging session</p>
                 </div>
             {% elif cost_info.display_cost is not none %}
                 <div class="text-center py-3">
-                    <span class="text-2xl font-bold text-white">${{ "%.2f"|format(cost_info.display_cost) }}</span>
+                    <span class="text-2xl font-bold text-base-content">${{ "%.2f"|format(cost_info.display_cost) }}</span>
                     {% if cost_info.cost_source == 'manual' %}
-                        <span class="text-xs text-blue-400 ml-1" title="Manual entry">&#9998;</span>
+                        <span class="text-xs text-info ml-1" title="Manual entry">&#9998;</span>
                     {% elif cost_info.cost_source == 'calculated' %}
-                        <span class="text-xs text-gray-500 ml-1" title="Estimated">~</span>
+                        <span class="text-xs text-base-content/40 ml-1" title="Estimated">~</span>
                     {% endif %}
                 </div>
                 {% if cost_info.calculation %}
-                    <p class="text-gray-500 text-xs text-center">{{ cost_info.calculation }}</p>
+                    <p class="text-base-content/40 text-xs text-center">{{ cost_info.calculation }}</p>
                 {% endif %}
             {% else %}
                 <div class="text-center py-3">
-                    <span class="text-gray-500">---</span>
-                    <p class="text-gray-500 text-xs mt-1">No network cost configured</p>
+                    <span class="text-base-content/40">---</span>
+                    <p class="text-base-content/40 text-xs mt-1">No network cost configured</p>
                 </div>
             {% endif %}
         </div>
         <!-- Edit mode cost input -->
         <div data-edit-field class="hidden">
-            <label class="block text-xs uppercase tracking-wide text-gray-500 mb-1">Cost ($)</label>
+            <label class="block text-xs uppercase tracking-wide text-base-content/50 mb-1">Cost ($)</label>
             <input
                 type="number"
                 name="cost"
@@ -401,31 +401,31 @@
                 min="0"
                 value="{{ '%.2f'|format(session.cost) if session.cost is not none else '' }}"
                 placeholder="0.00"
-                class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 text-base w-full"
+                class="input input-sm input-bordered w-full"
             >
         </div>
         <dl class="space-y-2 mt-4">
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Estimated Cost (Calculated)</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Estimated Cost (Calculated)</dt>
+                <dd class="text-base-content text-base">
                     {% if session.cost_without_overrides is not none %}
                         ${{ "%.2f"|format(session.cost_without_overrides) }}
                     {% else %}
-                        <span class="text-gray-500">---</span>
+                        <span class="text-base-content/40">---</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Is Free</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Is Free</dt>
+                <dd class="text-base-content text-base">
                     {% if session.is_free is not none %}
                         {% if session.is_free %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-300">Yes</span>
+                            <span class="badge badge-success badge-sm">Yes</span>
                         {% else %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400">No</span>
+                            <span class="badge badge-ghost badge-sm">No</span>
                         {% endif %}
                     {% else %}
-                        <span class="text-gray-500">---</span>
+                        <span class="text-base-content/40">---</span>
                     {% endif %}
                 </dd>
             </div>
@@ -434,45 +434,45 @@
 
     <!-- Status -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Status</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Status</h3>
         <dl class="space-y-2">
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Plug Status</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Plug Status</dt>
+                <dd class="text-base-content text-base">
                     {% if session.plug_status %}
                         {{ session.plug_status }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Charging Status</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Charging Status</dt>
+                <dd class="text-base-content text-base">
                     {% if session.charging_status %}
                         {{ session.charging_status }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Station Status</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Station Status</dt>
+                <dd class="text-base-content text-base">
                     {% if session.station_status %}
                         {{ session.station_status }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Is Complete</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Is Complete</dt>
+                <dd class="text-base-content text-base">
                     {% if session.is_complete %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-300">Yes</span>
+                        <span class="badge badge-success badge-sm">Yes</span>
                     {% else %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400">No</span>
+                        <span class="badge badge-ghost badge-sm">No</span>
                     {% endif %}
                 </dd>
             </div>
@@ -481,63 +481,63 @@
 
     <!-- Metadata -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Metadata</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Metadata</h3>
         <dl class="space-y-2">
             <div class="flex justify-between gap-4">
-                <dt class="text-gray-400 text-base shrink-0">Session ID</dt>
-                <dd class="text-gray-200 text-base font-mono text-right truncate">
+                <dt class="text-base-content/60 text-base shrink-0">Session ID</dt>
+                <dd class="text-base-content text-base font-mono text-right truncate">
                     {% if session.session_id %}
-                        {{ session.session_id|string|truncate(18, killwords=True, end='…') }}
+                        {{ session.session_id|string|truncate(18, killwords=True, end='...') }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between gap-4">
-                <dt class="text-gray-400 text-base shrink-0">Device ID</dt>
-                <dd class="text-gray-200 text-base font-mono text-right truncate">
+                <dt class="text-base-content/60 text-base shrink-0">Device ID</dt>
+                <dd class="text-base-content text-base font-mono text-right truncate">
                     {{ session.device_id or '—' }}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Source System</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Source System</dt>
+                <dd class="text-base-content text-base">
                     {% if session.source_system %}
                         {{ session.source_system }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Edit Status</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Edit Status</dt>
+                <dd class="text-base-content text-base">
                     {% if session.source_system == 'manual_entry' %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">Manual Entry</span>
+                        <span class="badge badge-info badge-sm">Manual Entry</span>
                     {% elif session.cost_source == 'manual' %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-900/50 text-yellow-300">Edited</span>
+                        <span class="badge badge-warning badge-sm">Edited</span>
                     {% else %}
-                        <span class="text-gray-500">Original</span>
+                        <span class="text-base-content/40">Original</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Ingested At</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Ingested At</dt>
+                <dd class="text-base-content text-base">
                     {% if session.ingested_at %}
                         {{ session.ingested_at.strftime("%b %-d, %Y %H:%M") }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-base w-40 shrink-0">Original Timestamp</dt>
-                <dd class="text-gray-200 text-base">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Original Timestamp</dt>
+                <dd class="text-base-content text-base">
                     {% if session.original_timestamp %}
                         {{ session.original_timestamp.strftime("%b %-d, %Y %H:%M") }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
@@ -549,7 +549,7 @@
         <button
             type="button"
             onclick="if(confirm('Delete this session?')) { htmx.ajax('DELETE', '/sessions/{{ session.id }}', {swap:'none'}); closeDrawer(); }"
-            class="bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900/50 rounded-lg px-4 py-2 text-sm w-full"
+            class="btn btn-error btn-outline btn-sm w-full"
         >
             Delete Session
         </button>
@@ -559,13 +559,13 @@
 </form>
 
 <!-- Prev/Next navigation -->
-<div class="sticky bottom-0 bg-gray-900 border-t border-gray-800 p-4 flex items-center justify-between">
+<div class="sticky bottom-0 bg-base-200 border-t border-base-300 p-4 flex items-center justify-between">
     {% if prev_id %}
         <button
             hx-get="/sessions/{{ prev_id }}/detail?next_id={{ session.id }}"
-            hx-target="#drawer-content"
+            hx-target="#drawer-body"
             hx-swap="innerHTML"
-            class="flex items-center gap-2 px-3 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
+            class="btn btn-ghost btn-sm gap-1"
         >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -573,7 +573,7 @@
             Prev
         </button>
     {% else %}
-        <span class="flex items-center gap-2 px-3 py-2 text-sm bg-gray-800/40 text-gray-600 rounded-lg cursor-not-allowed">
+        <span class="btn btn-ghost btn-sm gap-1 btn-disabled">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
@@ -581,14 +581,14 @@
         </span>
     {% endif %}
 
-    <span class="text-xs text-gray-600">ID {{ session.id }}</span>
+    <span class="text-xs text-base-content/40">ID {{ session.id }}</span>
 
     {% if next_id %}
         <button
             hx-get="/sessions/{{ next_id }}/detail?prev_id={{ session.id }}"
-            hx-target="#drawer-content"
+            hx-target="#drawer-body"
             hx-swap="innerHTML"
-            class="flex items-center gap-2 px-3 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
+            class="btn btn-ghost btn-sm gap-1"
         >
             Next
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -596,7 +596,7 @@
             </svg>
         </button>
     {% else %}
-        <span class="flex items-center gap-2 px-3 py-2 text-sm bg-gray-800/40 text-gray-600 rounded-lg cursor-not-allowed">
+        <span class="btn btn-ghost btn-sm gap-1 btn-disabled">
             Next
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
