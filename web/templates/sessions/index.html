@@ -6,16 +6,29 @@
             <h1 class="text-3xl font-bold text-base-content mb-2">Charging Sessions</h1>
             <p class="text-base-content/60">Browse and filter your complete EV charging history.</p>
         </div>
-        <button
-            type="button"
-            onclick="openNewSessionModal()"
-            class="btn btn-primary btn-sm gap-2"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            Add Session
-        </button>
+        <div class="flex items-center gap-2">
+            <button
+                type="button"
+                id="group-edit-toggle"
+                onclick="toggleGroupEdit()"
+                class="btn btn-outline btn-sm gap-2"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Group Edit
+            </button>
+            <button
+                type="button"
+                onclick="openNewSessionModal()"
+                class="btn btn-primary btn-sm gap-2"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Session
+            </button>
+        </div>
     </div>
 
     <!-- Filter bar -- always present, not HTMX-swapped -->
@@ -40,6 +53,48 @@
             <label for="session-drawer" class="drawer-overlay" aria-label="close drawer"></label>
             <div class="bg-base-200 min-h-full w-96 overflow-y-auto" id="drawer-body">
                 <!-- HTMX loads drawer content here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Group edit floating action bar (hidden by default) -->
+<div id="group-edit-bar" class="fixed bottom-0 left-0 right-0 z-50 hidden">
+    <div class="max-w-6xl mx-auto px-4 pb-4">
+        <div class="bg-base-200 border border-base-300 rounded-box shadow-2xl p-4">
+            <div class="flex items-center gap-4 flex-wrap">
+                <span id="selected-count" class="text-sm text-base-content/60 font-medium min-w-[100px]">0 selected</span>
+
+                <select id="bulk-network" class="select select-sm select-bordered">
+                    <option value="">Network...</option>
+                    <option value="clear">-- Clear --</option>
+                    {% for net in networks %}
+                        <option value="{{ net.id }}">{{ net.network_name }}</option>
+                    {% endfor %}
+                </select>
+
+                <select id="bulk-charge-type" class="select select-sm select-bordered">
+                    <option value="">Charge Type...</option>
+                    <option value="clear">-- Clear --</option>
+                    <option value="AC">AC</option>
+                    <option value="DC">DC</option>
+                </select>
+
+                <input id="bulk-location" type="text" placeholder="Location..." class="input input-sm input-bordered w-40">
+
+                <input id="bulk-cost" type="number" step="0.01" min="0" placeholder="Cost $..." class="input input-sm input-bordered w-28">
+
+                <button
+                    type="button"
+                    onclick="applyGroupEdit()"
+                    class="btn btn-primary btn-sm"
+                >Apply</button>
+
+                <button
+                    type="button"
+                    onclick="toggleGroupEdit()"
+                    class="btn btn-ghost btn-sm"
+                >Cancel</button>
             </div>
         </div>
     </div>
@@ -179,6 +234,124 @@ document.body.addEventListener('session-created', function(evt) {
         setTimeout(function() {
             highlightRow(sessionId);
         }, 200);
+    }
+});
+
+// --- Group Edit ---
+var _groupEditActive = false;
+
+function toggleGroupEdit() {
+    _groupEditActive = !_groupEditActive;
+    var cols = document.querySelectorAll('.group-edit-col');
+    var bar = document.getElementById('group-edit-bar');
+    var toggle = document.getElementById('group-edit-toggle');
+
+    if (_groupEditActive) {
+        cols.forEach(function(el) { el.classList.remove('hidden'); });
+        bar.classList.remove('hidden');
+        toggle.classList.add('btn-active');
+    } else {
+        cols.forEach(function(el) { el.classList.add('hidden'); });
+        bar.classList.add('hidden');
+        toggle.classList.remove('btn-active');
+        // Uncheck all
+        document.querySelectorAll('.session-checkbox').forEach(function(cb) { cb.checked = false; });
+        var selectAll = document.getElementById('select-all-sessions');
+        if (selectAll) selectAll.checked = false;
+        updateSelectedCount();
+        // Reset field inputs
+        document.getElementById('bulk-network').value = '';
+        document.getElementById('bulk-charge-type').value = '';
+        document.getElementById('bulk-location').value = '';
+        document.getElementById('bulk-cost').value = '';
+    }
+}
+
+function toggleAllSessionCheckboxes(selectAll) {
+    document.querySelectorAll('.session-checkbox').forEach(function(cb) {
+        cb.checked = selectAll.checked;
+    });
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    var count = document.querySelectorAll('.session-checkbox:checked').length;
+    var el = document.getElementById('selected-count');
+    if (el) el.textContent = count + ' selected';
+}
+
+// Delegate checkbox change events for count update
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('session-checkbox')) {
+        updateSelectedCount();
+    }
+});
+
+function applyGroupEdit() {
+    var checked = document.querySelectorAll('.session-checkbox:checked');
+    if (checked.length === 0) {
+        alert('No sessions selected');
+        return;
+    }
+
+    var ids = Array.from(checked).map(function(cb) { return cb.value; });
+    var changes = [];
+    var networkSel = document.getElementById('bulk-network');
+    var chargeSel = document.getElementById('bulk-charge-type');
+    var locInput = document.getElementById('bulk-location');
+    var costInput = document.getElementById('bulk-cost');
+
+    if (networkSel.value) changes.push('Network -> ' + networkSel.options[networkSel.selectedIndex].text);
+    if (chargeSel.value) changes.push('Charge Type -> ' + chargeSel.value);
+    if (locInput.value) changes.push('Location -> ' + locInput.value);
+    if (costInput.value) changes.push('Cost -> $' + costInput.value);
+
+    if (changes.length === 0) {
+        alert('No fields to update. Select at least one field value.');
+        return;
+    }
+
+    var msg = ids.length + ' sessions will be updated:\n' + changes.join('\n');
+    if (!confirm(msg)) return;
+
+    // Build form data and submit via fetch
+    var formData = new FormData();
+    formData.append('session_ids', ids.join(','));
+    if (networkSel.value) formData.append('bulk_network_id', networkSel.value);
+    if (chargeSel.value) formData.append('bulk_charge_type', chargeSel.value);
+    if (locInput.value) formData.append('bulk_location_name', locInput.value);
+    if (costInput.value) formData.append('bulk_cost', costInput.value);
+
+    fetch('/sessions/bulk', {
+        method: 'PUT',
+        body: formData,
+        headers: { 'HX-Request': 'true' }
+    }).then(function(resp) {
+        if (resp.ok) {
+            // Parse HX-Trigger header and dispatch events
+            var trigger = resp.headers.get('HX-Trigger');
+            if (trigger) {
+                try {
+                    var events = JSON.parse(trigger);
+                    for (var name in events) {
+                        document.body.dispatchEvent(new CustomEvent(name, { detail: events[name] }));
+                    }
+                } catch(e) {}
+            }
+            toggleGroupEdit();
+            showToast('Updated ' + ids.length + ' sessions', 'success');
+        } else {
+            showToast('Bulk update failed', 'error');
+        }
+    });
+}
+
+// Re-apply group edit visibility after HTMX table swap
+document.body.addEventListener('htmx:afterSettle', function(evt) {
+    if (evt.target.id === 'sessions-table-region' && _groupEditActive) {
+        document.querySelectorAll('.group-edit-col').forEach(function(el) {
+            el.classList.remove('hidden');
+        });
     }
 });
 
