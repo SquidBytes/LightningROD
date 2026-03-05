@@ -253,6 +253,10 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
     unconfigured_count = 0
     total_sessions = 0
     total_kwh = 0.0
+    actual_total_cost = 0.0
+    estimated_total_cost = 0.0
+    actual_session_count = 0
+    estimated_session_count = 0
     by_network: dict[str, dict] = {}
 
     for s in sessions:
@@ -273,6 +277,18 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
         if cost_info["is_free"]:
             free_total_kwh += kwh
             free_session_count += 1
+
+        # Track actual vs estimated
+        if s.cost is not None and s.cost_source in ("manual", "imported"):
+            actual_total_cost += float(s.cost)
+            actual_session_count += 1
+        elif s.estimated_cost is not None:
+            estimated_total_cost += float(s.estimated_cost)
+            estimated_session_count += 1
+        elif cost_info["display_cost"] is not None:
+            # Calculated cost (from compute_session_cost network/location lookup)
+            estimated_total_cost += cost_info["display_cost"]
+            estimated_session_count += 1
 
         # Group by network name (from FK) or fallback
         net_name = network.network_name if network else (s.location_name or s.location_type or "Unknown")
@@ -295,6 +311,10 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
         "unconfigured_count": unconfigured_count,
         "total_sessions": total_sessions,
         "total_kwh": total_kwh,
+        "actual_total_cost": actual_total_cost,
+        "estimated_total_cost": estimated_total_cost,
+        "actual_session_count": actual_session_count,
+        "estimated_session_count": estimated_session_count,
     }
 
 

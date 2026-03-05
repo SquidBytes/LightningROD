@@ -23,6 +23,22 @@
     </div>
 </div>
 
+<!-- Actual vs Estimated breakdown -->
+{% if summary.actual_session_count > 0 or summary.estimated_session_count > 0 %}
+<div class="stats stats-horizontal shadow bg-base-200 mb-4 w-full">
+    <div class="stat">
+        <div class="stat-title">Actual Cost</div>
+        <div class="stat-value text-lg">${{ "%.2f"|format(summary.actual_total_cost) }}</div>
+        <div class="stat-desc">{{ summary.actual_session_count }} sessions</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">Estimated Cost</div>
+        <div class="stat-value text-lg text-base-content/60">${{ "%.2f"|format(summary.estimated_total_cost) }}</div>
+        <div class="stat-desc">{{ summary.estimated_session_count }} sessions</div>
+    </div>
+</div>
+{% endif %}
+
 {% if summary.unconfigured_count > 0 %}
 <p class="text-xs text-base-content/40 mb-4">
     {{ summary.unconfigured_count }} {{ "session" if summary.unconfigured_count == 1 else "sessions" }} excluded (no configured network)
