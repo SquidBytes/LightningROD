@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
-from db.models.reference import EVChargingNetwork
+from db.models.reference import EVChargingNetwork, EVLocationLookup
 
 # Shared Plotly modebar config — show minimal controls, hide logo
 _PLOTLY_CONFIG = {
@@ -45,10 +45,29 @@ def build_time_filter(range_str: str):
     return EVChargingSession.session_start_utc >= cutoff
 
 
-def compute_session_cost(session, networks_by_name: dict) -> dict:
-    """Compute display cost for a session given a networks_by_name dict.
+def compute_session_cost(
+    session,
+    network=None,
+    location=None,
+    *,
+    networks_by_name: dict = None,
+) -> dict:
+    """Compute display cost for a session using the cost hierarchy cascade.
 
-    Pure logic function — not a DB query.
+    Supports both new-style and old-style call signatures:
+    - New: compute_session_cost(session, network=net_obj, location=loc_obj)
+    - Old: compute_session_cost(session, networks_by_name)  (positional dict)
+    - Old: compute_session_cost(session, networks_by_name=name_dict)  (keyword)
+
+    Cost cascade order:
+    1. Session is_free flag
+    2. Stored user cost (cost_source='manual' or 'imported')
+    3. Location cost_per_kwh override (if location has cost_per_kwh set)
+    4. Network cost_per_kwh (from network FK)
+    5. No cost data available
+
+    NOTE: Callers in sessions.py, comparisons.py, dashboard.py still use
+    old positional dict signature. Plan 03 will update them.
 
     Returns dict with keys:
     - display_cost: float|None
@@ -56,47 +75,98 @@ def compute_session_cost(session, networks_by_name: dict) -> dict:
     - is_free: bool
     - cost_per_kwh: float|None
     - calculation: str|None
+    - estimated_cost: float|None  (always calculated from hierarchy)
+    - actual_cost_per_kwh: float|None  (session.cost / energy_kwh when both exist)
+    - cost_difference: float|None  (session.cost - estimated_cost when both exist)
     """
+    # Backward compat: if network arg is actually a dict, treat as networks_by_name
+    if isinstance(network, dict):
+        networks_by_name = network
+        network = None
+
+    # Resolve network from networks_by_name if not passed directly
+    if network is None and networks_by_name is not None:
+        if session.location_name and session.location_name in networks_by_name:
+            network = networks_by_name[session.location_name]
+
     result = {
         "display_cost": None,
         "cost_source": None,
         "is_free": False,
         "cost_per_kwh": None,
         "calculation": None,
+        "estimated_cost": None,
+        "actual_cost_per_kwh": None,
+        "cost_difference": None,
     }
 
-    # (a) Session-level is_free flag — always honor this
+    energy_kwh = float(session.energy_kwh or 0)
+
+    # --- Compute estimated_cost from hierarchy (location -> network -> none) ---
+    estimated_cost = None
+    estimated_source = None
+
+    if location and location.cost_per_kwh:
+        cost_val = float(location.cost_per_kwh)
+        estimated_cost = energy_kwh * cost_val
+        estimated_source = "location"
+    elif network and not network.is_free and network.cost_per_kwh:
+        cost_val = float(network.cost_per_kwh)
+        estimated_cost = energy_kwh * cost_val
+        estimated_source = "network"
+
+    if estimated_cost is not None:
+        result["estimated_cost"] = round(estimated_cost, 4)
+
+    # --- Compute actual_cost_per_kwh from user cost ---
+    if session.cost is not None and energy_kwh > 0:
+        result["actual_cost_per_kwh"] = round(float(session.cost) / energy_kwh, 4)
+
+    # --- Compute cost_difference ---
+    if session.cost is not None and estimated_cost is not None:
+        result["cost_difference"] = round(float(session.cost) - estimated_cost, 4)
+
+    # --- Determine display_cost using cascade ---
+
+    # (a) Session-level is_free flag
     if session.is_free:
         result["display_cost"] = 0.0
         result["cost_source"] = "calculated"
         result["is_free"] = True
         return result
 
-    # (b) Stored cost — user-set or imported cost always takes priority
+    # (b) Stored cost (manual or imported) always takes priority for display
     if session.cost is not None:
         result["display_cost"] = float(session.cost)
         result["cost_source"] = session.cost_source or "imported"
         return result
 
-    # (c) Network lookup — only when no stored cost exists
-    if session.location_name and session.location_name in networks_by_name:
-        network = networks_by_name[session.location_name]
-        if network.is_free:
-            result["display_cost"] = 0.0
-            result["cost_source"] = "calculated"
-            result["is_free"] = True
-            return result
-        elif network.cost_per_kwh:
-            kwh = float(session.energy_kwh or 0)
-            cost_val = float(network.cost_per_kwh)
-            calculated = kwh * cost_val
-            result["display_cost"] = calculated
-            result["cost_source"] = "calculated"
-            result["cost_per_kwh"] = cost_val
-            result["calculation"] = f"{kwh} kWh x ${cost_val}/kWh"
-            return result
+    # (c) Network-level is_free
+    if network and network.is_free:
+        result["display_cost"] = 0.0
+        result["cost_source"] = "calculated"
+        result["is_free"] = True
+        return result
 
-    # (d) No cost data available
+    # (d) Location cost override
+    if location and location.cost_per_kwh:
+        cost_val = float(location.cost_per_kwh)
+        result["display_cost"] = round(energy_kwh * cost_val, 4)
+        result["cost_source"] = "calculated"
+        result["cost_per_kwh"] = cost_val
+        result["calculation"] = f"{energy_kwh} kWh x ${cost_val}/kWh (location)"
+        return result
+
+    # (e) Network cost
+    if network and network.cost_per_kwh:
+        cost_val = float(network.cost_per_kwh)
+        result["display_cost"] = round(energy_kwh * cost_val, 4)
+        result["cost_source"] = "calculated"
+        result["cost_per_kwh"] = cost_val
+        result["calculation"] = f"{energy_kwh} kWh x ${cost_val}/kWh"
+        return result
+
+    # (f) No cost data available
     return result
 
 
@@ -107,8 +177,52 @@ async def get_networks_by_name(db: AsyncSession) -> dict[str, EVChargingNetwork]
     return {network.network_name: network for network in networks}
 
 
+async def get_networks_by_id(db: AsyncSession) -> dict[int, EVChargingNetwork]:
+    """Return dict of network_id -> EVChargingNetwork for all networks."""
+    result = await db.execute(select(EVChargingNetwork))
+    networks = result.scalars().all()
+    return {network.id: network for network in networks}
+
+
+async def get_locations_by_id(
+    db: AsyncSession, location_ids: list[int]
+) -> dict[int, EVLocationLookup]:
+    """Return dict of location_id -> EVLocationLookup for given IDs."""
+    if not location_ids:
+        return {}
+    result = await db.execute(
+        select(EVLocationLookup).where(EVLocationLookup.id.in_(location_ids))
+    )
+    locations = result.scalars().all()
+    return {loc.id: loc for loc in locations}
+
+
+async def get_session_cost_context(
+    db: AsyncSession, session
+) -> tuple[Optional[EVChargingNetwork], Optional[EVLocationLookup]]:
+    """Load the network and location objects for a session's cost calculation.
+
+    Returns (network, location) tuple, either or both may be None.
+    """
+    network = None
+    location = None
+    if session.network_id:
+        result = await db.execute(
+            select(EVChargingNetwork).where(EVChargingNetwork.id == session.network_id)
+        )
+        network = result.scalar_one_or_none()
+    if session.location_id:
+        result = await db.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == session.location_id)
+        )
+        location = result.scalar_one_or_none()
+    return network, location
+
+
 async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
     """Compute lifetime (or time-filtered) cost summary aggregated by network.
+
+    Uses network_id FK lookup with location cost cascade.
 
     Returns dict with:
     - total_cost: float
@@ -119,7 +233,7 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
     - total_sessions: int
     - total_kwh: float
     """
-    networks_by_name = await get_networks_by_name(db)
+    networks_by_id = await get_networks_by_id(db)
 
     stmt = select(EVChargingSession)
     time_filter = build_time_filter(time_range)
@@ -128,6 +242,10 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
 
     result = await db.execute(stmt)
     sessions = result.scalars().all()
+
+    # Pre-load locations for sessions that have location_id
+    location_ids = [s.location_id for s in sessions if s.location_id]
+    locations_by_id = await get_locations_by_id(db, location_ids)
 
     total_cost = 0.0
     free_total_kwh = 0.0
@@ -138,7 +256,9 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
     by_network: dict[str, dict] = {}
 
     for s in sessions:
-        cost_info = compute_session_cost(s, networks_by_name)
+        network = networks_by_id.get(s.network_id) if s.network_id else None
+        location = locations_by_id.get(s.location_id) if s.location_id else None
+        cost_info = compute_session_cost(s, network=network, location=location)
 
         if cost_info["display_cost"] is None:
             unconfigured_count += 1
@@ -154,18 +274,18 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
             free_total_kwh += kwh
             free_session_count += 1
 
-        # Group by network (location_name or fallback)
-        network = s.location_name or s.location_type or "Unknown"
-        if network not in by_network:
-            by_network[network] = {
-                "network": network,
+        # Group by network name (from FK) or fallback
+        net_name = network.network_name if network else (s.location_name or s.location_type or "Unknown")
+        if net_name not in by_network:
+            by_network[net_name] = {
+                "network": net_name,
                 "total_cost": 0.0,
                 "session_count": 0,
                 "total_kwh": 0.0,
             }
-        by_network[network]["total_cost"] += cost_info["display_cost"]
-        by_network[network]["session_count"] += 1
-        by_network[network]["total_kwh"] += kwh
+        by_network[net_name]["total_cost"] += cost_info["display_cost"]
+        by_network[net_name]["session_count"] += 1
+        by_network[net_name]["total_kwh"] += kwh
 
     return {
         "total_cost": total_cost,
@@ -181,9 +301,11 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
 async def query_monthly_costs(db: AsyncSession, time_range: str = "all") -> list[dict]:
     """Return monthly cost data grouped by month and network.
 
+    Uses network_id FK lookup with location cost cascade.
+
     Returns list of dicts: [{"month": "2025-01", "network": "Home", "cost": 12.50}, ...]
     """
-    networks_by_name = await get_networks_by_name(db)
+    networks_by_id = await get_networks_by_id(db)
 
     stmt = select(EVChargingSession)
     time_filter = build_time_filter(time_range)
@@ -193,19 +315,25 @@ async def query_monthly_costs(db: AsyncSession, time_range: str = "all") -> list
     result = await db.execute(stmt)
     sessions = result.scalars().all()
 
+    # Pre-load locations for sessions that have location_id
+    location_ids = [s.location_id for s in sessions if s.location_id]
+    locations_by_id = await get_locations_by_id(db, location_ids)
+
     # Accumulate into {(month, network): cost}
     monthly: dict[tuple, float] = {}
 
     for s in sessions:
-        cost_info = compute_session_cost(s, networks_by_name)
+        network = networks_by_id.get(s.network_id) if s.network_id else None
+        location = locations_by_id.get(s.location_id) if s.location_id else None
+        cost_info = compute_session_cost(s, network=network, location=location)
         if cost_info["display_cost"] is None:
             continue
         if s.session_start_utc is None:
             continue
 
         month = s.session_start_utc.strftime("%Y-%m")
-        network = s.location_name or s.location_type or "Unknown"
-        key = (month, network)
+        net_name = network.network_name if network else (s.location_name or s.location_type or "Unknown")
+        key = (month, net_name)
         monthly[key] = monthly.get(key, 0.0) + cost_info["display_cost"]
 
     return [
