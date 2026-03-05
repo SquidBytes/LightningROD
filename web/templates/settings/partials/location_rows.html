@@ -9,6 +9,10 @@
                 {% if loc.location_type %}
                     <span class="badge badge-sm badge-ghost capitalize">{{ loc.location_type }}</span>
                 {% endif %}
+                {% if loc.cost_per_kwh is not none %}
+                    <span class="text-xs text-base-content/60">${{ "%.4f"|format(loc.cost_per_kwh) }}/kWh</span>
+                    <span class="badge badge-xs badge-warning">Override</span>
+                {% endif %}
                 {% if loc.address %}
                     <span class="text-xs text-base-content/40 truncate">{{ loc.address }}</span>
                 {% endif %}
@@ -53,6 +57,10 @@
                        class="input input-sm input-bordered w-24">
                 <input type="number" name="longitude" step="0.000001" value="{{ loc.longitude or '' }}" placeholder="Lon"
                        class="input input-sm input-bordered w-24">
+                <input type="number" name="cost_per_kwh" step="0.0001" min="0"
+                       value="{{ loc.cost_per_kwh if loc.cost_per_kwh is not none else '' }}"
+                       placeholder="Cost/kWh (inherit)"
+                       class="input input-sm input-bordered w-32">
             </div>
             <div class="flex gap-2">
                 <button type="submit" class="btn btn-primary btn-xs">Save</button>
@@ -87,6 +95,9 @@
         </select>
         <input type="text" name="address" placeholder="Address (optional)"
                class="input input-sm input-bordered flex-1 min-w-40">
+        <input type="number" name="cost_per_kwh" step="0.0001" min="0"
+               placeholder="Cost/kWh (inherit)"
+               class="input input-sm input-bordered w-32">
         <button type="submit" class="btn btn-primary btn-xs">Add</button>
     </form>
 </div>

@@ -45,6 +45,18 @@
                     </div>
                 </div>
 
+                <div>
+                    <button type="button"
+                        hx-post="/settings/networks/{{ network.id }}/recalculate"
+                        hx-target="#recalc-result-{{ network.id }}"
+                        hx-swap="innerHTML"
+                        class="btn btn-warning btn-sm btn-outline mt-2"
+                    >
+                        Recalculate Session Costs
+                    </button>
+                    <span id="recalc-result-{{ network.id }}" class="text-sm ml-2"></span>
+                </div>
+
                 <label class="form-control w-full">
                     <div class="label"><span class="label-text">Notes</span></div>
                     <textarea name="notes" rows="3" placeholder="Optional notes..."

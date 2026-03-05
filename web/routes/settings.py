@@ -6,7 +6,8 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.reference import EVLocationLookup
+from db.models.charging_session import EVChargingSession
+from db.models.reference import EVChargingNetwork, EVLocationLookup
 from web.dependencies import get_db
 from web.queries.settings import (
     create_location,
@@ -191,6 +192,51 @@ async def delete_network_route(
     )
 
 
+@router.post("/settings/networks/{network_id}/recalculate", response_class=HTMLResponse)
+async def recalculate_network_costs(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Recalculate estimated_cost for all sessions under this network.
+
+    Location-level: recalculates sessions where location has cost_per_kwh set.
+    Network-level: recalculates sessions where location has NO cost_per_kwh override.
+    """
+    result = await db.execute(
+        select(EVChargingNetwork).where(EVChargingNetwork.id == network_id)
+    )
+    network = result.scalar_one_or_none()
+    if not network:
+        return HTMLResponse("Network not found", status_code=404)
+
+    locations = await get_locations_for_network(db, network_id)
+    location_cost_map = {loc.id: float(loc.cost_per_kwh) for loc in locations if loc.cost_per_kwh is not None}
+
+    result = await db.execute(
+        select(EVChargingSession).where(EVChargingSession.network_id == network_id)
+    )
+    sessions = result.scalars().all()
+
+    updated = 0
+    for s in sessions:
+        if not s.energy_kwh:
+            continue
+        energy = float(s.energy_kwh)
+
+        if s.location_id and s.location_id in location_cost_map:
+            # Location cost override
+            s.estimated_cost = location_cost_map[s.location_id] * energy
+            updated += 1
+        elif network.cost_per_kwh:
+            # Network cost (only for sessions WITHOUT location cost override)
+            s.estimated_cost = float(network.cost_per_kwh) * energy
+            updated += 1
+
+    await db.commit()
+    return HTMLResponse(f'<span class="text-success text-sm">{updated} sessions recalculated</span>')
+
+
 @router.get("/settings/networks/{network_id}/locations", response_class=HTMLResponse)
 async def network_locations(
     network_id: int, request: Request, db: AsyncSession = Depends(get_db)
@@ -215,11 +261,13 @@ async def create_location_route(
     address: Optional[str] = Form(None),
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
+    cost_per_kwh: Optional[float] = Form(None),
 ):
     """Add a location under a network."""
     await create_location(
         db, network_id, location_name, location_type, notes,
         address=address or None, latitude=latitude, longitude=longitude,
+        cost_per_kwh=cost_per_kwh,
     )
     locations = await get_locations_for_network(db, network_id)
     return templates.TemplateResponse(
@@ -241,11 +289,13 @@ async def update_location_route(
     address: Optional[str] = Form(None),
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
+    cost_per_kwh: Optional[float] = Form(None),
 ):
     """Update a location and return the refreshed location list."""
     await update_location(
         db, location_id, location_name, location_type, notes,
         address=address or None, latitude=latitude, longitude=longitude,
+        cost_per_kwh=cost_per_kwh,
     )
     locations = await get_locations_for_network(db, network_id)
     return templates.TemplateResponse(

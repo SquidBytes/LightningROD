@@ -173,6 +173,7 @@ async def create_location(
     address: Optional[str] = None,
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,
+    cost_per_kwh: Optional[float] = None,
 ) -> EVLocationLookup:
     """Create a new location linked to a network."""
     loc = EVLocationLookup(
@@ -183,6 +184,7 @@ async def create_location(
         address=address,
         latitude=latitude,
         longitude=longitude,
+        cost_per_kwh=cost_per_kwh,
     )
     db.add(loc)
     await db.commit()
@@ -199,6 +201,7 @@ async def update_location(
     address: Optional[str] = None,
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,
+    cost_per_kwh: Optional[float] = None,
 ) -> Optional[EVLocationLookup]:
     """Update a location row. Returns updated location or None if not found."""
     result = await db.execute(
@@ -213,6 +216,7 @@ async def update_location(
     loc.address = address
     loc.latitude = latitude
     loc.longitude = longitude
+    loc.cost_per_kwh = cost_per_kwh
     await db.commit()
     await db.refresh(loc)
     return loc
