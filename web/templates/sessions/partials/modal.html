@@ -13,27 +13,46 @@
 </script>
 
 <!-- Modal header -->
-<h3 class="text-lg font-semibold text-base-content">
-    {% if modal_mode == 'add' %}New Session{% else %}Edit Session{% endif %}
-</h3>
-{% if modal_mode == 'edit' and session and session.session_start_utc %}
-    <p class="text-base-content/60 text-sm mt-0.5 flex items-center gap-1.5">
-        {{ session.session_start_utc.strftime("%B %-d, %Y") }}
-        {% if session.location_name %}
-            &mdash;
-            <span class="w-2 h-2 rounded-full inline-block flex-shrink-0" style="background-color: {{ network_color|default('#6B7280') }}"></span>
-            {{ session.location_name }}
+<div class="flex items-center justify-between">
+    <div>
+        <h3 class="text-lg font-semibold text-base-content">
+            {% if modal_mode == 'add' %}New Session{% else %}Edit Session{% endif %}
+        </h3>
+        {% if modal_mode == 'edit' and session and session.session_start_utc %}
+            <p class="text-base-content/60 text-sm mt-0.5 flex items-center gap-1.5">
+                {{ session.session_start_utc.strftime("%B %-d, %Y") }}
+                {% if session.location_name %}
+                    &mdash;
+                    <span class="w-2 h-2 rounded-full inline-block flex-shrink-0" style="background-color: {{ network_color|default('#6B7280') }}"></span>
+                    {{ session.location_name }}
+                {% endif %}
+            </p>
         {% endif %}
-    </p>
-{% endif %}
+    </div>
+    {% if modal_mode == 'edit' and session %}
+        <div class="mr-8">
+            {% if session.source_system == 'manual_entry' %}
+                <span class="badge badge-info">Manual Entry</span>
+            {% elif session.source_system == 'csv_import' %}
+                <span class="badge badge-warning">Imported</span>
+            {% elif session.source_system == 'home_assistant' %}
+                <span class="badge badge-accent">HASS</span>
+            {% elif session.cost_source == 'manual' %}
+                <span class="badge badge-secondary">Edited</span>
+            {% else %}
+                <span class="badge badge-ghost">Original</span>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
 
 <!-- Modal body: tabbed content -->
 <form id="modal-form" class="mt-4">
     <div role="tablist" class="tabs tabs-bordered">
 
-        <!-- Session tab -->
-        <input type="radio" name="modal-tabs" role="tab" class="tab" aria-label="Session" checked="checked" />
-        <div role="tabpanel" class="tab-content p-4">
+        <!-- Basics tab -->
+        <input type="radio" name="modal-tabs" role="tab" class="tab" aria-label="Basics" checked="checked" />
+        <div role="tabpanel" class="tab-content p-4 min-h-[320px]">
             <div class="space-y-4">
                 <div class="grid grid-cols-2 gap-3">
                     <label class="form-control w-full">
@@ -55,6 +74,108 @@
                         >
                     </label>
                 </div>
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Network</span></div>
+                    <select name="network_id" class="select select-bordered w-full">
+                        <option value="">— None —</option>
+                        {% for net in networks %}
+                            <option value="{{ net.id }}"
+                                {% if modal_mode == 'edit' and session and session.network_id == net.id %}selected{% endif %}
+                                style="color: {{ net.color or '#6B7280' }}"
+                            >{{ net.network_name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Energy (kWh)</span></div>
+                        <input
+                            type="number"
+                            name="energy_kwh"
+                            step="0.01"
+                            min="0"
+                            value="{% if modal_mode == 'edit' and session and session.energy_kwh is not none %}{{ '%.2f'|format(session.energy_kwh) }}{% endif %}"
+                            placeholder="e.g., 25.5"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Charge Type</span></div>
+                        <select name="charge_type" class="select select-bordered w-full">
+                            <option value="">—</option>
+                            <option value="AC" {% if modal_mode == 'edit' and session and session.charge_type == 'AC' %}selected{% endif %}>AC</option>
+                            <option value="DC" {% if modal_mode == 'edit' and session and session.charge_type == 'DC' %}selected{% endif %}>DC</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="flex items-end gap-3">
+                    <label class="form-control flex-1">
+                        <div class="label"><span class="label-text">Cost ($)</span></div>
+                        <input
+                            type="number"
+                            name="cost"
+                            step="0.01"
+                            min="0"
+                            value="{% if modal_mode == 'edit' and session and session.cost is not none %}{{ '%.2f'|format(session.cost) }}{% endif %}"
+                            placeholder="0.00"
+                            class="input input-bordered w-full"
+                            id="modal-cost-input"
+                        >
+                    </label>
+                    <div class="flex items-center gap-2 pb-3">
+                        <input
+                            type="checkbox"
+                            name="is_free"
+                            id="modal-is-free"
+                            value="1"
+                            {% if modal_mode == 'edit' and session and session.is_free %}checked{% endif %}
+                            class="checkbox checkbox-sm"
+                            onchange="if(this.checked) { document.getElementById('modal-cost-input').value = '0.00'; }"
+                        >
+                        <label for="modal-is-free" class="label-text">Free</label>
+                    </div>
+                </div>
+                {% if modal_mode == 'edit' and cost_info %}
+                    <div class="bg-base-300 rounded-lg p-3 text-sm">
+                        <p class="text-base-content/50 text-sm uppercase tracking-wide mb-2">Current Cost Info</p>
+                        {% if cost_info.is_free %}
+                            <p class="text-success font-medium">Free</p>
+                        {% elif cost_info.display_cost is not none %}
+                            <p class="text-base-content font-medium">${{ "%.2f"|format(cost_info.display_cost) }}</p>
+                            {% if cost_info.calculation %}
+                                <p class="text-base-content/40 text-xs mt-1">{{ cost_info.calculation }}</p>
+                            {% endif %}
+                        {% else %}
+                            <p class="text-base-content/40">No cost data</p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Location Name</span></div>
+                    <input
+                        type="text"
+                        name="location_name"
+                        value="{% if modal_mode == 'edit' and session %}{{ session.location_name or '' }}{% elif default_location %}{{ default_location.location_name or '' }}{% endif %}"
+                        placeholder="e.g., Home, EA Station"
+                        class="input input-bordered w-full"
+                    >
+                </label>
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Location Type</span></div>
+                    <select name="location_type" class="select select-bordered w-full">
+                        <option value="">—</option>
+                        <option value="home" {% if modal_mode == 'edit' and session and session.location_type == 'home' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'home' %}selected{% endif %}>Home</option>
+                        <option value="work" {% if modal_mode == 'edit' and session and session.location_type == 'work' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'work' %}selected{% endif %}>Work</option>
+                        <option value="public" {% if modal_mode == 'edit' and session and session.location_type == 'public' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'public' %}selected{% endif %}>Public</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+
+        <!-- Details tab -->
+        <input type="radio" name="modal-tabs" role="tab" class="tab" aria-label="Details" />
+        <div role="tabpanel" class="tab-content p-4 min-h-[320px]">
+            <div class="space-y-4">
                 <div class="grid grid-cols-2 gap-3">
                     <label class="form-control w-full">
                         <div class="label"><span class="label-text">End Date</span></div>
@@ -101,88 +222,6 @@
                         >
                     </label>
                 </div>
-                <label class="form-control w-full">
-                    <div class="label"><span class="label-text">Location Name</span></div>
-                    <input
-                        type="text"
-                        name="location_name"
-                        value="{% if modal_mode == 'edit' and session %}{{ session.location_name or '' }}{% elif default_location %}{{ default_location.location_name or '' }}{% endif %}"
-                        placeholder="e.g., Home, EA Station"
-                        class="input input-bordered w-full"
-                    >
-                </label>
-                <div class="grid grid-cols-2 gap-3">
-                    <label class="form-control w-full">
-                        <div class="label"><span class="label-text">Location Type</span></div>
-                        <select name="location_type" class="select select-bordered w-full">
-                            <option value="">—</option>
-                            <option value="home" {% if modal_mode == 'edit' and session and session.location_type == 'home' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'home' %}selected{% endif %}>Home</option>
-                            <option value="work" {% if modal_mode == 'edit' and session and session.location_type == 'work' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'work' %}selected{% endif %}>Work</option>
-                            <option value="public" {% if modal_mode == 'edit' and session and session.location_type == 'public' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'public' %}selected{% endif %}>Public</option>
-                        </select>
-                    </label>
-                    <label class="form-control w-full">
-                        <div class="label"><span class="label-text">Location ID</span></div>
-                        <input
-                            type="number"
-                            name="location_id"
-                            value="{% if modal_mode == 'edit' and session and session.location_id is not none %}{{ session.location_id }}{% endif %}"
-                            placeholder="DB location ID"
-                            class="input input-bordered w-full"
-                        >
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <!-- Charging tab -->
-        <input type="radio" name="modal-tabs" role="tab" class="tab" aria-label="Charging" />
-        <div role="tabpanel" class="tab-content p-4">
-            <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-3">
-                    <label class="form-control w-full">
-                        <div class="label"><span class="label-text">Energy (kWh)</span></div>
-                        <input
-                            type="number"
-                            name="energy_kwh"
-                            step="0.01"
-                            min="0"
-                            value="{% if modal_mode == 'edit' and session and session.energy_kwh is not none %}{{ '%.2f'|format(session.energy_kwh) }}{% endif %}"
-                            placeholder="e.g., 25.5"
-                            class="input input-bordered w-full"
-                        >
-                    </label>
-                    <label class="form-control w-full">
-                        <div class="label"><span class="label-text">Charge Type</span></div>
-                        <select name="charge_type" class="select select-bordered w-full">
-                            <option value="">—</option>
-                            <option value="AC" {% if modal_mode == 'edit' and session and session.charge_type == 'AC' %}selected{% endif %}>AC</option>
-                            <option value="DC" {% if modal_mode == 'edit' and session and session.charge_type == 'DC' %}selected{% endif %}>DC</option>
-                        </select>
-                    </label>
-                </div>
-                <label class="form-control w-full">
-                    <div class="label"><span class="label-text">Network</span></div>
-                    <select name="network_id" class="select select-bordered w-full">
-                        <option value="">— None —</option>
-                        {% for net in networks %}
-                            <option value="{{ net.id }}"
-                                {% if modal_mode == 'edit' and session and session.network_id == net.id %}selected{% endif %}
-                                style="color: {{ net.color or '#6B7280' }}"
-                            >{{ net.network_name }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label class="form-control w-full">
-                    <div class="label"><span class="label-text">Connector Type</span></div>
-                    <input
-                        type="text"
-                        name="connector_type"
-                        value="{% if modal_mode == 'edit' and session %}{{ session.charge_type or '' }}{% endif %}"
-                        placeholder="e.g., CCS, CHAdeMO, J1772"
-                        class="input input-bordered w-full"
-                    >
-                </label>
                 <div class="grid grid-cols-2 gap-3">
                     <label class="form-control w-full">
                         <div class="label"><span class="label-text">Max Power (kW)</span></div>
@@ -281,59 +320,22 @@
                         >
                     </label>
                 </div>
-            </div>
-        </div>
-
-        <!-- Cost tab -->
-        <input type="radio" name="modal-tabs" role="tab" class="tab" aria-label="Cost" />
-        <div role="tabpanel" class="tab-content p-4">
-            <div class="space-y-4">
                 <label class="form-control w-full">
-                    <div class="label"><span class="label-text">Cost ($)</span></div>
+                    <div class="label"><span class="label-text">Connector Type</span></div>
                     <input
-                        type="number"
-                        name="cost"
-                        step="0.01"
-                        min="0"
-                        value="{% if modal_mode == 'edit' and session and session.cost is not none %}{{ '%.2f'|format(session.cost) }}{% endif %}"
-                        placeholder="0.00"
+                        type="text"
+                        name="connector_type"
+                        value="{% if modal_mode == 'edit' and session %}{{ session.charge_type or '' }}{% endif %}"
+                        placeholder="e.g., CCS, CHAdeMO, J1772"
                         class="input input-bordered w-full"
-                        id="modal-cost-input"
                     >
                 </label>
-                <div class="flex items-center gap-3">
-                    <input
-                        type="checkbox"
-                        name="is_free"
-                        id="modal-is-free"
-                        value="1"
-                        {% if modal_mode == 'edit' and session and session.is_free %}checked{% endif %}
-                        class="checkbox checkbox-sm"
-                        onchange="if(this.checked) { document.getElementById('modal-cost-input').value = '0.00'; }"
-                    >
-                    <label for="modal-is-free" class="label-text">Free charging session</label>
-                </div>
-                {% if modal_mode == 'edit' and cost_info %}
-                    <div class="bg-base-300 rounded-lg p-3 text-sm">
-                        <p class="text-base-content/50 text-sm uppercase tracking-wide mb-2">Current Cost Info</p>
-                        {% if cost_info.is_free %}
-                            <p class="text-success font-medium">Free</p>
-                        {% elif cost_info.display_cost is not none %}
-                            <p class="text-base-content font-medium">${{ "%.2f"|format(cost_info.display_cost) }}</p>
-                            {% if cost_info.calculation %}
-                                <p class="text-base-content/40 text-xs mt-1">{{ cost_info.calculation }}</p>
-                            {% endif %}
-                        {% else %}
-                            <p class="text-base-content/40">No cost data</p>
-                        {% endif %}
-                    </div>
-                {% endif %}
             </div>
         </div>
 
         <!-- Notes tab -->
         <input type="radio" name="modal-tabs" role="tab" class="tab" aria-label="Notes" />
-        <div role="tabpanel" class="tab-content p-4">
+        <div role="tabpanel" class="tab-content p-4 min-h-[320px]">
             <div class="space-y-4">
                 <label class="form-control w-full">
                     <div class="label"><span class="label-text">Notes</span></div>
@@ -347,19 +349,6 @@
                         <span class="label-text-alt text-base-content/40">Notes are informational -- saved for future use when the data model supports them.</span>
                     </div>
                 </label>
-                {% if modal_mode == 'edit' and session %}
-                    <div class="bg-base-300 rounded-lg p-3 text-sm space-y-2">
-                        <p class="text-base-content/50 text-sm uppercase tracking-wide mb-2">Session Status (read-only)</p>
-                        <div class="flex items-center justify-between">
-                            <span class="text-base-content/60 text-xs">Plug Status</span>
-                            <span class="text-base-content text-xs font-medium">{{ session.plug_status or '—' }}</span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-base-content/60 text-xs">Charging Status</span>
-                            <span class="text-base-content text-xs font-medium">{{ session.charging_status or '—' }}</span>
-                        </div>
-                    </div>
-                {% endif %}
             </div>
         </div>
 
