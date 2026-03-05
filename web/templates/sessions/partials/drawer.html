@@ -12,6 +12,15 @@
         {% elif session.charge_type == 'AC' %}
             <span class="badge badge-ghost badge-sm">AC</span>
         {% endif %}
+        {% if session.source_system == 'manual_entry' %}
+            <span class="badge badge-info badge-sm">Manual</span>
+        {% elif session.source_system == 'csv_import' %}
+            <span class="badge badge-warning badge-sm">Import</span>
+        {% elif session.source_system == 'home_assistant' %}
+            <span class="badge badge-accent badge-sm">HASS</span>
+        {% elif session.cost_source == 'manual' %}
+            <span class="badge badge-secondary badge-sm">Edited</span>
+        {% endif %}
     </div>
     <div class="flex items-center gap-2">
         <!-- Edit button (read mode) -->
@@ -65,10 +74,58 @@
 
 <div class="p-4 space-y-6">
 
-    <!-- Charging -->
+    <!-- Basics -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Charging</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Basics</h3>
         <dl class="space-y-2">
+            <div class="flex justify-between items-center">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Network</dt>
+                <dd class="text-base-content text-base">
+                    <!-- Read mode -->
+                    <span data-read-field>
+                        {% if session.network_id and networks %}
+                            {% set current_net = namespace(obj=None) %}
+                            {% for net in networks %}
+                                {% if net.id == session.network_id %}
+                                    {% set current_net.obj = net %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if current_net.obj %}
+                                <span class="inline-flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ current_net.obj.color or '#6B7280' }}"></span>
+                                    {{ current_net.obj.network_name }}
+                                </span>
+                            {% else %}
+                                <span class="text-base-content/40">—</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-base-content/40">—</span>
+                        {% endif %}
+                    </span>
+                    <!-- Edit mode -->
+                    <select name="network_id" data-edit-field class="hidden select select-sm select-bordered w-full">
+                        <option value="">— None —</option>
+                        {% if networks %}
+                            {% for net in networks %}
+                                <option value="{{ net.id }}"
+                                    {% if session.network_id == net.id %}selected{% endif %}
+                                    style="color: {{ net.color or '#6B7280' }}"
+                                >{{ net.network_name }}</option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Energy</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.energy_kwh is not none %}
+                        {{ "%.1f"|format(session.energy_kwh) }} kWh
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
             <div class="flex justify-between items-center">
                 <dt class="text-base-content/60 text-base w-40 shrink-0">Charge Type</dt>
                 <dd class="text-base-content text-base">
@@ -90,102 +147,100 @@
                     </select>
                 </dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Energy</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.energy_kwh is not none %}
-                        {{ "%.1f"|format(session.energy_kwh) }} kWh
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
+            <!-- Cost display (read mode) -->
+            <div data-read-field>
+                {% if cost_info.is_free %}
+                    <div class="text-center py-3">
+                        <span class="text-2xl font-bold text-success">Free</span>
+                        <p class="text-base-content/40 text-xs mt-1">Free charging session</p>
+                    </div>
+                {% elif cost_info.display_cost is not none %}
+                    <div class="text-center py-3">
+                        <span class="text-2xl font-bold text-base-content">${{ "%.2f"|format(cost_info.display_cost) }}</span>
+                        {% if cost_info.cost_source == 'manual' %}
+                            <span class="text-xs text-info ml-1" title="Manual entry">&#9998;</span>
+                        {% elif cost_info.cost_source == 'calculated' %}
+                            <span class="text-xs text-base-content/40 ml-1" title="Estimated">~</span>
+                        {% endif %}
+                    </div>
+                    {% if cost_info.calculation %}
+                        <p class="text-base-content/40 text-xs text-center">{{ cost_info.calculation }}</p>
                     {% endif %}
+                {% else %}
+                    <div class="text-center py-3">
+                        <span class="text-base-content/40">---</span>
+                        <p class="text-base-content/40 text-xs mt-1">No network cost configured</p>
+                    </div>
+                {% endif %}
+            </div>
+            <!-- Cost edit input (edit mode) -->
+            <div data-edit-field class="hidden">
+                <label class="block text-xs uppercase tracking-wide text-base-content/50 mb-1">Cost ($)</label>
+                <input
+                    type="number"
+                    name="cost"
+                    step="0.01"
+                    min="0"
+                    value="{{ '%.2f'|format(session.cost) if session.cost is not none else '' }}"
+                    placeholder="0.00"
+                    class="input input-sm input-bordered w-full"
+                >
+            </div>
+            <div class="flex justify-between items-center">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Location Name</dt>
+                <dd class="text-base-content text-base">
+                    <!-- Read mode -->
+                    <span data-read-field>
+                        {% if session.location_name %}
+                            <span class="inline-flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ network_color|default('#6B7280') }}"></span>
+                                {{ session.location_name }}
+                            </span>
+                        {% else %}
+                            <span class="text-base-content/40">—</span>
+                        {% endif %}
+                    </span>
+                    <!-- Edit mode -->
+                    <input
+                        type="text"
+                        name="location_name"
+                        data-edit-field
+                        value="{{ session.location_name or '' }}"
+                        placeholder="e.g., Home, EA Station"
+                        class="hidden input input-sm input-bordered w-full"
+                    >
                 </dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Max Power</dt>
+            <div class="flex justify-between items-center">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Location Type</dt>
                 <dd class="text-base-content text-base">
-                    {% if session.max_power is not none %}
-                        {{ "%.1f"|format(session.max_power) }} kW
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Min Power</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.min_power is not none %}
-                        {{ "%.1f"|format(session.min_power) }} kW
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Charging kW (avg)</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.charging_kw is not none %}
-                        {{ "%.1f"|format(session.charging_kw) }} kW
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Charging Voltage</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.charging_voltage is not none %}
-                        {{ "%.0f"|format(session.charging_voltage) }} V
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Charging Amperage</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.charging_amperage is not none %}
-                        {{ "%.0f"|format(session.charging_amperage) }} A
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Start SOC</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.start_soc is not none %}
-                        {{ "%.0f"|format(session.start_soc) }}%
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">End SOC</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.end_soc is not none %}
-                        {{ "%.0f"|format(session.end_soc) }}%
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Miles Added</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.miles_added is not none %}
-                        {{ "%.1f"|format(session.miles_added) }} mi
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
+                    <!-- Read mode -->
+                    <span data-read-field>
+                        {% if session.location_type == 'home' %}
+                            <span class="badge badge-success badge-sm">Home</span>
+                        {% elif session.location_type == 'work' %}
+                            <span class="badge badge-warning badge-sm">Work</span>
+                        {% elif session.location_type == 'public' %}
+                            <span class="badge badge-secondary badge-sm">Public</span>
+                        {% else %}
+                            <span class="text-base-content/40">—</span>
+                        {% endif %}
+                    </span>
+                    <!-- Edit mode -->
+                    <select name="location_type" data-edit-field class="hidden select select-sm select-bordered w-full">
+                        <option value="" {% if not session.location_type %}selected{% endif %}>—</option>
+                        <option value="home" {% if session.location_type == 'home' %}selected{% endif %}>Home</option>
+                        <option value="work" {% if session.location_type == 'work' %}selected{% endif %}>Work</option>
+                        <option value="public" {% if session.location_type == 'public' %}selected{% endif %}>Public</option>
+                    </select>
                 </dd>
             </div>
         </dl>
     </div>
 
-    <!-- Session -->
+    <!-- Details -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Session</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Details</h3>
         <dl class="space-y-2">
             <div class="flex justify-between">
                 <dt class="text-base-content/60 text-base w-40 shrink-0">Start Time</dt>
@@ -255,105 +310,81 @@
                     {% endif %}
                 </dd>
             </div>
-        </dl>
-    </div>
-
-    <!-- Location -->
-    <div>
-        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Location</h3>
-        <dl class="space-y-2">
-            <div class="flex justify-between items-center">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Location Name</dt>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Max Power</dt>
                 <dd class="text-base-content text-base">
-                    <!-- Read mode -->
-                    <span data-read-field>
-                        {% if session.location_name %}
-                            <span class="inline-flex items-center gap-1.5">
-                                <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ network_color|default('#6B7280') }}"></span>
-                                {{ session.location_name }}
-                            </span>
-                        {% else %}
-                            <span class="text-base-content/40">—</span>
-                        {% endif %}
-                    </span>
-                    <!-- Edit mode -->
-                    <input
-                        type="text"
-                        name="location_name"
-                        data-edit-field
-                        value="{{ session.location_name or '' }}"
-                        placeholder="e.g., Home, EA Station"
-                        class="hidden input input-sm input-bordered w-full"
-                    >
-                </dd>
-            </div>
-            <div class="flex justify-between items-center">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Location Type</dt>
-                <dd class="text-base-content text-base">
-                    <!-- Read mode -->
-                    <span data-read-field>
-                        {% if session.location_type == 'home' %}
-                            <span class="badge badge-success badge-sm">Home</span>
-                        {% elif session.location_type == 'work' %}
-                            <span class="badge badge-warning badge-sm">Work</span>
-                        {% elif session.location_type == 'public' %}
-                            <span class="badge badge-secondary badge-sm">Public</span>
-                        {% else %}
-                            <span class="text-base-content/40">—</span>
-                        {% endif %}
-                    </span>
-                    <!-- Edit mode -->
-                    <select name="location_type" data-edit-field class="hidden select select-sm select-bordered w-full">
-                        <option value="" {% if not session.location_type %}selected{% endif %}>—</option>
-                        <option value="home" {% if session.location_type == 'home' %}selected{% endif %}>Home</option>
-                        <option value="work" {% if session.location_type == 'work' %}selected{% endif %}>Work</option>
-                        <option value="public" {% if session.location_type == 'public' %}selected{% endif %}>Public</option>
-                    </select>
-                </dd>
-            </div>
-            <div class="flex justify-between items-center">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Network</dt>
-                <dd class="text-base-content text-base">
-                    <!-- Read mode -->
-                    <span data-read-field>
-                        {% if session.network_id and networks %}
-                            {% set current_net = namespace(obj=None) %}
-                            {% for net in networks %}
-                                {% if net.id == session.network_id %}
-                                    {% set current_net.obj = net %}
-                                {% endif %}
-                            {% endfor %}
-                            {% if current_net.obj %}
-                                <span class="inline-flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ current_net.obj.color or '#6B7280' }}"></span>
-                                    {{ current_net.obj.network_name }}
-                                </span>
-                            {% else %}
-                                <span class="text-base-content/40">—</span>
-                            {% endif %}
-                        {% else %}
-                            <span class="text-base-content/40">—</span>
-                        {% endif %}
-                    </span>
-                    <!-- Edit mode -->
-                    <select name="network_id" data-edit-field class="hidden select select-sm select-bordered w-full">
-                        <option value="">— None —</option>
-                        {% if networks %}
-                            {% for net in networks %}
-                                <option value="{{ net.id }}"
-                                    {% if session.network_id == net.id %}selected{% endif %}
-                                    style="color: {{ net.color or '#6B7280' }}"
-                                >{{ net.network_name }}</option>
-                            {% endfor %}
-                        {% endif %}
-                    </select>
+                    {% if session.max_power is not none %}
+                        {{ "%.1f"|format(session.max_power) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Location ID</dt>
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Min Power</dt>
                 <dd class="text-base-content text-base">
-                    {% if session.location_id is not none %}
-                        {{ session.location_id }}
+                    {% if session.min_power is not none %}
+                        {{ "%.1f"|format(session.min_power) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Avg kW</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.charging_kw is not none %}
+                        {{ "%.1f"|format(session.charging_kw) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Voltage</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.charging_voltage is not none %}
+                        {{ "%.0f"|format(session.charging_voltage) }} V
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Amperage</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.charging_amperage is not none %}
+                        {{ "%.0f"|format(session.charging_amperage) }} A
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Start SOC</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.start_soc is not none %}
+                        {{ "%.0f"|format(session.start_soc) }}%
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">End SOC</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.end_soc is not none %}
+                        {{ "%.0f"|format(session.end_soc) }}%
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Miles Added</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.miles_added is not none %}
+                        {{ "%.1f"|format(session.miles_added) }} mi
                     {% else %}
                         <span class="text-base-content/40">—</span>
                     {% endif %}
@@ -362,121 +393,10 @@
         </dl>
     </div>
 
-    <!-- Cost -->
+    <!-- Notes -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Cost</h3>
-        <!-- Read mode cost display -->
-        <div data-read-field>
-            {% if cost_info.is_free %}
-                <div class="text-center py-3">
-                    <span class="text-2xl font-bold text-success">Free</span>
-                    <p class="text-base-content/40 text-xs mt-1">Free charging session</p>
-                </div>
-            {% elif cost_info.display_cost is not none %}
-                <div class="text-center py-3">
-                    <span class="text-2xl font-bold text-base-content">${{ "%.2f"|format(cost_info.display_cost) }}</span>
-                    {% if cost_info.cost_source == 'manual' %}
-                        <span class="text-xs text-info ml-1" title="Manual entry">&#9998;</span>
-                    {% elif cost_info.cost_source == 'calculated' %}
-                        <span class="text-xs text-base-content/40 ml-1" title="Estimated">~</span>
-                    {% endif %}
-                </div>
-                {% if cost_info.calculation %}
-                    <p class="text-base-content/40 text-xs text-center">{{ cost_info.calculation }}</p>
-                {% endif %}
-            {% else %}
-                <div class="text-center py-3">
-                    <span class="text-base-content/40">---</span>
-                    <p class="text-base-content/40 text-xs mt-1">No network cost configured</p>
-                </div>
-            {% endif %}
-        </div>
-        <!-- Edit mode cost input -->
-        <div data-edit-field class="hidden">
-            <label class="block text-xs uppercase tracking-wide text-base-content/50 mb-1">Cost ($)</label>
-            <input
-                type="number"
-                name="cost"
-                step="0.01"
-                min="0"
-                value="{{ '%.2f'|format(session.cost) if session.cost is not none else '' }}"
-                placeholder="0.00"
-                class="input input-sm input-bordered w-full"
-            >
-        </div>
-        <dl class="space-y-2 mt-4">
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Estimated Cost (Calculated)</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.cost_without_overrides is not none %}
-                        ${{ "%.2f"|format(session.cost_without_overrides) }}
-                    {% else %}
-                        <span class="text-base-content/40">---</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Is Free</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.is_free is not none %}
-                        {% if session.is_free %}
-                            <span class="badge badge-success badge-sm">Yes</span>
-                        {% else %}
-                            <span class="badge badge-ghost badge-sm">No</span>
-                        {% endif %}
-                    {% else %}
-                        <span class="text-base-content/40">---</span>
-                    {% endif %}
-                </dd>
-            </div>
-        </dl>
-    </div>
-
-    <!-- Status -->
-    <div>
-        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Status</h3>
-        <dl class="space-y-2">
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Plug Status</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.plug_status %}
-                        {{ session.plug_status }}
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Charging Status</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.charging_status %}
-                        {{ session.charging_status }}
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Station Status</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.station_status %}
-                        {{ session.station_status }}
-                    {% else %}
-                        <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Is Complete</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.is_complete %}
-                        <span class="badge badge-success badge-sm">Yes</span>
-                    {% else %}
-                        <span class="badge badge-ghost badge-sm">No</span>
-                    {% endif %}
-                </dd>
-            </div>
-        </dl>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Notes</h3>
+        <p class="text-base-content/40 text-sm">No notes field in data model yet.</p>
     </div>
 
     <!-- Metadata -->
@@ -506,18 +426,6 @@
                         {{ session.source_system }}
                     {% else %}
                         <span class="text-base-content/40">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Edit Status</dt>
-                <dd class="text-base-content text-base">
-                    {% if session.source_system == 'manual_entry' %}
-                        <span class="badge badge-info badge-sm">Manual Entry</span>
-                    {% elif session.cost_source == 'manual' %}
-                        <span class="badge badge-warning badge-sm">Edited</span>
-                    {% else %}
-                        <span class="text-base-content/40">Original</span>
                     {% endif %}
                 </dd>
             </div>
