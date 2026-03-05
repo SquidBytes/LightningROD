@@ -1,74 +1,58 @@
 {# CSV Import tab — file picker upload form and import flow container #}
 <div>
     <div class="mb-6">
-        <h2 class="text-xl font-semibold text-gray-100">Import Charging Sessions</h2>
-        <p class="text-gray-400 text-sm mt-1">Upload a CSV file to import charging sessions in bulk.</p>
+        <h2 class="text-xl font-semibold">Import Charging Sessions</h2>
+        <p class="text-base-content/60 text-sm mt-1">Upload a CSV file to import charging sessions in bulk.</p>
     </div>
 
     {# Upload card #}
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 max-w-2xl">
-        <h3 class="text-base font-medium text-gray-100 mb-4">Select CSV File</h3>
+    <div class="card bg-base-200 max-w-2xl">
+        <div class="card-body">
+            <h3 class="card-title text-base">Select CSV File</h3>
 
-        <form
-            id="csv-upload-form"
-            hx-post="/settings/import/upload"
-            hx-target="#import-flow-container"
-            hx-swap="innerHTML"
-            hx-encoding="multipart/form-data"
-            hx-indicator="#upload-spinner"
-            class="space-y-4"
-        >
-            {# Hidden native file input #}
-            <input
-                type="file"
-                id="csv-file-input"
-                name="file"
-                accept=".csv"
-                class="hidden"
-                onchange="handleFileSelect(this)"
+            <form
+                id="csv-upload-form"
+                hx-post="/settings/import/upload"
+                hx-target="#import-flow-container"
+                hx-swap="innerHTML"
+                hx-encoding="multipart/form-data"
+                hx-indicator="#upload-spinner"
+                class="space-y-4"
             >
-
-            {# Custom file picker UI #}
-            <div class="flex items-center gap-3">
-                <label
-                    for="csv-file-input"
-                    class="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-sm font-medium rounded-lg transition-colors"
-                >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-                    </svg>
-                    Choose File
-                </label>
-                <span id="csv-filename-display" class="text-sm text-gray-400 italic">No file selected</span>
-            </div>
-
-            {# Upload button + loading indicator #}
-            <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    id="upload-btn"
-                    disabled
-                    class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                    Upload &amp; Process
-                </button>
-                {# Spinner — shown by HTMX via hx-indicator #}
-                <div id="upload-spinner" class="htmx-indicator flex items-center gap-2 text-sm text-gray-400">
-                    <svg class="animate-spin w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.84 3 7.938l3-2.647z">
-                        </path>
-                    </svg>
-                    Processing...
+                {# File input using DaisyUI file-input #}
+                <div class="flex items-center gap-3">
+                    <input
+                        type="file"
+                        id="csv-file-input"
+                        name="file"
+                        accept=".csv"
+                        class="file-input file-input-bordered w-full max-w-xs"
+                        onchange="handleFileSelect(this)"
+                    >
                 </div>
-            </div>
-        </form>
 
-        <div class="mt-4 text-xs text-gray-500">
-            Supported format: CSV with column headers in the first row.
-            Columns will be mapped to charging session fields in the next step.
+                {# Upload button + loading indicator #}
+                <div class="flex items-center gap-3">
+                    <button
+                        type="submit"
+                        id="upload-btn"
+                        disabled
+                        class="btn btn-primary disabled:btn-disabled"
+                    >
+                        Upload &amp; Process
+                    </button>
+                    {# Spinner — shown by HTMX via hx-indicator #}
+                    <div id="upload-spinner" class="htmx-indicator flex items-center gap-2 text-sm text-base-content/60">
+                        <span class="loading loading-spinner loading-sm"></span>
+                        Processing...
+                    </div>
+                </div>
+            </form>
+
+            <div class="mt-4 text-xs text-base-content/40">
+                Supported format: CSV with column headers in the first row.
+                Columns will be mapped to charging session fields in the next step.
+            </div>
         </div>
     </div>
 
@@ -78,17 +62,10 @@
 
 <script>
 function handleFileSelect(input) {
-    var display = document.getElementById('csv-filename-display');
     var uploadBtn = document.getElementById('upload-btn');
     if (input.files && input.files.length > 0) {
-        display.textContent = input.files[0].name;
-        display.classList.remove('italic', 'text-gray-400');
-        display.classList.add('text-gray-200');
         uploadBtn.disabled = false;
     } else {
-        display.textContent = 'No file selected';
-        display.classList.add('italic', 'text-gray-400');
-        display.classList.remove('text-gray-200');
         uploadBtn.disabled = true;
     }
 }

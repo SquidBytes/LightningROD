@@ -2,38 +2,36 @@
 
 {% block content %}
 <div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-100">Settings</h1>
-    <p class="text-gray-400 mt-1">Configure charging networks, comparison options, and data import.</p>
+    <h1 class="text-2xl font-bold">Settings</h1>
+    <p class="text-base-content/60 mt-1">Configure charging networks, comparison options, and data import.</p>
 </div>
 
 {# Tab bar #}
-<div class="border-b border-gray-800 mb-6">
-    <nav class="flex gap-6" aria-label="Settings tabs">
-        <button
-            id="tab-btn-general"
-            onclick="switchTab('general')"
-            class="pb-3 text-sm font-medium border-b-2 transition-colors
-                   {% if active_tab == 'general' %}border-blue-500 text-white{% else %}border-transparent text-gray-400 hover:text-gray-200{% endif %}"
-        >
-            General
-        </button>
-        <button
-            id="tab-btn-networks"
-            onclick="switchTab('networks')"
-            class="pb-3 text-sm font-medium border-b-2 transition-colors
-                   {% if active_tab == 'networks' %}border-blue-500 text-white{% else %}border-transparent text-gray-400 hover:text-gray-200{% endif %}"
-        >
-            Networks
-        </button>
-        <button
-            id="tab-btn-import"
-            onclick="switchTab('import')"
-            class="pb-3 text-sm font-medium border-b-2 transition-colors
-                   {% if active_tab == 'import' %}border-blue-500 text-white{% else %}border-transparent text-gray-400 hover:text-gray-200{% endif %}"
-        >
-            CSV Import
-        </button>
-    </nav>
+<div role="tablist" class="tabs tabs-bordered mb-6">
+    <button
+        id="tab-btn-general"
+        onclick="switchTab('general')"
+        role="tab"
+        class="tab {% if active_tab == 'general' %}tab-active{% endif %}"
+    >
+        General
+    </button>
+    <button
+        id="tab-btn-networks"
+        onclick="switchTab('networks')"
+        role="tab"
+        class="tab {% if active_tab == 'networks' %}tab-active{% endif %}"
+    >
+        Networks
+    </button>
+    <button
+        id="tab-btn-import"
+        onclick="switchTab('import')"
+        role="tab"
+        class="tab {% if active_tab == 'import' %}tab-active{% endif %}"
+    >
+        CSV Import
+    </button>
 </div>
 
 {# General tab content #}
@@ -41,21 +39,25 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         <!-- Comparison Settings -->
-        <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-            <h2 class="text-lg font-semibold text-gray-100 mb-1">Comparison Settings</h2>
-            <div id="gas-settings">
-                {% include "settings/partials/gas_settings.html" %}
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <h2 class="card-title">Comparison Settings</h2>
+                <div id="gas-settings">
+                    {% include "settings/partials/gas_settings.html" %}
+                </div>
             </div>
         </div>
 
     </div>
 
     <!-- Unit Preferences -->
-    <div class="mt-6 bg-gray-900 rounded-xl border border-gray-800 p-6 max-w-lg">
-        <h2 class="text-lg font-semibold text-gray-100 mb-1">Unit Preferences</h2>
-        <p class="text-gray-400 text-sm mb-4">Choose how efficiency values display on the energy dashboard.</p>
-        <div id="unit-settings">
-            {% include "settings/partials/unit_settings.html" %}
+    <div class="card bg-base-200 mt-6 max-w-lg">
+        <div class="card-body">
+            <h2 class="card-title">Unit Preferences</h2>
+            <p class="text-base-content/60 text-sm">Choose how efficiency values display on the energy dashboard.</p>
+            <div id="unit-settings">
+                {% include "settings/partials/unit_settings.html" %}
+            </div>
         </div>
     </div>
 </div>
@@ -86,12 +88,10 @@ function switchTab(tabName) {
         var btn = document.getElementById('tab-btn-' + t);
         if (t === tabName) {
             content.classList.remove('hidden');
-            btn.classList.add('border-blue-500', 'text-white');
-            btn.classList.remove('border-transparent', 'text-gray-400', 'hover:text-gray-200');
+            btn.classList.add('tab-active');
         } else {
             content.classList.add('hidden');
-            btn.classList.remove('border-blue-500', 'text-white');
-            btn.classList.add('border-transparent', 'text-gray-400', 'hover:text-gray-200');
+            btn.classList.remove('tab-active');
         }
     });
 }
