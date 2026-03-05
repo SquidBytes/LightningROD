@@ -64,6 +64,7 @@ class EVChargingSession(Base):
     cost: Mapped[Optional[float]] = mapped_column(Numeric)
     cost_without_overrides: Mapped[Optional[float]] = mapped_column(Numeric)
     cost_source: Mapped[Optional[str]] = mapped_column(String(20))  # 'imported', 'manual', 'calculated', None
+    estimated_cost: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
 
     # Session flags
     is_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

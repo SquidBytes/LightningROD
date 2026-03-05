@@ -48,6 +48,7 @@ class EVLocationLookup(Base):
     network_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("ev_charging_networks.id", ondelete="SET NULL"), nullable=True
     )
+    cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
 
 
 class EVStatistics(Base):
