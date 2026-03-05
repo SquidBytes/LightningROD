@@ -147,31 +147,74 @@
                     </select>
                 </dd>
             </div>
-            <!-- Cost display (read mode) -->
+            <!-- Cost Breakdown Card (read mode) -->
             <div data-read-field>
-                {% if cost_info.is_free %}
-                    <div class="text-center py-3">
-                        <span class="text-2xl font-bold text-success">Free</span>
-                        <p class="text-base-content/40 text-xs mt-1">Free charging session</p>
-                    </div>
-                {% elif cost_info.display_cost is not none %}
-                    <div class="text-center py-3">
-                        <span class="text-2xl font-bold text-base-content">${{ "%.2f"|format(cost_info.display_cost) }}</span>
-                        {% if cost_info.cost_source == 'manual' %}
-                            <span class="text-xs text-info ml-1" title="Manual entry">&#9998;</span>
-                        {% elif cost_info.cost_source == 'calculated' %}
-                            <span class="text-xs text-base-content/40 ml-1" title="Estimated">~</span>
+                <div class="card bg-base-300 shadow-sm">
+                    <div class="card-body p-4 space-y-3">
+                        {% if cost_info.is_free %}
+                            <div class="text-center">
+                                <span class="text-2xl font-bold text-success">Free</span>
+                            </div>
+                        {% elif cost_info.display_cost is not none %}
+                            <div class="text-center">
+                                <span class="text-2xl font-bold text-base-content">${{ "%.2f"|format(cost_info.display_cost) }}</span>
+                                {% if cost_info.cost_source == 'manual' %}
+                                    <span class="badge badge-info badge-xs ml-2">User Set</span>
+                                {% endif %}
+                            </div>
+                        {% elif cost_info.estimated_cost is not none %}
+                            <div class="text-center">
+                                <span class="text-2xl font-bold text-base-content/60">~${{ "%.2f"|format(cost_info.estimated_cost) }}</span>
+                                <span class="badge badge-ghost badge-xs ml-2">Estimated</span>
+                            </div>
+                        {% else %}
+                            <div class="text-center">
+                                <span class="text-base-content/40 text-lg">No cost data</span>
+                            </div>
+                        {% endif %}
+
+                        {% if cost_info.estimated_cost is not none or cost_info.display_cost is not none %}
+                            <div class="divider my-1"></div>
+                            <dl class="space-y-1.5 text-sm">
+                                {% if cost_info.estimated_cost is not none %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Estimated Cost</dt>
+                                        <dd class="text-base-content">${{ "%.2f"|format(cost_info.estimated_cost) }}</dd>
+                                    </div>
+                                {% endif %}
+                                {% if cost_info.display_cost is not none and cost_info.cost_source == 'manual' %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Actual Cost</dt>
+                                        <dd class="text-base-content font-medium">${{ "%.2f"|format(cost_info.display_cost) }}</dd>
+                                    </div>
+                                {% endif %}
+                                {% if cost_info.actual_cost_per_kwh is not none %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Actual $/kWh</dt>
+                                        <dd class="text-base-content">${{ "%.4f"|format(cost_info.actual_cost_per_kwh) }}</dd>
+                                    </div>
+                                {% endif %}
+                                {% if cost_info.cost_per_kwh is not none %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Network $/kWh</dt>
+                                        <dd class="text-base-content">${{ "%.4f"|format(cost_info.cost_per_kwh) }}</dd>
+                                    </div>
+                                {% endif %}
+                                {% if cost_info.cost_difference is not none %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Difference</dt>
+                                        <dd class="{% if cost_info.cost_difference > 0 %}text-error{% elif cost_info.cost_difference < 0 %}text-success{% else %}text-base-content{% endif %}">
+                                            {% if cost_info.cost_difference > 0 %}+{% endif %}${{ "%.2f"|format(cost_info.cost_difference) }}
+                                        </dd>
+                                    </div>
+                                {% endif %}
+                                {% if cost_info.calculation %}
+                                    <div class="text-xs text-base-content/40 pt-1">{{ cost_info.calculation }}</div>
+                                {% endif %}
+                            </dl>
                         {% endif %}
                     </div>
-                    {% if cost_info.calculation %}
-                        <p class="text-base-content/40 text-xs text-center">{{ cost_info.calculation }}</p>
-                    {% endif %}
-                {% else %}
-                    <div class="text-center py-3">
-                        <span class="text-base-content/40">---</span>
-                        <p class="text-base-content/40 text-xs mt-1">No network cost configured</p>
-                    </div>
-                {% endif %}
+                </div>
             </div>
             <!-- Cost edit input (edit mode) -->
             <div data-edit-field class="hidden">

@@ -15,6 +15,7 @@
     <table class="table table-zebra table-pin-rows">
         <thead>
             <tr>
+                <th class="w-10 group-edit-col hidden"><input type="checkbox" class="checkbox checkbox-sm" id="select-all-sessions" onchange="toggleAllSessionCheckboxes(this)"></th>
                 {% set current_sort_by = sort_by %}
                 {% set current_sort_dir = sort_dir %}
 
@@ -68,6 +69,7 @@
                 hx-swap="innerHTML"
                 onclick="openDrawer()"
             >
+                <td class="group-edit-col hidden" onclick="event.stopPropagation()"><input type="checkbox" class="checkbox checkbox-sm session-checkbox" value="{{ session.id }}"></td>
                 <!-- Date -->
                 <td class="px-4 py-3 text-base w-[120px]">
                     {% if session.session_start_utc %}
@@ -145,15 +147,18 @@
 
                 <!-- Cost -->
                 <td class="px-4 py-3 text-right text-base w-[100px]">
-                    {% if cost_info.is_free %}
-                        <span class="text-success">Free</span>
-                    {% elif cost_info.display_cost is not none %}
-                        <span>${{ "%.2f"|format(cost_info.display_cost) }}</span>
+                    {% if cost_info.display_cost is not none %}
+                        ${{ "%.2f"|format(cost_info.display_cost) }}
                         {% if session.source_system == 'manual_entry' %}
                             <span class="text-xs text-primary ml-1" title="Manual entry">&#9998;</span>
-                        {% elif cost_info.cost_source == 'calculated' %}
-                            <span class="text-xs text-base-content/40 ml-1" title="Estimated from network cost">~</span>
                         {% endif %}
+                    {% elif cost_info.estimated_cost is not none %}
+                        <span class="text-base-content/50">
+                            ~${{ "%.2f"|format(cost_info.estimated_cost) }}
+                            <span class="badge badge-ghost badge-xs ml-1">Est.</span>
+                        </span>
+                    {% elif cost_info.is_free %}
+                        <span class="text-success text-sm">Free</span>
                     {% else %}
                         <span class="text-base-content/40">---</span>
                     {% endif %}
