@@ -192,8 +192,10 @@
                     <!-- Read mode -->
                     <span data-read-field>
                         {% if session.location_name %}
+                            {% set loc_net = network_map.get(session.network_id) if network_map is defined and session.network_id else None %}
+                            {% set loc_net_color = loc_net.color if loc_net and loc_net.color else '#6B7280' %}
                             <span class="inline-flex items-center gap-1.5">
-                                <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ network_color|default('#6B7280') }}"></span>
+                                <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ loc_net_color }}"></span>
                                 {{ session.location_name }}
                             </span>
                         {% else %}

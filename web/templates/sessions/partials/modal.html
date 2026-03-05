@@ -23,7 +23,8 @@
                 {{ session.session_start_utc.strftime("%B %-d, %Y") }}
                 {% if session.location_name %}
                     &mdash;
-                    <span class="w-2 h-2 rounded-full inline-block flex-shrink-0" style="background-color: {{ network_color|default('#6B7280') }}"></span>
+                    {% set modal_net = network_map.get(session.network_id) if network_map is defined and session.network_id else None %}
+                    <span class="w-2 h-2 rounded-full inline-block flex-shrink-0" style="background-color: {{ modal_net.color if modal_net and modal_net.color else '#6B7280' }}"></span>
                     {{ session.location_name }}
                 {% endif %}
             </p>

@@ -11,8 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
+from db.models.reference import EVLocationLookup
 from web.dependencies import get_db
-from web.queries.costs import compute_session_cost, get_networks_by_name
+from web.queries.costs import compute_session_cost, get_locations_by_id, get_session_cost_context
 from web.queries.sessions import get_most_recent_location, query_sessions
 from web.queries.settings import get_all_networks
 
@@ -70,15 +71,19 @@ async def sessions(
 
     total_pages = max(math.ceil(total / per_page), 1)
 
-    # Enrich sessions with cost data and build network colors map
-    networks_by_name = await get_networks_by_name(db)
+    # Enrich sessions with cost data and build network map
     all_networks = await get_all_networks(db)
-    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
     network_map = {n.id: n for n in all_networks}
+
+    # Batch pre-load locations for sessions that have location_id
+    location_ids = [s.location_id for s in session_list if s.location_id]
+    locations_by_id = await get_locations_by_id(db, location_ids) if location_ids else {}
 
     enriched_sessions = []
     for s in session_list:
-        cost_info = compute_session_cost(s, networks_by_name)
+        network = network_map.get(s.network_id) if s.network_id else None
+        location = locations_by_id.get(s.location_id) if s.location_id else None
+        cost_info = compute_session_cost(s, network=network, location=location)
         enriched_sessions.append({"session": s, "cost_info": cost_info})
 
     # Build clean filter_params dict for pagination URLs (exclude page, exclude None)
@@ -118,7 +123,6 @@ async def sessions(
         "sort_by": sort_by,
         "sort_dir": sort_dir,
         "filter_params": filter_params,
-        "network_colors": network_colors,
         "network_map": network_map,
         "networks": all_networks,
         "active_page": "sessions",
@@ -128,6 +132,70 @@ async def sessions(
     if hx_request:
         return templates.TemplateResponse(request, "sessions/partials/table.html", context)
     return templates.TemplateResponse(request, "sessions/index.html", context)
+
+
+@router.put("/sessions/bulk", response_class=HTMLResponse)
+async def bulk_update_sessions(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk update selected sessions with common field values."""
+    form = await request.form()
+
+    # Parse session IDs from comma-separated hidden input
+    session_ids_str = form.get("session_ids", "")
+    if not session_ids_str:
+        return JSONResponse(status_code=422, content={"error": "No sessions selected"})
+
+    try:
+        session_ids = [int(sid.strip()) for sid in session_ids_str.split(",") if sid.strip()]
+    except ValueError:
+        return JSONResponse(status_code=422, content={"error": "Invalid session IDs"})
+
+    if not session_ids:
+        return JSONResponse(status_code=422, content={"error": "No sessions selected"})
+
+    # Load sessions
+    result = await db.execute(
+        select(EVChargingSession).where(EVChargingSession.id.in_(session_ids))
+    )
+    bulk_sessions = result.scalars().all()
+
+    # Apply updates only for fields that were submitted (non-empty)
+    bulk_network_id = form.get("bulk_network_id")
+    bulk_charge_type = form.get("bulk_charge_type")
+    bulk_location_name = form.get("bulk_location_name")
+    bulk_cost_str = form.get("bulk_cost")
+
+    updated = 0
+    for s in bulk_sessions:
+        changed = False
+        if bulk_network_id is not None and bulk_network_id != "":
+            s.network_id = int(bulk_network_id) if bulk_network_id != "clear" else None
+            changed = True
+        if bulk_charge_type is not None and bulk_charge_type != "":
+            s.charge_type = bulk_charge_type if bulk_charge_type != "clear" else None
+            changed = True
+        if bulk_location_name is not None and bulk_location_name != "":
+            s.location_name = bulk_location_name if bulk_location_name != "clear" else None
+            changed = True
+        if bulk_cost_str is not None and bulk_cost_str != "":
+            s.cost = float(bulk_cost_str)
+            s.cost_source = "manual"
+            changed = True
+        if changed:
+            updated += 1
+
+    await db.commit()
+
+    # Return response that triggers table reload
+    return Response(
+        content="",
+        status_code=200,
+        headers={
+            "HX-Trigger": json.dumps({"session-updated": {"bulk": True, "count": updated}}),
+        },
+    )
 
 
 @router.get("/sessions/new", response_class=HTMLResponse)
@@ -269,23 +337,37 @@ async def create_session(
     )
 
     db.add(new_session)
+
+    # Compute estimated cost from hierarchy before commit
+    all_networks = await get_all_networks(db)
+    network_obj = next((n for n in all_networks if n.id == new_session.network_id), None) if new_session.network_id else None
+    location_obj = None
+    if new_session.location_id:
+        loc_result = await db.execute(select(EVLocationLookup).where(EVLocationLookup.id == new_session.location_id))
+        location_obj = loc_result.scalar_one_or_none()
+
+    est_rate = None
+    if location_obj and location_obj.cost_per_kwh:
+        est_rate = float(location_obj.cost_per_kwh)
+    elif network_obj and network_obj.cost_per_kwh:
+        est_rate = float(network_obj.cost_per_kwh)
+
+    if est_rate and new_session.energy_kwh:
+        new_session.estimated_cost = est_rate * float(new_session.energy_kwh)
+    else:
+        new_session.estimated_cost = None
+
     await db.commit()
     await db.refresh(new_session)
 
-    networks_by_name = await get_networks_by_name(db)
-    cost_info = compute_session_cost(new_session, networks_by_name)
-
-    all_networks = await get_all_networks(db)
-    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
-    network_color = network_colors.get(new_session.location_name, '#6B7280') if new_session.location_name else '#6B7280'
+    cost_info = compute_session_cost(new_session, network=network_obj, location=location_obj)
 
     context = {
         "session": new_session,
         "cost_info": cost_info,
         "prev_id": None,
         "next_id": None,
-        "network_color": network_color,
-        "network_colors": network_colors,
+        "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
@@ -412,30 +494,42 @@ async def update_session(
         session.is_free = is_free in ('1', 'on', 'true')
 
     # Recalculate cost when network changes and cost was not manually set
+    all_networks = await get_all_networks(db)
     if session.network_id != old_network_id and session.cost_source != 'manual':
-        all_networks_pre = await get_all_networks(db)
-        new_network = next((n for n in all_networks_pre if n.id == session.network_id), None)
+        new_network = next((n for n in all_networks if n.id == session.network_id), None)
         if new_network and new_network.cost_per_kwh and session.energy_kwh:
             session.cost = float(new_network.cost_per_kwh) * float(session.energy_kwh)
             session.cost_source = 'calculated'
 
+    # Compute estimated cost from hierarchy
+    network_obj = next((n for n in all_networks if n.id == session.network_id), None) if session.network_id else None
+    location_obj = None
+    if session.location_id:
+        loc_result = await db.execute(select(EVLocationLookup).where(EVLocationLookup.id == session.location_id))
+        location_obj = loc_result.scalar_one_or_none()
+
+    est_rate = None
+    if location_obj and location_obj.cost_per_kwh:
+        est_rate = float(location_obj.cost_per_kwh)
+    elif network_obj and network_obj.cost_per_kwh:
+        est_rate = float(network_obj.cost_per_kwh)
+
+    if est_rate and session.energy_kwh:
+        session.estimated_cost = est_rate * float(session.energy_kwh)
+    else:
+        session.estimated_cost = None
+
     await db.commit()
     await db.refresh(session)
 
-    networks_by_name = await get_networks_by_name(db)
-    cost_info = compute_session_cost(session, networks_by_name)
-
-    all_networks = await get_all_networks(db)
-    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
-    network_color = network_colors.get(session.location_name, '#6B7280') if session.location_name else '#6B7280'
+    cost_info = compute_session_cost(session, network=network_obj, location=location_obj)
 
     context = {
         "session": session,
         "cost_info": cost_info,
         "prev_id": None,
         "next_id": None,
-        "network_color": network_color,
-        "network_colors": network_colors,
+        "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
@@ -487,20 +581,17 @@ async def session_detail(
     if session is None:
         return HTMLResponse(content="<p class='text-gray-400 p-4'>Session not found.</p>", status_code=404)
 
-    networks_by_name = await get_networks_by_name(db)
-    cost_info = compute_session_cost(session, networks_by_name)
+    network_obj, location_obj = await get_session_cost_context(db, session)
+    cost_info = compute_session_cost(session, network=network_obj, location=location_obj)
 
     all_networks = await get_all_networks(db)
-    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
-    network_color = network_colors.get(session.location_name, '#6B7280') if session.location_name else '#6B7280'
 
     context = {
         "session": session,
         "cost_info": cost_info,
         "prev_id": prev_id,
         "next_id": next_id,
-        "network_color": network_color,
-        "network_colors": network_colors,
+        "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
     }
     return templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
@@ -521,12 +612,10 @@ async def session_modal(
     if session is None:
         return HTMLResponse(content="<p class='text-gray-400 p-4'>Session not found.</p>", status_code=404)
 
-    networks_by_name = await get_networks_by_name(db)
-    cost_info = compute_session_cost(session, networks_by_name)
+    network_obj, location_obj = await get_session_cost_context(db, session)
+    cost_info = compute_session_cost(session, network=network_obj, location=location_obj)
 
     all_networks = await get_all_networks(db)
-    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
-    network_color = network_colors.get(session.location_name, '#6B7280') if session.location_name else '#6B7280'
 
     context = {
         "session": session,
@@ -534,8 +623,7 @@ async def session_modal(
         "modal_mode": "edit",
         "default_date": None,
         "default_location": None,
-        "network_color": network_color,
-        "network_colors": network_colors,
+        "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
     }
     return templates.TemplateResponse(request, "sessions/partials/modal.html", context)
