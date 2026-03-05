@@ -17,6 +17,9 @@ __pycache__/
 # Tailwind
 tailwindcss
 
+# Node
+node_modules/
+
 # Ruff
 .ruff_cache/
 

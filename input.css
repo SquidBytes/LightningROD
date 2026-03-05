@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@plugin "daisyui" {
+  themes: dark --default;
+}
 
 @theme {
   /* LightningROD brand palette */
