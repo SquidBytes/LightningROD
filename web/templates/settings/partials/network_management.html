@@ -1,140 +1,140 @@
 {# Network management partial — full CRUD for ev_charging_networks #}
-<div id="network-management-card" class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-    <div class="mb-4">
-        <h2 class="text-lg font-semibold text-gray-100 mb-1">Charging Networks</h2>
-        <p class="text-gray-400 text-sm">Manage your charging networks, costs, and color badges.</p>
-    </div>
+<div id="network-management-card" class="card bg-base-200">
+    <div class="card-body">
+        <h2 class="card-title">Charging Networks</h2>
+        <p class="text-base-content/60 text-sm">Manage your charging networks, costs, and color badges.</p>
 
-    {# Network table #}
-    <div id="network-management-table">
-        <table class="w-full text-sm">
-            <thead>
-                <tr class="border-b border-gray-800">
-                    <th class="text-left pb-2 text-gray-400 font-medium w-8">Color</th>
-                    <th class="text-left pb-2 text-gray-400 font-medium">Name</th>
-                    <th class="text-left pb-2 text-gray-400 font-medium w-28">Cost/kWh</th>
-                    <th class="text-left pb-2 text-gray-400 font-medium w-12">Free</th>
-                    <th class="text-left pb-2 text-gray-400 font-medium w-20">Locations</th>
-                    <th class="text-right pb-2 text-gray-400 font-medium w-28">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for network in networks %}
-                <tr id="network-row-{{ network.id }}"
-                    class="border-b border-gray-800/50 cursor-pointer hover:bg-gray-800/20 transition-colors"
-                    onclick="toggleNetworkLocations({{ network.id }})">
-                    <td class="py-2 pr-3">
-                        <div class="flex items-center gap-1.5">
-                            <svg id="chevron-{{ network.id }}"
-                                 class="h-3 w-3 text-gray-500 transition-transform duration-200 flex-shrink-0"
-                                 viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd"
-                                      d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                                      clip-rule="evenodd"/>
-                            </svg>
-                            <div style="width:20px; height:20px; border-radius:50%; background-color:{{ network.color or '#6B7280' }};"
-                                 title="{{ network.color or '#6B7280' }}"></div>
-                        </div>
-                    </td>
-                    <td class="py-2 text-gray-200">{{ network.network_name }}</td>
-                    <td class="py-2 text-gray-300">
-                        {% if network.is_free %}
-                            <span class="text-green-400">Free</span>
-                        {% elif network.cost_per_kwh is not none %}
-                            ${{ '%.3f'|format(network.cost_per_kwh) }}
-                        {% else %}
-                            <span class="text-gray-500">—</span>
-                        {% endif %}
-                    </td>
-                    <td class="py-2">
-                        {% if network.is_free %}
-                            <span class="text-green-400 text-xs">Yes</span>
-                        {% else %}
-                            <span class="text-gray-500 text-xs">No</span>
-                        {% endif %}
-                    </td>
-                    <td class="py-2 text-gray-400 text-sm">{{ location_counts.get(network.id, 0) }}</td>
-                    <td class="py-2 text-right" onclick="event.stopPropagation()">
-                        <div class="flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onclick="openNetworkModal({{ network.id }})"
-                                class="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors">
-                                Edit
-                            </button>
-                            <button
-                                hx-delete="/settings/networks/{{ network.id }}"
-                                hx-target="#network-management-card"
-                                hx-swap="outerHTML"
-                                hx-confirm="Delete {{ network.network_name }}?"
-                                class="px-2 py-1 text-xs bg-red-900/60 hover:bg-red-800 text-red-300 rounded transition-colors">
-                                Delete
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-                {# Expandable locations row — hidden by default, lazy-loaded on first expand #}
-                <tr id="network-locations-{{ network.id }}" class="hidden">
-                    <td colspan="6" class="px-4 py-3 bg-gray-800/30">
-                        <div id="network-locations-content-{{ network.id }}"
-                             hx-get="/settings/networks/{{ network.id }}/locations"
-                             hx-trigger="intersect once"
-                             hx-swap="innerHTML">
-                            <p class="text-gray-500 text-sm">Loading locations...</p>
-                        </div>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6" class="py-4 text-center text-gray-500">No networks configured yet.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+        {# Network table #}
+        <div id="network-management-table" class="overflow-x-auto">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th class="w-8">Color</th>
+                        <th>Name</th>
+                        <th class="w-28">Cost/kWh</th>
+                        <th class="w-12">Free</th>
+                        <th class="w-20">Locations</th>
+                        <th class="text-right w-28">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for network in networks %}
+                    <tr id="network-row-{{ network.id }}"
+                        class="cursor-pointer hover transition-colors"
+                        onclick="toggleNetworkLocations({{ network.id }})">
+                        <td class="pr-3">
+                            <div class="flex items-center gap-1.5">
+                                <svg id="chevron-{{ network.id }}"
+                                     class="h-3 w-3 text-base-content/40 transition-transform duration-200 flex-shrink-0"
+                                     viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd"
+                                          d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                                          clip-rule="evenodd"/>
+                                </svg>
+                                <div style="width:20px; height:20px; border-radius:50%; background-color:{{ network.color or '#6B7280' }};"
+                                     title="{{ network.color or '#6B7280' }}"></div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge text-white text-xs" style="background-color: {{ network.color or '#6B7280' }}">{{ network.network_name }}</span>
+                        </td>
+                        <td>
+                            {% if network.is_free %}
+                                <span class="text-success">Free</span>
+                            {% elif network.cost_per_kwh is not none %}
+                                ${{ '%.3f'|format(network.cost_per_kwh) }}
+                            {% else %}
+                                <span class="text-base-content/40">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if network.is_free %}
+                                <span class="text-success text-xs">Yes</span>
+                            {% else %}
+                                <span class="text-base-content/40 text-xs">No</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-base-content/60 text-sm">{{ location_counts.get(network.id, 0) }}</td>
+                        <td class="text-right" onclick="event.stopPropagation()">
+                            <div class="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onclick="openNetworkModal({{ network.id }})"
+                                    class="btn btn-ghost btn-xs">
+                                    Edit
+                                </button>
+                                <button
+                                    hx-delete="/settings/networks/{{ network.id }}"
+                                    hx-target="#network-management-card"
+                                    hx-swap="outerHTML"
+                                    hx-confirm="Delete {{ network.network_name }}?"
+                                    class="btn btn-error btn-ghost btn-xs">
+                                    Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {# Expandable locations row — hidden by default, lazy-loaded on first expand #}
+                    <tr id="network-locations-{{ network.id }}" class="hidden">
+                        <td colspan="6" class="bg-base-300/50 px-4 py-3">
+                            <div id="network-locations-content-{{ network.id }}"
+                                 hx-get="/settings/networks/{{ network.id }}/locations"
+                                 hx-trigger="intersect once"
+                                 hx-swap="innerHTML">
+                                <p class="text-base-content/40 text-sm">Loading locations...</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="py-4 text-center text-base-content/40">No networks configured yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
-    {# Add Network form #}
-    <div class="mt-6 border-t border-gray-800 pt-5">
-        <h3 class="text-sm font-semibold text-gray-300 mb-3">Add Network</h3>
-        <form
-            hx-post="/settings/networks"
-            hx-target="#network-management-card"
-            hx-swap="outerHTML"
-            hx-on::after-request="if(event.detail.successful) this.reset()"
-            class="flex flex-wrap gap-3 items-end">
+        {# Add Network form #}
+        <div class="mt-6 border-t border-base-300 pt-5">
+            <h3 class="text-sm font-semibold mb-3">Add Network</h3>
+            <form
+                hx-post="/settings/networks"
+                hx-target="#network-management-card"
+                hx-swap="outerHTML"
+                hx-on::after-request="if(event.detail.successful) this.reset()"
+                class="flex flex-wrap gap-3 items-end">
 
-            <div class="flex flex-col gap-1">
-                <label class="text-xs text-gray-400">Name</label>
-                <input type="text" name="network_name" required placeholder="e.g. ChargePoint"
-                       class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 w-40">
-            </div>
-
-            <div class="flex flex-col gap-1">
-                <label class="text-xs text-gray-400">Cost/kWh</label>
-                <input type="number" name="cost_per_kwh" step="0.001" min="0" placeholder="0.000"
-                       class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 w-28 text-right">
-            </div>
-
-            <div class="flex flex-col gap-1">
-                <label class="text-xs text-gray-400">Color</label>
-                <input type="color" name="color" value="#6B7280"
-                       class="h-8 w-14 rounded border border-gray-700 bg-gray-800 cursor-pointer p-0.5">
-            </div>
-
-            <div class="flex flex-col gap-1">
-                <label class="text-xs text-gray-400">Free</label>
-                <label class="flex items-center gap-1.5 cursor-pointer h-8">
-                    <input type="checkbox" name="is_free"
-                           class="rounded bg-gray-800 border-gray-600 text-green-500 focus:ring-green-500">
-                    <span class="text-gray-400 text-xs">Is free</span>
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Name</span></div>
+                    <input type="text" name="network_name" required placeholder="e.g. ChargePoint"
+                           class="input input-sm input-bordered w-40">
                 </label>
-            </div>
 
-            <button type="submit"
-                    class="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors">
-                Add
-            </button>
-        </form>
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Cost/kWh</span></div>
+                    <input type="number" name="cost_per_kwh" step="0.001" min="0" placeholder="0.000"
+                           class="input input-sm input-bordered w-28 text-right">
+                </label>
+
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Color</span></div>
+                    <input type="color" name="color" value="#6B7280"
+                           class="h-8 w-14 rounded cursor-pointer p-0.5">
+                </label>
+
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Free</span></div>
+                    <label class="flex items-center gap-1.5 cursor-pointer h-8">
+                        <input type="checkbox" name="is_free" class="checkbox checkbox-sm checkbox-success">
+                        <span class="text-base-content/60 text-xs">Is free</span>
+                    </label>
+                </label>
+
+                <button type="submit" class="btn btn-primary btn-sm">
+                    Add
+                </button>
+            </form>
+        </div>
     </div>
 </div>
 
