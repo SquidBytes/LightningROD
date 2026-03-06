@@ -49,6 +49,7 @@ SETTINGS_KEYS = [
     "comparison_network_enabled",
     "comparison_section_visible",
     "efficiency_unit",
+    "user_timezone",
 ]
 
 
@@ -335,7 +336,7 @@ async def convert_network_to_location(
 async def network_locations(
     network_id: int, request: Request, db: AsyncSession = Depends(get_db)
 ):
-    """Return location rows partial for a given network."""
+    """Return location rows partial for a given network (used in modal)."""
     locations = await get_locations_for_network(db, network_id)
     # Query stall counts per location
     stall_counts: dict[int, int] = {}
@@ -350,6 +351,37 @@ async def network_locations(
         request,
         "settings/partials/location_rows.html",
         {"locations": locations, "network_id": network_id, "stall_counts": stall_counts},
+    )
+
+
+@router.get("/settings/networks/{network_id}/locations-summary", response_class=HTMLResponse)
+async def network_locations_summary(
+    network_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
+    """Return read-only location summary for the network table expandable row."""
+    locations = await get_locations_for_network(db, network_id)
+    stall_counts: dict[int, int] = {}
+    stall_types: dict[int, list[str]] = {}
+    if locations:
+        loc_ids = [loc.id for loc in locations]
+        stall_count_result = await db.execute(
+            select(EVChargerStall.location_id, func.count().label("cnt"))
+            .where(EVChargerStall.location_id.in_(loc_ids))
+            .group_by(EVChargerStall.location_id)
+        )
+        stall_counts = {row.location_id: row.cnt for row in stall_count_result.all()}
+        type_result = await db.execute(
+            select(EVChargerStall.location_id, EVChargerStall.charger_type)
+            .where(EVChargerStall.location_id.in_(loc_ids))
+            .where(EVChargerStall.charger_type.isnot(None))
+            .distinct()
+        )
+        for row in type_result.all():
+            stall_types.setdefault(row.location_id, []).append(row.charger_type)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/location_summary.html",
+        {"locations": locations, "stall_counts": stall_counts, "stall_types": stall_types},
     )
 
 
@@ -657,6 +689,22 @@ async def update_unit_settings(
     return templates.TemplateResponse(
         request,
         "settings/partials/unit_settings.html",
+        {"settings": settings, "saved": True},
+    )
+
+
+@router.post("/settings/timezone", response_class=HTMLResponse)
+async def update_timezone_setting(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_timezone: str = Form("UTC"),
+):
+    """Save the user's preferred display timezone."""
+    await set_app_setting(db, "user_timezone", user_timezone)
+    settings = await get_app_settings_dict(db, SETTINGS_KEYS)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/timezone_settings.html",
         {"settings": settings, "saved": True},
     )
 

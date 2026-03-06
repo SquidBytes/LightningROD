@@ -32,6 +32,17 @@
                 </div>
             </div>
         </div>
+
+        <!-- Timezone -->
+        <div class="card bg-base-200 mt-6 max-w-lg">
+            <div class="card-body">
+                <h2 class="card-title">Timezone</h2>
+                <p class="text-base-content/60 text-sm">Set your local timezone for displaying session timestamps.</p>
+                <div id="timezone-settings">
+                    {% include "settings/partials/timezone_settings.html" %}
+                </div>
+            </div>
+        </div>
     </div>
 
     <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Networks" {{ 'checked' if active_tab == 'networks' }} />
@@ -47,7 +58,7 @@
 
 {# Network edit modal using DaisyUI dialog #}
 <dialog id="network-modal" class="modal">
-    <div class="modal-box w-11/12 max-w-2xl">
+    <div class="modal-box w-11/12 max-w-4xl">
         <form method="dialog">
             <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
         </form>
