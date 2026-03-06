@@ -1,6 +1,7 @@
 <div class="space-y-2">
     <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Locations</p>
     {% for loc in locations %}
+    {% set sc = stall_counts.get(loc.id, 0) if stall_counts is defined else 0 %}
     <div class="bg-base-300/50 rounded px-3 py-2 text-sm" id="location-{{ loc.id }}">
         {# Read mode #}
         <div class="flex items-center justify-between location-read" data-loc="{{ loc.id }}">
@@ -29,7 +30,7 @@
                     class="btn btn-ghost btn-xs text-error">Delete</button>
             </div>
         </div>
-        {# Edit mode — hidden by default #}
+        {# Edit mode -- hidden by default #}
         <form class="hidden location-edit" data-loc="{{ loc.id }}"
               hx-put="/settings/locations/{{ loc.id }}"
               hx-target="closest div.space-y-2"
@@ -68,6 +69,19 @@
                         class="btn btn-ghost btn-xs">Cancel</button>
             </div>
         </form>
+
+        {# Charger Stalls expandable section #}
+        <details class="mt-2">
+            <summary class="cursor-pointer text-xs text-base-content/50 hover:text-base-content/70 select-none">
+                Charger Stalls ({{ sc }})
+            </summary>
+            <div class="bg-base-300 rounded-box p-2 mt-2"
+                 hx-get="/settings/locations/{{ loc.id }}/stalls"
+                 hx-trigger="intersect once"
+                 hx-swap="innerHTML">
+                <p class="text-base-content/40 text-xs">Loading stalls...</p>
+            </div>
+        </details>
     </div>
     {% else %}
     <p class="text-base-content/40 text-sm">No locations yet.</p>

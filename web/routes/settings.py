@@ -337,10 +337,19 @@ async def network_locations(
 ):
     """Return location rows partial for a given network."""
     locations = await get_locations_for_network(db, network_id)
+    # Query stall counts per location
+    stall_counts: dict[int, int] = {}
+    if locations:
+        stall_count_result = await db.execute(
+            select(EVChargerStall.location_id, func.count().label("cnt"))
+            .where(EVChargerStall.location_id.in_([loc.id for loc in locations]))
+            .group_by(EVChargerStall.location_id)
+        )
+        stall_counts = {row.location_id: row.cnt for row in stall_count_result.all()}
     return templates.TemplateResponse(
         request,
         "settings/partials/location_rows.html",
-        {"locations": locations, "network_id": network_id},
+        {"locations": locations, "network_id": network_id, "stall_counts": stall_counts},
     )
 
 
@@ -364,10 +373,18 @@ async def create_location_route(
         cost_per_kwh=cost_per_kwh,
     )
     locations = await get_locations_for_network(db, network_id)
+    stall_counts: dict[int, int] = {}
+    if locations:
+        stall_count_result = await db.execute(
+            select(EVChargerStall.location_id, func.count().label("cnt"))
+            .where(EVChargerStall.location_id.in_([loc.id for loc in locations]))
+            .group_by(EVChargerStall.location_id)
+        )
+        stall_counts = {row.location_id: row.cnt for row in stall_count_result.all()}
     return templates.TemplateResponse(
         request,
         "settings/partials/location_rows.html",
-        {"locations": locations, "network_id": network_id},
+        {"locations": locations, "network_id": network_id, "stall_counts": stall_counts},
     )
 
 
@@ -392,10 +409,18 @@ async def update_location_route(
         cost_per_kwh=cost_per_kwh,
     )
     locations = await get_locations_for_network(db, network_id)
+    stall_counts: dict[int, int] = {}
+    if locations:
+        stall_count_result = await db.execute(
+            select(EVChargerStall.location_id, func.count().label("cnt"))
+            .where(EVChargerStall.location_id.in_([loc.id for loc in locations]))
+            .group_by(EVChargerStall.location_id)
+        )
+        stall_counts = {row.location_id: row.cnt for row in stall_count_result.all()}
     return templates.TemplateResponse(
         request,
         "settings/partials/location_rows.html",
-        {"locations": locations, "network_id": network_id},
+        {"locations": locations, "network_id": network_id, "stall_counts": stall_counts},
     )
 
 
@@ -410,10 +435,18 @@ async def delete_location_route(
     await delete_location(db, location_id)
     if network_id:
         locations = await get_locations_for_network(db, network_id)
+        stall_counts: dict[int, int] = {}
+        if locations:
+            stall_count_result = await db.execute(
+                select(EVChargerStall.location_id, func.count().label("cnt"))
+                .where(EVChargerStall.location_id.in_([loc.id for loc in locations]))
+                .group_by(EVChargerStall.location_id)
+            )
+            stall_counts = {row.location_id: row.cnt for row in stall_count_result.all()}
         return templates.TemplateResponse(
             request,
             "settings/partials/location_rows.html",
-            {"locations": locations, "network_id": network_id},
+            {"locations": locations, "network_id": network_id, "stall_counts": stall_counts},
         )
     return HTMLResponse("")
 
