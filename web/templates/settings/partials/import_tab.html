@@ -1,4 +1,4 @@
-{# CSV Import tab — file picker upload form and import flow container #}
+{# CSV Import tab — template download, file picker, timezone selector, and import flow container #}
 <div>
     <div class="mb-6">
         <h2 class="text-xl font-semibold">Import Charging Sessions</h2>
@@ -8,7 +8,68 @@
     {# Upload card #}
     <div class="card bg-base-200 max-w-2xl">
         <div class="card-body">
-            <h3 class="card-title text-base">Select CSV File</h3>
+
+            {# Template section #}
+            <div class="mb-4">
+                <h3 class="card-title text-base">Use Our Template</h3>
+                <p class="text-base-content/60 text-sm mt-1">
+                    Download our CSV template, fill in your data, then upload it here.
+                </p>
+
+                <div class="mt-3">
+                    <a href="/settings/import/template" download
+                       class="btn btn-outline btn-sm gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download Template
+                    </a>
+                </div>
+
+                {# Collapsible column reference table #}
+                {% if db_fields %}
+                <div class="collapse collapse-arrow bg-base-300 mt-3">
+                    <input type="checkbox" />
+                    <div class="collapse-title text-sm font-medium">
+                        View column reference ({{ db_fields | length }} columns)
+                    </div>
+                    <div class="collapse-content">
+                        <div class="overflow-x-auto">
+                            <table class="table table-sm table-zebra">
+                                <thead>
+                                    <tr>
+                                        <th>Column Name</th>
+                                        <th>Description</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for field in db_fields %}
+                                    <tr>
+                                        <td class="font-mono text-xs">{{ field.field }}</td>
+                                        <td class="text-xs">{{ field.description }}</td>
+                                        <td>
+                                            {% if field.important %}
+                                                <span class="badge badge-info badge-xs">Recommended</span>
+                                            {% else %}
+                                                <span class="text-base-content/40 text-xs">Optional</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <p class="text-xs text-base-content/40 mt-2">
+                    You can also upload any CSV &mdash; we'll automatically match columns by name.
+                </p>
+            </div>
+
+            <div class="divider my-1"></div>
 
             <form
                 id="csv-upload-form"
@@ -20,15 +81,87 @@
                 class="space-y-4"
             >
                 {# File input using DaisyUI file-input #}
-                <div class="flex items-center gap-3">
-                    <input
-                        type="file"
-                        id="csv-file-input"
-                        name="file"
-                        accept=".csv"
-                        class="file-input file-input-bordered w-full max-w-xs"
-                        onchange="handleFileSelect(this)"
-                    >
+                <div>
+                    <label class="label"><span class="label-text">Select CSV File</span></label>
+                    <div class="flex items-center gap-3">
+                        <input
+                            type="file"
+                            id="csv-file-input"
+                            name="file"
+                            accept=".csv"
+                            class="file-input file-input-bordered w-full max-w-xs"
+                            onchange="handleFileSelect(this)"
+                        >
+                    </div>
+                </div>
+
+                {# Timezone selector #}
+                <div>
+                    <label class="label"><span class="label-text">Timestamps timezone</span></label>
+                    <select name="import_timezone" class="select select-bordered select-sm w-full max-w-xs">
+                        {% set tz = user_tz | default('UTC') %}
+                        <optgroup label="US / Canada">
+                            <option value="America/New_York" {% if tz == 'America/New_York' %}selected{% endif %}>Eastern (New York)</option>
+                            <option value="America/Chicago" {% if tz == 'America/Chicago' %}selected{% endif %}>Central (Chicago)</option>
+                            <option value="America/Denver" {% if tz == 'America/Denver' %}selected{% endif %}>Mountain (Denver)</option>
+                            <option value="America/Los_Angeles" {% if tz == 'America/Los_Angeles' %}selected{% endif %}>Pacific (Los Angeles)</option>
+                            <option value="America/Phoenix" {% if tz == 'America/Phoenix' %}selected{% endif %}>Arizona (Phoenix)</option>
+                            <option value="America/Anchorage" {% if tz == 'America/Anchorage' %}selected{% endif %}>Alaska (Anchorage)</option>
+                            <option value="America/Honolulu" {% if tz == 'America/Honolulu' %}selected{% endif %}>Hawaii (Honolulu)</option>
+                            <option value="America/Toronto" {% if tz == 'America/Toronto' %}selected{% endif %}>Eastern (Toronto)</option>
+                            <option value="America/Vancouver" {% if tz == 'America/Vancouver' %}selected{% endif %}>Pacific (Vancouver)</option>
+                            <option value="America/Edmonton" {% if tz == 'America/Edmonton' %}selected{% endif %}>Mountain (Edmonton)</option>
+                            <option value="America/Winnipeg" {% if tz == 'America/Winnipeg' %}selected{% endif %}>Central (Winnipeg)</option>
+                            <option value="America/Halifax" {% if tz == 'America/Halifax' %}selected{% endif %}>Atlantic (Halifax)</option>
+                            <option value="America/St_Johns" {% if tz == 'America/St_Johns' %}selected{% endif %}>Newfoundland (St. John's)</option>
+                        </optgroup>
+                        <optgroup label="Central / South America">
+                            <option value="America/Mexico_City" {% if tz == 'America/Mexico_City' %}selected{% endif %}>Mexico City</option>
+                            <option value="America/Bogota" {% if tz == 'America/Bogota' %}selected{% endif %}>Bogota</option>
+                            <option value="America/Sao_Paulo" {% if tz == 'America/Sao_Paulo' %}selected{% endif %}>Sao Paulo</option>
+                            <option value="America/Argentina/Buenos_Aires" {% if tz == 'America/Argentina/Buenos_Aires' %}selected{% endif %}>Buenos Aires</option>
+                            <option value="America/Santiago" {% if tz == 'America/Santiago' %}selected{% endif %}>Santiago</option>
+                        </optgroup>
+                        <optgroup label="Europe">
+                            <option value="Europe/London" {% if tz == 'Europe/London' %}selected{% endif %}>London (GMT/BST)</option>
+                            <option value="Europe/Paris" {% if tz == 'Europe/Paris' %}selected{% endif %}>Paris (CET)</option>
+                            <option value="Europe/Berlin" {% if tz == 'Europe/Berlin' %}selected{% endif %}>Berlin (CET)</option>
+                            <option value="Europe/Madrid" {% if tz == 'Europe/Madrid' %}selected{% endif %}>Madrid (CET)</option>
+                            <option value="Europe/Rome" {% if tz == 'Europe/Rome' %}selected{% endif %}>Rome (CET)</option>
+                            <option value="Europe/Amsterdam" {% if tz == 'Europe/Amsterdam' %}selected{% endif %}>Amsterdam (CET)</option>
+                            <option value="Europe/Stockholm" {% if tz == 'Europe/Stockholm' %}selected{% endif %}>Stockholm (CET)</option>
+                            <option value="Europe/Helsinki" {% if tz == 'Europe/Helsinki' %}selected{% endif %}>Helsinki (EET)</option>
+                            <option value="Europe/Athens" {% if tz == 'Europe/Athens' %}selected{% endif %}>Athens (EET)</option>
+                            <option value="Europe/Moscow" {% if tz == 'Europe/Moscow' %}selected{% endif %}>Moscow (MSK)</option>
+                            <option value="Europe/Istanbul" {% if tz == 'Europe/Istanbul' %}selected{% endif %}>Istanbul (TRT)</option>
+                        </optgroup>
+                        <optgroup label="Asia / Middle East">
+                            <option value="Asia/Dubai" {% if tz == 'Asia/Dubai' %}selected{% endif %}>Dubai (GST)</option>
+                            <option value="Asia/Kolkata" {% if tz == 'Asia/Kolkata' %}selected{% endif %}>India (IST)</option>
+                            <option value="Asia/Bangkok" {% if tz == 'Asia/Bangkok' %}selected{% endif %}>Bangkok (ICT)</option>
+                            <option value="Asia/Singapore" {% if tz == 'Asia/Singapore' %}selected{% endif %}>Singapore (SGT)</option>
+                            <option value="Asia/Shanghai" {% if tz == 'Asia/Shanghai' %}selected{% endif %}>China (CST)</option>
+                            <option value="Asia/Hong_Kong" {% if tz == 'Asia/Hong_Kong' %}selected{% endif %}>Hong Kong (HKT)</option>
+                            <option value="Asia/Tokyo" {% if tz == 'Asia/Tokyo' %}selected{% endif %}>Tokyo (JST)</option>
+                            <option value="Asia/Seoul" {% if tz == 'Asia/Seoul' %}selected{% endif %}>Seoul (KST)</option>
+                        </optgroup>
+                        <optgroup label="Oceania">
+                            <option value="Australia/Perth" {% if tz == 'Australia/Perth' %}selected{% endif %}>Perth (AWST)</option>
+                            <option value="Australia/Adelaide" {% if tz == 'Australia/Adelaide' %}selected{% endif %}>Adelaide (ACST)</option>
+                            <option value="Australia/Sydney" {% if tz == 'Australia/Sydney' %}selected{% endif %}>Sydney (AEST)</option>
+                            <option value="Australia/Brisbane" {% if tz == 'Australia/Brisbane' %}selected{% endif %}>Brisbane (AEST)</option>
+                            <option value="Pacific/Auckland" {% if tz == 'Pacific/Auckland' %}selected{% endif %}>Auckland (NZST)</option>
+                        </optgroup>
+                        <optgroup label="Other">
+                            <option value="UTC" {% if tz == 'UTC' %}selected{% endif %}>UTC</option>
+                            <option value="Africa/Johannesburg" {% if tz == 'Africa/Johannesburg' %}selected{% endif %}>Johannesburg (SAST)</option>
+                            <option value="Africa/Cairo" {% if tz == 'Africa/Cairo' %}selected{% endif %}>Cairo (EET)</option>
+                            <option value="Africa/Lagos" {% if tz == 'Africa/Lagos' %}selected{% endif %}>Lagos (WAT)</option>
+                        </optgroup>
+                    </select>
+                    <div class="label">
+                        <span class="label-text-alt text-base-content/40">Timezone for timestamps in your CSV that don't include timezone info</span>
+                    </div>
                 </div>
 
                 {# Upload button + loading indicator #}
@@ -39,7 +172,7 @@
                         disabled
                         class="btn btn-primary disabled:btn-disabled"
                     >
-                        Upload &amp; Process
+                        Upload &amp; Preview
                     </button>
                     {# Spinner — shown by HTMX via hx-indicator #}
                     <div id="upload-spinner" class="htmx-indicator flex items-center gap-2 text-sm text-base-content/60">
@@ -51,12 +184,11 @@
 
             <div class="mt-4 text-xs text-base-content/40">
                 Supported format: CSV with column headers in the first row.
-                Columns will be mapped to charging session fields in the next step.
             </div>
         </div>
     </div>
 
-    {# Import flow container — target for column mapper, preview, and summary #}
+    {# Import flow container — target for preview and summary #}
     <div id="import-flow-container" class="mt-6"></div>
 </div>
 

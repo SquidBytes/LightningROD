@@ -17,6 +17,7 @@ from web.queries.settings import (
     delete_network,
     delete_stall,
     get_all_networks,
+    get_app_setting,
     get_app_settings_dict,
     get_charger_templates,
     get_locations_for_network,
@@ -26,6 +27,7 @@ from web.queries.settings import (
     update_network,
     update_stall,
 )
+from web.services.csv_parser import get_db_field_options
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -67,11 +69,19 @@ async def settings_index(
         active_tab = "networks"
     else:
         active_tab = "general"
+
+    # Import tab needs extra context for template features and timezone selector
+    import_ctx: dict = {}
+    if active_tab == "import":
+        user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
+        import_ctx = {"db_fields": get_db_field_options(), "user_tz": user_tz}
+
     return templates.TemplateResponse(
         request,
         "settings/index.html",
         {
             **net_ctx,
+            **import_ctx,
             "settings": settings,
             "active_page": "settings",
             "page_title": "Settings",
