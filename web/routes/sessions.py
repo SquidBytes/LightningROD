@@ -15,7 +15,7 @@ from db.models.reference import EVChargerStall, EVLocationLookup
 from web.dependencies import get_db
 from web.queries.costs import compute_session_cost, get_locations_by_id, get_session_cost_context
 from web.queries.sessions import get_most_recent_location, query_sessions
-from web.queries.settings import get_all_networks, get_stalls_for_location
+from web.queries.settings import get_all_networks, get_app_setting, get_stalls_for_location
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -74,6 +74,7 @@ async def sessions(
     # Enrich sessions with cost data and build network map
     all_networks = await get_all_networks(db)
     network_map = {n.id: n for n in all_networks}
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
 
     # Batch pre-load locations for sessions that have location_id
     location_ids = [s.location_id for s in session_list if s.location_id]
@@ -125,6 +126,7 @@ async def sessions(
         "filter_params": filter_params,
         "network_map": network_map,
         "networks": all_networks,
+        "user_tz": user_tz,
         "active_page": "sessions",
         "page_title": "Sessions",
     }
@@ -390,6 +392,7 @@ async def create_session(
     await db.refresh(new_session)
 
     cost_info = compute_session_cost(new_session, network=network_obj, location=location_obj)
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
 
     context = {
         "session": new_session,
@@ -398,6 +401,7 @@ async def create_session(
         "next_id": None,
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
+        "user_tz": user_tz,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
     response.headers["HX-Trigger"] = json.dumps({
@@ -590,6 +594,7 @@ async def update_session(
     await db.refresh(session)
 
     cost_info = compute_session_cost(session, network=network_obj, location=location_obj)
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
 
     context = {
         "session": session,
@@ -598,6 +603,7 @@ async def update_session(
         "next_id": None,
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
+        "user_tz": user_tz,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
     response.headers["HX-Trigger"] = json.dumps({
@@ -662,6 +668,8 @@ async def session_detail(
         stall = stall_result.scalar_one_or_none()
         stall_label = stall.stall_label if stall else None
 
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
+
     context = {
         "session": session,
         "cost_info": cost_info,
@@ -670,6 +678,7 @@ async def session_detail(
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
         "stall_label": stall_label,
+        "user_tz": user_tz,
     }
     return templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
 
@@ -699,6 +708,8 @@ async def session_modal(
     if session.location_id:
         stalls = await get_stalls_for_location(db, session.location_id)
 
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
+
     context = {
         "session": session,
         "cost_info": cost_info,
@@ -708,5 +719,6 @@ async def session_modal(
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
         "stalls": stalls,
+        "user_tz": user_tz,
     }
     return templates.TemplateResponse(request, "sessions/partials/modal.html", context)

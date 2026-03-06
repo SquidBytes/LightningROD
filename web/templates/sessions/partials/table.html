@@ -73,7 +73,7 @@
                 <!-- Date -->
                 <td class="px-4 py-3 text-base w-[120px]">
                     {% if session.session_start_utc %}
-                        {{ session.session_start_utc.strftime("%b %-d, %Y") }}
+                        {{ session.session_start_utc|localtime(user_tz, "%b %-d, %Y") }}
                     {% else %}
                         <span class="text-base-content/40">—</span>
                     {% endif %}
