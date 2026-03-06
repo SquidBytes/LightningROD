@@ -7,19 +7,24 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
-from db.models.reference import EVChargingNetwork, EVLocationLookup
+from db.models.reference import EVChargerStall, EVChargingNetwork, EVLocationLookup
 from web.dependencies import get_db
 from web.queries.settings import (
     create_location,
     create_network,
+    create_stall,
     delete_location,
     delete_network,
+    delete_stall,
     get_all_networks,
     get_app_settings_dict,
+    get_charger_templates,
     get_locations_for_network,
+    get_stalls_for_location,
     set_app_setting,
     update_location,
     update_network,
+    update_stall,
 )
 
 router = APIRouter()
@@ -411,6 +416,181 @@ async def delete_location_route(
             {"locations": locations, "network_id": network_id},
         )
     return HTMLResponse("")
+
+
+# ---------------------------------------------------------------------------
+# Stall CRUD routes
+# ---------------------------------------------------------------------------
+
+
+async def _stall_context(db: AsyncSession, location_id: int) -> dict:
+    """Build context for stall_rows.html partial."""
+    stalls = await get_stalls_for_location(db, location_id)
+    # Look up the location's network name for template matching
+    result = await db.execute(
+        select(EVLocationLookup).where(EVLocationLookup.id == location_id)
+    )
+    location = result.scalar_one_or_none()
+    network_name = None
+    has_templates = False
+    if location and location.network_id:
+        net_result = await db.execute(
+            select(EVChargingNetwork).where(EVChargingNetwork.id == location.network_id)
+        )
+        network = net_result.scalar_one_or_none()
+        if network:
+            network_name = network.network_name
+            templates = await get_charger_templates(db)
+            has_templates = network_name in templates
+    return {
+        "stalls": stalls,
+        "location_id": location_id,
+        "network_name": network_name,
+        "has_templates": has_templates,
+    }
+
+
+@router.get("/settings/locations/{location_id}/stalls", response_class=HTMLResponse)
+async def location_stalls(
+    location_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
+    """Return stall rows partial for a given location."""
+    ctx = await _stall_context(db, location_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/stall_rows.html",
+        ctx,
+    )
+
+
+@router.post("/settings/locations/{location_id}/stalls", response_class=HTMLResponse)
+async def create_stall_route(
+    location_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    stall_label: str = Form(...),
+    charger_type: Optional[str] = Form(None),
+    rated_kw: Optional[float] = Form(None),
+    voltage: Optional[float] = Form(None),
+    amperage: Optional[float] = Form(None),
+    connector_type: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    is_default: Optional[str] = Form(None),
+):
+    """Create a stall for a location."""
+    await create_stall(
+        db,
+        location_id=location_id,
+        label=stall_label,
+        charger_type=charger_type or None,
+        rated_kw=rated_kw,
+        voltage=voltage,
+        amperage=amperage,
+        connector_type=connector_type or None,
+        notes=notes or None,
+        is_default=is_default is not None,
+    )
+    ctx = await _stall_context(db, location_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/stall_rows.html",
+        ctx,
+    )
+
+
+@router.put("/settings/stalls/{stall_id}", response_class=HTMLResponse)
+async def update_stall_route(
+    stall_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    location_id: int = Form(...),
+    stall_label: str = Form(...),
+    charger_type: Optional[str] = Form(None),
+    rated_kw: Optional[float] = Form(None),
+    voltage: Optional[float] = Form(None),
+    amperage: Optional[float] = Form(None),
+    connector_type: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    is_default: Optional[str] = Form(None),
+):
+    """Update a stall and return refreshed stall rows."""
+    await update_stall(
+        db,
+        stall_id=stall_id,
+        label=stall_label,
+        charger_type=charger_type or None,
+        rated_kw=rated_kw,
+        voltage=voltage,
+        amperage=amperage,
+        connector_type=connector_type or None,
+        notes=notes or None,
+        is_default=is_default is not None,
+    )
+    ctx = await _stall_context(db, location_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/stall_rows.html",
+        ctx,
+    )
+
+
+@router.delete("/settings/stalls/{stall_id}", response_class=HTMLResponse)
+async def delete_stall_route(
+    stall_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    location_id: int = 0,
+):
+    """Delete a stall and return refreshed stall rows."""
+    await delete_stall(db, stall_id)
+    if location_id:
+        ctx = await _stall_context(db, location_id)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/stall_rows.html",
+            ctx,
+        )
+    return HTMLResponse("")
+
+
+@router.post("/settings/locations/{location_id}/stalls/prefill", response_class=HTMLResponse)
+async def prefill_stalls(
+    location_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Pre-fill stalls from network charger templates (non-destructive)."""
+    # Look up the location's network name
+    result = await db.execute(
+        select(EVLocationLookup).where(EVLocationLookup.id == location_id)
+    )
+    location = result.scalar_one_or_none()
+    if location and location.network_id:
+        net_result = await db.execute(
+            select(EVChargingNetwork).where(EVChargingNetwork.id == location.network_id)
+        )
+        network = net_result.scalar_one_or_none()
+        if network:
+            all_templates = await get_charger_templates(db)
+            network_templates = all_templates.get(network.network_name, [])
+            for tmpl in network_templates:
+                await create_stall(
+                    db,
+                    location_id=location_id,
+                    label=tmpl.get("label", "Charger"),
+                    charger_type=tmpl.get("charger_type"),
+                    rated_kw=tmpl.get("rated_kw"),
+                    voltage=tmpl.get("voltage"),
+                    amperage=tmpl.get("amperage"),
+                    connector_type=tmpl.get("connector_type"),
+                    is_default=False,
+                )
+    ctx = await _stall_context(db, location_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/stall_rows.html",
+        ctx,
+    )
 
 
 @router.post("/settings/gas", response_class=HTMLResponse)

@@ -1,0 +1,184 @@
+{# Stall management table for a location -- inline edit, add, delete, pre-fill from templates #}
+<div id="stall-container-{{ location_id }}">
+    {% if has_templates %}
+    <div class="flex justify-end mb-2">
+        <button type="button"
+                hx-post="/settings/locations/{{ location_id }}/stalls/prefill"
+                hx-target="#stall-container-{{ location_id }}"
+                hx-swap="outerHTML"
+                class="btn btn-outline btn-info btn-xs gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+            </svg>
+            Pre-fill from {{ network_name }}
+        </button>
+    </div>
+    {% endif %}
+
+    {% if stalls %}
+    <div class="overflow-x-auto">
+        <table class="table table-xs w-full">
+            <thead>
+                <tr class="text-base-content/60">
+                    <th>Label</th>
+                    <th>Type</th>
+                    <th>Rated</th>
+                    <th>V / A</th>
+                    <th>Connector</th>
+                    <th>Default</th>
+                    <th class="w-20"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stall in stalls %}
+                {# Read row #}
+                <tr class="stall-read" data-stall="{{ stall.id }}">
+                    <td>{{ stall.stall_label }}</td>
+                    <td>
+                        {% if stall.charger_type == 'DCFC' %}
+                            <span class="badge badge-sm badge-info">DCFC</span>
+                        {% elif stall.charger_type == 'L2' %}
+                            <span class="badge badge-sm badge-warning">L2</span>
+                        {% elif stall.charger_type == 'L1' %}
+                            <span class="badge badge-sm badge-ghost">L1</span>
+                        {% else %}
+                            <span class="badge badge-sm badge-ghost">{{ stall.charger_type or '-' }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ "%.1f"|format(stall.rated_kw) if stall.rated_kw else '-' }} kW</td>
+                    <td>
+                        {% if stall.voltage or stall.amperage %}
+                            {{ stall.voltage|int if stall.voltage else '?' }}V / {{ stall.amperage|int if stall.amperage else '?' }}A
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if stall.connector_type %}
+                            <span class="badge badge-sm badge-outline">{{ stall.connector_type }}</span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if stall.is_default %}
+                            <input type="checkbox" checked disabled class="toggle toggle-xs toggle-success">
+                        {% else %}
+                            <input type="checkbox" disabled class="toggle toggle-xs">
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="flex gap-1">
+                            <button type="button" onclick="editStall({{ stall.id }})"
+                                    class="btn btn-ghost btn-xs text-info">Edit</button>
+                            <button type="button"
+                                    hx-delete="/settings/stalls/{{ stall.id }}?location_id={{ location_id }}"
+                                    hx-target="#stall-container-{{ location_id }}"
+                                    hx-swap="outerHTML"
+                                    hx-confirm="Delete stall {{ stall.stall_label }}?"
+                                    class="btn btn-ghost btn-xs text-error">Del</button>
+                        </div>
+                    </td>
+                </tr>
+                {# Edit row -- hidden by default #}
+                <tr class="hidden stall-edit" data-stall="{{ stall.id }}">
+                    <td colspan="7">
+                        <form class="flex flex-wrap items-center gap-2"
+                              hx-put="/settings/stalls/{{ stall.id }}"
+                              hx-target="#stall-container-{{ location_id }}"
+                              hx-swap="outerHTML">
+                            <input type="hidden" name="location_id" value="{{ location_id }}">
+                            <input type="text" name="stall_label" value="{{ stall.stall_label }}" required
+                                   placeholder="Label" class="input input-xs input-bordered w-28">
+                            <select name="charger_type" class="select select-xs select-bordered w-20">
+                                <option value="">Type</option>
+                                <option value="L1" {% if stall.charger_type == 'L1' %}selected{% endif %}>L1</option>
+                                <option value="L2" {% if stall.charger_type == 'L2' %}selected{% endif %}>L2</option>
+                                <option value="DCFC" {% if stall.charger_type == 'DCFC' %}selected{% endif %}>DCFC</option>
+                            </select>
+                            <input type="number" name="rated_kw" step="0.1" min="0"
+                                   value="{{ stall.rated_kw if stall.rated_kw else '' }}"
+                                   placeholder="kW" class="input input-xs input-bordered w-20">
+                            <input type="number" name="voltage" step="1" min="0"
+                                   value="{{ stall.voltage|int if stall.voltage else '' }}"
+                                   placeholder="V" class="input input-xs input-bordered w-16">
+                            <input type="number" name="amperage" step="1" min="0"
+                                   value="{{ stall.amperage|int if stall.amperage else '' }}"
+                                   placeholder="A" class="input input-xs input-bordered w-16">
+                            <select name="connector_type" class="select select-xs select-bordered w-24">
+                                <option value="">Connector</option>
+                                <option value="CCS" {% if stall.connector_type == 'CCS' %}selected{% endif %}>CCS</option>
+                                <option value="CHAdeMO" {% if stall.connector_type == 'CHAdeMO' %}selected{% endif %}>CHAdeMO</option>
+                                <option value="J1772" {% if stall.connector_type == 'J1772' %}selected{% endif %}>J1772</option>
+                                <option value="NACS" {% if stall.connector_type == 'NACS' %}selected{% endif %}>NACS</option>
+                                <option value="Tesla" {% if stall.connector_type == 'Tesla' %}selected{% endif %}>Tesla</option>
+                            </select>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" name="is_default"
+                                       {% if stall.is_default %}checked{% endif %}
+                                       class="toggle toggle-xs toggle-success">
+                                <span class="text-xs">Default</span>
+                            </label>
+                            <button type="submit" class="btn btn-primary btn-xs">Save</button>
+                            <button type="button" onclick="cancelStallEdit({{ stall.id }})"
+                                    class="btn btn-ghost btn-xs">Cancel</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-base-content/40 text-xs mb-2">No stalls configured.</p>
+    {% endif %}
+
+    {# Add stall form #}
+    <form class="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-base-content/10"
+          hx-post="/settings/locations/{{ location_id }}/stalls"
+          hx-target="#stall-container-{{ location_id }}"
+          hx-swap="outerHTML"
+          hx-on::after-request="if(event.detail.successful) this.reset()">
+        <input type="text" name="stall_label" required placeholder="Stall label"
+               class="input input-xs input-bordered w-28">
+        <select name="charger_type" class="select select-xs select-bordered w-20">
+            <option value="">Type</option>
+            <option value="L1">L1</option>
+            <option value="L2">L2</option>
+            <option value="DCFC">DCFC</option>
+        </select>
+        <input type="number" name="rated_kw" step="0.1" min="0" placeholder="kW"
+               class="input input-xs input-bordered w-20">
+        <input type="number" name="voltage" step="1" min="0" placeholder="V"
+               class="input input-xs input-bordered w-16">
+        <input type="number" name="amperage" step="1" min="0" placeholder="A"
+               class="input input-xs input-bordered w-16">
+        <select name="connector_type" class="select select-xs select-bordered w-24">
+            <option value="">Connector</option>
+            <option value="CCS">CCS</option>
+            <option value="CHAdeMO">CHAdeMO</option>
+            <option value="J1772">J1772</option>
+            <option value="NACS">NACS</option>
+            <option value="Tesla">Tesla</option>
+        </select>
+        <label class="flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" name="is_default" class="toggle toggle-xs toggle-success">
+            <span class="text-xs">Default</span>
+        </label>
+        <button type="submit" class="btn btn-primary btn-xs">Add</button>
+    </form>
+</div>
+
+<script>
+if (!window._stallEditInit) {
+    window._stallEditInit = true;
+    window.editStall = function(stallId) {
+        document.querySelectorAll('.stall-read[data-stall="' + stallId + '"]').forEach(function(el) { el.classList.add('hidden'); });
+        document.querySelectorAll('.stall-edit[data-stall="' + stallId + '"]').forEach(function(el) { el.classList.remove('hidden'); });
+    };
+    window.cancelStallEdit = function(stallId) {
+        document.querySelectorAll('.stall-read[data-stall="' + stallId + '"]').forEach(function(el) { el.classList.remove('hidden'); });
+        document.querySelectorAll('.stall-edit[data-stall="' + stallId + '"]').forEach(function(el) { el.classList.add('hidden'); });
+    };
+}
+</script>
