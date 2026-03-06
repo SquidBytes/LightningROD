@@ -383,6 +383,7 @@ def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, s
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
         showlegend=False,
         margin=dict(l=20, r=20, t=20, b=20),
         xaxis_tickprefix="$",
@@ -412,6 +413,7 @@ def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str,
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
         showlegend=True,
         margin=dict(l=20, r=20, t=20, b=20),
         yaxis_tickprefix="$",

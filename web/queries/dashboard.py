@@ -183,6 +183,7 @@ def build_energy_by_network_chart(
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
         margin=dict(l=20, r=20, t=20, b=40),
@@ -243,6 +244,7 @@ def build_cumulative_energy_chart(
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
         margin=dict(l=20, r=20, t=20, b=20),
         yaxis_title="Total kWh",
         xaxis_title="",
