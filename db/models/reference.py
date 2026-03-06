@@ -51,6 +51,29 @@ class EVLocationLookup(Base):
     cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
 
 
+class EVChargerStall(Base):
+    """Charger stall configuration for a location.
+
+    Each location can have multiple stalls with different specs.
+    Used for auto-populating EVSE fields on sessions.
+    """
+
+    __tablename__ = "ev_charger_stalls"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ev_location_lookup.id", ondelete="CASCADE"), nullable=False
+    )
+    stall_label: Mapped[str] = mapped_column(String, nullable=False)
+    charger_type: Mapped[Optional[str]] = mapped_column(String(10))  # 'L1', 'L2', 'DCFC'
+    rated_kw: Mapped[Optional[float]] = mapped_column(Numeric)
+    voltage: Mapped[Optional[float]] = mapped_column(Numeric)
+    amperage: Mapped[Optional[float]] = mapped_column(Numeric)
+    connector_type: Mapped[Optional[str]] = mapped_column(String(20))  # 'CCS', 'CHAdeMO', 'J1772', 'NACS', 'Tesla'
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
 class EVStatistics(Base):
     """Aggregate statistics summary (11 columns).
 

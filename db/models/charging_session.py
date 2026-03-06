@@ -80,6 +80,18 @@ class EVChargingSession(Base):
     min_power: Mapped[Optional[float]] = mapped_column(Numeric)
     miles_added: Mapped[Optional[float]] = mapped_column(Numeric)
 
+    # EVSE data (charger-side measurements)
+    evse_voltage: Mapped[Optional[float]] = mapped_column(Numeric)
+    evse_amperage: Mapped[Optional[float]] = mapped_column(Numeric)
+    evse_kw: Mapped[Optional[float]] = mapped_column(Numeric)
+    evse_energy_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
+    evse_max_power_kw: Mapped[Optional[float]] = mapped_column(Numeric)
+    charger_rated_kw: Mapped[Optional[float]] = mapped_column(Numeric)
+    evse_source: Mapped[Optional[str]] = mapped_column(String(20))  # 'smart_evse', 'energy_monitor', 'manual', 'estimated', 'stall_default'
+    stall_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ev_charger_stalls.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Pipeline metadata
     source_system: Mapped[Optional[str]] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
