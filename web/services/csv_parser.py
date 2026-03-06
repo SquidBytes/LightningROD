@@ -10,6 +10,7 @@ import io
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -445,6 +446,30 @@ def _parse_timestamp(v: str) -> Optional[datetime]:
         return None
 
 
+def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> Optional[datetime]:
+    """Parse ISO timestamp string to timezone-aware datetime using the given timezone.
+
+    If the parsed datetime is naive (no tzinfo), treats it as being in ``import_tz``
+    and converts to UTC for storage.  If the datetime already carries tzinfo, the
+    existing timezone is respected and the value is converted to UTC.
+    """
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    try:
+        dt = datetime.fromisoformat(v)
+        if dt.tzinfo is None:
+            # Treat naive timestamp as being in the user-selected import timezone
+            tz = ZoneInfo(import_tz) if import_tz and import_tz != "UTC" else timezone.utc
+            dt = dt.replace(tzinfo=tz).astimezone(timezone.utc)
+        else:
+            # Already has timezone — convert to UTC
+            dt = dt.astimezone(timezone.utc)
+        return dt
+    except (ValueError, TypeError, KeyError):
+        return None
+
+
 def _parse_uuid(v: str) -> Optional[uuid.UUID]:
     """Parse a UUID string, returning None if empty or invalid."""
     v = v.strip() if v else ""
@@ -525,13 +550,21 @@ _DB_FIELD_PARSERS: dict[str, object] = {
 }
 
 
-def transform_rows(raw_rows: list[dict], column_mapping: dict[str, str]) -> list[dict]:
+_TIMESTAMP_FIELDS = {"session_start_utc", "session_end_utc", "recorded_at"}
+
+
+def transform_rows(
+    raw_rows: list[dict],
+    column_mapping: dict[str, str],
+    import_tz: str = "UTC",
+) -> list[dict]:
     """Transform raw CSV rows into DB-ready dicts using the given column mapping.
 
     Args:
         raw_rows: List of raw string dicts from parse_csv_file.
         column_mapping: Dict mapping CSV header names to DB field names.
                         Empty string values mean "skip this column".
+        import_tz: IANA timezone name for interpreting naive timestamps in the CSV.
 
     Returns:
         List of transformed row dicts with:
@@ -566,6 +599,11 @@ def transform_rows(raw_rows: list[dict], column_mapping: dict[str, str]) -> list
             if csv_col in duration_csv_cols and db_col == "charge_duration_seconds":
                 stripped = raw_val.strip() if raw_val else ""
                 db_row[db_col] = float(stripped) * 60 if stripped else None
+                continue
+
+            # Use timezone-aware parser for timestamp fields
+            if db_col in _TIMESTAMP_FIELDS:
+                db_row[db_col] = _parse_timestamp_with_tz(raw_val, import_tz)
                 continue
 
             # Use registered parser or fall through as string

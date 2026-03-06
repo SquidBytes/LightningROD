@@ -17,6 +17,32 @@
         {# Hidden field carrying ALL transformed row data for the import step #}
         <input type="hidden" name="import_data" value="{{ import_data_json | e }}">
 
+        {# Column mapping info banner #}
+        {% if matched_columns or unmatched_columns %}
+        <div class="card bg-base-200">
+            <div class="card-body py-3">
+                <div class="flex flex-wrap items-start gap-4 text-sm">
+                    {% if matched_columns %}
+                    <div>
+                        <span class="font-medium text-success">{{ matched_columns | length }} columns matched:</span>
+                        <span class="text-base-content/60">
+                            {% for col in matched_columns %}{{ col.csv_header }} &rarr; {{ col.db_field_label }}{% if not loop.last %}, {% endif %}{% endfor %}
+                        </span>
+                    </div>
+                    {% endif %}
+                    {% if unmatched_columns %}
+                    <div>
+                        <span class="font-medium text-warning">{{ unmatched_columns | length }} columns skipped:</span>
+                        <span class="text-base-content/60">
+                            {{ unmatched_columns | join(', ') }}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         {# Summary bar #}
         <div class="card bg-base-200">
             <div class="card-body py-4 flex-row flex-wrap items-center gap-4 text-sm">
@@ -162,14 +188,6 @@
         {# Action buttons #}
         <div class="flex justify-between items-center">
             <div class="flex items-center gap-3">
-                <button
-                    type="button"
-                    hx-post="/settings/import/upload"
-                    class="btn btn-ghost btn-sm"
-                    onclick="document.getElementById('import-flow-container').innerHTML = ''"
-                >
-                    Back to Column Mapping
-                </button>
                 <button
                     type="button"
                     onclick="document.getElementById('import-flow-container').innerHTML = ''"

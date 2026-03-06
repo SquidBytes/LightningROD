@@ -1,14 +1,18 @@
 """CSV import routes for uploading and processing charging session CSV files."""
 
+import csv
+import io
 import json
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
+from web.queries.settings import get_app_setting
 from web.services.csv_parser import (
+    DB_FIELD_OPTIONS,
     auto_detect_mappings,
     detect_duplicates,
     get_db_field_options,
@@ -21,15 +25,39 @@ router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
 
 
+@router.get("/settings/import/template")
+async def download_template() -> Response:
+    """Generate and return an empty CSV template with all DB field headers.
+
+    Returns a CSV file with a single header row (no data rows) containing every
+    mappable EVChargingSession column name.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    headers = [f["field"] for f in DB_FIELD_OPTIONS]
+    writer.writerow(headers)
+    csv_bytes = output.getvalue().encode("utf-8")
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="lightningrod_import_template.csv"',
+        },
+    )
+
+
 @router.post("/settings/import/upload", response_class=HTMLResponse)
 async def upload_csv(
     request: Request,
+    db: AsyncSession = Depends(get_db),
     file: UploadFile = File(...),
+    import_timezone: str = Form("UTC"),
 ) -> HTMLResponse:
-    """Accept a CSV file upload, parse headers, and return the column mapper partial.
+    """Accept a CSV file upload, auto-detect columns, and render preview directly.
 
-    Reads file bytes, parses CSV, extracts headers, auto-detects column mappings,
-    and renders the column mapper template with the results.
+    Skips the column mapper step entirely.  Reads file bytes, parses CSV,
+    auto-detects column mappings silently, transforms rows with timezone-aware
+    parsing, runs duplicate detection, and renders the import preview.
 
     Returns 422 JSONResponse if the file is empty or cannot be parsed.
     """
@@ -44,7 +72,7 @@ async def upload_csv(
 
     # Parse CSV
     try:
-        headers, rows = parse_csv_file(contents)
+        headers, raw_rows = parse_csv_file(contents)
     except ValueError as exc:
         return JSONResponse(
             status_code=422,
@@ -57,64 +85,21 @@ async def upload_csv(
             content={"detail": "CSV file has no column headers."},
         )
 
-    # Get DB field options and auto-detect mappings
+    # Auto-detect column mappings silently
     db_fields = get_db_field_options()
     auto_mappings = auto_detect_mappings(headers, db_fields)
 
-    # Serialize rows to JSON string to pass through the template as a hidden field
-    # (stateless approach — no server-side session storage)
-    rows_json = json.dumps(rows)
-    headers_json = json.dumps(headers)
+    # Compute matched / unmatched columns for informational banner
+    field_label_map = {f["field"]: f["label"] for f in db_fields}
+    matched_columns = [
+        {"csv_header": h, "db_field_label": field_label_map.get(auto_mappings[h], auto_mappings[h])}
+        for h in headers
+        if h in auto_mappings
+    ]
+    unmatched_columns = [h for h in headers if h not in auto_mappings]
 
-    return templates.TemplateResponse(
-        request,
-        "settings/partials/column_mapper.html",
-        {
-            "csv_headers": headers,
-            "db_fields": db_fields,
-            "auto_mappings": auto_mappings,
-            "row_count": len(rows),
-            "rows_json": rows_json,
-            "headers_json": headers_json,
-            "filename": file.filename or "uploaded.csv",
-        },
-    )
-
-
-@router.post("/settings/import/preview", response_class=HTMLResponse)
-async def preview_import(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-) -> HTMLResponse:
-    """Accept column mapping form data and return the import preview table.
-
-    Parses the mapping fields (mapping_{csv_header}), transforms all rows,
-    runs duplicate detection, and renders the preview partial with first 25 rows.
-    """
-    form = await request.form()
-
-    # Extract raw CSV data from hidden fields
-    csv_data_raw = form.get("csv_data", "")
-    csv_headers_raw = form.get("csv_headers", "")
-
-    try:
-        raw_rows: list[dict] = json.loads(csv_data_raw) if csv_data_raw else []
-        csv_headers: list[str] = json.loads(csv_headers_raw) if csv_headers_raw else []
-    except (json.JSONDecodeError, ValueError):
-        return JSONResponse(
-            status_code=422,
-            content={"detail": "Invalid CSV data in form — please re-upload your file."},
-        )
-
-    # Extract column mapping from form fields (mapping_{csv_header} -> db_field)
-    column_mapping: dict[str, str] = {}
-    for key, value in form.items():
-        if key.startswith("mapping_"):
-            csv_header = key[len("mapping_"):]
-            column_mapping[csv_header] = str(value)
-
-    # Transform rows
-    transformed = transform_rows(raw_rows, column_mapping)
+    # Transform rows with timezone-aware parsing
+    transformed = transform_rows(raw_rows, auto_mappings, import_tz=import_timezone)
 
     # Detect duplicates against the database
     transformed = await detect_duplicates(transformed, db)
@@ -125,11 +110,7 @@ async def preview_import(
     dup_count = sum(1 for r in transformed if r.get("_status") in ("duplicate", "fuzzy_duplicate"))
     error_count = sum(1 for r in transformed if r.get("_status") == "error")
 
-    # Prepare preview rows (first 25) — make datetime objects JSON-serializable
     preview_rows = transformed[:25]
-
-    # Serialize all transformed rows for hidden import_data field
-    # Convert non-serializable types (datetime, uuid) to strings
     import_data = _serialize_rows(transformed)
 
     return templates.TemplateResponse(
@@ -142,6 +123,61 @@ async def preview_import(
             "dup_count": dup_count,
             "error_count": error_count,
             "import_data_json": json.dumps(import_data),
+            "matched_columns": matched_columns,
+            "unmatched_columns": unmatched_columns,
+            "import_timezone": import_timezone,
+        },
+    )
+
+
+@router.post("/settings/import/preview", response_class=HTMLResponse)
+async def preview_import(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Re-verify endpoint for inline editing (kept for future Plan 03 use).
+
+    The standard upload flow now goes directly from upload to preview via
+    upload_csv().  This route is retained for potential re-verification needs.
+    """
+    form = await request.form()
+
+    # Extract raw CSV data from hidden fields
+    csv_data_raw = form.get("csv_data", "")
+
+    try:
+        raw_rows: list[dict] = json.loads(csv_data_raw) if csv_data_raw else []
+    except (json.JSONDecodeError, ValueError):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Invalid CSV data in form — please re-upload your file."},
+        )
+
+    # Transform rows (no column mapping needed — data is already transformed)
+    # Detect duplicates against the database
+    transformed = await detect_duplicates(raw_rows, db)
+
+    total_rows = len(transformed)
+    new_count = sum(1 for r in transformed if r.get("_status") == "new")
+    dup_count = sum(1 for r in transformed if r.get("_status") in ("duplicate", "fuzzy_duplicate"))
+    error_count = sum(1 for r in transformed if r.get("_status") == "error")
+
+    preview_rows = transformed[:25]
+    import_data = _serialize_rows(transformed)
+
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/import_preview.html",
+        {
+            "preview_rows": preview_rows,
+            "total_rows": total_rows,
+            "new_count": new_count,
+            "dup_count": dup_count,
+            "error_count": error_count,
+            "import_data_json": json.dumps(import_data),
+            "matched_columns": [],
+            "unmatched_columns": [],
+            "import_timezone": "UTC",
         },
     )
 
@@ -210,15 +246,22 @@ async def execute_import(
 
 
 @router.get("/settings/import/reset", response_class=HTMLResponse)
-async def reset_import(request: Request) -> HTMLResponse:
+async def reset_import(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
     """Return the initial import file picker so the user can start a new import.
 
     Called by the 'Import Another File' button on the summary page via HTMX.
     """
+    user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
     return templates.TemplateResponse(
         request,
         "settings/partials/import_tab.html",
-        {},
+        {
+            "db_fields": get_db_field_options(),
+            "user_tz": user_tz,
+        },
     )
 
 
