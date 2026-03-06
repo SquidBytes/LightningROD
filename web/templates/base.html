@@ -71,5 +71,18 @@
 
     <script src="{{ url_for('static', path='vendor/htmx/htmx.min.js') }}"></script>
     <script src="{{ url_for('static', path='vendor/plotly/plotly.min.js') }}"></script>
+    <script>
+    /* Network combobox: resolve typed name to network_id via datalist */
+    function resolveNetworkCombobox(input) {
+        var hidden = input.closest('.form-control, div, td, label').querySelector('[data-network-hidden]');
+        if (!hidden) return;
+        var dl = document.getElementById(input.getAttribute('list'));
+        if (!dl) { hidden.value = ''; return; }
+        var match = Array.from(dl.options).find(function(opt) {
+            return opt.value.toLowerCase() === input.value.toLowerCase();
+        });
+        hidden.value = match ? match.dataset.id : '';
+    }
+    </script>
 </body>
 </html>

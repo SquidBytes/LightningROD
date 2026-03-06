@@ -218,9 +218,10 @@
                                             </div>
                                             <div class="form-control">
                                                 <label class="label"><span class="label-text text-xs">Network</span></label>
-                                                <input type="text" name="network_id"
-                                                       value="{{ row.get('network_id') or '' }}"
-                                                       class="input input-bordered input-sm">
+                                                {% set current_network_id = row.get('network_id') if row.get('network_id') is not none and row.get('network_id') != '' else None %}
+                                                {% set input_class = 'input input-bordered input-sm w-full' %}
+                                                {% set datalist_id = 'preview-network-list-' ~ row_index %}
+                                                {% include "partials/network_combobox.html" %}
                                             </div>
                                             <div class="form-control">
                                                 <label class="label"><span class="label-text text-xs">Duration (sec)</span></label>

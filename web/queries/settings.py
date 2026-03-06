@@ -35,6 +35,47 @@ async def get_all_networks(db: AsyncSession) -> list[EVChargingNetwork]:
     return list(result.scalars().all())
 
 
+async def resolve_network(
+    db: AsyncSession,
+    network_id: Optional[int] = None,
+    network_name: Optional[str] = None,
+) -> Optional[int]:
+    """Resolve a network to its ID. Accepts ID directly or name for lookup/auto-create.
+
+    Priority: network_id (if truthy) > network_name lookup > auto-create from name.
+    Returns None if neither is provided or name is empty.
+    """
+    if network_id:
+        return network_id
+
+    if not network_name or not network_name.strip():
+        return None
+
+    name = network_name.strip()
+
+    # Try case-insensitive match against existing networks
+    from sqlalchemy import func
+    result = await db.execute(
+        select(EVChargingNetwork).where(
+            func.lower(EVChargingNetwork.network_name) == name.lower()
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        return existing.id
+
+    # Auto-create new network with defaults
+    resolved_color = NETWORK_COLORS.get(name, DEFAULT_COLOR)
+    new_net = EVChargingNetwork(
+        network_name=name,
+        is_free=False,
+        color=resolved_color,
+    )
+    db.add(new_net)
+    await db.flush()  # get the ID without committing
+    return new_net.id
+
+
 async def create_network(
     db: AsyncSession,
     name: str,

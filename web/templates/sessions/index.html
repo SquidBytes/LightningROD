@@ -40,13 +40,19 @@
             <div class="flex items-center gap-3 flex-nowrap overflow-x-auto">
                 <span id="selected-count" class="text-base text-base-content/70 font-medium whitespace-nowrap min-w-[100px]">0 selected</span>
 
-                <select id="bulk-network" class="select select-bordered select-sm">
-                    <option value="">Network...</option>
-                    <option value="clear">-- Clear --</option>
-                    {% for net in networks %}
-                        <option value="{{ net.id }}">{{ net.network_name }}</option>
-                    {% endfor %}
-                </select>
+                <div class="form-control">
+                    <input type="hidden" name="network_id" id="bulk-network-id" value="" data-network-hidden>
+                    <input type="text" id="bulk-network" list="bulk-network-list"
+                           placeholder="Network..."
+                           class="input input-bordered input-sm w-40"
+                           autocomplete="off"
+                           oninput="resolveNetworkCombobox(this)">
+                    <datalist id="bulk-network-list">
+                        {% for net in networks %}
+                        <option value="{{ net.network_name }}" data-id="{{ net.id }}"></option>
+                        {% endfor %}
+                    </datalist>
+                </div>
 
                 <select id="bulk-charge-type" class="select select-bordered select-sm">
                     <option value="">Charge Type...</option>
@@ -259,6 +265,7 @@ function toggleGroupEdit() {
         updateSelectedCount();
         // Reset field inputs
         document.getElementById('bulk-network').value = '';
+        document.getElementById('bulk-network-id').value = '';
         document.getElementById('bulk-charge-type').value = '';
         document.getElementById('bulk-location').value = '';
         document.getElementById('bulk-cost').value = '';
@@ -294,12 +301,13 @@ function applyGroupEdit() {
 
     var ids = Array.from(checked).map(function(cb) { return cb.value; });
     var changes = [];
-    var networkSel = document.getElementById('bulk-network');
+    var networkInput = document.getElementById('bulk-network');
+    var networkIdInput = document.getElementById('bulk-network-id');
     var chargeSel = document.getElementById('bulk-charge-type');
     var locInput = document.getElementById('bulk-location');
     var costInput = document.getElementById('bulk-cost');
 
-    if (networkSel.value) changes.push('Network -> ' + networkSel.options[networkSel.selectedIndex].text);
+    if (networkInput.value) changes.push('Network -> ' + networkInput.value);
     if (chargeSel.value) changes.push('Charge Type -> ' + chargeSel.value);
     if (locInput.value) changes.push('Location -> ' + locInput.value);
     if (costInput.value) changes.push('Cost -> $' + costInput.value);
@@ -315,7 +323,8 @@ function applyGroupEdit() {
     // Build form data and submit via fetch
     var formData = new FormData();
     formData.append('session_ids', ids.join(','));
-    if (networkSel.value) formData.append('bulk_network_id', networkSel.value);
+    if (networkIdInput.value) formData.append('bulk_network_id', networkIdInput.value);
+    else if (networkInput.value) formData.append('bulk_network_name', networkInput.value);
     if (chargeSel.value) formData.append('bulk_charge_type', chargeSel.value);
     if (locInput.value) formData.append('bulk_location_name', locInput.value);
     if (costInput.value) formData.append('bulk_cost', costInput.value);

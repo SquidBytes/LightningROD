@@ -103,17 +103,12 @@
                         {% endif %}
                     </span>
                     <!-- Edit mode -->
-                    <select name="network_id" data-edit-field class="hidden select select-sm select-bordered w-full">
-                        <option value="">— None —</option>
-                        {% if networks %}
-                            {% for net in networks %}
-                                <option value="{{ net.id }}"
-                                    {% if session.network_id == net.id %}selected{% endif %}
-                                    style="color: {{ net.color or '#6B7280' }}"
-                                >{{ net.network_name }}</option>
-                            {% endfor %}
-                        {% endif %}
-                    </select>
+                    <span data-edit-field class="hidden w-full">
+                        {% set current_network_id = session.network_id %}
+                        {% set input_class = 'input input-sm input-bordered w-full' %}
+                        {% set datalist_id = 'drawer-network-list' %}
+                        {% include "partials/network_combobox.html" %}
+                    </span>
                 </dd>
             </div>
             <div class="flex justify-between">

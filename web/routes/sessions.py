@@ -15,7 +15,7 @@ from db.models.reference import EVChargerStall, EVLocationLookup
 from web.dependencies import get_db
 from web.queries.costs import compute_session_cost, get_locations_by_id, get_session_cost_context
 from web.queries.sessions import get_most_recent_location, query_sessions
-from web.queries.settings import get_all_networks, get_app_setting, get_stalls_for_location
+from web.queries.settings import get_all_networks, get_app_setting, get_stalls_for_location, resolve_network
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -165,9 +165,16 @@ async def bulk_update_sessions(
 
     # Apply updates only for fields that were submitted (non-empty)
     bulk_network_id = form.get("bulk_network_id")
+    bulk_network_name = form.get("bulk_network_name")
     bulk_charge_type = form.get("bulk_charge_type")
     bulk_location_name = form.get("bulk_location_name")
     bulk_cost_str = form.get("bulk_cost")
+
+    # Resolve network name to ID if name provided without ID
+    if bulk_network_name and not bulk_network_id:
+        resolved_id = await resolve_network(db, network_name=bulk_network_name)
+        if resolved_id:
+            bulk_network_id = str(resolved_id)
 
     updated = 0
     for s in bulk_sessions:
@@ -262,6 +269,7 @@ async def create_session(
     plug_status: Annotated[Optional[str], Form()] = None,
     charging_status: Annotated[Optional[str], Form()] = None,
     network_id: Annotated[Optional[int], Form()] = None,
+    network_name: Annotated[Optional[str], Form()] = None,
     is_free_form: Annotated[Optional[str], Form(alias="is_free")] = None,
     evse_voltage: Annotated[Optional[float], Form()] = None,
     evse_amperage: Annotated[Optional[float], Form()] = None,
@@ -297,6 +305,9 @@ async def create_session(
 
     if errors:
         return JSONResponse(status_code=422, content={"errors": errors})
+
+    # Resolve network: prefer network_id, fall back to network_name lookup/auto-create
+    network_id = await resolve_network(db, network_id=network_id, network_name=network_name)
 
     # Determine is_free: checkbox form value takes precedence; fall back to cost == 0
     is_free: Optional[bool] = None
@@ -438,6 +449,7 @@ async def update_session(
     plug_status: Annotated[Optional[str], Form()] = None,
     charging_status: Annotated[Optional[str], Form()] = None,
     network_id: Annotated[Optional[int], Form()] = None,
+    network_name: Annotated[Optional[str], Form()] = None,
     is_free: Annotated[Optional[str], Form()] = None,
     evse_voltage: Annotated[Optional[float], Form()] = None,
     evse_amperage: Annotated[Optional[float], Form()] = None,
@@ -461,6 +473,10 @@ async def update_session(
             errors["session_date"] = "Invalid date format. Use YYYY-MM-DD."
     if errors:
         return JSONResponse(status_code=422, content={"errors": errors})
+
+    # Resolve network: prefer network_id, fall back to network_name lookup/auto-create
+    if network_name and not network_id:
+        network_id = await resolve_network(db, network_name=network_name)
 
     result = await db.execute(
         select(EVChargingSession).where(EVChargingSession.id == session_id)

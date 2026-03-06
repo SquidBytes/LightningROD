@@ -1,0 +1,27 @@
+{# Network combobox — dropdown of configured networks + free-text input.
+   Receives: networks (list), current_network_id (int|None), input_class (str, optional),
+             datalist_id (str, optional — unique ID for the datalist element)
+   Outputs: hidden input name="network_id", visible input name="network_name" with datalist. #}
+{% set dl_id = datalist_id|default('network-list-' ~ range(10000)|random) %}
+{% set ns = namespace(current_name='') %}
+{% if current_network_id and networks %}
+    {% for net in networks %}
+        {% if net.id == current_network_id or net.id|string == current_network_id|string %}
+            {% set ns.current_name = net.network_name %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+<input type="hidden" name="network_id" value="{{ current_network_id or '' }}" data-network-hidden>
+<input type="text"
+       name="network_name"
+       list="{{ dl_id }}"
+       value="{{ ns.current_name }}"
+       placeholder="Select or type network..."
+       class="{{ input_class|default('input input-bordered input-sm w-full') }}"
+       autocomplete="off"
+       oninput="resolveNetworkCombobox(this)">
+<datalist id="{{ dl_id }}">
+    {% for net in networks %}
+    <option value="{{ net.network_name }}" data-id="{{ net.id }}"></option>
+    {% endfor %}
+</datalist>

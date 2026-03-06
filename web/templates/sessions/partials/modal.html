@@ -77,15 +77,10 @@
                 </div>
                 <label class="form-control w-full">
                     <div class="label"><span class="label-text">Network</span></div>
-                    <select name="network_id" class="select select-bordered w-full">
-                        <option value="">— None —</option>
-                        {% for net in networks %}
-                            <option value="{{ net.id }}"
-                                {% if modal_mode == 'edit' and session and session.network_id == net.id %}selected{% endif %}
-                                style="color: {{ net.color or '#6B7280' }}"
-                            >{{ net.network_name }}</option>
-                        {% endfor %}
-                    </select>
+                    {% set current_network_id = session.network_id if modal_mode == 'edit' and session else None %}
+                    {% set input_class = 'input input-bordered w-full' %}
+                    {% set datalist_id = 'modal-network-list' %}
+                    {% include "partials/network_combobox.html" %}
                 </label>
                 <div class="grid grid-cols-2 gap-3">
                     <label class="form-control w-full">

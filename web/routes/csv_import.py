@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
-from web.queries.settings import get_app_setting
+from web.queries.settings import get_all_networks, get_app_setting, resolve_network
 from web.services.csv_parser import (
     DB_FIELD_OPTIONS,
     auto_detect_mappings,
@@ -111,6 +111,7 @@ async def upload_csv(
     error_count = sum(1 for r in transformed if r.get("_status") == "error")
 
     import_data = _serialize_rows(transformed)
+    all_networks = await get_all_networks(db)
 
     return templates.TemplateResponse(
         request,
@@ -125,6 +126,7 @@ async def upload_csv(
             "matched_columns": matched_columns,
             "unmatched_columns": unmatched_columns,
             "import_timezone": import_timezone,
+            "networks": all_networks,
         },
     )
 
@@ -146,16 +148,27 @@ async def verify_row(
     import_timezone = str(form.get("import_timezone", "UTC"))
     editor_open = bool(form.get("editor_open", ""))
 
+    # Resolve network: combobox sends network_id (hidden) and network_name (visible)
+    form_network_id = form.get("network_id", "")
+    form_network_name = form.get("network_name", "")
+    resolved_network_id = await resolve_network(
+        db,
+        network_id=int(form_network_id) if form_network_id else None,
+        network_name=form_network_name if form_network_name else None,
+    )
+
     # Build a raw row dict from submitted field values
     editable_fields = [
         "session_start_utc", "energy_kwh", "location_name", "cost",
-        "charge_type", "network_id", "charge_duration_seconds",
+        "charge_type", "charge_duration_seconds",
     ]
     raw_row: dict[str, str] = {}
     for field in editable_fields:
         val = form.get(field, "")
         if val:
             raw_row[field] = str(val)
+    if resolved_network_id:
+        raw_row["network_id"] = str(resolved_network_id)
 
     # Create identity mapping (values are already keyed by DB field name)
     column_mapping = {f: f for f in raw_row}
@@ -172,6 +185,8 @@ async def verify_row(
         "_error": "No data provided",
     }
 
+    all_networks = await get_all_networks(db)
+
     # Return HTML fragment: a <tbody> wrapping the data row and editor row
     return templates.TemplateResponse(
         request,
@@ -181,6 +196,7 @@ async def verify_row(
             "row_index": row_index,
             "import_timezone": import_timezone,
             "editor_open": editor_open,
+            "networks": all_networks,
         },
     )
 
