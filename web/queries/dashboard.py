@@ -5,7 +5,7 @@ Provides summary aggregation for the landing dashboard page.
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
@@ -63,6 +63,71 @@ async def query_dashboard_summary(db: AsyncSession) -> dict:
         "total_cost": total_cost,
         "avg_cost_per_session": avg_cost_per_session,
         "avg_kwh_per_session": avg_kwh_per_session,
+    }
+
+
+async def query_charging_efficiency(db: AsyncSession) -> dict:
+    """Aggregate charging efficiency metrics from sessions with EVSE data.
+
+    Returns dict with:
+    - sessions_with_evse: int (count of sessions with evse_energy_kwh)
+    - total_loss_kwh: float (sum of evse_energy_kwh - energy_kwh)
+    - avg_loss_pct: float | None (average loss percentage)
+    - avg_utilization_pct: float | None (average max_power/charger_rated_kw)
+    """
+    # Loss metrics: sessions with both evse_energy_kwh and energy_kwh
+    loss_result = await db.execute(
+        select(EVChargingSession).where(
+            and_(
+                EVChargingSession.evse_energy_kwh.isnot(None),
+                EVChargingSession.energy_kwh.isnot(None),
+                EVChargingSession.evse_energy_kwh > 0,
+            )
+        )
+    )
+    loss_sessions = loss_result.scalars().all()
+
+    sessions_with_evse = len(loss_sessions)
+    total_loss_kwh = 0.0
+    loss_pct_sum = 0.0
+
+    for s in loss_sessions:
+        evse_e = float(s.evse_energy_kwh)
+        veh_e = float(s.energy_kwh)
+        loss = evse_e - veh_e
+        total_loss_kwh += loss
+        loss_pct_sum += (loss / evse_e) * 100
+
+    avg_loss_pct = loss_pct_sum / sessions_with_evse if sessions_with_evse > 0 else None
+
+    # Utilization metrics: sessions with max power and charger_rated_kw
+    util_result = await db.execute(
+        select(EVChargingSession).where(
+            and_(
+                EVChargingSession.charger_rated_kw.isnot(None),
+                EVChargingSession.charger_rated_kw > 0,
+            )
+        )
+    )
+    util_sessions = util_result.scalars().all()
+
+    util_pct_sum = 0.0
+    util_count = 0
+    for s in util_sessions:
+        max_pwr = float(s.evse_max_power_kw) if s.evse_max_power_kw is not None else (
+            float(s.max_power) if s.max_power is not None else None
+        )
+        if max_pwr is not None:
+            util_pct_sum += (max_pwr / float(s.charger_rated_kw)) * 100
+            util_count += 1
+
+    avg_utilization_pct = util_pct_sum / util_count if util_count > 0 else None
+
+    return {
+        "sessions_with_evse": sessions_with_evse,
+        "total_loss_kwh": total_loss_kwh,
+        "avg_loss_pct": avg_loss_pct,
+        "avg_utilization_pct": avg_utilization_pct,
     }
 
 

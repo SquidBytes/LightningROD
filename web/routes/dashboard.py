@@ -9,6 +9,7 @@ from web.dependencies import get_db
 from web.queries.dashboard import (
     build_cumulative_energy_chart,
     build_energy_by_network_chart,
+    query_charging_efficiency,
     query_dashboard_summary,
 )
 from web.queries.costs import (
@@ -51,6 +52,9 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         network_colors=network_colors,
     )
 
+    # Charging efficiency aggregates (EVSE loss + utilization)
+    efficiency = await query_charging_efficiency(db)
+
     return templates.TemplateResponse(
         request,
         "dashboard/index.html",
@@ -60,5 +64,6 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "summary": summary,
             "cumulative_chart": cumulative_chart,
             "energy_by_network_chart": energy_by_network_chart,
+            "efficiency": efficiency,
         },
     )
