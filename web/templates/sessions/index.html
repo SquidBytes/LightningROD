@@ -34,6 +34,46 @@
     <!-- Filter bar -- always present, not HTMX-swapped -->
     {% include "sessions/partials/filters.html" %}
 
+    <!-- Group edit action bar (hidden by default, sticky at top when active) -->
+    <div id="group-edit-bar" class="sticky top-0 z-50 hidden mb-4">
+        <div class="bg-base-200 border-2 border-primary/30 rounded-box shadow-lg px-4 py-3">
+            <div class="flex items-center gap-3 flex-nowrap overflow-x-auto">
+                <span id="selected-count" class="text-base text-base-content/70 font-medium whitespace-nowrap min-w-[100px]">0 selected</span>
+
+                <select id="bulk-network" class="select select-bordered select-sm">
+                    <option value="">Network...</option>
+                    <option value="clear">-- Clear --</option>
+                    {% for net in networks %}
+                        <option value="{{ net.id }}">{{ net.network_name }}</option>
+                    {% endfor %}
+                </select>
+
+                <select id="bulk-charge-type" class="select select-bordered select-sm">
+                    <option value="">Charge Type...</option>
+                    <option value="clear">-- Clear --</option>
+                    <option value="AC">AC</option>
+                    <option value="DC">DC</option>
+                </select>
+
+                <input id="bulk-location" type="text" placeholder="Location..." class="input input-bordered input-sm w-40">
+
+                <input id="bulk-cost" type="number" step="0.01" min="0" placeholder="Cost $..." class="input input-bordered input-sm w-28">
+
+                <button
+                    type="button"
+                    onclick="applyGroupEdit()"
+                    class="btn btn-primary btn-sm"
+                >Apply</button>
+
+                <button
+                    type="button"
+                    onclick="toggleGroupEdit()"
+                    class="btn btn-ghost btn-sm"
+                >Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Drawer wrapper for session detail panel -->
     <div class="drawer drawer-end">
         <input id="session-drawer" type="checkbox" class="drawer-toggle" />
@@ -53,48 +93,6 @@
             <label for="session-drawer" class="drawer-overlay" aria-label="close drawer"></label>
             <div class="bg-base-200 min-h-full w-96 overflow-y-auto" id="drawer-body">
                 <!-- HTMX loads drawer content here -->
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Group edit floating action bar (hidden by default) -->
-<div id="group-edit-bar" class="fixed bottom-0 left-0 right-0 z-50 hidden">
-    <div class="max-w-6xl mx-auto px-4 pb-4">
-        <div class="bg-base-200 border border-base-300 rounded-box shadow-2xl p-4">
-            <div class="flex items-center gap-4 flex-wrap">
-                <span id="selected-count" class="text-sm text-base-content/60 font-medium min-w-[100px]">0 selected</span>
-
-                <select id="bulk-network" class="select select-sm select-bordered">
-                    <option value="">Network...</option>
-                    <option value="clear">-- Clear --</option>
-                    {% for net in networks %}
-                        <option value="{{ net.id }}">{{ net.network_name }}</option>
-                    {% endfor %}
-                </select>
-
-                <select id="bulk-charge-type" class="select select-sm select-bordered">
-                    <option value="">Charge Type...</option>
-                    <option value="clear">-- Clear --</option>
-                    <option value="AC">AC</option>
-                    <option value="DC">DC</option>
-                </select>
-
-                <input id="bulk-location" type="text" placeholder="Location..." class="input input-sm input-bordered w-40">
-
-                <input id="bulk-cost" type="number" step="0.01" min="0" placeholder="Cost $..." class="input input-sm input-bordered w-28">
-
-                <button
-                    type="button"
-                    onclick="applyGroupEdit()"
-                    class="btn btn-primary btn-sm"
-                >Apply</button>
-
-                <button
-                    type="button"
-                    onclick="toggleGroupEdit()"
-                    class="btn btn-ghost btn-sm"
-                >Cancel</button>
             </div>
         </div>
     </div>

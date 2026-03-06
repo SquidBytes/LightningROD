@@ -4,14 +4,14 @@
 -->
 <div class="flex items-center justify-between mt-4 px-1">
     <!-- Page info -->
-    <div class="text-sm text-base-content/60">
+    <div class="text-base text-base-content/60">
         Page {{ page }} of {{ total_pages }}
     </div>
 
     <div class="flex items-center gap-4">
         <!-- Items per page dropdown -->
         <div class="flex items-center gap-2">
-            <span class="text-sm text-base-content/60">Show</span>
+            <span class="text-base text-base-content/60">Show</span>
             <select id="per-page-select"
                 onchange="changePerPage(this.value)"
                 class="select select-sm select-bordered">
@@ -19,7 +19,7 @@
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
             </select>
-            <span class="text-sm text-base-content/60">per page</span>
+            <span class="text-base text-base-content/60">per page</span>
         </div>
 
         <!-- Page navigation -->

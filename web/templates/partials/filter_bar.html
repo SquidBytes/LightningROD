@@ -29,11 +29,11 @@
 
     <!-- Custom date range -->
     <div class="flex items-center gap-1.5">
-      <span class="text-base-content/60 text-xs">From</span>
+      <span class="text-base-content/60 text-sm">From</span>
       <input type="date" name="date_from" value="{{ date_from or '' }}"
         onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('btn-primary'); b.classList.add('btn-ghost'); }); var pi=document.getElementById('page_input'); if(pi) pi.value='1'; htmx.trigger(document.body, 'filterChanged')"
         class="input input-sm input-bordered w-28">
-      <span class="text-base-content/60 text-xs">To</span>
+      <span class="text-base-content/60 text-sm">To</span>
       <input type="date" name="date_to" value="{{ date_to or '' }}"
         onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('btn-primary'); b.classList.add('btn-ghost'); }); var pi=document.getElementById('page_input'); if(pi) pi.value='1'; htmx.trigger(document.body, 'filterChanged')"
         class="input input-sm input-bordered w-28">
@@ -72,7 +72,7 @@ function activatePreset(btn, value) {
 
 function createFilterChip(text, filterKey, filterValue) {
     var chip = document.createElement('span');
-    chip.className = 'badge badge-sm gap-1';
+    chip.className = 'badge badge-outline gap-1';
     var label = document.createTextNode(text + ' ');
     chip.appendChild(label);
     var btn = document.createElement('button');
