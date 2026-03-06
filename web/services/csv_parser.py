@@ -492,15 +492,15 @@ def _parse_uuid(v: str) -> Optional[uuid.UUID]:
 
 def _normalize_charge_type(charger_type: str, location_name: str) -> Optional[str]:
     """Normalize charger type to 'AC' or 'DC'."""
-    ct = charger_type.strip() if charger_type else ""
-    if ct in ("AC Level 2", "AC_BASIC", "level_2", "ac_charging", "AC Level 1"):
+    ct = charger_type.strip().upper() if charger_type else ""
+    if ct in ("AC", "AC LEVEL 2", "AC_BASIC", "LEVEL_2", "AC_CHARGING", "AC LEVEL 1", "L2", "LEVEL 2", "LEVEL 1"):
         return "AC"
-    if ct in ("DC_FAST", "dc_fast", "dc_charging"):
+    if ct in ("DC", "DC_FAST", "DC_CHARGING", "DCFC", "L3", "LEVEL 3"):
         return "DC"
     loc = location_name.strip() if location_name else ""
     if not ct and loc == "Work":
         return "AC"
-    return None
+    return ct if ct else None
 
 
 def _classify_location_type(location_name: str) -> str:

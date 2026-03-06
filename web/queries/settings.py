@@ -22,8 +22,9 @@ PREDEFINED_NETWORKS = [
     {"name": "Home", "color": "#6366F1", "cost_per_kwh": 0.12, "is_free": True},
 ]
 
-# Derived color lookup for backward compatibility
+# Derived lookups from predefined list — used when auto-creating known networks
 NETWORK_COLORS = {n["name"]: n["color"] for n in PREDEFINED_NETWORKS}
+_PREDEFINED_BY_NAME = {n["name"].lower(): n for n in PREDEFINED_NETWORKS}
 DEFAULT_COLOR = "#6B7280"  # gray-500
 
 
@@ -64,12 +65,13 @@ async def resolve_network(
     if existing:
         return existing.id
 
-    # Auto-create new network with defaults
-    resolved_color = NETWORK_COLORS.get(name, DEFAULT_COLOR)
+    # Auto-create new network — use predefined data if it's a known network
+    known = _PREDEFINED_BY_NAME.get(name.lower())
     new_net = EVChargingNetwork(
-        network_name=name,
-        is_free=False,
-        color=resolved_color,
+        network_name=known["name"] if known else name,
+        is_free=known["is_free"] if known else False,
+        color=known["color"] if known else DEFAULT_COLOR,
+        cost_per_kwh=known["cost_per_kwh"] if known else None,
     )
     db.add(new_net)
     await db.flush()  # get the ID without committing
@@ -85,13 +87,15 @@ async def create_network(
 ) -> EVChargingNetwork:
     """Create a new charging network row.
 
-    If color is None or empty, auto-assign from NETWORK_COLORS lookup by name,
-    falling back to DEFAULT_COLOR.
+    If color/cost not provided, auto-fill from predefined network data if
+    the name matches a known network, falling back to DEFAULT_COLOR.
     """
-    resolved_color = color if color else NETWORK_COLORS.get(name, DEFAULT_COLOR)
+    known = _PREDEFINED_BY_NAME.get(name.lower().strip()) if name else None
+    resolved_color = color if color else (known["color"] if known else DEFAULT_COLOR)
+    resolved_cost = cost_per_kwh if cost_per_kwh is not None else (known["cost_per_kwh"] if known else None)
     network = EVChargingNetwork(
         network_name=name,
-        cost_per_kwh=cost_per_kwh,
+        cost_per_kwh=resolved_cost,
         is_free=is_free,
         color=resolved_color,
     )
@@ -119,10 +123,11 @@ async def update_network(
     network = result.scalar_one_or_none()
     if network is None:
         return None
+    known = _PREDEFINED_BY_NAME.get(name.lower().strip()) if name else None
     network.network_name = name
     network.cost_per_kwh = cost_per_kwh
     network.is_free = is_free
-    network.color = color if color else NETWORK_COLORS.get(name, DEFAULT_COLOR)
+    network.color = color if color else (known["color"] if known else DEFAULT_COLOR)
     await db.commit()
     await db.refresh(network)
     return network
