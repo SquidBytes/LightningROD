@@ -144,6 +144,7 @@ async def verify_row(
 
     row_index = int(form.get("row_index", "0"))
     import_timezone = str(form.get("import_timezone", "UTC"))
+    editor_open = bool(form.get("editor_open", ""))
 
     # Build a raw row dict from submitted field values
     editable_fields = [
@@ -179,6 +180,7 @@ async def verify_row(
             "row": row,
             "row_index": row_index,
             "import_timezone": import_timezone,
+            "editor_open": editor_open,
         },
     )
 

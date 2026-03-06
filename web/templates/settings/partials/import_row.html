@@ -1,9 +1,10 @@
 {# Single row fragment — returned by POST /settings/import/verify-row.
-   Receives: row (dict), row_index (int), import_timezone (str)
+   Receives: row (dict), row_index (int), import_timezone (str), editor_open (bool, optional)
    Replaces the <tbody id="rowgroup-{row_index}"> via hx-swap="outerHTML". #}
 {% set row_status = row.get('_status', 'new') %}
 {% set is_error = row_status == 'error' %}
 {% set is_dup = row_status in ('duplicate', 'fuzzy_duplicate') %}
+{% set show_editor = editor_open|default(false) %}
 <tbody id="rowgroup-{{ row_index }}">
     {# Data row #}
     <tr
@@ -19,6 +20,7 @@
                 value="{{ row_index }}"
                 {% if row_status == 'new' %}checked{% endif %}
                 class="checkbox checkbox-sm checkbox-primary"
+                onclick="event.stopPropagation()"
             >
         </td>
         <td class="text-base-content/40 text-xs">{{ row_index + 1 }}</td>
@@ -60,112 +62,113 @@
     </tr>
 
     {# Inline editor row (available for all rows) #}
-    <tr id="editor-{{ row_index }}" class="hidden">
+    <tr id="editor-{{ row_index }}" class="{% if not show_editor %}hidden{% endif %}">
         <td colspan="11" class="p-0">
             <div class="card bg-base-200 m-2">
-                <div class="card-body p-4"
-                     hx-post="/settings/import/verify-row"
-                     hx-target="#rowgroup-{{ row_index }}"
-                     hx-swap="outerHTML"
-                     hx-indicator="#rowgroup-{{ row_index }} .htmx-indicator"
-                >
-                    <input type="hidden" name="row_index" value="{{ row_index }}">
-                    <input type="hidden" name="import_timezone" value="{{ import_timezone }}">
+                <div class="card-body p-4">
+                    <form hx-post="/settings/import/verify-row"
+                          hx-target="#rowgroup-{{ row_index }}"
+                          hx-swap="outerHTML"
+                          hx-indicator="#rowgroup-{{ row_index }} .htmx-indicator"
+                    >
+                        <input type="hidden" name="row_index" value="{{ row_index }}">
+                        <input type="hidden" name="import_timezone" value="{{ import_timezone }}">
+                        <input type="hidden" name="editor_open" value="1">
 
-                    {# Status message (if error or duplicate) #}
-                    {% if is_error or is_dup %}
-                    <div class="mb-2">
-                        <h4 class="text-xs font-semibold text-warning">
-                            {% if is_error %}
-                                Problem: {{ row.get('_error', 'Unknown error') }}
-                            {% else %}
-                                Duplicate detected — review key fields
-                            {% endif %}
-                        </h4>
-                    </div>
-                    {% endif %}
+                        {# Status message (if error or duplicate) #}
+                        {% if is_error or is_dup %}
+                        <div class="mb-2">
+                            <h4 class="text-xs font-semibold text-warning">
+                                {% if is_error %}
+                                    Problem: {{ row.get('_error', 'Unknown error') }}
+                                {% else %}
+                                    Duplicate detected — review key fields
+                                {% endif %}
+                            </h4>
+                        </div>
+                        {% endif %}
 
-                    {# Editable fields #}
-                    <div class="mb-3">
-                        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {# Editable fields #}
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div class="form-control">
                                 <label class="label"><span class="label-text text-xs">Date/Time</span></label>
                                 <input type="datetime-local" name="session_start_utc"
                                        value="{% set s = row.get('session_start_utc') %}{% if s %}{% if s is string %}{{ s[:16] }}{% else %}{{ s.strftime('%Y-%m-%dT%H:%M') }}{% endif %}{% endif %}"
-                                       class="input input-bordered input-sm"
-                                       hx-trigger="blur">
+                                       class="input input-bordered input-sm">
                             </div>
                             <div class="form-control">
                                 <label class="label"><span class="label-text text-xs">Location</span></label>
                                 <input type="text" name="location_name"
                                        value="{{ row.get('location_name') or '' }}"
-                                       class="input input-bordered input-sm"
-                                       hx-trigger="blur">
+                                       class="input input-bordered input-sm">
                             </div>
                             <div class="form-control">
                                 <label class="label"><span class="label-text text-xs">Energy (kWh)</span></label>
                                 <input type="number" step="0.01" name="energy_kwh"
                                        value="{% if row.get('energy_kwh') is not none %}{{ row.get('energy_kwh') }}{% endif %}"
-                                       class="input input-bordered input-sm"
-                                       hx-trigger="blur">
+                                       class="input input-bordered input-sm">
+                            </div>
+                            <div class="form-control">
+                                <label class="label"><span class="label-text text-xs">Cost ($)</span></label>
+                                <input type="number" step="0.01" name="cost"
+                                       value="{% if row.get('cost') is not none %}{{ row.get('cost') }}{% endif %}"
+                                       class="input input-bordered input-sm">
+                            </div>
+                            <div class="form-control">
+                                <label class="label"><span class="label-text text-xs">Type</span></label>
+                                <select name="charge_type" class="select select-bordered select-sm">
+                                    <option value="">--</option>
+                                    <option value="AC" {% if row.get('charge_type') == 'AC' %}selected{% endif %}>AC</option>
+                                    <option value="DC" {% if row.get('charge_type') == 'DC' %}selected{% endif %}>DC</option>
+                                </select>
+                            </div>
+                            <div class="form-control">
+                                <label class="label"><span class="label-text text-xs">Network</span></label>
+                                <input type="text" name="network_id"
+                                       value="{{ row.get('network_id') or '' }}"
+                                       class="input input-bordered input-sm">
+                            </div>
+                            <div class="form-control">
+                                <label class="label"><span class="label-text text-xs">Duration (sec)</span></label>
+                                <input type="number" step="1" name="charge_duration_seconds"
+                                       value="{% if row.get('charge_duration_seconds') is not none %}{{ row.get('charge_duration_seconds')|int }}{% endif %}"
+                                       class="input input-bordered input-sm">
                             </div>
                         </div>
-                    </div>
 
-                    {# Other populated fields #}
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div class="form-control">
-                            <label class="label"><span class="label-text text-xs">Cost ($)</span></label>
-                            <input type="number" step="0.01" name="cost"
-                                   value="{% if row.get('cost') is not none %}{{ row.get('cost') }}{% endif %}"
-                                   class="input input-bordered input-sm"
-                                   hx-trigger="blur">
+                        {# Duplicate action options #}
+                        {% if is_dup %}
+                        <div class="flex items-center gap-4 mt-3 pt-3 border-t border-base-300">
+                            <span class="text-xs font-medium">Action:</span>
+                            <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                <input type="radio" name="action_{{ row_index }}" value="skip"
+                                       class="radio radio-sm" checked>
+                                Skip
+                            </label>
+                            <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                <input type="radio" name="action_{{ row_index }}" value="insert"
+                                       class="radio radio-sm">
+                                Insert Anyway
+                            </label>
+                            <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                <input type="radio" name="action_{{ row_index }}" value="update"
+                                       class="radio radio-sm">
+                                Update Existing
+                            </label>
                         </div>
-                        <div class="form-control">
-                            <label class="label"><span class="label-text text-xs">Type</span></label>
-                            <select name="charge_type" class="select select-bordered select-sm" hx-trigger="blur">
-                                <option value="">--</option>
-                                <option value="AC" {% if row.get('charge_type') == 'AC' %}selected{% endif %}>AC</option>
-                                <option value="DC" {% if row.get('charge_type') == 'DC' %}selected{% endif %}>DC</option>
-                            </select>
-                        </div>
-                        <div class="form-control">
-                            <label class="label"><span class="label-text text-xs">Network</span></label>
-                            <input type="text" name="network_id"
-                                   value="{{ row.get('network_id') or '' }}"
-                                   class="input input-bordered input-sm"
-                                   hx-trigger="blur">
-                        </div>
-                        <div class="form-control">
-                            <label class="label"><span class="label-text text-xs">Duration (sec)</span></label>
-                            <input type="number" step="1" name="charge_duration_seconds"
-                                   value="{% if row.get('charge_duration_seconds') is not none %}{{ row.get('charge_duration_seconds')|int }}{% endif %}"
-                                   class="input input-bordered input-sm"
-                                   hx-trigger="blur">
-                        </div>
-                    </div>
+                        {% endif %}
 
-                    {# Duplicate action options #}
-                    {% if is_dup %}
-                    <div class="flex items-center gap-4 mt-3 pt-3 border-t border-base-300">
-                        <span class="text-xs font-medium">Action:</span>
-                        <label class="flex items-center gap-1 text-xs cursor-pointer">
-                            <input type="radio" name="action_{{ row_index }}" value="skip"
-                                   class="radio radio-sm" checked>
-                            Skip
-                        </label>
-                        <label class="flex items-center gap-1 text-xs cursor-pointer">
-                            <input type="radio" name="action_{{ row_index }}" value="insert"
-                                   class="radio radio-sm">
-                            Insert Anyway
-                        </label>
-                        <label class="flex items-center gap-1 text-xs cursor-pointer">
-                            <input type="radio" name="action_{{ row_index }}" value="update"
-                                   class="radio radio-sm">
-                            Update Existing
-                        </label>
-                    </div>
-                    {% endif %}
+                        {# Save / close buttons #}
+                        <div class="flex items-center gap-2 mt-3 pt-3 border-t border-base-300">
+                            <button type="submit" class="btn btn-primary btn-sm btn-outline">
+                                Save
+                                <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+                            </button>
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEditor({{ row_index }})">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </td>
