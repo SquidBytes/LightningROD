@@ -110,14 +110,13 @@ async def upload_csv(
     dup_count = sum(1 for r in transformed if r.get("_status") in ("duplicate", "fuzzy_duplicate"))
     error_count = sum(1 for r in transformed if r.get("_status") == "error")
 
-    preview_rows = transformed[:25]
     import_data = _serialize_rows(transformed)
 
     return templates.TemplateResponse(
         request,
         "settings/partials/import_preview.html",
         {
-            "preview_rows": preview_rows,
+            "preview_rows": transformed,
             "total_rows": total_rows,
             "new_count": new_count,
             "dup_count": dup_count,
@@ -130,54 +129,56 @@ async def upload_csv(
     )
 
 
-@router.post("/settings/import/preview", response_class=HTMLResponse)
-async def preview_import(
+@router.post("/settings/import/verify-row", response_class=HTMLResponse)
+async def verify_row(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    """Re-verify endpoint for inline editing (kept for future Plan 03 use).
+    """Re-verify a single edited row and return updated row HTML.
 
-    The standard upload flow now goes directly from upload to preview via
-    upload_csv().  This route is retained for potential re-verification needs.
+    Accepts form data with editable field values, re-transforms and re-checks
+    for duplicates, and returns a replacement <tbody> fragment containing the
+    updated data row and inline editor.
     """
     form = await request.form()
 
-    # Extract raw CSV data from hidden fields
-    csv_data_raw = form.get("csv_data", "")
+    row_index = int(form.get("row_index", "0"))
+    import_timezone = str(form.get("import_timezone", "UTC"))
 
-    try:
-        raw_rows: list[dict] = json.loads(csv_data_raw) if csv_data_raw else []
-    except (json.JSONDecodeError, ValueError):
-        return JSONResponse(
-            status_code=422,
-            content={"detail": "Invalid CSV data in form — please re-upload your file."},
-        )
+    # Build a raw row dict from submitted field values
+    editable_fields = [
+        "session_start_utc", "energy_kwh", "location_name", "cost",
+        "charge_type", "network_id", "charge_duration_seconds",
+    ]
+    raw_row: dict[str, str] = {}
+    for field in editable_fields:
+        val = form.get(field, "")
+        if val:
+            raw_row[field] = str(val)
 
-    # Transform rows (no column mapping needed — data is already transformed)
-    # Detect duplicates against the database
-    transformed = await detect_duplicates(raw_rows, db)
+    # Create identity mapping (values are already keyed by DB field name)
+    column_mapping = {f: f for f in raw_row}
 
-    total_rows = len(transformed)
-    new_count = sum(1 for r in transformed if r.get("_status") == "new")
-    dup_count = sum(1 for r in transformed if r.get("_status") in ("duplicate", "fuzzy_duplicate"))
-    error_count = sum(1 for r in transformed if r.get("_status") == "error")
+    # Transform and detect duplicates
+    transformed = transform_rows([raw_row], column_mapping, import_tz=import_timezone)
+    if transformed:
+        transformed[0]["_row_index"] = row_index
+        transformed = await detect_duplicates(transformed, db)
 
-    preview_rows = transformed[:25]
-    import_data = _serialize_rows(transformed)
+    row = transformed[0] if transformed else {
+        "_row_index": row_index,
+        "_status": "error",
+        "_error": "No data provided",
+    }
 
+    # Return HTML fragment: a <tbody> wrapping the data row and editor row
     return templates.TemplateResponse(
         request,
-        "settings/partials/import_preview.html",
+        "settings/partials/import_row.html",
         {
-            "preview_rows": preview_rows,
-            "total_rows": total_rows,
-            "new_count": new_count,
-            "dup_count": dup_count,
-            "error_count": error_count,
-            "import_data_json": json.dumps(import_data),
-            "matched_columns": [],
-            "unmatched_columns": [],
-            "import_timezone": "UTC",
+            "row": row,
+            "row_index": row_index,
+            "import_timezone": import_timezone,
         },
     )
 
