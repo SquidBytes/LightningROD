@@ -34,14 +34,20 @@ templates = Jinja2Templates(directory="web/templates")
 
 
 async def _network_management_context(db: AsyncSession) -> dict:
-    """Build context dict for network_management.html — networks + per-network location counts."""
+    """Build context dict for network_management.html — networks + per-network counts."""
     networks = await get_all_networks(db)
     loc_count_result = await db.execute(
         select(EVLocationLookup.network_id, func.count().label("cnt"))
         .group_by(EVLocationLookup.network_id)
     )
     location_counts = {row.network_id: row.cnt for row in loc_count_result.all()}
-    return {"networks": networks, "location_counts": location_counts}
+    session_count_result = await db.execute(
+        select(EVChargingSession.network_id, func.count().label("cnt"))
+        .where(EVChargingSession.network_id.isnot(None))
+        .group_by(EVChargingSession.network_id)
+    )
+    session_counts = {row.network_id: row.cnt for row in session_count_result.all()}
+    return {"networks": networks, "location_counts": location_counts, "session_counts": session_counts}
 
 
 SETTINGS_KEYS = [

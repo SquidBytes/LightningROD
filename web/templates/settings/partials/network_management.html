@@ -13,6 +13,7 @@
                         <th>Name</th>
                         <th class="w-28">Cost/kWh</th>
                         <th class="w-12">Free</th>
+                        <th class="w-20">Sessions</th>
                         <th class="w-20">Locations</th>
                         <th class="text-right w-28">Actions</th>
                     </tr>
@@ -54,6 +55,10 @@
                                 <span class="text-base-content/40 text-xs">No</span>
                             {% endif %}
                         </td>
+                        <td class="text-base-content/60 text-sm">
+                            {% set sc = session_counts.get(network.id, 0) if session_counts is defined else 0 %}
+                            {% if sc > 0 %}{{ sc }}{% else %}<span class="text-base-content/30">0</span>{% endif %}
+                        </td>
                         <td class="text-base-content/60 text-sm">{{ location_counts.get(network.id, 0) }}</td>
                         <td class="text-right" onclick="event.stopPropagation()">
                             <div class="flex justify-end gap-2">
@@ -81,11 +86,11 @@
                             </div>
                         </td>
                     </tr>
-                    {# Expandable locations row — hidden by default, lazy-loaded on first expand #}
+                    {# Expandable locations row — view-only summary, lazy-loaded #}
                     <tr id="network-locations-{{ network.id }}" class="hidden">
-                        <td colspan="6" class="bg-base-300/50 px-4 py-3">
+                        <td colspan="7" class="bg-base-300/30 px-6 py-3">
                             <div id="network-locations-content-{{ network.id }}"
-                                 hx-get="/settings/networks/{{ network.id }}/locations"
+                                 hx-get="/settings/networks/{{ network.id }}/locations-summary"
                                  hx-trigger="intersect once"
                                  hx-swap="innerHTML">
                                 <p class="text-base-content/40 text-sm">Loading locations...</p>
@@ -94,7 +99,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="py-4 text-center text-base-content/40">No networks configured yet.</td>
+                        <td colspan="7" class="py-4 text-center text-base-content/40">No networks configured yet.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
