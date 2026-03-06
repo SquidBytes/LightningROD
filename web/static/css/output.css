@@ -4483,6 +4483,9 @@
     }
   }
 }
+html[data-theme="dark"] {
+  background-color: oklch(23.26% 0.014 253.1);
+}
 #sessions-table-region.htmx-request {
   opacity: 0.4;
 }

@@ -237,6 +237,95 @@ async def recalculate_network_costs(
     return HTMLResponse(f'<span class="text-success text-sm">{updated} sessions recalculated</span>')
 
 
+@router.get("/settings/networks/{network_id}/convert-modal", response_class=HTMLResponse)
+async def convert_network_modal(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the 'Convert to Location' modal form for a given network."""
+    networks = await get_all_networks(db)
+    network = next((n for n in networks if n.id == network_id), None)
+    if network is None:
+        return HTMLResponse(status_code=404)
+    other_networks = [n for n in networks if n.id != network_id]
+    # Count sessions that will be reassigned
+    result = await db.execute(
+        select(func.count()).where(EVChargingSession.network_id == network_id)
+    )
+    session_count = result.scalar() or 0
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/convert_to_location_modal.html",
+        {"network": network, "other_networks": other_networks, "session_count": session_count},
+    )
+
+
+@router.post("/settings/networks/{network_id}/convert-to-location", response_class=HTMLResponse)
+async def convert_network_to_location(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    target_network_id: int = Form(...),
+    location_name: str = Form(...),
+    location_type: Optional[str] = Form(None),
+):
+    """Convert a network into a location under another network.
+
+    - Creates a new location under target_network_id
+    - Reassigns all sessions from network_id to target_network_id
+    - Sets location_name and location_id on those sessions
+    - Deletes the old network
+    """
+    # Validate source network exists
+    result = await db.execute(
+        select(EVChargingNetwork).where(EVChargingNetwork.id == network_id)
+    )
+    source = result.scalar_one_or_none()
+    if not source:
+        return HTMLResponse("Source network not found", status_code=404)
+
+    # Validate target network exists and is different
+    result = await db.execute(
+        select(EVChargingNetwork).where(EVChargingNetwork.id == target_network_id)
+    )
+    target = result.scalar_one_or_none()
+    if not target:
+        return HTMLResponse("Target network not found", status_code=404)
+
+    # Create the new location under target network
+    new_location = await create_location(
+        db,
+        network_id=target_network_id,
+        name=location_name,
+        location_type=location_type or "public",
+        cost_per_kwh=source.cost_per_kwh,
+    )
+
+    # Reassign all sessions from source network to target network + new location
+    result = await db.execute(
+        select(EVChargingSession).where(EVChargingSession.network_id == network_id)
+    )
+    sessions = result.scalars().all()
+    for s in sessions:
+        s.network_id = target_network_id
+        s.location_name = location_name
+        s.location_id = new_location.id
+
+    # Delete the old network
+    await db.delete(source)
+    await db.commit()
+
+    net_ctx = await _network_management_context(db)
+    response = templates.TemplateResponse(
+        request,
+        "settings/partials/network_management.html",
+        net_ctx,
+    )
+    response.headers["HX-Trigger"] = "closeNetworkModal"
+    return response
+
+
 @router.get("/settings/networks/{network_id}/locations", response_class=HTMLResponse)
 async def network_locations(
     network_id: int, request: Request, db: AsyncSession = Depends(get_db)

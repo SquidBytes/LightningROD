@@ -64,6 +64,13 @@
                                     Edit
                                 </button>
                                 <button
+                                    type="button"
+                                    onclick="openConvertModal({{ network.id }})"
+                                    class="btn btn-ghost btn-xs text-warning"
+                                    title="Convert this network into a location under another network">
+                                    Convert
+                                </button>
+                                <button
                                     hx-delete="/settings/networks/{{ network.id }}"
                                     hx-target="#network-management-card"
                                     hx-swap="outerHTML"

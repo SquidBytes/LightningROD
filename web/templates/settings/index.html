@@ -72,6 +72,12 @@ function closeNetworkModal() {
     document.getElementById('network-modal-content').innerHTML = '';
 }
 
+function openConvertModal(networkId) {
+    htmx.ajax('GET', '/settings/networks/' + networkId + '/convert-modal',
+        {target: '#network-modal-content', swap: 'innerHTML'});
+    document.getElementById('network-modal').showModal();
+}
+
 // Listen for closeNetworkModal HX-Trigger event (fired by PUT on save)
 document.body.addEventListener('closeNetworkModal', closeNetworkModal);
 </script>

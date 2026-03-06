@@ -14,6 +14,9 @@
   --color-accent: #47A8E5;
 }
 
+/* Prevent sidebar flash on navigation — match html bg to sidebar color */
+html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
+
 /* HTMX loading state for sessions table region */
 #sessions-table-region.htmx-request { opacity: 0.4; }
 #sessions-table-region { transition: opacity 0.15s ease; }

@@ -1,0 +1,79 @@
+{# Convert network to location modal -- reassigns sessions to a parent network #}
+
+<p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Convert to Location</p>
+<h3 class="text-lg font-semibold text-base-content">{{ network.network_name }}</h3>
+
+<div class="mt-4 space-y-4">
+    <div class="bg-base-300 rounded-lg p-3">
+        <p class="text-sm text-base-content/70">
+            This will convert <strong>{{ network.network_name }}</strong> from a network into a location
+            under the network you select below.
+        </p>
+        {% if session_count > 0 %}
+        <p class="text-sm text-base-content/70 mt-2">
+            <span class="font-semibold text-warning">{{ session_count }}</span>
+            {{ "session" if session_count == 1 else "sessions" }} will be reassigned to the target network.
+        </p>
+        {% else %}
+        <p class="text-sm text-base-content/50 mt-2">No sessions are linked to this network.</p>
+        {% endif %}
+    </div>
+
+    <form id="convert-form">
+        <div class="space-y-4">
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text">Move to Network</span></div>
+                <select name="target_network_id" required class="select select-bordered w-full">
+                    <option value="" disabled selected>Select parent network...</option>
+                    {% for net in other_networks %}
+                        <option value="{{ net.id }}">
+                            {{ net.network_name }}
+                            {% if net.cost_per_kwh is not none %} (${{ '%.3f'|format(net.cost_per_kwh) }}/kWh){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text">Location Name</span></div>
+                <input type="text" name="location_name" required
+                       value="{{ network.network_name }}"
+                       class="input input-bordered w-full">
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Name for the new location (pre-filled from network name)</span>
+                </div>
+            </label>
+
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text">Location Type</span></div>
+                <select name="location_type" class="select select-bordered w-full">
+                    <option value="public" selected>Public</option>
+                    <option value="home">Home</option>
+                    <option value="work">Work</option>
+                    <option value="retail">Retail</option>
+                    <option value="destination">Destination</option>
+                    <option value="highway">Highway</option>
+                    <option value="other">Other</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="flex items-center justify-end pt-4 mt-4 border-t border-base-300">
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="closeNetworkModal()"
+                        class="btn btn-ghost btn-sm">
+                    Cancel
+                </button>
+                <button type="button"
+                        hx-post="/settings/networks/{{ network.id }}/convert-to-location"
+                        hx-target="#network-management-card"
+                        hx-swap="outerHTML"
+                        hx-include="#convert-form"
+                        hx-confirm="Convert {{ network.network_name }} to a location? This will reassign {{ session_count }} sessions and delete the network."
+                        class="btn btn-warning btn-sm">
+                    Convert
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
