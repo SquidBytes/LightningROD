@@ -4,14 +4,13 @@
 {% set row_status = row.get('_status', 'new') %}
 {% set is_error = row_status == 'error' %}
 {% set is_dup = row_status in ('duplicate', 'fuzzy_duplicate') %}
-{% set needs_editor = is_error or is_dup %}
 <tbody id="rowgroup-{{ row_index }}">
     {# Data row #}
     <tr
-        class="{% if is_error %}bg-error/10{% elif is_dup %}bg-warning/10{% endif %}{% if needs_editor %} cursor-pointer{% endif %}"
+        class="cursor-pointer{% if is_error %} bg-error/10{% elif is_dup %} bg-warning/10{% endif %}"
         data-row-status="{{ row_status }}"
         data-row-index="{{ row_index }}"
-        {% if needs_editor %}onclick="toggleEditor({{ row_index }})"{% endif %}
+        onclick="toggleEditor({{ row_index }})"
     >
         <td>
             <input
@@ -35,16 +34,16 @@
         <td class="text-xs">{{ row.get('network_id') or '&mdash;' }}</td>
         <td class="text-xs text-right">
             {% set kwh = row.get('energy_kwh') %}
-            {% if kwh is not none %}{{ "%.2f"|format(kwh) }}{% else %}<span class="text-base-content/40">&mdash;</span>{% endif %}
+            {% if kwh is not none %}{{ "%.2f"|format(kwh|float) }}{% else %}<span class="text-base-content/40">&mdash;</span>{% endif %}
         </td>
         <td class="text-xs text-right">
             {% set cost = row.get('cost') %}
-            {% if cost is not none %}${{ "%.2f"|format(cost) }}{% else %}<span class="text-base-content/40">&mdash;</span>{% endif %}
+            {% if cost is not none %}${{ "%.2f"|format(cost|float) }}{% else %}<span class="text-base-content/40">&mdash;</span>{% endif %}
         </td>
         <td class="text-base-content/60 text-xs">{{ row.get('charge_type') or '&mdash;' }}</td>
         <td class="text-xs">
             {% set dur = row.get('charge_duration_seconds') %}
-            {% if dur is not none %}{{ (dur / 60)|round(0)|int }} min{% else %}<span class="text-base-content/40">&mdash;</span>{% endif %}
+            {% if dur is not none %}{{ (dur|float / 60)|round(0)|int }} min{% else %}<span class="text-base-content/40">&mdash;</span>{% endif %}
         </td>
         <td>
             {% if row_status == 'new' %}
@@ -60,8 +59,7 @@
         </td>
     </tr>
 
-    {# Inline editor row (only for error/duplicate rows) #}
-    {% if needs_editor %}
+    {# Inline editor row (available for all rows) #}
     <tr id="editor-{{ row_index }}" class="hidden">
         <td colspan="11" class="p-0">
             <div class="card bg-base-200 m-2">
@@ -74,15 +72,21 @@
                     <input type="hidden" name="row_index" value="{{ row_index }}">
                     <input type="hidden" name="import_timezone" value="{{ import_timezone }}">
 
-                    {# Problematic fields (highlighted) #}
-                    <div class="mb-3">
-                        <h4 class="text-xs font-semibold text-warning mb-2">
+                    {# Status message (if error or duplicate) #}
+                    {% if is_error or is_dup %}
+                    <div class="mb-2">
+                        <h4 class="text-xs font-semibold text-warning">
                             {% if is_error %}
                                 Problem: {{ row.get('_error', 'Unknown error') }}
                             {% else %}
                                 Duplicate detected — review key fields
                             {% endif %}
                         </h4>
+                    </div>
+                    {% endif %}
+
+                    {# Editable fields #}
+                    <div class="mb-3">
                         <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                             <div class="form-control">
                                 <label class="label"><span class="label-text text-xs">Date/Time</span></label>
@@ -166,5 +170,4 @@
             </div>
         </td>
     </tr>
-    {% endif %}
 </tbody>
