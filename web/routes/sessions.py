@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
-from db.models.reference import EVLocationLookup
+from db.models.reference import EVChargerStall, EVLocationLookup
 from web.dependencies import get_db
 from web.queries.costs import compute_session_cost, get_locations_by_id, get_session_cost_context
 from web.queries.sessions import get_most_recent_location, query_sessions
@@ -586,6 +586,15 @@ async def session_detail(
 
     all_networks = await get_all_networks(db)
 
+    # Look up stall label if session has a stall_id
+    stall_label = None
+    if session.stall_id:
+        stall_result = await db.execute(
+            select(EVChargerStall).where(EVChargerStall.id == session.stall_id)
+        )
+        stall = stall_result.scalar_one_or_none()
+        stall_label = stall.stall_label if stall else None
+
     context = {
         "session": session,
         "cost_info": cost_info,
@@ -593,6 +602,7 @@ async def session_detail(
         "next_id": next_id,
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
+        "stall_label": stall_label,
     }
     return templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
 

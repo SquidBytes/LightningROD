@@ -438,6 +438,122 @@
         </dl>
     </div>
 
+    <!-- EVSE / Charger -->
+    <div>
+        <div class="flex items-center gap-2 pb-2 mb-3 border-b border-base-300">
+            <h3 class="text-xs uppercase tracking-wide text-base-content/50">EVSE / Charger</h3>
+            {% if session.evse_source == 'manual' %}
+                <span class="badge badge-ghost badge-xs">Manual</span>
+            {% elif session.evse_source == 'estimated' %}
+                <span class="badge badge-ghost badge-xs">Est.</span>
+            {% elif session.evse_source == 'stall_default' %}
+                <span class="badge badge-ghost badge-xs">Stall</span>
+            {% elif session.evse_source == 'smart_evse' %}
+                <span class="badge badge-ghost badge-xs">Smart</span>
+            {% elif session.evse_source == 'energy_monitor' %}
+                <span class="badge badge-ghost badge-xs">Monitor</span>
+            {% endif %}
+        </div>
+
+        {% if stall_label %}
+            <div class="flex justify-between mb-3">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Stall</dt>
+                <dd class="text-base-content text-base">{{ stall_label }}</dd>
+            </div>
+        {% endif %}
+
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-2 mb-4">
+            <div>
+                <dt class="text-base-content/60 text-xs">Voltage</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.evse_voltage is not none %}
+                        {{ "%.0f"|format(session.evse_voltage) }} V
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-base-content/60 text-xs">Amperage</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.evse_amperage is not none %}
+                        {{ "%.0f"|format(session.evse_amperage) }} A
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-base-content/60 text-xs">Power</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.evse_kw is not none %}
+                        {{ "%.1f"|format(session.evse_kw) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-base-content/60 text-xs">EVSE Energy</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.evse_energy_kwh is not none %}
+                        {{ "%.1f"|format(session.evse_energy_kwh) }} kWh
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-base-content/60 text-xs">Max Power</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.evse_max_power_kw is not none %}
+                        {{ "%.1f"|format(session.evse_max_power_kw) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-base-content/60 text-xs">Rated Capacity</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.charger_rated_kw is not none %}
+                        {{ "%.1f"|format(session.charger_rated_kw) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </dd>
+            </div>
+        </dl>
+
+        {# Computed metrics: charging loss and utilization #}
+        <div class="stats stats-horizontal shadow bg-base-300 w-full">
+            <div class="stat px-4 py-3">
+                <div class="stat-title text-xs">Charging Loss</div>
+                <div class="stat-value text-base">
+                    {% if session.evse_energy_kwh is not none and session.energy_kwh is not none and session.evse_energy_kwh > 0 %}
+                        {% set loss_kwh = session.evse_energy_kwh - session.energy_kwh %}
+                        {% set loss_pct = (loss_kwh / session.evse_energy_kwh) * 100 %}
+                        {{ "%.1f"|format(loss_kwh) }} kWh ({{ "%.1f"|format(loss_pct) }}%)
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="stat px-4 py-3">
+                <div class="stat-title text-xs">Utilization</div>
+                <div class="stat-value text-base">
+                    {% set max_pwr = session.evse_max_power_kw if session.evse_max_power_kw is not none else session.max_power %}
+                    {% if max_pwr is not none and session.charger_rated_kw is not none and session.charger_rated_kw > 0 %}
+                        {% set util_pct = (max_pwr / session.charger_rated_kw) * 100 %}
+                        {{ "%.0f"|format(util_pct) }}%
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Notes -->
     <div>
         <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Notes</h3>
