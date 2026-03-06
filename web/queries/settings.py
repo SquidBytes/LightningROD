@@ -1,10 +1,11 @@
+import json
 from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.reference import AppSettings, EVChargingNetwork, EVLocationLookup
+from db.models.reference import AppSettings, EVChargerStall, EVChargingNetwork, EVLocationLookup
 
 # Predefined EV charging networks with brand-accurate colors
 PREDEFINED_NETWORKS = [
@@ -273,3 +274,150 @@ async def set_app_setting(db: AsyncSession, key: str, value: str) -> None:
     )
     await db.execute(stmt)
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Network charger templates (seed data)
+# ---------------------------------------------------------------------------
+
+NETWORK_CHARGER_TEMPLATES = {
+    "Electrify America": [
+        {"label": "150kW CCS", "charger_type": "DCFC", "rated_kw": 150, "voltage": 400, "amperage": 375, "connector_type": "CCS"},
+        {"label": "350kW CCS", "charger_type": "DCFC", "rated_kw": 350, "voltage": 800, "amperage": 500, "connector_type": "CCS"},
+    ],
+    "Tesla Supercharger": [
+        {"label": "250kW V3", "charger_type": "DCFC", "rated_kw": 250, "voltage": 400, "amperage": 625, "connector_type": "NACS"},
+    ],
+    "ChargePoint": [
+        {"label": "L2 Charger", "charger_type": "L2", "rated_kw": 7.7, "voltage": 240, "amperage": 32, "connector_type": "J1772"},
+        {"label": "62.5kW DCFC", "charger_type": "DCFC", "rated_kw": 62.5, "voltage": 400, "amperage": 156, "connector_type": "CCS"},
+    ],
+    "Home": [
+        {"label": "L2 Wall Connector", "charger_type": "L2", "rated_kw": 9.6, "voltage": 240, "amperage": 40, "connector_type": "NACS"},
+        {"label": "L1 Standard Outlet", "charger_type": "L1", "rated_kw": 1.4, "voltage": 120, "amperage": 12, "connector_type": "NACS"},
+    ],
+}
+
+
+async def seed_charger_templates(db: AsyncSession) -> bool:
+    """Seed network charger templates into app_settings as JSON.
+
+    Idempotent -- skips if key already exists.
+    Returns True if seeded, False if already existed.
+    """
+    existing = await get_app_setting(db, "network_charger_templates", "")
+    if existing:
+        return False
+    await set_app_setting(db, "network_charger_templates", json.dumps(NETWORK_CHARGER_TEMPLATES))
+    return True
+
+
+async def get_charger_templates(db: AsyncSession) -> dict:
+    """Load and parse network charger templates from app_settings.
+
+    Returns empty dict if not found.
+    """
+    raw = await get_app_setting(db, "network_charger_templates", "")
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+# ---------------------------------------------------------------------------
+# Stall CRUD
+# ---------------------------------------------------------------------------
+
+async def get_stalls_for_location(db: AsyncSession, location_id: int) -> list[EVChargerStall]:
+    """Return all stalls for a location ordered by stall_label."""
+    result = await db.execute(
+        select(EVChargerStall)
+        .where(EVChargerStall.location_id == location_id)
+        .order_by(EVChargerStall.stall_label)
+    )
+    return list(result.scalars().all())
+
+
+async def create_stall(
+    db: AsyncSession,
+    location_id: int,
+    label: str,
+    charger_type: Optional[str] = None,
+    rated_kw: Optional[float] = None,
+    voltage: Optional[float] = None,
+    amperage: Optional[float] = None,
+    connector_type: Optional[str] = None,
+    notes: Optional[str] = None,
+    is_default: bool = False,
+) -> EVChargerStall:
+    """Create a new charger stall for a location."""
+    stall = EVChargerStall(
+        location_id=location_id,
+        stall_label=label,
+        charger_type=charger_type,
+        rated_kw=rated_kw,
+        voltage=voltage,
+        amperage=amperage,
+        connector_type=connector_type,
+        notes=notes,
+        is_default=is_default,
+    )
+    db.add(stall)
+    await db.commit()
+    await db.refresh(stall)
+    return stall
+
+
+async def update_stall(
+    db: AsyncSession,
+    stall_id: int,
+    label: Optional[str] = None,
+    charger_type: Optional[str] = None,
+    rated_kw: Optional[float] = None,
+    voltage: Optional[float] = None,
+    amperage: Optional[float] = None,
+    connector_type: Optional[str] = None,
+    notes: Optional[str] = None,
+    is_default: Optional[bool] = None,
+) -> Optional[EVChargerStall]:
+    """Update a charger stall. Returns updated stall or None if not found."""
+    result = await db.execute(
+        select(EVChargerStall).where(EVChargerStall.id == stall_id)
+    )
+    stall = result.scalar_one_or_none()
+    if stall is None:
+        return None
+    if label is not None:
+        stall.stall_label = label
+    if charger_type is not None:
+        stall.charger_type = charger_type
+    if rated_kw is not None:
+        stall.rated_kw = rated_kw
+    if voltage is not None:
+        stall.voltage = voltage
+    if amperage is not None:
+        stall.amperage = amperage
+    if connector_type is not None:
+        stall.connector_type = connector_type
+    if notes is not None:
+        stall.notes = notes
+    if is_default is not None:
+        stall.is_default = is_default
+    await db.commit()
+    await db.refresh(stall)
+    return stall
+
+
+async def delete_stall(db: AsyncSession, stall_id: int) -> bool:
+    """Delete a charger stall by id. Returns True if deleted, False if not found."""
+    result = await db.execute(
+        select(EVChargerStall).where(EVChargerStall.id == stall_id)
+    )
+    stall = result.scalar_one_or_none()
+    if stall is None:
+        return False
+    await db.delete(stall)
+    await db.commit()
+    return True

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from db.engine import AsyncSessionLocal, engine
-from web.queries.settings import seed_predefined_networks
+from web.queries.settings import seed_charger_templates, seed_predefined_networks
 from web.routes import csv_import, dashboard, sessions, costs, energy, settings
 
 
@@ -13,6 +13,7 @@ async def lifespan(app: FastAPI):
     # Startup: seed predefined networks (idempotent — skips existing by name)
     async with AsyncSessionLocal() as session:
         await seed_predefined_networks(session)
+        await seed_charger_templates(session)
     yield
     # Shutdown: dispose engine connections
     await engine.dispose()
