@@ -15,7 +15,7 @@ from db.models.reference import EVChargerStall, EVLocationLookup
 from web.dependencies import get_db
 from web.queries.costs import compute_session_cost, get_locations_by_id, get_session_cost_context
 from web.queries.sessions import get_most_recent_location, query_sessions
-from web.queries.settings import get_all_networks
+from web.queries.settings import get_all_networks, get_stalls_for_location
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -227,6 +227,7 @@ async def new_session_modal(
         "default_date": date.today().isoformat(),
         "default_location": default_location,
         "networks": all_networks,
+        "stalls": [],
     }
     return templates.TemplateResponse(request, "sessions/partials/modal.html", context)
 
@@ -260,6 +261,14 @@ async def create_session(
     charging_status: Annotated[Optional[str], Form()] = None,
     network_id: Annotated[Optional[int], Form()] = None,
     is_free_form: Annotated[Optional[str], Form(alias="is_free")] = None,
+    evse_voltage: Annotated[Optional[float], Form()] = None,
+    evse_amperage: Annotated[Optional[float], Form()] = None,
+    evse_kw: Annotated[Optional[float], Form()] = None,
+    evse_energy_kwh: Annotated[Optional[float], Form()] = None,
+    evse_max_power_kw: Annotated[Optional[float], Form()] = None,
+    charger_rated_kw: Annotated[Optional[float], Form()] = None,
+    stall_id: Annotated[Optional[int], Form()] = None,
+    evse_source: Annotated[Optional[str], Form()] = None,
 ):
     errors: dict[str, str] = {}
 
@@ -334,7 +343,27 @@ async def create_session(
         is_complete=True,
         source_system="manual_entry",
         is_free=is_free,
+        evse_voltage=evse_voltage or None,
+        evse_amperage=evse_amperage or None,
+        evse_kw=evse_kw or None,
+        evse_energy_kwh=evse_energy_kwh or None,
+        evse_max_power_kw=evse_max_power_kw or None,
+        charger_rated_kw=charger_rated_kw or None,
+        stall_id=stall_id or None,
+        evse_source=evse_source or None,
     )
+
+    # DC V/A estimation: if evse_kw set and V/A blank for DC sessions
+    if new_session.charge_type == 'DC' and new_session.evse_kw and not new_session.evse_voltage and not new_session.evse_amperage:
+        pack_voltage = 400  # F-150 Lightning ~400V pack
+        new_session.evse_voltage = pack_voltage
+        new_session.evse_amperage = float(new_session.evse_kw) * 1000 / pack_voltage
+        if not new_session.evse_source:
+            new_session.evse_source = 'estimated'
+
+    # Set evse_source to stall_default when stall fills defaults and no explicit source
+    if new_session.stall_id and not new_session.evse_source:
+        new_session.evse_source = 'stall_default'
 
     db.add(new_session)
 
@@ -406,6 +435,14 @@ async def update_session(
     charging_status: Annotated[Optional[str], Form()] = None,
     network_id: Annotated[Optional[int], Form()] = None,
     is_free: Annotated[Optional[str], Form()] = None,
+    evse_voltage: Annotated[Optional[float], Form()] = None,
+    evse_amperage: Annotated[Optional[float], Form()] = None,
+    evse_kw: Annotated[Optional[float], Form()] = None,
+    evse_energy_kwh: Annotated[Optional[float], Form()] = None,
+    evse_max_power_kw: Annotated[Optional[float], Form()] = None,
+    charger_rated_kw: Annotated[Optional[float], Form()] = None,
+    stall_id: Annotated[Optional[int], Form()] = None,
+    evse_source: Annotated[Optional[str], Form()] = None,
 ):
     # Validate enum fields
     errors: dict[str, str] = {}
@@ -492,6 +529,36 @@ async def update_session(
         session.network_id = network_id or None
     if is_free is not None:
         session.is_free = is_free in ('1', 'on', 'true')
+
+    # Update EVSE fields when submitted
+    if evse_voltage is not None:
+        session.evse_voltage = evse_voltage or None
+    if evse_amperage is not None:
+        session.evse_amperage = evse_amperage or None
+    if evse_kw is not None:
+        session.evse_kw = evse_kw or None
+    if evse_energy_kwh is not None:
+        session.evse_energy_kwh = evse_energy_kwh or None
+    if evse_max_power_kw is not None:
+        session.evse_max_power_kw = evse_max_power_kw or None
+    if charger_rated_kw is not None:
+        session.charger_rated_kw = charger_rated_kw or None
+    if stall_id is not None:
+        session.stall_id = stall_id or None
+    if evse_source is not None:
+        session.evse_source = evse_source or None
+
+    # DC V/A estimation: if evse_kw set and V/A blank for DC sessions
+    if session.charge_type == 'DC' and session.evse_kw and not session.evse_voltage and not session.evse_amperage:
+        pack_voltage = 400  # F-150 Lightning ~400V pack
+        session.evse_voltage = pack_voltage
+        session.evse_amperage = float(session.evse_kw) * 1000 / pack_voltage
+        if not session.evse_source:
+            session.evse_source = 'estimated'
+
+    # Set evse_source to stall_default when stall fills defaults and no explicit source
+    if session.stall_id and not session.evse_source:
+        session.evse_source = 'stall_default'
 
     # Recalculate cost when network changes and cost was not manually set
     all_networks = await get_all_networks(db)
@@ -627,6 +694,11 @@ async def session_modal(
 
     all_networks = await get_all_networks(db)
 
+    # Load stalls for session's location
+    stalls = []
+    if session.location_id:
+        stalls = await get_stalls_for_location(db, session.location_id)
+
     context = {
         "session": session,
         "cost_info": cost_info,
@@ -635,5 +707,6 @@ async def session_modal(
         "default_location": None,
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
+        "stalls": stalls,
     }
     return templates.TemplateResponse(request, "sessions/partials/modal.html", context)
