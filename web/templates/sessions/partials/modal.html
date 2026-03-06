@@ -331,6 +331,116 @@
                         class="input input-bordered w-full"
                     >
                 </label>
+
+                <!-- EVSE / Charger Section -->
+                <div class="divider text-xs text-base-content/50">
+                    EVSE / Charger
+                    {% if modal_mode == 'edit' and session and session.evse_source %}
+                        <span class="badge badge-ghost badge-xs ml-1">{{ session.evse_source }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Stall dropdown (full width) -->
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Stall</span></div>
+                    <select name="stall_id" id="modal-stall-select" class="select select-sm select-bordered w-full">
+                        <option value="">— No stall —</option>
+                        {% if stalls is defined and stalls %}
+                            {% for stall in stalls %}
+                                <option value="{{ stall.id }}"
+                                    data-rated-kw="{{ stall.rated_kw or '' }}"
+                                    data-voltage="{{ stall.voltage or '' }}"
+                                    data-amperage="{{ stall.amperage or '' }}"
+                                    data-connector="{{ stall.connector_type or '' }}"
+                                    {% if modal_mode == 'edit' and session and session.stall_id == stall.id %}selected{% endif %}
+                                >{{ stall.stall_label }}{% if stall.rated_kw %} ({{ stall.rated_kw }}kW){% endif %}{% if stall.connector_type %} - {{ stall.connector_type }}{% endif %}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option disabled>No stalls configured</option>
+                        {% endif %}
+                    </select>
+                </label>
+
+                <input type="hidden" name="evse_source" id="modal-evse-source"
+                    value="{% if modal_mode == 'edit' and session and session.evse_source %}{{ session.evse_source }}{% endif %}">
+
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">Voltage (V)</span></div>
+                        <input
+                            type="number"
+                            name="evse_voltage"
+                            id="modal-evse-voltage"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.evse_voltage is not none %}{{ session.evse_voltage }}{% endif %}"
+                            placeholder="Voltage (V)"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">Amperage (A)</span></div>
+                        <input
+                            type="number"
+                            name="evse_amperage"
+                            id="modal-evse-amperage"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.evse_amperage is not none %}{{ session.evse_amperage }}{% endif %}"
+                            placeholder="Amperage (A)"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">Power (kW)</span></div>
+                        <input
+                            type="number"
+                            name="evse_kw"
+                            id="modal-evse-kw"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.evse_kw is not none %}{{ session.evse_kw }}{% endif %}"
+                            placeholder="Power (kW)"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </label>
+                    <div class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">EVSE Energy (kWh)</span></div>
+                        <div class="flex gap-1">
+                            <input
+                                type="number"
+                                name="evse_energy_kwh"
+                                id="modal-evse-energy"
+                                step="0.01"
+                                value="{% if modal_mode == 'edit' and session and session.evse_energy_kwh is not none %}{{ session.evse_energy_kwh }}{% endif %}"
+                                placeholder="EVSE Energy"
+                                class="input input-sm input-bordered w-full"
+                            >
+                            <button type="button" id="btn-estimate-energy" class="btn btn-xs btn-ghost self-end mb-0.5" title="Estimate from kW x duration">Est.</button>
+                        </div>
+                    </div>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">Max Power (kW)</span></div>
+                        <input
+                            type="number"
+                            name="evse_max_power_kw"
+                            id="modal-evse-max-power"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.evse_max_power_kw is not none %}{{ session.evse_max_power_kw }}{% endif %}"
+                            placeholder="Max Power (kW)"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">Rated Capacity (kW)</span></div>
+                        <input
+                            type="number"
+                            name="charger_rated_kw"
+                            id="modal-charger-rated-kw"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.charger_rated_kw is not none %}{{ session.charger_rated_kw }}{% endif %}"
+                            placeholder="Rated Capacity (kW)"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -417,5 +527,78 @@
             drawerCheckbox.checked = true;
         }
     }, { once: true });
+})();
+
+// Stall selection: auto-fill empty EVSE fields with stall defaults
+(function() {
+    var stallSelect = document.getElementById('modal-stall-select');
+    if (!stallSelect) return;
+
+    var fieldMap = {
+        'rated-kw': 'modal-charger-rated-kw',
+        'voltage': 'modal-evse-voltage',
+        'amperage': 'modal-evse-amperage'
+    };
+
+    stallSelect.addEventListener('change', function() {
+        var opt = stallSelect.options[stallSelect.selectedIndex];
+        if (!opt || !opt.value) return;
+
+        var anyFilled = false;
+        Object.keys(fieldMap).forEach(function(dataAttr) {
+            var input = document.getElementById(fieldMap[dataAttr]);
+            if (!input) return;
+            var val = opt.dataset[dataAttr.replace(/-([a-z])/g, function(m, c) { return c.toUpperCase(); })];
+            if (val && !input.value) {
+                input.value = val;
+                input.classList.add('text-base-content/50');
+                anyFilled = true;
+            }
+        });
+
+        // Also set rated_kw as evse_kw if empty
+        var kwInput = document.getElementById('modal-evse-kw');
+        var ratedKw = opt.dataset.ratedKw;
+        if (kwInput && ratedKw && !kwInput.value) {
+            kwInput.value = ratedKw;
+            kwInput.classList.add('text-base-content/50');
+            anyFilled = true;
+        }
+
+        if (anyFilled) {
+            var sourceInput = document.getElementById('modal-evse-source');
+            if (sourceInput) sourceInput.value = 'stall_default';
+        }
+    });
+
+    // Remove dimmed style when user manually types
+    Object.values(fieldMap).concat(['modal-evse-kw']).forEach(function(id) {
+        var input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', function() {
+                input.classList.remove('text-base-content/50');
+            });
+        }
+    });
+})();
+
+// Estimate EVSE energy: kW * (duration_min / 60)
+(function() {
+    var btn = document.getElementById('btn-estimate-energy');
+    if (!btn) return;
+
+    btn.addEventListener('click', function() {
+        var kwInput = document.getElementById('modal-evse-kw');
+        var durInput = document.querySelector('input[name="charge_duration_minutes"]');
+        var energyInput = document.getElementById('modal-evse-energy');
+        if (!kwInput || !durInput || !energyInput) return;
+
+        var kw = parseFloat(kwInput.value);
+        var durMin = parseFloat(durInput.value);
+        if (isNaN(kw) || isNaN(durMin) || kw <= 0 || durMin <= 0) return;
+
+        var estimated = kw * (durMin / 60);
+        energyInput.value = estimated.toFixed(2);
+    });
 })();
 </script>
