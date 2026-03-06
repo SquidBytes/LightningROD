@@ -34,7 +34,7 @@ async def download_template() -> Response:
     """
     output = io.StringIO()
     writer = csv.writer(output)
-    headers = [f["field"] for f in DB_FIELD_OPTIONS]
+    headers = [f.get("csv_header", f["field"]) for f in DB_FIELD_OPTIONS]
     writer.writerow(headers)
     csv_bytes = output.getvalue().encode("utf-8")
     return Response(

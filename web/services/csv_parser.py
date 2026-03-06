@@ -65,10 +65,11 @@ DB_FIELD_OPTIONS = [
     },
     {
         "field": "network_id",
-        "label": "Network",
-        "description": "Charging Network Name",
+        "label": "Charging Network",
+        "description": "Network name (e.g. Electrify America, Tesla Supercharger, ChargePoint). Matched to configured networks automatically.",
         "required": False,
         "important": False,
+        "csv_header": "charging_network",
     },
     {
         "field": "is_free",
@@ -220,6 +221,9 @@ _SEED_COLUMN_MAP: dict[str, str] = {
     "charger_type": "charge_type",
     "location_type": "location_type",
     "network_id": "network_id",
+    "charging_network": "network_id",
+    "network_name": "network_id",
+    "network": "network_id",
     "is_free": "is_free",
     "device_id": "device_id",
     "vin": "device_id",
@@ -270,6 +274,8 @@ _KEYWORD_HINTS: list[tuple[list[str], str]] = [
     (["location", "type"], "location_type"),
     (["network", "id"], "network_id"),
     (["network", "name"], "network_id"),
+    (["charging", "network"], "network_id"),
+    (["network"], "network_id"),
     (["charge", "type"], "charge_type"),
     (["charger", "type"], "charge_type"),
     (["is", "free"], "is_free"),
@@ -801,6 +807,22 @@ async def import_rows(
 
         # Strip internal fields before DB operations
         clean_row = {k: v for k, v in row.items() if k not in _INTERNAL_FIELDS}
+
+        # Resolve network_id: may be a name string from CSV — convert to integer FK
+        net_val = clean_row.get("network_id")
+        if net_val is not None and not isinstance(net_val, int):
+            try:
+                clean_row["network_id"] = int(net_val)
+            except (ValueError, TypeError):
+                # It's a network name string — resolve via DB lookup/auto-create
+                from web.queries.settings import resolve_network
+                resolved_id = await resolve_network(
+                    db_session, network_name=str(net_val)
+                )
+                if resolved_id:
+                    clean_row["network_id"] = resolved_id
+                else:
+                    del clean_row["network_id"]
 
         if action == "insert":
             try:

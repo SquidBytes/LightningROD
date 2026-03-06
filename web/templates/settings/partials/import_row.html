@@ -33,7 +33,22 @@
             {% endif %}
         </td>
         <td class="text-xs">{{ row.get('location_name') or '&mdash;' }}</td>
-        <td class="text-xs">{{ row.get('network_id') or '&mdash;' }}</td>
+        <td class="text-xs">
+            {%- set net_val = row.get('network_id') -%}
+            {%- if net_val is not none and net_val != '' -%}
+                {%- set ns_net = namespace(name='') -%}
+                {%- if networks is defined -%}
+                    {%- for net in networks -%}
+                        {%- if net.id|string == net_val|string -%}
+                            {%- set ns_net.name = net.network_name -%}
+                        {%- endif -%}
+                    {%- endfor -%}
+                {%- endif -%}
+                {{ ns_net.name or net_val }}
+            {%- else -%}
+                &mdash;
+            {%- endif -%}
+        </td>
         <td class="text-xs text-right">
             {% set kwh = row.get('energy_kwh') %}
             {% if kwh is not none %}{{ "%.2f"|format(kwh|float) }}{% else %}<span class="text-base-content/40">&mdash;</span>{% endif %}
