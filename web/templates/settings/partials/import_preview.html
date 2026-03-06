@@ -48,8 +48,8 @@
             </div>
         </div>
 
-        {# Bulk selection controls #}
-        <div class="flex items-center gap-3">
+        {# Bulk selection + bulk edit controls #}
+        <div class="flex items-center gap-3 flex-wrap">
             <span class="text-sm text-base-content/60">Select:</span>
             <button type="button" onclick="selectPreset('non_duplicates')"
                     class="btn btn-ghost btn-xs">All Non-Duplicates</button>
@@ -57,6 +57,50 @@
                     class="btn btn-ghost btn-xs">All</button>
             <button type="button" onclick="selectPreset('none')"
                     class="btn btn-ghost btn-xs">None</button>
+            <div class="divider divider-horizontal mx-0"></div>
+            <button type="button" id="import-bulk-edit-toggle" onclick="toggleImportBulkEdit()"
+                    class="btn btn-outline btn-sm gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Bulk Edit
+            </button>
+        </div>
+
+        {# Bulk edit bar (hidden by default) #}
+        <div id="import-bulk-bar" class="hidden">
+            <div class="bg-base-200 border-2 border-primary/30 rounded-box shadow-lg px-4 py-3">
+                <div class="flex items-center gap-3 flex-nowrap overflow-x-auto">
+                    <span id="import-selected-count" class="text-sm text-base-content/70 font-medium whitespace-nowrap min-w-[80px]">0 selected</span>
+
+                    <div class="form-control">
+                        <input type="hidden" id="import-bulk-network-id" value="" data-network-hidden>
+                        <input type="text" id="import-bulk-network" list="import-bulk-network-list"
+                               placeholder="Network..."
+                               class="input input-bordered input-sm w-40"
+                               autocomplete="off"
+                               oninput="resolveNetworkCombobox(this)">
+                        <datalist id="import-bulk-network-list">
+                            {% for net in networks %}
+                            <option value="{{ net.network_name }}" data-id="{{ net.id }}"></option>
+                            {% endfor %}
+                        </datalist>
+                    </div>
+
+                    <select id="import-bulk-charge-type" class="select select-bordered select-sm">
+                        <option value="">Charge Type...</option>
+                        <option value="AC">AC</option>
+                        <option value="DC">DC</option>
+                    </select>
+
+                    <input id="import-bulk-location" type="text" placeholder="Location..." class="input input-bordered input-sm w-40">
+
+                    <input id="import-bulk-cost" type="number" step="0.01" min="0" placeholder="Cost $..." class="input input-bordered input-sm w-28">
+
+                    <button type="button" onclick="applyImportBulkEdit()" class="btn btn-primary btn-sm">Apply</button>
+                    <button type="button" onclick="toggleImportBulkEdit()" class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+            </div>
         </div>
 
         {# Preview table with virtual scroll #}
@@ -345,5 +389,133 @@ function selectPreset(mode) {
             cb.checked = (status === 'new');
         }
     });
+    updateImportSelectedCount();
+}
+
+// --- Import Bulk Edit ---
+var _importBulkActive = false;
+
+function toggleImportBulkEdit() {
+    _importBulkActive = !_importBulkActive;
+    var bar = document.getElementById('import-bulk-bar');
+    var toggle = document.getElementById('import-bulk-edit-toggle');
+    if (_importBulkActive) {
+        bar.classList.remove('hidden');
+        toggle.classList.add('btn-active');
+        updateImportSelectedCount();
+    } else {
+        bar.classList.add('hidden');
+        toggle.classList.remove('btn-active');
+        // Reset fields
+        document.getElementById('import-bulk-network').value = '';
+        document.getElementById('import-bulk-network-id').value = '';
+        document.getElementById('import-bulk-charge-type').value = '';
+        document.getElementById('import-bulk-location').value = '';
+        document.getElementById('import-bulk-cost').value = '';
+    }
+}
+
+function updateImportSelectedCount() {
+    var count = document.querySelectorAll('#import-preview-form input[name="selected_rows"]:checked').length;
+    var el = document.getElementById('import-selected-count');
+    if (el) el.textContent = count + ' selected';
+}
+
+// Update count when checkboxes change
+document.addEventListener('change', function(e) {
+    if (e.target.name === 'selected_rows' && _importBulkActive) {
+        updateImportSelectedCount();
+    }
+});
+
+function applyImportBulkEdit() {
+    var checked = document.querySelectorAll('#import-preview-form input[name="selected_rows"]:checked');
+    if (checked.length === 0) {
+        alert('No rows selected');
+        return;
+    }
+
+    var networkInput = document.getElementById('import-bulk-network');
+    var networkIdInput = document.getElementById('import-bulk-network-id');
+    var chargeType = document.getElementById('import-bulk-charge-type').value;
+    var location = document.getElementById('import-bulk-location').value;
+    var cost = document.getElementById('import-bulk-cost').value;
+
+    var changes = [];
+    if (networkInput.value) changes.push('Network → ' + networkInput.value);
+    if (chargeType) changes.push('Charge Type → ' + chargeType);
+    if (location) changes.push('Location → ' + location);
+    if (cost) changes.push('Cost → $' + cost);
+
+    if (changes.length === 0) {
+        alert('No fields to update. Set at least one field value.');
+        return;
+    }
+
+    if (!confirm(checked.length + ' rows will be updated:\n' + changes.join('\n'))) return;
+
+    // Collect selected row indices
+    var selectedIndices = new Set();
+    checked.forEach(function(cb) { selectedIndices.add(parseInt(cb.value)); });
+
+    // Update the hidden import_data JSON
+    var dataInput = document.querySelector('#import-preview-form input[name="import_data"]');
+    var importData = [];
+    try { importData = JSON.parse(dataInput.value); } catch(e) {}
+
+    importData.forEach(function(row) {
+        var idx = row._row_index;
+        if (idx === undefined) return;
+        if (!selectedIndices.has(idx)) return;
+
+        if (networkIdInput.value) {
+            row.network_id = parseInt(networkIdInput.value);
+        } else if (networkInput.value) {
+            row.network_id = networkInput.value;
+        }
+        if (chargeType) row.charge_type = chargeType;
+        if (location) row.location_name = location;
+        if (cost) row.cost = parseFloat(cost);
+    });
+
+    dataInput.value = JSON.stringify(importData);
+
+    // Update visible table cells
+    checked.forEach(function(cb) {
+        var dataRow = cb.closest('tr');
+        if (!dataRow) return;
+        var cells = dataRow.querySelectorAll('td');
+        // Cell order: checkbox(0), #(1), date(2), location(3), network(4), energy(5), cost(6), type(7), duration(8), status(9)
+        if (location) cells[3].innerHTML = '<span class="text-xs">' + location + '</span>';
+        if (networkInput.value) cells[4].innerHTML = '<span class="text-xs">' + networkInput.value + '</span>';
+        if (cost) cells[6].innerHTML = '<span class="text-xs text-right">$' + parseFloat(cost).toFixed(2) + '</span>';
+        if (chargeType) cells[7].innerHTML = '<span class="text-base-content/60 text-xs">' + chargeType + '</span>';
+    });
+
+    // Also update inline editor inputs for affected rows
+    selectedIndices.forEach(function(idx) {
+        var editor = document.getElementById('editor-' + idx);
+        if (!editor) return;
+        if (location) {
+            var locInput = editor.querySelector('input[name="location_name"]');
+            if (locInput) locInput.value = location;
+        }
+        if (cost) {
+            var costInput = editor.querySelector('input[name="cost"]');
+            if (costInput) costInput.value = cost;
+        }
+        if (chargeType) {
+            var typeSelect = editor.querySelector('select[name="charge_type"]');
+            if (typeSelect) typeSelect.value = chargeType;
+        }
+        if (networkInput.value) {
+            var netNameInput = editor.querySelector('input[name="network_name"]');
+            var netHidden = editor.querySelector('input[name="network_id"]');
+            if (netNameInput) netNameInput.value = networkInput.value;
+            if (netHidden) netHidden.value = networkIdInput.value || '';
+        }
+    });
+
+    toggleImportBulkEdit();
 }
 </script>

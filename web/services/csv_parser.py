@@ -219,6 +219,7 @@ _SEED_COLUMN_MAP: dict[str, str] = {
     # Additional common aliases
     "charge_type": "charge_type",
     "charger_type": "charge_type",
+    "charging_type": "charge_type",
     "location_type": "location_type",
     "network_id": "network_id",
     "charging_network": "network_id",
@@ -229,6 +230,7 @@ _SEED_COLUMN_MAP: dict[str, str] = {
     "vin": "device_id",
     "source_system": "source_system",
     "energy_kwh": "energy_kwh",
+    "charger_kwh": "energy_kwh",
     "session_start": "session_start_utc",
     "session_end": "session_end_utc",
 }
@@ -278,6 +280,7 @@ _KEYWORD_HINTS: list[tuple[list[str], str]] = [
     (["network"], "network_id"),
     (["charge", "type"], "charge_type"),
     (["charger", "type"], "charge_type"),
+    (["charging", "type"], "charge_type"),
     (["is", "free"], "is_free"),
     (["is", "complete"], "is_complete"),
     (["recorded"], "recorded_at"),
