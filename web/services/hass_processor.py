@@ -435,6 +435,219 @@ async def handle_tire_pressure(slug, new_state, ha_config, device_id, db):
 # Helper: get device_id (VIN) from entity_id or ha_config
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# energytransferlogentry handler (charging session creation)
+# ---------------------------------------------------------------------------
+
+# Charger type normalization mapping
+_CHARGER_TYPE_MAP = {
+    "AC_BASIC": "AC Level 2",
+    "AC_LEVEL_2": "AC Level 2",
+    "DC_FAST": "DC Fast",
+    "DC_DCFAST": "DC Fast",
+    "DC_COMBO": "DC Fast",
+    "LEVEL_1": "AC Level 1",
+    "AC_LEVEL_1": "AC Level 1",
+}
+
+
+def _normalize_charge_type(raw: Optional[str]) -> Optional[str]:
+    """Normalize charger type string to standard display format."""
+    if not raw:
+        return None
+    return _CHARGER_TYPE_MAP.get(raw.upper(), raw)
+
+
+def _format_address(addr: Optional[dict]) -> Optional[str]:
+    """Format address dict from energytransferlogentry location into a string."""
+    if not addr or not isinstance(addr, dict):
+        return None
+    parts = []
+    if addr.get("address1"):
+        parts.append(addr["address1"])
+    if addr.get("city"):
+        parts.append(addr["city"])
+    if addr.get("state"):
+        parts.append(addr["state"])
+    return ", ".join(parts) if parts else None
+
+
+def _parse_iso_datetime(val: Optional[str]) -> Optional[datetime]:
+    """Parse ISO 8601 datetime string, returning None on failure."""
+    if not val:
+        return None
+    try:
+        # Handle Z suffix and various ISO formats
+        if val.endswith("Z"):
+            val = val[:-1] + "+00:00"
+        return datetime.fromisoformat(val)
+    except (ValueError, TypeError):
+        logger.warning("Failed to parse datetime: %s", val)
+        return None
+
+
+@handles("energytransferlogentry")
+async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
+    """Handle energytransferlogentry events to create EVChargingSession records.
+
+    Extracts all available fields from the rich payload including energy, SOC,
+    duration, power stats, location, and plug times. Performs duplicate detection
+    and network resolution.
+    """
+    from db.models.charging_session import EVChargingSession
+    from sqlalchemy import select
+
+    attrs = _get_attributes(new_state)
+    unit_system = _get_unit_system(ha_config)
+
+    if not attrs:
+        logger.warning("energytransferlogentry with empty attributes, skipping")
+        return
+
+    # Extract core fields
+    energy_kwh = _safe_float(attrs.get("energyConsumed"))
+    charge_type = _normalize_charge_type(attrs.get("chargerType"))
+
+    # Duration fields
+    duration_data = attrs.get("energyTransferDuration", {}) or {}
+    session_start_utc = _parse_iso_datetime(duration_data.get("begin"))
+    session_end_utc = _parse_iso_datetime(duration_data.get("end"))
+    charge_duration_seconds = _safe_float(duration_data.get("totalTime"))
+
+    # Plug details
+    plug_data = attrs.get("plugDetails", {}) or {}
+    plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
+    total_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
+    miles_added = normalize_value(total_distance_added, "mi", unit_system) if total_distance_added is not None else None
+
+    # State of charge
+    soc_data = attrs.get("stateOfCharge", {}) or {}
+    start_soc = _safe_float(soc_data.get("firstSOC"))
+    end_soc = _safe_float(soc_data.get("lastSOC"))
+
+    # Power stats (W -> kW)
+    power_data = attrs.get("power", {}) or {}
+    max_power = _safe_float(power_data.get("max"))
+    min_power = _safe_float(power_data.get("min"))
+    weighted_avg_power = _safe_float(power_data.get("weightedAverage"))
+    if max_power is not None:
+        max_power = max_power / 1000
+    if min_power is not None:
+        min_power = min_power / 1000
+    charging_kw = weighted_avg_power / 1000 if weighted_avg_power is not None else None
+
+    # Location
+    location_data = attrs.get("location", {}) or {}
+    address_dict = location_data.get("address", {}) or {}
+    address = _format_address(address_dict)
+    latitude = _safe_float(location_data.get("latitude"))
+    longitude = _safe_float(location_data.get("longitude"))
+    location_name = location_data.get("name") or (address_dict.get("city") if address_dict else None)
+    network_name = location_data.get("network")
+
+    # Timestamp
+    original_timestamp = _parse_iso_datetime(attrs.get("timeStamp"))
+
+    # -----------------------------------------------------------------------
+    # Duplicate detection: match on session_start_utc + energy_kwh
+    # -----------------------------------------------------------------------
+    if session_start_utc is not None and energy_kwh is not None:
+        existing = await db.execute(
+            select(EVChargingSession.id)
+            .where(EVChargingSession.session_start_utc == session_start_utc)
+            .where(EVChargingSession.energy_kwh == energy_kwh)
+            .where(EVChargingSession.source_system == "home_assistant")
+            .limit(1)
+        )
+        if existing.scalar_one_or_none() is not None:
+            logger.info(
+                "Duplicate session detected (start=%s, energy=%.3f kWh), skipping",
+                session_start_utc, energy_kwh,
+            )
+            return
+
+    # -----------------------------------------------------------------------
+    # Network resolution
+    # -----------------------------------------------------------------------
+    network_id = None
+    if network_name and network_name.upper() != "UNKNOWN":
+        from web.queries.settings import resolve_network
+        network_id = await resolve_network(db, network_name=network_name)
+
+    # -----------------------------------------------------------------------
+    # Create session record
+    # -----------------------------------------------------------------------
+    session = EVChargingSession(
+        device_id=device_id,
+        source_system="home_assistant",
+        charge_type=charge_type,
+        location_name=location_name,
+        network_id=network_id,
+        session_start_utc=session_start_utc,
+        session_end_utc=session_end_utc,
+        charge_duration_seconds=charge_duration_seconds,
+        plugged_in_duration_seconds=plugged_in_duration_seconds,
+        start_soc=start_soc,
+        end_soc=end_soc,
+        energy_kwh=energy_kwh,
+        max_power=max_power,
+        min_power=min_power,
+        charging_kw=charging_kw,
+        address=address,
+        latitude=latitude,
+        longitude=longitude,
+        miles_added=miles_added,
+        original_timestamp=original_timestamp,
+        is_complete=True,  # energytransferlogentry fires after session completes
+        recorded_at=datetime.now(timezone.utc),
+    )
+    db.add(session)
+
+    logger.info(
+        "Created charging session: %.3f kWh, %s -> %s%%, %s, %s",
+        energy_kwh or 0,
+        start_soc,
+        end_soc,
+        charge_type,
+        location_name or "unknown location",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Main event dispatcher
+# ---------------------------------------------------------------------------
+
+
+async def process_state_change(
+    entity_id: str, old_state: dict, new_state: dict, ha_config: dict
+) -> None:
+    """Main event handler -- dispatches to registered sensor handlers.
+
+    Called by HASSClient for each state_changed event. Resolves the sensor
+    slug, looks up the handler, opens a DB session, and delegates.
+    """
+    slug = extract_slug(entity_id)
+    if slug is None or slug not in SENSOR_HANDLERS:
+        return  # Unhandled entity, ignore silently
+
+    handler = SENSOR_HANDLERS[slug]
+    device_id = get_device_id(entity_id, ha_config)
+
+    from db.engine import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        try:
+            await handler(slug, new_state, ha_config, device_id, db)
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            logger.error("Error processing %s: %s", entity_id, e, exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# Helper: get device_id (VIN) from entity_id or ha_config
+# ---------------------------------------------------------------------------
+
 def get_device_id(entity_id: str, ha_config: dict) -> str:
     """Resolve device_id (VIN) from entity_id pattern or config override.
 

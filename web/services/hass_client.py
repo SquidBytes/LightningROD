@@ -336,9 +336,11 @@ async def start_hass_service() -> None:
         logger.warning("HASS auto-connect enabled but ha_url or ha_token not set, skipping")
         return
 
+    from web.services.hass_processor import process_state_change
+
     logger.info("Starting HASS service (auto-connect enabled)")
     task = asyncio.create_task(
-        hass_service.start(ha_url, ha_token, _noop_handler),
+        hass_service.start(ha_url, ha_token, process_state_change),
         name="hass-client",
     )
     hass_service._task = task
