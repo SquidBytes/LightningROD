@@ -73,6 +73,8 @@ async def settings_index(
         active_tab = "import"
     elif tab == "networks":
         active_tab = "networks"
+    elif tab == "hass":
+        active_tab = "hass"
     else:
         active_tab = "general"
 
@@ -672,6 +674,81 @@ async def prefill_stalls(
         "settings/partials/stall_rows.html",
         ctx,
     )
+
+
+HASS_SETTINGS_KEYS = [
+    "ha_url",
+    "ha_token",
+    "ha_vin_override",
+    "ha_unit_system",
+    "ha_auto_connect",
+]
+
+
+@router.get("/settings/hass", response_class=HTMLResponse)
+async def hass_settings_partial(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return HASS configuration partial with current values."""
+    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
+    # Mask token for display: show only last 8 chars
+    token = settings.get("ha_token", "")
+    masked_token = ""
+    if token:
+        if len(token) > 8:
+            masked_token = "*" * (len(token) - 8) + token[-8:]
+        else:
+            masked_token = token
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_settings.html",
+        {"hass": settings, "masked_token": masked_token},
+    )
+
+
+@router.post("/settings/hass", response_class=HTMLResponse)
+async def save_hass_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ha_url: str = Form(""),
+    ha_token: str = Form(""),
+    ha_vin_override: str = Form(""),
+    ha_unit_system: str = Form("auto"),
+    ha_auto_connect: Optional[str] = Form(None),
+):
+    """Save HASS configuration to app_settings."""
+    if ha_url:
+        # Strip trailing slash for consistency
+        ha_url = ha_url.rstrip("/")
+    await set_app_setting(db, "ha_url", ha_url)
+    # Only overwrite token if a new value was provided (not the masked placeholder)
+    if ha_token and not ha_token.startswith("*"):
+        await set_app_setting(db, "ha_token", ha_token)
+    await set_app_setting(db, "ha_vin_override", ha_vin_override)
+    if ha_unit_system not in ("auto", "metric", "imperial"):
+        ha_unit_system = "auto"
+    await set_app_setting(db, "ha_unit_system", ha_unit_system)
+    await set_app_setting(
+        db, "ha_auto_connect", "true" if ha_auto_connect is not None else "false"
+    )
+
+    # Re-read saved values for display
+    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
+    token = settings.get("ha_token", "")
+    masked_token = ""
+    if token:
+        if len(token) > 8:
+            masked_token = "*" * (len(token) - 8) + token[-8:]
+        else:
+            masked_token = token
+
+    response = templates.TemplateResponse(
+        request,
+        "settings/partials/hass_settings.html",
+        {"hass": settings, "masked_token": masked_token, "saved": True},
+    )
+    return response
 
 
 @router.post("/settings/gas", response_class=HTMLResponse)
