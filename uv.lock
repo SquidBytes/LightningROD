@@ -492,6 +492,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -516,6 +517,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.47" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.41.0" },
+    { name = "websockets", specifier = ">=15.0" },
 ]
 
 [package.metadata.requires-dev]
