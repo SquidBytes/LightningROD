@@ -193,7 +193,21 @@ class HASSClient:
             logger.info("Loaded %d entity states from HA", len(self._entity_states))
             self._detect_vin()
 
-        # Step 6: subscribe to state_changed
+        # Step 6: Process initial snapshot through event handler
+        # This captures current state (e.g. last energytransferlogentry) as DB records
+        if self._event_handler and self._entity_states:
+            snapshot_count = 0
+            for entity_id, state_obj in self._entity_states.items():
+                if not entity_id.startswith("sensor.fordpass_"):
+                    continue
+                try:
+                    await self._event_handler(entity_id, {}, state_obj, self._ha_config or {})
+                    snapshot_count += 1
+                except Exception as exc:
+                    logger.error("Snapshot processing error for %s: %s", entity_id, exc)
+            logger.info("Processed %d FordPass entities from initial snapshot", snapshot_count)
+
+        # Step 7: subscribe to state_changed
         sub_id = self._next_msg_id()
         await self._send_json({
             "type": "subscribe_events",
