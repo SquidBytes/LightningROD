@@ -555,6 +555,23 @@ def _parse_bool(v: str) -> bool:
     return v.strip().lower() in ("true", "1", "yes") if v else False
 
 
+def _parse_bool_or_none(v: str) -> Optional[bool]:
+    """Return True/False for explicit bool strings, None for empty/whitespace.
+
+    Used for nullable boolean fields like ``is_free`` where an empty CSV value
+    should trigger classifier fallback rather than defaulting to False.
+    """
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    low = v.lower()
+    if low in ("true", "1", "yes"):
+        return True
+    if low in ("false", "0", "no"):
+        return False
+    return None
+
+
 def _parse_timestamp(v: str) -> Optional[datetime]:
     """Parse ISO timestamp string to timezone-aware datetime.
 
@@ -664,7 +681,7 @@ _DB_FIELD_PARSERS: dict[str, object] = {
     "charging_voltage": _float_or_none,
     "charging_amperage": _float_or_none,
     "is_complete": _parse_bool,
-    "is_free": _parse_bool,
+    "is_free": _parse_bool_or_none,
     "location_name": _str_or_none,
     "network_id": _str_or_none,
     "charge_type": _str_or_none,
@@ -885,6 +902,13 @@ async def detect_duplicates(rows: list[dict], db_session: AsyncSession) -> list[
 
 _INTERNAL_FIELDS = {"_status", "_row_index", "_error", "_matched_id"}
 
+# Columns safe to pass to EVChargingSession(**kwargs).  Built from DB_FIELD_OPTIONS
+# (the importable subset) plus auto-set fields.  stall_id is excluded — stalls are
+# managed via the stall management UI and arbitrary CSV values cause FK violations.
+_VALID_SESSION_COLUMNS = (
+    {opt["field"] for opt in DB_FIELD_OPTIONS} | {"device_id", "source_system"}
+) - {"stall_id"}
+
 
 async def import_rows(
     rows: list[dict],
@@ -960,6 +984,9 @@ async def import_rows(
                     clean_row["network_id"] = resolved_id
                 else:
                     del clean_row["network_id"]
+
+        # Strip any keys not in the valid column set (e.g. connector_type, stall_id)
+        clean_row = {k: v for k, v in clean_row.items() if k in _VALID_SESSION_COLUMNS}
 
         if action == "insert":
             try:
