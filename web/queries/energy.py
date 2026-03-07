@@ -20,10 +20,17 @@ CHARGE_TYPE_LABELS = {"AC": "AC (L1/L2)", "DC": "DC Fast"}
 
 # Shared Plotly modebar config — show minimal controls, hide logo
 _PLOTLY_CONFIG = {
-    "displayModeBar": True,
+    "displayModeBar": "hover",
     "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
     "displaylogo": False,
 }
+
+_HOVER_LABEL = dict(bgcolor="#1f2937", font_color="#e5e7eb", bordercolor="#374151")
+
+
+def _wrap_chart(html: str) -> str:
+    """Wrap Plotly HTML in a container for modebar positioning."""
+    return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
 def build_time_filter_trip(range_str: str):
@@ -273,9 +280,10 @@ def build_monthly_energy_chart(monthly_data: list[dict]) -> str:
         yaxis_title="kWh",
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hoverlabel=_HOVER_LABEL,
     )
 
-    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))
 
 
 def build_efficiency_chart(
@@ -408,6 +416,7 @@ def build_efficiency_chart(
         margin=dict(l=20, r=20, t=20, b=20),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         yaxis_title=unit_label,
+        hoverlabel=_HOVER_LABEL,
     )
 
-    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))

@@ -17,10 +17,17 @@ from web.queries.costs import (
 
 # Shared Plotly modebar config — show minimal controls, hide logo
 _PLOTLY_CONFIG = {
-    "displayModeBar": True,
+    "displayModeBar": "hover",
     "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
     "displaylogo": False,
 }
+
+_HOVER_LABEL = dict(bgcolor="#1f2937", font_color="#e5e7eb", bordercolor="#374151")
+
+
+def _wrap_chart(html: str) -> str:
+    """Wrap Plotly HTML in a container for modebar positioning."""
+    return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
 async def query_dashboard_summary(db: AsyncSession) -> dict:
@@ -188,21 +195,22 @@ def build_energy_by_network_chart(
         legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
         margin=dict(l=20, r=20, t=20, b=40),
         hovermode="closest",
+        hoverlabel=_HOVER_LABEL,
     )
-    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))
 
 
-def build_cumulative_energy_chart(
+def build_monthly_energy_by_network_chart(
     sessions: list,
+    network_id_to_name: dict[int, str] | None = None,
     network_colors: dict[str, str] | None = None,
 ) -> str:
-    """Build a Plotly area chart showing cumulative kWh over time.
-
-    Shows running total of energy consumed, colored by network when possible.
+    """Build a stacked bar chart of monthly kWh broken down by network.
 
     Args:
         sessions: List of EVChargingSession ORM objects.
-        network_colors: Optional dict (unused for area, reserved for future use).
+        network_id_to_name: Dict mapping network_id -> network name.
+        network_colors: Dict mapping network name -> hex color string.
 
     Returns:
         HTML div string (include_plotlyjs=False). Empty string if no data.
@@ -210,46 +218,43 @@ def build_cumulative_energy_chart(
     if not sessions:
         return ""
 
+    import plotly.express as px
+
     pio.templates.default = "plotly_dark"
+
+    id_to_name = network_id_to_name or {}
 
     data_points = []
     for s in sessions:
         if s.session_start_utc is None or s.energy_kwh is None:
             continue
-        data_points.append({
-            "date": s.session_start_utc,
-            "kwh": float(s.energy_kwh),
-        })
+        network = id_to_name.get(s.network_id, "Unknown") if s.network_id else "Unknown"
+        month = s.session_start_utc.strftime("%Y-%m")
+        data_points.append({"month": month, "network": network, "kwh": float(s.energy_kwh)})
 
     if not data_points:
         return ""
 
-    df = pd.DataFrame(data_points).sort_values("date")
-    df["cumulative_kwh"] = df["kwh"].cumsum()
+    df = pd.DataFrame(data_points)
+    df = df.groupby(["month", "network"], as_index=False)["kwh"].sum()
+    df = df.sort_values("month")
 
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=df["date"],
-            y=df["cumulative_kwh"],
-            mode="lines",
-            fill="tozeroy",
-            name="Cumulative kWh",
-            line=dict(color="#60a5fa", width=2),
-            fillcolor="rgba(96, 165, 250, 0.15)",
-            hovertemplate="<b>%{x|%b %d, %Y}</b><br>Total: %{y:.1f} kWh<extra></extra>",
-        )
-    )
-
+    kwargs = dict(x="month", y="kwh", color="network", barmode="stack")
+    if network_colors:
+        kwargs["color_discrete_map"] = network_colors
+    fig = px.bar(df, **kwargs)
+    fig.update_traces(hovertemplate="<b>%{data.name}</b><br>%{x}: %{y:.1f} kWh<extra></extra>")
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font_color="#e5e7eb",
-        margin=dict(l=20, r=20, t=20, b=20),
-        yaxis_title="Total kWh",
+        margin=dict(l=20, r=20, t=10, b=20),
+        yaxis_title="kWh",
         xaxis_title="",
-        showlegend=False,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
         hovermode="x unified",
+        hoverlabel=_HOVER_LABEL,
     )
 
-    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))

@@ -12,10 +12,17 @@ from db.models.reference import EVChargingNetwork, EVLocationLookup
 
 # Shared Plotly modebar config — show minimal controls, hide logo
 _PLOTLY_CONFIG = {
-    "displayModeBar": True,
+    "displayModeBar": "hover",
     "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
     "displaylogo": False,
 }
+
+_HOVER_LABEL = dict(bgcolor="#1f2937", font_color="#e5e7eb", bordercolor="#374151")
+
+
+def _wrap_chart(html: str) -> str:
+    """Wrap Plotly HTML in a container for modebar positioning."""
+    return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
 def build_time_filter(range_str: str):
@@ -385,11 +392,12 @@ def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, s
         plot_bgcolor="rgba(0,0,0,0)",
         font_color="#e5e7eb",
         showlegend=False,
-        margin=dict(l=20, r=20, t=20, b=20),
+        margin=dict(l=20, r=20, t=10, b=20),
         xaxis_tickprefix="$",
         yaxis_title="",
+        hoverlabel=_HOVER_LABEL,
     )
-    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))
 
 
 def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str, str] = None) -> str:
@@ -415,10 +423,12 @@ def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str,
         plot_bgcolor="rgba(0,0,0,0)",
         font_color="#e5e7eb",
         showlegend=True,
-        margin=dict(l=20, r=20, t=20, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
+        margin=dict(l=20, r=20, t=10, b=20),
         yaxis_tickprefix="$",
         xaxis_title="",
         yaxis_title="Cost ($)",
         hovermode="x unified",
+        hoverlabel=_HOVER_LABEL,
     )
-    return fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))
