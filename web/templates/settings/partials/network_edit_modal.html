@@ -1,48 +1,48 @@
 {# Network edit modal -- tabbed modal for editing a network's details and managing its locations #}
 
 {# Header #}
-<p class="text-xs text-base-content/50 uppercase tracking-wide font-medium">Edit Network</p>
-<h3 class="text-lg font-semibold text-base-content">{{ network.network_name }}</h3>
+<p class="text-sm text-base-content/50 uppercase tracking-wide font-medium">Edit Network</p>
+<h3 class="text-xl font-semibold text-base-content">{{ network.network_name }}</h3>
 
 {# Tabbed content using DaisyUI radio tabs #}
-<form id="network-modal-form" class="mt-4">
-    <div role="tablist" class="tabs tabs-bordered">
+<form id="network-modal-form" class="mt-5">
+    <div role="tablist" class="tabs tabs-bordered tabs-lg">
 
         {# Details tab #}
         <input type="radio" name="network-modal-tabs" role="tab" class="tab" aria-label="Details" checked="checked" />
-        <div role="tabpanel" class="tab-content p-4">
-            <div class="space-y-4">
+        <div role="tabpanel" class="tab-content p-6 min-h-[320px]">
+            <div class="space-y-5">
                 <label class="form-control w-full">
-                    <div class="label"><span class="label-text">Network Name</span></div>
+                    <div class="label"><span class="label-text text-sm">Network Name</span></div>
                     <input type="text" name="network_name" required
                            value="{{ network.network_name }}"
                            class="input input-bordered w-full">
                 </label>
 
-                <div class="flex gap-4">
-                    <div class="flex flex-col gap-1">
-                        <label class="label"><span class="label-text">Color Badge</span></label>
+                <div class="grid grid-cols-3 gap-6">
+                    <label class="form-control">
+                        <div class="label"><span class="label-text text-sm">Color Badge</span></div>
                         <input type="color" name="color"
                                value="{{ network.color or '#6B7280' }}"
-                               class="h-8 w-14 rounded border border-base-300 bg-base-200 cursor-pointer p-0.5">
-                    </div>
+                               class="h-10 w-16 rounded border border-base-300 bg-base-200 cursor-pointer p-0.5">
+                    </label>
 
-                    <label class="form-control flex-1">
-                        <div class="label"><span class="label-text">Cost per kWh</span></div>
+                    <label class="form-control">
+                        <div class="label"><span class="label-text text-sm">Cost per kWh</span></div>
                         <input type="number" name="cost_per_kwh" step="0.001" min="0" placeholder="0.000"
                                value="{{ '%.3f'|format(network.cost_per_kwh) if network.cost_per_kwh is not none else '' }}"
                                class="input input-bordered w-full text-right">
                     </label>
 
-                    <div class="flex flex-col gap-1">
-                        <label class="label"><span class="label-text">Free</span></label>
-                        <label class="flex items-center gap-1.5 cursor-pointer h-8">
+                    <label class="form-control">
+                        <div class="label"><span class="label-text text-sm">Free</span></div>
+                        <label class="flex items-center gap-2 cursor-pointer h-12">
                             <input type="checkbox" name="is_free"
                                    {% if network.is_free %}checked{% endif %}
                                    class="checkbox checkbox-sm checkbox-success">
-                            <span class="text-base-content/60 text-xs">Is free</span>
+                            <span class="text-base-content/60 text-sm">Is free</span>
                         </label>
-                    </div>
+                    </label>
                 </div>
 
                 <div>
@@ -58,7 +58,7 @@
                 </div>
 
                 <label class="form-control w-full">
-                    <div class="label"><span class="label-text">Notes</span></div>
+                    <div class="label"><span class="label-text text-sm">Notes</span></div>
                     <textarea name="notes" rows="3" placeholder="Optional notes..."
                               class="textarea textarea-bordered w-full resize-none">{{ network.notes or '' }}</textarea>
                 </label>
@@ -67,7 +67,7 @@
 
         {# Locations tab #}
         <input type="radio" name="network-modal-tabs" role="tab" class="tab" aria-label="Locations" />
-        <div role="tabpanel" class="tab-content p-4">
+        <div role="tabpanel" class="tab-content p-6 min-h-[320px]">
             <div id="network-locations-list"
                  hx-get="/settings/networks/{{ network.id }}/locations"
                  hx-trigger="intersect once"
@@ -79,10 +79,10 @@
     </div>
 
     {# Footer: Cancel + Save #}
-    <div class="flex items-center justify-end pt-4 mt-4 border-t border-base-300">
+    <div class="flex items-center justify-end pt-5 mt-5 border-t border-base-300">
         <div class="flex items-center gap-3">
             <button type="button" onclick="closeNetworkModal()"
-                    class="btn btn-ghost btn-sm">
+                    class="btn btn-ghost">
                 Cancel
             </button>
             <button type="button"
@@ -90,7 +90,7 @@
                     hx-target="#network-management-card"
                     hx-swap="outerHTML"
                     hx-include="#network-modal-form"
-                    class="btn btn-primary btn-sm">
+                    class="btn btn-primary">
                 Save
             </button>
         </div>

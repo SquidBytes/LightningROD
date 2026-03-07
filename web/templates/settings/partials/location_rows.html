@@ -1,8 +1,8 @@
 <div class="space-y-2">
-    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Locations</p>
+    <p class="text-sm uppercase tracking-wide text-base-content/40 mb-3">Locations</p>
     {% for loc in locations %}
     {% set sc = stall_counts.get(loc.id, 0) if stall_counts is defined else 0 %}
-    <div class="bg-base-300/50 rounded px-3 py-2 text-sm" id="location-{{ loc.id }}">
+    <div class="bg-base-300/50 rounded-lg px-4 py-3" id="location-{{ loc.id }}">
         {# Read mode #}
         <div class="flex items-center justify-between location-read" data-loc="{{ loc.id }}">
             <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -72,10 +72,10 @@
 
         {# Charger Stalls expandable section #}
         <details class="mt-2">
-            <summary class="cursor-pointer text-xs text-base-content/50 hover:text-base-content/70 select-none">
+            <summary class="cursor-pointer text-sm text-base-content/50 hover:text-base-content/70 select-none">
                 Charger Stalls ({{ sc }})
             </summary>
-            <div class="bg-base-300 rounded-box p-2 mt-2"
+            <div class="bg-base-300 rounded-box p-3 mt-2"
                  hx-get="/settings/locations/{{ loc.id }}/stalls"
                  hx-trigger="intersect once"
                  hx-swap="innerHTML">
