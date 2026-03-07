@@ -1,0 +1,112 @@
+<!-- HASS connection status partial — swapped into #hass-connection-status via HTMX polling -->
+<div id="hass-status-inner"
+     hx-get="/settings/hass/status"
+     hx-trigger="every 10s"
+     hx-target="#hass-connection-status"
+     hx-swap="innerHTML">
+
+    <div class="card bg-base-200 max-w-2xl">
+        <div class="card-body">
+            <div class="flex items-center justify-between">
+                <h3 class="card-title text-base">Connection Status</h3>
+                {% if health.connection_state == 'connected' %}
+                    <span class="badge badge-success">Connected</span>
+                {% elif health.connection_state == 'connecting' %}
+                    <span class="badge badge-warning">Connecting...</span>
+                {% elif health.connection_state == 'reconnecting' %}
+                    <span class="badge badge-warning">Reconnecting...</span>
+                {% else %}
+                    <span class="badge badge-error">Disconnected</span>
+                {% endif %}
+            </div>
+
+            <!-- Stats grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                <div class="bg-base-300 rounded-lg p-3 text-center">
+                    <div class="text-xs text-base-content/50 uppercase">Events</div>
+                    <div class="text-lg font-mono font-semibold">{{ health.events_processed }}</div>
+                </div>
+                <div class="bg-base-300 rounded-lg p-3 text-center">
+                    <div class="text-xs text-base-content/50 uppercase">Last Event</div>
+                    <div class="text-sm font-mono">
+                        {% if health.last_event_at %}
+                            {{ health.last_event_at[:19] | replace('T', ' ') }}
+                        {% else %}
+                            <span class="text-base-content/40">Never</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="bg-base-300 rounded-lg p-3 text-center">
+                    <div class="text-xs text-base-content/50 uppercase">Errors</div>
+                    <div class="text-lg font-mono font-semibold">
+                        {% if health.errors > 0 %}
+                            <span class="text-error">{{ health.errors }}</span>
+                        {% else %}
+                            {{ health.errors }}
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="bg-base-300 rounded-lg p-3 text-center">
+                    <div class="text-xs text-base-content/50 uppercase">Last Write</div>
+                    <div class="text-sm font-mono">
+                        {% if health.last_successful_write %}
+                            {{ health.last_successful_write[:19] | replace('T', ' ') }}
+                        {% else %}
+                            <span class="text-base-content/40">Never</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detected VIN and Unit System -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-base-content/60">Detected VIN:</span>
+                    {% if detected_vin %}
+                        <span class="font-mono text-sm badge badge-ghost">{{ detected_vin }}</span>
+                    {% else %}
+                        <span class="text-sm text-warning">Not detected</span>
+                    {% endif %}
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-base-content/60">HA Unit System:</span>
+                    {% if unit_system %}
+                        <span class="text-sm">
+                            {{ unit_system.get('length', '?') }} / {{ unit_system.get('temperature', '?') }}
+                        </span>
+                    {% else %}
+                        <span class="text-sm text-warning">Not detected</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Last Error -->
+            {% if health.last_error %}
+            <div class="alert alert-error text-sm mt-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{{ health.last_error }}</span>
+            </div>
+            {% endif %}
+
+            <!-- Control buttons -->
+            <div class="flex gap-2 mt-3">
+                <button class="btn btn-warning btn-sm"
+                        hx-post="/settings/hass/reconnect"
+                        hx-target="#hass-connection-status"
+                        hx-swap="innerHTML">
+                    Reconnect
+                </button>
+                {% if health.connection_state == 'connected' or health.connection_state == 'connecting' or health.connection_state == 'reconnecting' %}
+                <button class="btn btn-error btn-sm btn-outline"
+                        hx-post="/settings/hass/disconnect"
+                        hx-target="#hass-connection-status"
+                        hx-swap="innerHTML">
+                    Disconnect
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

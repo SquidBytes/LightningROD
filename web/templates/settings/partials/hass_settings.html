@@ -94,8 +94,13 @@
     </div>
 </div>
 
-<!-- Connection status placeholder (populated by Plan 04) -->
-<div id="hass-connection-status" class="mt-4"></div>
+<!-- Connection status — loaded on tab view, auto-refreshes every 10s -->
+<div id="hass-connection-status" class="mt-4"
+     hx-get="/settings/hass/status"
+     hx-trigger="load"
+     hx-target="#hass-connection-status"
+     hx-swap="innerHTML">
+</div>
 
 <script>
 if (!window._hassTokenInit) {
