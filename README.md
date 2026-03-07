@@ -7,8 +7,7 @@ Built for the Ford F-150 Lightning, but should work with any Ford EV.
 > [!IMPORTANT]
 > This is a work in progress. Do not use this as the only data storage.
 
-Currently, the views and graphs are only using CSV session data seeded at build time.
-Additional data sources are planned, and in progress.
+Supports automatic data ingestion from Home Assistant via [ha-fordpass](https://github.com/marq24/ha_fordpass), CSV import, and manual entry.
 
 > [!NOTE]
 > **This is my own personal project**
@@ -26,7 +25,8 @@ Full documentation is available at the [documentation site](https://SquidBytes.g
 
 - [Installation](https://squidbytes.github.io/LightningROD/getting-started/installation/) -- Docker Compose setup and startup
 - [Configuration](https://squidbytes.github.io/LightningROD/getting-started/configuration/) -- Environment variables and in-app settings
-- [Data Import]([docs/getting-started/data-import.md](https://squidbytes.github.io/LightningROD/getting-started/data-import/)) -- CSV format, seed script, classification rules
+- [Data Import](https://squidbytes.github.io/LightningROD/getting-started/data-import/) -- CSV format, seed script, classification rules
+- [Home Assistant](https://squidbytes.github.io/LightningROD/guide/home-assistant/) -- Real-time FordPass data ingestion via WebSocket
 - [Development](https://squidbytes.github.io/LightningROD/development/setup/) -- Running outside of the Docker enviornment with reloading and database access
 - [Architecture](https://squidbytes.github.io/LightningROD/development/architecture/) -- Project structure and patterns
 - [Database](https://squidbytes.github.io/LightningROD/development/database/) -- Schema, models, migrations

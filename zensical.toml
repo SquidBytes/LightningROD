@@ -19,6 +19,7 @@ nav = [
     "guide/costs.md",
     "guide/energy.md",
     "guide/csv-import.md",
+    "guide/home-assistant.md",
     "guide/settings.md",
   ]},
   {"Development" = [

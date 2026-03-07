@@ -20,7 +20,9 @@ Track charging sessions, analyze costs, and monitor energy consumption with a we
 
 **CSV Import** -- Template-based import with auto-detection fallback, inline error/duplicate editing, timezone-aware parsing, and import summary.
 
-**Settings** -- Network management, gas comparison parameters, unit preferences (US/EU), timezone selection, and comparison section toggles.
+**Home Assistant Integration** -- Real-time connection to Home Assistant via WebSocket for automatic charging session detection from [ha-fordpass](https://github.com/marq24/ha_fordpass). Vehicle telemetry ingestion, VIN auto-detection, unit normalization, and 30-day history backfill.
+
+**Settings** -- Network management, gas comparison parameters, unit preferences (US/EU), timezone selection, Home Assistant connection, and comparison section toggles.
 
 ---
 

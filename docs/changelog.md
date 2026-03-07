@@ -8,6 +8,8 @@ Session management, CSV import, UI overhaul, and data model expansion.
 
 ### Added
 
+- **Home Assistant Integration** -- Real-time WebSocket connection to Home Assistant for automatic FordPass data ingestion. Authenticates with long-lived access token. Processes 29 FordPass sensors with unit normalization (imperial to metric). Creates charging sessions from `energytransferlogentry` events with full field extraction (energy, SOC, duration, power stats, location, charger type). Batched vehicle and battery telemetry writes. VIN auto-detection from entity IDs. Exponential backoff reconnection. 30-day history backfill via REST API. Live connection status with 10-second polling. Duplicate session detection.
+- **HASS Settings** -- Home Assistant configuration tab in Settings with URL, access token (masked display), VIN override, unit system selection, and auto-connect toggle. Connection status display with event counter, error tracking, detected VIN, and unit system. Reconnect, disconnect, and backfill controls.
 - **Session CRUD** -- Add, edit, and delete charging sessions from the web UI. Edit modal with three tabs (Basics/Details/Notes). Data source badges track origin (Manual Entry, Imported, HASS, Edited).
 - **CSV Import** -- Template-based CSV import with auto-detection fallback. Inline error/duplicate editing with blur-triggered re-verify. Timezone-aware parsing. Three-step flow: Upload, Preview, Import.
 - **Dashboard** -- Summary cards (total sessions, energy, cost, miles) plus three charts: monthly cost trend, energy by network, and efficiency trend. Charging efficiency card with aggregate loss and utilization metrics.

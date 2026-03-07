@@ -2,6 +2,32 @@
 
 All notable changes to LightningROD are documented here.
 
+## v0.2 -- In Progress
+
+Session management, CSV import, UI overhaul, Home Assistant integration, and data model expansion.
+
+### Added
+
+- **Home Assistant Integration** -- Real-time WebSocket connection to Home Assistant for automatic FordPass data ingestion via [ha-fordpass](https://github.com/marq24/ha_fordpass). Authenticates with long-lived access token. Processes 29 FordPass sensors with unit normalization. Creates charging sessions from energytransferlogentry events with full field extraction. Batched vehicle and battery telemetry writes. VIN auto-detection. Exponential backoff reconnection. 30-day history backfill. Live connection status with 10-second polling.
+- **HASS Settings** -- Home Assistant configuration tab in Settings with URL, access token, VIN override, unit system, and auto-connect toggle. Connection status display with health metrics and reconnect/disconnect/backfill controls.
+- **Session CRUD** -- Add, edit, and delete charging sessions from the web UI. Edit modal with three tabs (Basics/Details/Notes). Data source badges track origin (Manual Entry, Imported, HASS, Edited).
+- **CSV Import** -- Template-based CSV import with auto-detection fallback. Inline error/duplicate editing with blur-triggered re-verify. Timezone-aware parsing. Three-step flow: Upload, Preview, Import.
+- **Dashboard** -- Summary cards (total sessions, energy, cost, miles) plus three charts: monthly cost trend, energy by network, and efficiency trend. Charging efficiency card with aggregate loss and utilization metrics.
+- **Network Management** -- Networks as first-class entities with color badges. Expandable location management per network. Per-location cost override. Charger stall configuration with rated kW, connector type, and default stall auto-selection.
+- **Cost Hierarchy** -- Location cost_per_kwh overrides network cost_per_kwh. Estimated cost stored on sessions. Cost breakdown card in drawer showing actual vs estimated with difference.
+- **EVSE Data** -- Charger-side fields on sessions: voltage, amperage, kW, energy, max power, rated capacity, source provenance. Charging loss (kWh and %) and utilization (%) calculated when data available.
+- **Charger Stalls** -- Per-location stall definitions with charger type, rated kW, voltage, amperage, connector. Network-level charger templates for popular networks. Auto-fill EVSE fields on stall selection.
+- **Timezone Support** -- User timezone setting. All timestamps displayed in local timezone. Import-time timezone selection for naive CSV timestamps.
+- **Sort and Filter** -- Click-to-sort column headers with three-state cycle. Multi-select network filter with color badges. Filter chips showing active filters. Per-page size selector (25/50/100).
+
+### Changed
+
+- **UI Component Library** -- Migrated from hand-rolled Tailwind components to DaisyUI v5. All modals, drawers, tables, tabs, badges, cards, and form controls now use DaisyUI classes.
+- **CSS Build** -- Multi-stage Docker build with Node 22 for Tailwind v4 + DaisyUI compilation. HTMX and Plotly vendored as static assets (no CDN).
+- **Filter Bar** -- Shared compact date-range filter bar across sessions, costs, and energy pages. Pill-style preset buttons with active state.
+- **Session Drawer** -- Reorganized with cost breakdown card, EVSE/Charger section, and network color badges.
+- **Database Schema** -- Added `ev_charger_stalls` table. Added EVSE columns, `estimated_cost`, `stall_id` to sessions. Added `cost_per_kwh` to locations. Added `color` to networks.
+
 ## v0.1.5 -- 2026-02-28
 
 Initial release. Core charging analytics platform.
