@@ -14,11 +14,12 @@ nav = [
     "getting-started/data-import.md",
   ]},
   {"User Guide" = [
+    "guide/dashboard.md",
     "guide/sessions.md",
     "guide/costs.md",
     "guide/energy.md",
-    "guide/settings.md",
     "guide/csv-import.md",
+    "guide/settings.md",
   ]},
   {"Development" = [
     "development/setup.md",
