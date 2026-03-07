@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
 
 import websockets
@@ -307,6 +307,77 @@ class HASSClient:
         """Receive and parse a JSON message from the websocket."""
         raw = await self._ws.recv()
         return json.loads(raw)
+
+
+    async def backfill_history(self, days: int = 30) -> dict:
+        """Fetch historical energytransferlogentry states from HA REST API.
+
+        Uses GET /api/history/period to pull past state changes for the
+        energytransferlogentry entity, then processes each through the
+        event handler to create session records (with duplicate detection).
+
+        Returns dict with counts: {"processed": N, "errors": N}
+        """
+        import httpx
+
+        if not self._ha_config:
+            return {"processed": 0, "errors": 0, "error": "Not connected to HA"}
+
+        # Build the entity_id for energytransferlogentry
+        vin = self.detected_vin or "unknown"
+        entity_id = f"sensor.fordpass_{vin}_energytransferlogentry"
+
+        # Need ha_url and ha_token from settings
+        from db.engine import AsyncSessionLocal
+        from web.queries.settings import get_app_settings_dict
+
+        async with AsyncSessionLocal() as db:
+            cfg = await get_app_settings_dict(db, ["ha_url", "ha_token"])
+
+        ha_url = cfg.get("ha_url", "").rstrip("/")
+        ha_token = cfg.get("ha_token", "")
+        if not ha_url or not ha_token:
+            return {"processed": 0, "errors": 0, "error": "Missing ha_url or ha_token"}
+
+        # Fetch history from HA REST API
+        start_time = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        logger.info("Backfill: fetching history for %s (last %d days)", entity_id, days)
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(
+                    f"{ha_url}/api/history/period/{start_time}",
+                    params={"filter_entity_id": entity_id},
+                    headers={"Authorization": f"Bearer {ha_token}"},
+                )
+                resp.raise_for_status()
+                history_data = resp.json()
+        except Exception as exc:
+            logger.error("Backfill: failed to fetch history: %s", exc)
+            return {"processed": 0, "errors": 0, "error": str(exc)}
+
+        if not history_data or not history_data[0]:
+            logger.info("Backfill: no history found for %s", entity_id)
+            return {"processed": 0, "errors": 0}
+
+        # history_data is a list of lists; first element is the entity's state history
+        states = history_data[0]
+        processed = 0
+        errors = 0
+
+        for state_obj in states:
+            if not state_obj.get("attributes"):
+                continue
+            try:
+                await self._event_handler(entity_id, {}, state_obj, self._ha_config or {})
+                processed += 1
+            except Exception as exc:
+                logger.error("Backfill: error processing state: %s", exc)
+                errors += 1
+
+        logger.info("Backfill complete: %d processed, %d errors", processed, errors)
+        return {"processed": processed, "errors": errors}
 
 
 class _AuthInvalid(Exception):

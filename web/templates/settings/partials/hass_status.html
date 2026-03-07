@@ -91,13 +91,22 @@
             {% endif %}
 
             <!-- Control buttons -->
-            <div class="flex gap-2 mt-3">
+            <div class="flex flex-wrap gap-2 mt-3">
                 <button class="btn btn-warning btn-sm"
                         hx-post="/settings/hass/reconnect"
                         hx-target="#hass-connection-status"
                         hx-swap="innerHTML">
                     Reconnect
                 </button>
+                {% if health.connection_state == 'connected' %}
+                <button class="btn btn-info btn-sm"
+                        hx-post="/settings/hass/backfill"
+                        hx-target="#hass-backfill-result"
+                        hx-swap="innerHTML"
+                        hx-indicator="#backfill-spinner">
+                    Backfill History (30 days)
+                </button>
+                {% endif %}
                 {% if health.connection_state == 'connected' or health.connection_state == 'connecting' or health.connection_state == 'reconnecting' %}
                 <button class="btn btn-error btn-sm btn-outline"
                         hx-post="/settings/hass/disconnect"
@@ -106,6 +115,11 @@
                     Disconnect
                 </button>
                 {% endif %}
+            </div>
+
+            <!-- Backfill result area -->
+            <div id="hass-backfill-result" class="mt-2">
+                <span id="backfill-spinner" class="loading loading-spinner loading-sm htmx-indicator"></span>
             </div>
         </div>
     </div>

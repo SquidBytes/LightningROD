@@ -797,6 +797,32 @@ async def hass_reconnect(request: Request):
     )
 
 
+@router.post("/settings/hass/backfill", response_class=HTMLResponse)
+async def hass_backfill(request: Request):
+    """Trigger history backfill from HA REST API for past charging sessions."""
+    from web.services.hass_client import hass_service
+
+    if not hass_service.health.get("connected"):
+        return HTMLResponse(
+            '<div class="alert alert-error text-sm">Must be connected to HA to backfill.</div>'
+        )
+
+    result = await hass_service.backfill_history(days=30)
+
+    if result.get("error"):
+        return HTMLResponse(
+            f'<div class="alert alert-error text-sm">{result["error"]}</div>'
+        )
+
+    return HTMLResponse(
+        f'<div class="alert alert-success text-sm">'
+        f'Backfill complete: {result["processed"]} sessions processed'
+        f'{", " + str(result["errors"]) + " errors" if result["errors"] else ""}. '
+        f'Duplicates are automatically skipped.'
+        f'</div>'
+    )
+
+
 @router.post("/settings/hass/disconnect", response_class=HTMLResponse)
 async def hass_disconnect(request: Request):
     """Stop the HASS websocket service."""
