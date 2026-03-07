@@ -1,179 +1,341 @@
 <!-- Session detail drawer content -->
-<div class="flex items-center justify-between p-4 border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
+<form id="edit-form">
+<div class="flex items-center justify-between p-4 border-b border-base-300 sticky top-0 bg-base-200 z-10">
     <div class="flex items-center gap-3">
         {% if session.session_start_utc %}
-            <span class="text-white font-semibold">{{ session.session_start_utc.strftime("%b %-d, %Y") }}</span>
+            <span class="text-base-content font-semibold">{{ session.session_start_utc|localtime(user_tz, "%b %-d, %Y") }}</span>
         {% else %}
-            <span class="text-gray-400 font-semibold">Unknown Date</span>
+            <span class="text-base-content/60 font-semibold">Unknown Date</span>
         {% endif %}
         {% if session.charge_type == 'DC' %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">DC</span>
+            <span class="badge badge-info badge-sm">DC</span>
         {% elif session.charge_type == 'AC' %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400">AC</span>
+            <span class="badge badge-ghost badge-sm">AC</span>
+        {% endif %}
+        {% if session.source_system == 'manual_entry' %}
+            <span class="badge badge-info badge-sm">Manual</span>
+        {% elif session.source_system == 'csv_import' %}
+            <span class="badge badge-warning badge-sm">Import</span>
+        {% elif session.source_system == 'home_assistant' %}
+            <span class="badge badge-accent badge-sm">HASS</span>
+        {% elif session.cost_source == 'manual' %}
+            <span class="badge badge-secondary badge-sm">Edited</span>
         {% endif %}
     </div>
-    <button onclick="closeDrawer()" class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-    </button>
+    <div class="flex items-center gap-2">
+        <!-- Edit button (read mode) -->
+        <button
+            id="edit-btn"
+            type="button"
+            onclick="toggleEditMode()"
+            class="btn btn-ghost btn-sm btn-square"
+            title="Quick edit"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+        </button>
+        <!-- Advanced Edit button -->
+        <button
+            type="button"
+            onclick="openSessionModal({{ session.id }})"
+            class="btn btn-ghost btn-sm btn-square"
+            title="Advanced edit"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+        </button>
+        <!-- Save button (edit mode, hidden by default) -->
+        <button
+            id="save-btn"
+            type="button"
+            hx-put="/sessions/{{ session.id }}"
+            hx-target="#drawer-body"
+            hx-swap="innerHTML"
+            hx-include="#edit-form"
+            class="hidden btn btn-primary btn-sm"
+        >Save</button>
+        <!-- Cancel button (edit mode, hidden by default) -->
+        <button
+            id="cancel-btn"
+            type="button"
+            onclick="toggleEditMode()"
+            class="hidden btn btn-ghost btn-sm"
+        >Cancel</button>
+        <!-- Close button -->
+        <button type="button" onclick="closeDrawer()" class="btn btn-ghost btn-sm btn-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+    </div>
 </div>
 
 <div class="p-4 space-y-6">
 
-    <!-- Charging Info -->
+    <!-- Basics -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Charging Info</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Basics</h3>
         <dl class="space-y-2">
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Charge Type</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.charge_type == 'DC' %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">DC</span>
-                    {% elif session.charge_type == 'AC' %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400">AC</span>
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
+            <div class="flex justify-between items-center">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Network</dt>
+                <dd class="text-base-content text-base">
+                    <!-- Read mode -->
+                    <span data-read-field>
+                        {% if session.network_id and networks %}
+                            {% set current_net = namespace(obj=None) %}
+                            {% for net in networks %}
+                                {% if net.id == session.network_id %}
+                                    {% set current_net.obj = net %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if current_net.obj %}
+                                <span class="inline-flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ current_net.obj.color or '#6B7280' }}"></span>
+                                    {{ current_net.obj.network_name }}
+                                </span>
+                            {% else %}
+                                <span class="text-base-content/40">—</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-base-content/40">—</span>
+                        {% endif %}
+                    </span>
+                    <!-- Edit mode -->
+                    <span data-edit-field class="hidden w-full">
+                        {% set current_network_id = session.network_id %}
+                        {% set input_class = 'input input-sm input-bordered w-full' %}
+                        {% set datalist_id = 'drawer-network-list' %}
+                        {% include "partials/network_combobox.html" %}
+                    </span>
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Energy</dt>
-                <dd class="text-gray-200 text-sm">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Energy</dt>
+                <dd class="text-base-content text-base">
                     {% if session.energy_kwh is not none %}
                         {{ "%.1f"|format(session.energy_kwh) }} kWh
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Max Power</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.max_power is not none %}
-                        {{ "%.1f"|format(session.max_power) }} kW
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
+            <div class="flex justify-between items-center">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Charge Type</dt>
+                <dd class="text-base-content text-base">
+                    <!-- Read mode -->
+                    <span data-read-field>
+                        {% if session.charge_type == 'DC' %}
+                            <span class="badge badge-info badge-sm">DC</span>
+                        {% elif session.charge_type == 'AC' %}
+                            <span class="badge badge-ghost badge-sm">AC</span>
+                        {% else %}
+                            <span class="text-base-content/40">—</span>
+                        {% endif %}
+                    </span>
+                    <!-- Edit mode -->
+                    <select name="charge_type" data-edit-field class="hidden select select-sm select-bordered w-full">
+                        <option value="" {% if not session.charge_type %}selected{% endif %}>—</option>
+                        <option value="AC" {% if session.charge_type == 'AC' %}selected{% endif %}>AC</option>
+                        <option value="DC" {% if session.charge_type == 'DC' %}selected{% endif %}>DC</option>
+                    </select>
                 </dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Min Power</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.min_power is not none %}
-                        {{ "%.1f"|format(session.min_power) }} kW
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
+            <!-- Cost Breakdown Card (read mode) -->
+            <div data-read-field>
+                <div class="card bg-base-300 shadow-sm">
+                    <div class="card-body p-4 space-y-3">
+                        {% if cost_info.is_free %}
+                            <div class="text-center">
+                                <span class="text-2xl font-bold text-success">Free</span>
+                            </div>
+                        {% elif cost_info.display_cost is not none %}
+                            <div class="text-center">
+                                <span class="text-2xl font-bold text-base-content">${{ "%.2f"|format(cost_info.display_cost) }}</span>
+                                {% if cost_info.cost_source == 'manual' %}
+                                    <span class="badge badge-info badge-xs ml-2">User Set</span>
+                                {% endif %}
+                            </div>
+                        {% elif cost_info.estimated_cost is not none %}
+                            <div class="text-center">
+                                <span class="text-2xl font-bold text-base-content/60">~${{ "%.2f"|format(cost_info.estimated_cost) }}</span>
+                                <span class="badge badge-ghost badge-xs ml-2">Estimated</span>
+                            </div>
+                        {% else %}
+                            <div class="text-center">
+                                <span class="text-base-content/40 text-lg">No cost data</span>
+                            </div>
+                        {% endif %}
+
+                        {% if cost_info.estimated_cost is not none or cost_info.display_cost is not none %}
+                            <div class="divider my-1"></div>
+                            <dl class="space-y-1.5 text-sm">
+                                {% if cost_info.estimated_cost is not none %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Estimated Cost</dt>
+                                        <dd class="text-base-content">${{ "%.2f"|format(cost_info.estimated_cost) }}</dd>
+                                    </div>
+                                {% endif %}
+                                {% if cost_info.display_cost is not none and cost_info.cost_source == 'manual' %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Actual Cost</dt>
+                                        <dd class="text-base-content font-medium">${{ "%.2f"|format(cost_info.display_cost) }}</dd>
+                                    </div>
+                                {% endif %}
+                                {% if cost_info.actual_cost_per_kwh is not none %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Actual $/kWh</dt>
+                                        <dd class="text-base-content">${{ "%.4f"|format(cost_info.actual_cost_per_kwh) }}</dd>
+                                    </div>
+                                {% endif %}
+                                {% if cost_info.cost_per_kwh is not none %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Network $/kWh</dt>
+                                        <dd class="text-base-content">${{ "%.4f"|format(cost_info.cost_per_kwh) }}</dd>
+                                    </div>
+                                {% endif %}
+                                {% if cost_info.cost_difference is not none %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Difference</dt>
+                                        <dd class="{% if cost_info.cost_difference > 0 %}text-error{% elif cost_info.cost_difference < 0 %}text-success{% else %}text-base-content{% endif %}">
+                                            {% if cost_info.cost_difference > 0 %}+{% endif %}${{ "%.2f"|format(cost_info.cost_difference) }}
+                                        </dd>
+                                    </div>
+                                {% endif %}
+                                {% if cost_info.calculation %}
+                                    <div class="text-xs text-base-content/40 pt-1">{{ cost_info.calculation }}</div>
+                                {% endif %}
+                            </dl>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <!-- Cost edit input (edit mode) -->
+            <div data-edit-field class="hidden">
+                <label class="block text-xs uppercase tracking-wide text-base-content/50 mb-1">Cost ($)</label>
+                <input
+                    type="number"
+                    name="cost"
+                    step="0.01"
+                    min="0"
+                    value="{{ '%.2f'|format(session.cost) if session.cost is not none else '' }}"
+                    placeholder="0.00"
+                    class="input input-sm input-bordered w-full"
+                >
+            </div>
+            <div class="flex justify-between items-center">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Location Name</dt>
+                <dd class="text-base-content text-base">
+                    <!-- Read mode -->
+                    <span data-read-field>
+                        {% if session.location_name %}
+                            {% set loc_net = network_map.get(session.network_id) if network_map is defined and session.network_id else None %}
+                            {% set loc_net_color = loc_net.color if loc_net and loc_net.color else '#6B7280' %}
+                            <span class="inline-flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ loc_net_color }}"></span>
+                                {{ session.location_name }}
+                            </span>
+                        {% else %}
+                            <span class="text-base-content/40">—</span>
+                        {% endif %}
+                    </span>
+                    <!-- Edit mode -->
+                    <input
+                        type="text"
+                        name="location_name"
+                        data-edit-field
+                        value="{{ session.location_name or '' }}"
+                        placeholder="e.g., Home, EA Station"
+                        class="hidden input input-sm input-bordered w-full"
+                    >
                 </dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Charging kW (avg)</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.charging_kw is not none %}
-                        {{ "%.1f"|format(session.charging_kw) }} kW
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Charging Voltage</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.charging_voltage is not none %}
-                        {{ "%.0f"|format(session.charging_voltage) }} V
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Charging Amperage</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.charging_amperage is not none %}
-                        {{ "%.0f"|format(session.charging_amperage) }} A
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Start SOC</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.start_soc is not none %}
-                        {{ "%.0f"|format(session.start_soc) }}%
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">End SOC</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.end_soc is not none %}
-                        {{ "%.0f"|format(session.end_soc) }}%
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Miles Added</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.miles_added is not none %}
-                        {{ "%.1f"|format(session.miles_added) }} mi
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
+            <div class="flex justify-between items-center">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Location Type</dt>
+                <dd class="text-base-content text-base">
+                    <!-- Read mode -->
+                    <span data-read-field>
+                        {% if session.location_type == 'home' %}
+                            <span class="badge badge-success badge-sm">Home</span>
+                        {% elif session.location_type == 'work' %}
+                            <span class="badge badge-warning badge-sm">Work</span>
+                        {% elif session.location_type == 'public' %}
+                            <span class="badge badge-secondary badge-sm">Public</span>
+                        {% else %}
+                            <span class="text-base-content/40">—</span>
+                        {% endif %}
+                    </span>
+                    <!-- Edit mode -->
+                    <select name="location_type" data-edit-field class="hidden select select-sm select-bordered w-full">
+                        <option value="" {% if not session.location_type %}selected{% endif %}>—</option>
+                        <option value="home" {% if session.location_type == 'home' %}selected{% endif %}>Home</option>
+                        <option value="work" {% if session.location_type == 'work' %}selected{% endif %}>Work</option>
+                        <option value="public" {% if session.location_type == 'public' %}selected{% endif %}>Public</option>
+                    </select>
                 </dd>
             </div>
         </dl>
     </div>
 
-    <!-- Timing -->
+    <!-- Details -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Timing</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Details</h3>
         <dl class="space-y-2">
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Start Time</dt>
-                <dd class="text-gray-200 text-sm">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Start Time</dt>
+                <dd class="text-base-content text-base">
                     {% if session.session_start_utc %}
-                        {{ session.session_start_utc.strftime("%b %-d, %Y %H:%M") }}
+                        {{ session.session_start_utc|localtime(user_tz, "%b %-d, %Y %H:%M") }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">End Time</dt>
-                <dd class="text-gray-200 text-sm">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">End Time</dt>
+                <dd class="text-base-content text-base">
                     {% if session.session_end_utc %}
-                        {{ session.session_end_utc.strftime("%b %-d, %Y %H:%M") }}
+                        {{ session.session_end_utc|localtime(user_tz, "%b %-d, %Y %H:%M") }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Charge Duration</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.charge_duration_seconds is not none %}
-                        {% set total_seconds = session.charge_duration_seconds|int %}
-                        {% set hours = total_seconds // 3600 %}
-                        {% set minutes = (total_seconds % 3600) // 60 %}
-                        {% if hours > 0 %}
-                            {{ hours }}h {{ "%02d"|format(minutes) }}m
+            <div class="flex justify-between items-center">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Charge Duration</dt>
+                <dd class="text-base-content text-base">
+                    <!-- Read mode -->
+                    <span data-read-field>
+                        {% if session.charge_duration_seconds is not none %}
+                            {% set total_seconds = session.charge_duration_seconds|int %}
+                            {% set hours = total_seconds // 3600 %}
+                            {% set minutes = (total_seconds % 3600) // 60 %}
+                            {% if hours > 0 %}
+                                {{ hours }}h {{ "%02d"|format(minutes) }}m
+                            {% else %}
+                                {{ minutes }} min
+                            {% endif %}
                         {% else %}
-                            {{ minutes }} min
+                            <span class="text-base-content/40">—</span>
                         {% endif %}
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
+                    </span>
+                    <!-- Edit mode: input accepts minutes, endpoint stores seconds -->
+                    <input
+                        type="number"
+                        name="charge_duration_minutes"
+                        data-edit-field
+                        step="1"
+                        min="0"
+                        value="{{ (session.charge_duration_seconds / 60)|int if session.charge_duration_seconds is not none else '' }}"
+                        placeholder="minutes"
+                        class="hidden input input-sm input-bordered w-full"
+                    >
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Plugged-in Duration</dt>
-                <dd class="text-gray-200 text-sm">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Plugged-in Duration</dt>
+                <dd class="text-base-content text-base">
                     {% if session.plugged_in_duration_seconds is not none %}
                         {% set total_seconds = session.plugged_in_duration_seconds|int %}
                         {% set hours = total_seconds // 3600 %}
@@ -184,218 +346,290 @@
                             {{ minutes }} min
                         {% endif %}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Max Power</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.max_power is not none %}
+                        {{ "%.1f"|format(session.max_power) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Min Power</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.min_power is not none %}
+                        {{ "%.1f"|format(session.min_power) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Avg kW</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.charging_kw is not none %}
+                        {{ "%.1f"|format(session.charging_kw) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Voltage</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.charging_voltage is not none %}
+                        {{ "%.0f"|format(session.charging_voltage) }} V
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Amperage</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.charging_amperage is not none %}
+                        {{ "%.0f"|format(session.charging_amperage) }} A
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Start SOC</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.start_soc is not none %}
+                        {{ "%.0f"|format(session.start_soc) }}%
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">End SOC</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.end_soc is not none %}
+                        {{ "%.0f"|format(session.end_soc) }}%
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Miles Added</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.miles_added is not none %}
+                        {{ "%.1f"|format(session.miles_added) }} mi
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
         </dl>
     </div>
 
-    <!-- Location -->
+    <!-- EVSE / Charger -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Location</h3>
-        <dl class="space-y-2">
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Location Name</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.location_name %}
-                        {{ session.location_name }}
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Location Type</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.location_type == 'home' %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-300">Home</span>
-                    {% elif session.location_type == 'work' %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-900/50 text-yellow-300">Work</span>
-                    {% elif session.location_type == 'public' %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-900/50 text-purple-300">Public</span>
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Location ID</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.location_id is not none %}
-                        {{ session.location_id }}
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-        </dl>
-    </div>
-
-    <!-- Cost -->
-    <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Cost</h3>
-        {% if cost_info.is_free %}
-            <div class="text-center py-3">
-                <span class="text-2xl font-bold text-green-400">Free</span>
-                <p class="text-gray-500 text-xs mt-1">Free charging session</p>
-            </div>
-        {% elif cost_info.display_cost is not none %}
-            <div class="text-center py-3">
-                <span class="text-2xl font-bold text-white">${{ "%.2f"|format(cost_info.display_cost) }}</span>
-                {% if cost_info.cost_source == 'manual' %}
-                    <span class="text-xs text-blue-400 ml-1" title="Manual entry">&#9998;</span>
-                {% elif cost_info.cost_source == 'calculated' %}
-                    <span class="text-xs text-gray-500 ml-1" title="Estimated">~</span>
-                {% endif %}
-            </div>
-            {% if cost_info.calculation %}
-                <p class="text-gray-500 text-xs text-center">{{ cost_info.calculation }}</p>
+        <div class="flex items-center gap-2 pb-2 mb-3 border-b border-base-300">
+            <h3 class="text-xs uppercase tracking-wide text-base-content/50">EVSE / Charger</h3>
+            {% if session.evse_source == 'manual' %}
+                <span class="badge badge-ghost badge-xs">Manual</span>
+            {% elif session.evse_source == 'estimated' %}
+                <span class="badge badge-ghost badge-xs">Est.</span>
+            {% elif session.evse_source == 'stall_default' %}
+                <span class="badge badge-ghost badge-xs">Stall</span>
+            {% elif session.evse_source == 'smart_evse' %}
+                <span class="badge badge-ghost badge-xs">Smart</span>
+            {% elif session.evse_source == 'energy_monitor' %}
+                <span class="badge badge-ghost badge-xs">Monitor</span>
             {% endif %}
-        {% else %}
-            <div class="text-center py-3">
-                <span class="text-gray-500">---</span>
-                <p class="text-gray-500 text-xs mt-1">No network cost configured</p>
+        </div>
+
+        {% if stall_label %}
+            <div class="flex justify-between mb-3">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Stall</dt>
+                <dd class="text-base-content text-base">{{ stall_label }}</dd>
             </div>
         {% endif %}
-        <dl class="space-y-2 mt-4">
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Estimated Cost (Calculated)</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.cost_without_overrides is not none %}
-                        ${{ "%.2f"|format(session.cost_without_overrides) }}
+
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-2 mb-4">
+            <div>
+                <dt class="text-base-content/60 text-xs">Voltage</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.evse_voltage is not none %}
+                        {{ "%.0f"|format(session.evse_voltage) }} V
                     {% else %}
-                        <span class="text-gray-500">---</span>
+                        <span class="text-base-content/40">N/A</span>
                     {% endif %}
                 </dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Is Free</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.is_free is not none %}
-                        {% if session.is_free %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-300">Yes</span>
-                        {% else %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400">No</span>
-                        {% endif %}
+            <div>
+                <dt class="text-base-content/60 text-xs">Amperage</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.evse_amperage is not none %}
+                        {{ "%.0f"|format(session.evse_amperage) }} A
                     {% else %}
-                        <span class="text-gray-500">---</span>
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-base-content/60 text-xs">Power</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.evse_kw is not none %}
+                        {{ "%.1f"|format(session.evse_kw) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-base-content/60 text-xs">EVSE Energy</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.evse_energy_kwh is not none %}
+                        {{ "%.1f"|format(session.evse_energy_kwh) }} kWh
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-base-content/60 text-xs">Max Power</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.evse_max_power_kw is not none %}
+                        {{ "%.1f"|format(session.evse_max_power_kw) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-base-content/60 text-xs">Rated Capacity</dt>
+                <dd class="text-base-content text-base">
+                    {% if session.charger_rated_kw is not none %}
+                        {{ "%.1f"|format(session.charger_rated_kw) }} kW
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
                     {% endif %}
                 </dd>
             </div>
         </dl>
+
+        {# Computed metrics: charging loss and utilization #}
+        <div class="stats stats-horizontal shadow bg-base-300 w-full">
+            <div class="stat px-4 py-3">
+                <div class="stat-title text-xs">Charging Loss</div>
+                <div class="stat-value text-base">
+                    {% if session.evse_energy_kwh is not none and session.energy_kwh is not none and session.evse_energy_kwh > 0 %}
+                        {% set loss_kwh = session.evse_energy_kwh - session.energy_kwh %}
+                        {% set loss_pct = (loss_kwh / session.evse_energy_kwh) * 100 %}
+                        {{ "%.1f"|format(loss_kwh) }} kWh ({{ "%.1f"|format(loss_pct) }}%)
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="stat px-4 py-3">
+                <div class="stat-title text-xs">Utilization</div>
+                <div class="stat-value text-base">
+                    {% set max_pwr = session.evse_max_power_kw if session.evse_max_power_kw is not none else session.max_power %}
+                    {% if max_pwr is not none and session.charger_rated_kw is not none and session.charger_rated_kw > 0 %}
+                        {% set util_pct = (max_pwr / session.charger_rated_kw) * 100 %}
+                        {{ "%.0f"|format(util_pct) }}%
+                    {% else %}
+                        <span class="text-base-content/40">N/A</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Status -->
+    <!-- Notes -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Status</h3>
-        <dl class="space-y-2">
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Plug Status</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.plug_status %}
-                        {{ session.plug_status }}
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Charging Status</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.charging_status %}
-                        {{ session.charging_status }}
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Station Status</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.station_status %}
-                        {{ session.station_status }}
-                    {% else %}
-                        <span class="text-gray-500">—</span>
-                    {% endif %}
-                </dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Is Complete</dt>
-                <dd class="text-gray-200 text-sm">
-                    {% if session.is_complete %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-300">Yes</span>
-                    {% else %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400">No</span>
-                    {% endif %}
-                </dd>
-            </div>
-        </dl>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Notes</h3>
+        <p class="text-base-content/40 text-sm">No notes field in data model yet.</p>
     </div>
 
     <!-- Metadata -->
     <div>
-        <h3 class="text-xs uppercase tracking-wide text-gray-500 pb-2 mb-3 border-b border-gray-800">Metadata</h3>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Metadata</h3>
         <dl class="space-y-2">
             <div class="flex justify-between gap-4">
-                <dt class="text-gray-400 text-sm shrink-0">Session ID</dt>
-                <dd class="text-gray-200 text-sm font-mono text-right truncate">
+                <dt class="text-base-content/60 text-base shrink-0">Session ID</dt>
+                <dd class="text-base-content text-base font-mono text-right truncate">
                     {% if session.session_id %}
-                        {{ session.session_id|string|truncate(18, killwords=True, end='…') }}
+                        {{ session.session_id|string|truncate(18, killwords=True, end='...') }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between gap-4">
-                <dt class="text-gray-400 text-sm shrink-0">Device ID</dt>
-                <dd class="text-gray-200 text-sm font-mono text-right truncate">
+                <dt class="text-base-content/60 text-base shrink-0">Device ID</dt>
+                <dd class="text-base-content text-base font-mono text-right truncate">
                     {{ session.device_id or '—' }}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Source System</dt>
-                <dd class="text-gray-200 text-sm">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Source System</dt>
+                <dd class="text-base-content text-base">
                     {% if session.source_system %}
                         {{ session.source_system }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Ingested At</dt>
-                <dd class="text-gray-200 text-sm">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Ingested At</dt>
+                <dd class="text-base-content text-base">
                     {% if session.ingested_at %}
-                        {{ session.ingested_at.strftime("%b %-d, %Y %H:%M") }}
+                        {{ session.ingested_at|localtime(user_tz, "%b %-d, %Y %H:%M") }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-gray-400 text-sm">Original Timestamp</dt>
-                <dd class="text-gray-200 text-sm">
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Original Timestamp</dt>
+                <dd class="text-base-content text-base">
                     {% if session.original_timestamp %}
-                        {{ session.original_timestamp.strftime("%b %-d, %Y %H:%M") }}
+                        {{ session.original_timestamp|localtime(user_tz, "%b %-d, %Y %H:%M") }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </dd>
             </div>
         </dl>
     </div>
 
+    <!-- Delete button -->
+    <div class="pt-2">
+        <button
+            type="button"
+            onclick="if(confirm('Delete this session?')) { htmx.ajax('DELETE', '/sessions/{{ session.id }}', {swap:'none'}); closeDrawer(); }"
+            class="btn btn-error btn-outline btn-sm w-full"
+        >
+            Delete Session
+        </button>
+    </div>
+
 </div>
+</form>
 
 <!-- Prev/Next navigation -->
-<div class="sticky bottom-0 bg-gray-900 border-t border-gray-800 p-4 flex items-center justify-between">
+<div class="sticky bottom-0 bg-base-200 border-t border-base-300 p-4 flex items-center justify-between">
     {% if prev_id %}
         <button
             hx-get="/sessions/{{ prev_id }}/detail?next_id={{ session.id }}"
-            hx-target="#drawer-content"
+            hx-target="#drawer-body"
             hx-swap="innerHTML"
-            class="flex items-center gap-2 px-3 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
+            class="btn btn-ghost btn-sm gap-1"
         >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -403,7 +637,7 @@
             Prev
         </button>
     {% else %}
-        <span class="flex items-center gap-2 px-3 py-2 text-sm bg-gray-800/40 text-gray-600 rounded-lg cursor-not-allowed">
+        <span class="btn btn-ghost btn-sm gap-1 btn-disabled">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
@@ -411,14 +645,14 @@
         </span>
     {% endif %}
 
-    <span class="text-xs text-gray-600">ID {{ session.id }}</span>
+    <span class="text-xs text-base-content/40">ID {{ session.id }}</span>
 
     {% if next_id %}
         <button
             hx-get="/sessions/{{ next_id }}/detail?prev_id={{ session.id }}"
-            hx-target="#drawer-content"
+            hx-target="#drawer-body"
             hx-swap="innerHTML"
-            class="flex items-center gap-2 px-3 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
+            class="btn btn-ghost btn-sm gap-1"
         >
             Next
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -426,7 +660,7 @@
             </svg>
         </button>
     {% else %}
-        <span class="flex items-center gap-2 px-3 py-2 text-sm bg-gray-800/40 text-gray-600 rounded-lg cursor-not-allowed">
+        <span class="btn btn-ghost btn-sm gap-1 btn-disabled">
             Next
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />

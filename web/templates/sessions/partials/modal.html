@@ -1,0 +1,599 @@
+<!-- Advanced edit modal for session CRUD -->
+<script>
+// Auto-collapse drawer when modal opens
+(function() {
+    var drawerCheckbox = document.getElementById('session-drawer');
+    if (drawerCheckbox && drawerCheckbox.checked) {
+        drawerCheckbox.dataset.wasOpen = 'true';
+        drawerCheckbox.checked = false;
+    } else if (drawerCheckbox) {
+        drawerCheckbox.dataset.wasOpen = 'false';
+    }
+})();
+</script>
+
+<!-- Modal header -->
+<div class="flex items-center justify-between">
+    <div>
+        <h3 class="text-lg font-semibold text-base-content">
+            {% if modal_mode == 'add' %}New Session{% else %}Edit Session{% endif %}
+        </h3>
+        {% if modal_mode == 'edit' and session and session.session_start_utc %}
+            <p class="text-base-content/60 text-sm mt-0.5 flex items-center gap-1.5">
+                {{ session.session_start_utc|localtime(user_tz|default('UTC'), "%B %-d, %Y") }}
+                {% if session.location_name %}
+                    &mdash;
+                    {% set modal_net = network_map.get(session.network_id) if network_map is defined and session.network_id else None %}
+                    <span class="w-2 h-2 rounded-full inline-block flex-shrink-0" style="background-color: {{ modal_net.color if modal_net and modal_net.color else '#6B7280' }}"></span>
+                    {{ session.location_name }}
+                {% endif %}
+            </p>
+        {% endif %}
+    </div>
+    {% if modal_mode == 'edit' and session %}
+        <div class="mr-8">
+            {% if session.source_system == 'manual_entry' %}
+                <span class="badge badge-info">Manual Entry</span>
+            {% elif session.source_system == 'csv_import' %}
+                <span class="badge badge-warning">Imported</span>
+            {% elif session.source_system == 'home_assistant' %}
+                <span class="badge badge-accent">HASS</span>
+            {% elif session.cost_source == 'manual' %}
+                <span class="badge badge-secondary">Edited</span>
+            {% else %}
+                <span class="badge badge-ghost">Original</span>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<!-- Modal body: tabbed content -->
+<form id="modal-form" class="mt-4">
+    <div role="tablist" class="tabs tabs-bordered">
+
+        <!-- Basics tab -->
+        <input type="radio" name="modal-tabs" role="tab" class="tab" aria-label="Basics" checked="checked" />
+        <div role="tabpanel" class="tab-content p-4 min-h-[320px]">
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Start Date</span></div>
+                        <input
+                            type="date"
+                            name="session_date"
+                            value="{% if modal_mode == 'edit' and session and session.session_start_utc %}{{ session.session_start_utc|localtime(user_tz|default('UTC'), '%Y-%m-%d') }}{% elif default_date %}{{ default_date }}{% endif %}"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Start Time</span></div>
+                        <input
+                            type="time"
+                            name="session_time"
+                            value="{% if modal_mode == 'edit' and session and session.session_start_utc %}{{ session.session_start_utc|localtime(user_tz|default('UTC'), '%H:%M') }}{% endif %}"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                </div>
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Network</span></div>
+                    {% set current_network_id = session.network_id if modal_mode == 'edit' and session else None %}
+                    {% set input_class = 'input input-bordered w-full' %}
+                    {% set datalist_id = 'modal-network-list' %}
+                    {% include "partials/network_combobox.html" %}
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Energy (kWh)</span></div>
+                        <input
+                            type="number"
+                            name="energy_kwh"
+                            step="0.01"
+                            min="0"
+                            value="{% if modal_mode == 'edit' and session and session.energy_kwh is not none %}{{ '%.2f'|format(session.energy_kwh) }}{% endif %}"
+                            placeholder="e.g., 25.5"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Charge Type</span></div>
+                        <select name="charge_type" class="select select-bordered w-full">
+                            <option value="">—</option>
+                            <option value="AC" {% if modal_mode == 'edit' and session and session.charge_type == 'AC' %}selected{% endif %}>AC</option>
+                            <option value="DC" {% if modal_mode == 'edit' and session and session.charge_type == 'DC' %}selected{% endif %}>DC</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="flex items-end gap-3">
+                    <label class="form-control flex-1">
+                        <div class="label"><span class="label-text">Cost ($)</span></div>
+                        <input
+                            type="number"
+                            name="cost"
+                            step="0.01"
+                            min="0"
+                            value="{% if modal_mode == 'edit' and session and session.cost is not none %}{{ '%.2f'|format(session.cost) }}{% endif %}"
+                            placeholder="0.00"
+                            class="input input-bordered w-full"
+                            id="modal-cost-input"
+                        >
+                    </label>
+                    <div class="flex items-center gap-2 pb-3">
+                        <input
+                            type="checkbox"
+                            name="is_free"
+                            id="modal-is-free"
+                            value="1"
+                            {% if modal_mode == 'edit' and session and session.is_free %}checked{% endif %}
+                            class="checkbox checkbox-sm"
+                            onchange="if(this.checked) { document.getElementById('modal-cost-input').value = '0.00'; }"
+                        >
+                        <label for="modal-is-free" class="label-text">Free</label>
+                    </div>
+                </div>
+                {% if modal_mode == 'edit' and cost_info %}
+                    <div class="bg-base-300 rounded-lg p-3 text-sm">
+                        <p class="text-base-content/50 text-sm uppercase tracking-wide mb-2">Current Cost Info</p>
+                        {% if cost_info.is_free %}
+                            <p class="text-success font-medium">Free</p>
+                        {% elif cost_info.display_cost is not none %}
+                            <p class="text-base-content font-medium">${{ "%.2f"|format(cost_info.display_cost) }}</p>
+                            {% if cost_info.calculation %}
+                                <p class="text-base-content/40 text-xs mt-1">{{ cost_info.calculation }}</p>
+                            {% endif %}
+                        {% else %}
+                            <p class="text-base-content/40">No cost data</p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Location Name</span></div>
+                    <input
+                        type="text"
+                        name="location_name"
+                        value="{% if modal_mode == 'edit' and session %}{{ session.location_name or '' }}{% elif default_location %}{{ default_location.location_name or '' }}{% endif %}"
+                        placeholder="e.g., Home, EA Station"
+                        class="input input-bordered w-full"
+                    >
+                </label>
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Location Type</span></div>
+                    <select name="location_type" class="select select-bordered w-full">
+                        <option value="">—</option>
+                        <option value="home" {% if modal_mode == 'edit' and session and session.location_type == 'home' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'home' %}selected{% endif %}>Home</option>
+                        <option value="work" {% if modal_mode == 'edit' and session and session.location_type == 'work' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'work' %}selected{% endif %}>Work</option>
+                        <option value="public" {% if modal_mode == 'edit' and session and session.location_type == 'public' %}selected{% elif modal_mode == 'add' and default_location and default_location.location_type == 'public' %}selected{% endif %}>Public</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+
+        <!-- Details tab -->
+        <input type="radio" name="modal-tabs" role="tab" class="tab" aria-label="Details" />
+        <div role="tabpanel" class="tab-content p-4 min-h-[320px]">
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">End Date</span></div>
+                        <input
+                            type="date"
+                            name="end_date"
+                            value="{% if modal_mode == 'edit' and session and session.session_end_utc %}{{ session.session_end_utc|localtime(user_tz|default('UTC'), '%Y-%m-%d') }}{% endif %}"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">End Time</span></div>
+                        <input
+                            type="time"
+                            name="end_time"
+                            value="{% if modal_mode == 'edit' and session and session.session_end_utc %}{{ session.session_end_utc|localtime(user_tz|default('UTC'), '%H:%M') }}{% endif %}"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Charge Duration (min)</span></div>
+                        <input
+                            type="number"
+                            name="charge_duration_minutes"
+                            step="1"
+                            min="0"
+                            value="{% if modal_mode == 'edit' and session and session.charge_duration_seconds is not none %}{{ (session.charge_duration_seconds / 60)|int }}{% endif %}"
+                            placeholder="e.g., 45"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Plugged-in Duration (min)</span></div>
+                        <input
+                            type="number"
+                            name="plugged_in_duration_minutes"
+                            step="1"
+                            min="0"
+                            value="{% if modal_mode == 'edit' and session and session.plugged_in_duration_seconds is not none %}{{ (session.plugged_in_duration_seconds / 60)|int }}{% endif %}"
+                            placeholder="e.g., 50"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Max Power (kW)</span></div>
+                        <input
+                            type="number"
+                            name="max_power"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.max_power is not none %}{{ session.max_power }}{% endif %}"
+                            placeholder="e.g., 150.0"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Min Power (kW)</span></div>
+                        <input
+                            type="number"
+                            name="min_power"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.min_power is not none %}{{ session.min_power }}{% endif %}"
+                            placeholder="e.g., 10.0"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Avg kW</span></div>
+                        <input
+                            type="number"
+                            name="charging_kw"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.charging_kw is not none %}{{ session.charging_kw }}{% endif %}"
+                            placeholder="e.g., 75.0"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Voltage (V)</span></div>
+                        <input
+                            type="number"
+                            name="charging_voltage"
+                            step="1"
+                            value="{% if modal_mode == 'edit' and session and session.charging_voltage is not none %}{{ session.charging_voltage }}{% endif %}"
+                            placeholder="e.g., 400"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Amperage (A)</span></div>
+                        <input
+                            type="number"
+                            name="charging_amperage"
+                            step="1"
+                            value="{% if modal_mode == 'edit' and session and session.charging_amperage is not none %}{{ session.charging_amperage }}{% endif %}"
+                            placeholder="e.g., 375"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Start SOC (%)</span></div>
+                        <input
+                            type="number"
+                            name="start_soc"
+                            step="1"
+                            min="0"
+                            max="100"
+                            value="{% if modal_mode == 'edit' and session and session.start_soc is not none %}{{ session.start_soc }}{% endif %}"
+                            placeholder="e.g., 20"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">End SOC (%)</span></div>
+                        <input
+                            type="number"
+                            name="end_soc"
+                            step="1"
+                            min="0"
+                            max="100"
+                            value="{% if modal_mode == 'edit' and session and session.end_soc is not none %}{{ session.end_soc }}{% endif %}"
+                            placeholder="e.g., 80"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text">Miles Added</span></div>
+                        <input
+                            type="number"
+                            name="miles_added"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.miles_added is not none %}{{ session.miles_added }}{% endif %}"
+                            placeholder="e.g., 120.5"
+                            class="input input-bordered w-full"
+                        >
+                    </label>
+                </div>
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Connector Type</span></div>
+                    <input
+                        type="text"
+                        name="connector_type"
+                        value="{% if modal_mode == 'edit' and session %}{{ session.charge_type or '' }}{% endif %}"
+                        placeholder="e.g., CCS, CHAdeMO, J1772"
+                        class="input input-bordered w-full"
+                    >
+                </label>
+
+                <!-- EVSE / Charger Section -->
+                <div class="divider text-xs text-base-content/50">
+                    EVSE / Charger
+                    {% if modal_mode == 'edit' and session and session.evse_source %}
+                        <span class="badge badge-ghost badge-xs ml-1">{{ session.evse_source }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Stall dropdown (full width) -->
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Stall</span></div>
+                    <select name="stall_id" id="modal-stall-select" class="select select-sm select-bordered w-full">
+                        <option value="">— No stall —</option>
+                        {% if stalls is defined and stalls %}
+                            {% for stall in stalls %}
+                                <option value="{{ stall.id }}"
+                                    data-rated-kw="{{ stall.rated_kw or '' }}"
+                                    data-voltage="{{ stall.voltage or '' }}"
+                                    data-amperage="{{ stall.amperage or '' }}"
+                                    data-connector="{{ stall.connector_type or '' }}"
+                                    {% if modal_mode == 'edit' and session and session.stall_id == stall.id %}selected{% endif %}
+                                >{{ stall.stall_label }}{% if stall.rated_kw %} ({{ stall.rated_kw }}kW){% endif %}{% if stall.connector_type %} - {{ stall.connector_type }}{% endif %}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option disabled>No stalls configured</option>
+                        {% endif %}
+                    </select>
+                </label>
+
+                <input type="hidden" name="evse_source" id="modal-evse-source"
+                    value="{% if modal_mode == 'edit' and session and session.evse_source %}{{ session.evse_source }}{% endif %}">
+
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">Voltage (V)</span></div>
+                        <input
+                            type="number"
+                            name="evse_voltage"
+                            id="modal-evse-voltage"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.evse_voltage is not none %}{{ session.evse_voltage }}{% endif %}"
+                            placeholder="Voltage (V)"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">Amperage (A)</span></div>
+                        <input
+                            type="number"
+                            name="evse_amperage"
+                            id="modal-evse-amperage"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.evse_amperage is not none %}{{ session.evse_amperage }}{% endif %}"
+                            placeholder="Amperage (A)"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">Power (kW)</span></div>
+                        <input
+                            type="number"
+                            name="evse_kw"
+                            id="modal-evse-kw"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.evse_kw is not none %}{{ session.evse_kw }}{% endif %}"
+                            placeholder="Power (kW)"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </label>
+                    <div class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">EVSE Energy (kWh)</span></div>
+                        <div class="flex gap-1">
+                            <input
+                                type="number"
+                                name="evse_energy_kwh"
+                                id="modal-evse-energy"
+                                step="0.01"
+                                value="{% if modal_mode == 'edit' and session and session.evse_energy_kwh is not none %}{{ session.evse_energy_kwh }}{% endif %}"
+                                placeholder="EVSE Energy"
+                                class="input input-sm input-bordered w-full"
+                            >
+                            <button type="button" id="btn-estimate-energy" class="btn btn-xs btn-ghost self-end mb-0.5" title="Estimate from kW x duration">Est.</button>
+                        </div>
+                    </div>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">Max Power (kW)</span></div>
+                        <input
+                            type="number"
+                            name="evse_max_power_kw"
+                            id="modal-evse-max-power"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.evse_max_power_kw is not none %}{{ session.evse_max_power_kw }}{% endif %}"
+                            placeholder="Max Power (kW)"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </label>
+                    <label class="form-control w-full">
+                        <div class="label"><span class="label-text text-xs">Rated Capacity (kW)</span></div>
+                        <input
+                            type="number"
+                            name="charger_rated_kw"
+                            id="modal-charger-rated-kw"
+                            step="0.1"
+                            value="{% if modal_mode == 'edit' and session and session.charger_rated_kw is not none %}{{ session.charger_rated_kw }}{% endif %}"
+                            placeholder="Rated Capacity (kW)"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes tab -->
+        <input type="radio" name="modal-tabs" role="tab" class="tab" aria-label="Notes" />
+        <div role="tabpanel" class="tab-content p-4 min-h-[320px]">
+            <div class="space-y-4">
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">Notes</span></div>
+                    <textarea
+                        name="notes_text"
+                        rows="6"
+                        placeholder="Add notes about this session..."
+                        class="textarea textarea-bordered w-full resize-none"
+                    ></textarea>
+                    <div class="label">
+                        <span class="label-text-alt text-base-content/40">Notes are informational -- saved for future use when the data model supports them.</span>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal footer -->
+    <div class="flex items-center justify-between pt-4 mt-4 border-t border-base-300">
+        <!-- Delete button (edit mode only) -->
+        <div>
+            {% if modal_mode == 'edit' and session %}
+                <button
+                    type="button"
+                    onclick="confirmDeleteFromModal({{ session.id }})"
+                    class="btn btn-error btn-outline btn-sm"
+                >
+                    Delete
+                </button>
+            {% endif %}
+        </div>
+
+        <!-- Cancel + Save buttons -->
+        <div class="flex items-center gap-3">
+            <button
+                type="button"
+                onclick="closeSessionModal()"
+                class="btn btn-ghost btn-sm"
+            >
+                Cancel
+            </button>
+            {% if modal_mode == 'edit' and session %}
+                <button
+                    type="button"
+                    hx-put="/sessions/{{ session.id }}"
+                    hx-target="#drawer-body"
+                    hx-swap="innerHTML"
+                    hx-include="#modal-form"
+                    class="btn btn-primary btn-sm"
+                >
+                    Save
+                </button>
+            {% else %}
+                <button
+                    type="button"
+                    hx-post="/sessions"
+                    hx-target="#drawer-body"
+                    hx-swap="innerHTML"
+                    hx-include="#modal-form"
+                    class="btn btn-primary btn-sm"
+                >
+                    Save
+                </button>
+            {% endif %}
+        </div>
+    </div>
+</form>
+
+<script>
+// Re-open drawer when modal closes (dialog close event)
+(function() {
+    var modal = document.getElementById('session-modal');
+    if (!modal) return;
+    modal.addEventListener('close', function() {
+        var drawerCheckbox = document.getElementById('session-drawer');
+        if (drawerCheckbox && drawerCheckbox.dataset.wasOpen === 'true') {
+            drawerCheckbox.checked = true;
+        }
+    }, { once: true });
+})();
+
+// Stall selection: auto-fill empty EVSE fields with stall defaults
+(function() {
+    var stallSelect = document.getElementById('modal-stall-select');
+    if (!stallSelect) return;
+
+    var fieldMap = {
+        'rated-kw': 'modal-charger-rated-kw',
+        'voltage': 'modal-evse-voltage',
+        'amperage': 'modal-evse-amperage'
+    };
+
+    stallSelect.addEventListener('change', function() {
+        var opt = stallSelect.options[stallSelect.selectedIndex];
+        if (!opt || !opt.value) return;
+
+        var anyFilled = false;
+        Object.keys(fieldMap).forEach(function(dataAttr) {
+            var input = document.getElementById(fieldMap[dataAttr]);
+            if (!input) return;
+            var val = opt.dataset[dataAttr.replace(/-([a-z])/g, function(m, c) { return c.toUpperCase(); })];
+            if (val && !input.value) {
+                input.value = val;
+                input.classList.add('text-base-content/50');
+                anyFilled = true;
+            }
+        });
+
+        // Also set rated_kw as evse_kw if empty
+        var kwInput = document.getElementById('modal-evse-kw');
+        var ratedKw = opt.dataset.ratedKw;
+        if (kwInput && ratedKw && !kwInput.value) {
+            kwInput.value = ratedKw;
+            kwInput.classList.add('text-base-content/50');
+            anyFilled = true;
+        }
+
+        if (anyFilled) {
+            var sourceInput = document.getElementById('modal-evse-source');
+            if (sourceInput) sourceInput.value = 'stall_default';
+        }
+    });
+
+    // Remove dimmed style when user manually types
+    Object.values(fieldMap).concat(['modal-evse-kw']).forEach(function(id) {
+        var input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', function() {
+                input.classList.remove('text-base-content/50');
+            });
+        }
+    });
+})();
+
+// Estimate EVSE energy: kW * (duration_min / 60)
+(function() {
+    var btn = document.getElementById('btn-estimate-energy');
+    if (!btn) return;
+
+    btn.addEventListener('click', function() {
+        var kwInput = document.getElementById('modal-evse-kw');
+        var durInput = document.querySelector('input[name="charge_duration_minutes"]');
+        var energyInput = document.getElementById('modal-evse-energy');
+        if (!kwInput || !durInput || !energyInput) return;
+
+        var kw = parseFloat(kwInput.value);
+        var durMin = parseFloat(durInput.value);
+        if (isNaN(kw) || isNaN(durMin) || kw <= 0 || durMin <= 0) return;
+
+        var estimated = kw * (durMin / 60);
+        energyInput.value = estimated.toFixed(2);
+    });
+})();
+</script>

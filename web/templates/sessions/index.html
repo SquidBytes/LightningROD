@@ -1,52 +1,385 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-6xl">
-    <h1 class="text-3xl font-bold text-white mb-2">Charging Sessions</h1>
-    <p class="text-gray-400 mb-6">Browse and filter your complete EV charging history.</p>
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-base-content mb-2">Charging Sessions</h1>
+            <p class="text-base-content/60">Browse and filter your complete EV charging history.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button
+                type="button"
+                id="group-edit-toggle"
+                onclick="toggleGroupEdit()"
+                class="btn btn-outline btn-sm gap-2"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Group Edit
+            </button>
+            <button
+                type="button"
+                onclick="openNewSessionModal()"
+                class="btn btn-primary btn-sm gap-2"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Session
+            </button>
+        </div>
+    </div>
 
-    <!-- Filter bar — always present, not HTMX-swapped -->
+    <!-- Filter bar -- always present, not HTMX-swapped -->
     {% include "sessions/partials/filters.html" %}
 
-    <!-- Table region — HTMX swap target -->
-    <div id="sessions-table-region" class="transition-opacity">
-        {% include "sessions/partials/table.html" %}
+    <!-- Group edit action bar (hidden by default, sticky at top when active) -->
+    <div id="group-edit-bar" class="sticky top-0 z-50 hidden mb-4">
+        <div class="bg-base-200 border-2 border-primary/30 rounded-box shadow-lg px-4 py-3">
+            <div class="flex items-center gap-3 flex-nowrap overflow-x-auto">
+                <span id="selected-count" class="text-base text-base-content/70 font-medium whitespace-nowrap min-w-[100px]">0 selected</span>
+
+                <div class="form-control">
+                    <input type="hidden" name="network_id" id="bulk-network-id" value="" data-network-hidden>
+                    <input type="text" id="bulk-network" list="bulk-network-list"
+                           placeholder="Network..."
+                           class="input input-bordered input-sm w-40"
+                           autocomplete="off"
+                           oninput="resolveNetworkCombobox(this)">
+                    <datalist id="bulk-network-list">
+                        {% for net in networks %}
+                        <option value="{{ net.network_name }}" data-id="{{ net.id }}"></option>
+                        {% endfor %}
+                    </datalist>
+                </div>
+
+                <select id="bulk-charge-type" class="select select-bordered select-sm">
+                    <option value="">Charge Type...</option>
+                    <option value="clear">-- Clear --</option>
+                    <option value="AC">AC</option>
+                    <option value="DC">DC</option>
+                </select>
+
+                <input id="bulk-location" type="text" placeholder="Location..." class="input input-bordered input-sm w-40">
+
+                <input id="bulk-cost" type="number" step="0.01" min="0" placeholder="Cost $..." class="input input-bordered input-sm w-28">
+
+                <button
+                    type="button"
+                    onclick="applyGroupEdit()"
+                    class="btn btn-primary btn-sm"
+                >Apply</button>
+
+                <button
+                    type="button"
+                    onclick="toggleGroupEdit()"
+                    class="btn btn-ghost btn-sm"
+                >Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drawer wrapper for session detail panel -->
+    <div class="drawer drawer-end">
+        <input id="session-drawer" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content">
+            <!-- Table region -- HTMX swap target, auto-refreshes on CRUD events -->
+            <div id="sessions-table-region"
+                 hx-get="/sessions"
+                 hx-trigger="session-updated from:body, session-deleted from:body, session-created from:body"
+                 hx-target="#sessions-table-region"
+                 hx-swap="innerHTML"
+                 hx-include="#filter-form"
+                 class="transition-opacity">
+                {% include "sessions/partials/table.html" %}
+            </div>
+        </div>
+        <div class="drawer-side z-40">
+            <label for="session-drawer" class="drawer-overlay" aria-label="close drawer"></label>
+            <div class="bg-base-200 min-h-full w-96 overflow-y-auto" id="drawer-body">
+                <!-- HTMX loads drawer content here -->
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Drawer shell — populated in Plan 02 -->
-<div
-    id="drawer"
-    class="fixed top-0 right-0 h-full w-96 bg-gray-900 border-l border-gray-800 z-50 transform translate-x-full transition-transform duration-300 overflow-y-auto"
->
-    <div id="drawer-content">
-        <!-- HTMX swap target for session detail -->
+<!-- Session modal using DaisyUI dialog -->
+<dialog id="session-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="session-modal-content">
+            <!-- HTMX loads modal content here -->
+        </div>
     </div>
-</div>
-<div
-    id="drawer-backdrop"
-    class="fixed inset-0 bg-black/50 z-40 hidden"
-    onclick="closeDrawer()"
-></div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<!-- Toast container -->
+<div id="toast-container" class="fixed top-4 right-4 z-[70] space-y-2"></div>
 
 <script>
 function openDrawer() {
-    const drawer = document.getElementById('drawer');
-    const backdrop = document.getElementById('drawer-backdrop');
-    drawer.classList.remove('translate-x-full');
-    backdrop.classList.remove('hidden');
+    document.getElementById('session-drawer').checked = true;
 }
 
 function closeDrawer() {
-    const drawer = document.getElementById('drawer');
-    const backdrop = document.getElementById('drawer-backdrop');
-    drawer.classList.add('translate-x-full');
-    backdrop.classList.add('hidden');
+    document.getElementById('session-drawer').checked = false;
 }
 
 // Auto-open drawer when HTMX loads content into it
 document.body.addEventListener('htmx:afterSettle', function(evt) {
-    if (evt.target.id === 'drawer-content') {
+    if (evt.target.id === 'drawer-body') {
         openDrawer();
+    }
+});
+
+function toggleEditMode() {
+    var readFields = document.querySelectorAll('[data-read-field]');
+    var editFields = document.querySelectorAll('[data-edit-field]');
+    var editBtn = document.getElementById('edit-btn');
+    var saveBtn = document.getElementById('save-btn');
+    var cancelBtn = document.getElementById('cancel-btn');
+
+    var isEditing = editBtn.classList.contains('hidden');
+    if (isEditing) {
+        // Switch to read mode
+        readFields.forEach(function(el) { el.classList.remove('hidden'); });
+        editFields.forEach(function(el) { el.classList.add('hidden'); });
+        editBtn.classList.remove('hidden');
+        saveBtn.classList.add('hidden');
+        cancelBtn.classList.add('hidden');
+    } else {
+        // Switch to edit mode
+        readFields.forEach(function(el) { el.classList.add('hidden'); });
+        editFields.forEach(function(el) { el.classList.remove('hidden'); });
+        editBtn.classList.add('hidden');
+        saveBtn.classList.remove('hidden');
+        cancelBtn.classList.remove('hidden');
+    }
+}
+
+function openSessionModal(sessionId) {
+    htmx.ajax('GET', '/sessions/' + sessionId + '/modal', {target: '#session-modal-content', swap: 'innerHTML'});
+    document.getElementById('session-modal').showModal();
+}
+
+function openNewSessionModal() {
+    htmx.ajax('GET', '/sessions/new/modal', {target: '#session-modal-content', swap: 'innerHTML'});
+    document.getElementById('session-modal').showModal();
+}
+
+function closeSessionModal() {
+    document.getElementById('session-modal').close();
+    document.getElementById('session-modal-content').innerHTML = '';
+}
+
+function confirmDeleteFromModal(sessionId) {
+    if (confirm('Are you sure you want to delete this session?')) {
+        htmx.ajax('DELETE', '/sessions/' + sessionId, {target: '#drawer-body', swap: 'innerHTML'});
+        closeSessionModal();
+    }
+}
+
+// Listen for closeModal event from HTMX responses
+document.body.addEventListener('closeModal', closeSessionModal);
+
+function showToast(message, type) {
+    var container = document.getElementById('toast-container');
+    var toast = document.createElement('div');
+    var cls = type === 'success' ? 'alert alert-success' : 'alert alert-error';
+    toast.className = cls + ' text-sm shadow-lg transform transition-all duration-300';
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(function() {
+        toast.classList.add('opacity-0', 'translate-x-4');
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 3000);
+}
+
+function highlightRow(sessionId) {
+    var rows = document.querySelectorAll('#sessions-table-region tbody tr');
+    rows.forEach(function(row) {
+        var hxGet = row.getAttribute('hx-get');
+        if (hxGet && hxGet.includes('/sessions/' + sessionId + '/detail')) {
+            row.classList.add('bg-blue-900/30');
+            setTimeout(function() {
+                row.style.transition = 'background-color 2s ease-out';
+                row.classList.remove('bg-blue-900/30');
+                row.style.backgroundColor = '';
+            }, 100);
+        }
+    });
+}
+
+// Listen for HTMX trigger events for toasts
+document.body.addEventListener('session-updated', function(evt) {
+    showToast('Session saved', 'success');
+    var sessionId = evt.detail ? evt.detail.sessionId : null;
+    if (sessionId) {
+        setTimeout(function() {
+            highlightRow(sessionId);
+        }, 200);
+    }
+});
+document.body.addEventListener('session-deleted', function() {
+    showToast('Session deleted', 'success');
+    closeDrawer();
+    closeSessionModal();
+});
+document.body.addEventListener('session-created', function(evt) {
+    showToast('Session added', 'success');
+    var sessionId = evt.detail ? evt.detail.sessionId : null;
+    if (sessionId) {
+        setTimeout(function() {
+            highlightRow(sessionId);
+        }, 200);
+    }
+});
+
+// --- Group Edit ---
+var _groupEditActive = false;
+
+function toggleGroupEdit() {
+    _groupEditActive = !_groupEditActive;
+    var cols = document.querySelectorAll('.group-edit-col');
+    var bar = document.getElementById('group-edit-bar');
+    var toggle = document.getElementById('group-edit-toggle');
+
+    if (_groupEditActive) {
+        cols.forEach(function(el) { el.classList.remove('hidden'); });
+        bar.classList.remove('hidden');
+        toggle.classList.add('btn-active');
+    } else {
+        cols.forEach(function(el) { el.classList.add('hidden'); });
+        bar.classList.add('hidden');
+        toggle.classList.remove('btn-active');
+        // Uncheck all
+        document.querySelectorAll('.session-checkbox').forEach(function(cb) { cb.checked = false; });
+        var selectAll = document.getElementById('select-all-sessions');
+        if (selectAll) selectAll.checked = false;
+        updateSelectedCount();
+        // Reset field inputs
+        document.getElementById('bulk-network').value = '';
+        document.getElementById('bulk-network-id').value = '';
+        document.getElementById('bulk-charge-type').value = '';
+        document.getElementById('bulk-location').value = '';
+        document.getElementById('bulk-cost').value = '';
+    }
+}
+
+function toggleAllSessionCheckboxes(selectAll) {
+    document.querySelectorAll('.session-checkbox').forEach(function(cb) {
+        cb.checked = selectAll.checked;
+    });
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    var count = document.querySelectorAll('.session-checkbox:checked').length;
+    var el = document.getElementById('selected-count');
+    if (el) el.textContent = count + ' selected';
+}
+
+// Delegate checkbox change events for count update
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('session-checkbox')) {
+        updateSelectedCount();
+    }
+});
+
+function applyGroupEdit() {
+    var checked = document.querySelectorAll('.session-checkbox:checked');
+    if (checked.length === 0) {
+        alert('No sessions selected');
+        return;
+    }
+
+    var ids = Array.from(checked).map(function(cb) { return cb.value; });
+    var changes = [];
+    var networkInput = document.getElementById('bulk-network');
+    var networkIdInput = document.getElementById('bulk-network-id');
+    var chargeSel = document.getElementById('bulk-charge-type');
+    var locInput = document.getElementById('bulk-location');
+    var costInput = document.getElementById('bulk-cost');
+
+    if (networkInput.value) changes.push('Network -> ' + networkInput.value);
+    if (chargeSel.value) changes.push('Charge Type -> ' + chargeSel.value);
+    if (locInput.value) changes.push('Location -> ' + locInput.value);
+    if (costInput.value) changes.push('Cost -> $' + costInput.value);
+
+    if (changes.length === 0) {
+        alert('No fields to update. Select at least one field value.');
+        return;
+    }
+
+    var msg = ids.length + ' sessions will be updated:\n' + changes.join('\n');
+    if (!confirm(msg)) return;
+
+    // Build form data and submit via fetch
+    var formData = new FormData();
+    formData.append('session_ids', ids.join(','));
+    if (networkIdInput.value) formData.append('bulk_network_id', networkIdInput.value);
+    else if (networkInput.value) formData.append('bulk_network_name', networkInput.value);
+    if (chargeSel.value) formData.append('bulk_charge_type', chargeSel.value);
+    if (locInput.value) formData.append('bulk_location_name', locInput.value);
+    if (costInput.value) formData.append('bulk_cost', costInput.value);
+
+    fetch('/sessions/bulk', {
+        method: 'PUT',
+        body: formData,
+        headers: { 'HX-Request': 'true' }
+    }).then(function(resp) {
+        if (resp.ok) {
+            // Parse HX-Trigger header and dispatch events
+            var trigger = resp.headers.get('HX-Trigger');
+            if (trigger) {
+                try {
+                    var events = JSON.parse(trigger);
+                    for (var name in events) {
+                        document.body.dispatchEvent(new CustomEvent(name, { detail: events[name] }));
+                    }
+                } catch(e) {}
+            }
+            toggleGroupEdit();
+            showToast('Updated ' + ids.length + ' sessions', 'success');
+        } else {
+            showToast('Bulk update failed', 'error');
+        }
+    });
+}
+
+// Re-apply group edit visibility after HTMX table swap
+document.body.addEventListener('htmx:afterSettle', function(evt) {
+    if (evt.target.id === 'sessions-table-region' && _groupEditActive) {
+        document.querySelectorAll('.group-edit-col').forEach(function(el) {
+            el.classList.remove('hidden');
+        });
+    }
+});
+
+// Handle validation errors (422 responses)
+document.body.addEventListener('htmx:responseError', function(evt) {
+    if (evt.detail.xhr.status === 422) {
+        try {
+            var errors = JSON.parse(evt.detail.xhr.responseText).errors;
+            // Clear previous errors
+            document.querySelectorAll('.field-error').forEach(function(el) { el.remove(); });
+            // Show new errors
+            for (var field in errors) {
+                var input = document.querySelector('[name="' + field + '"]');
+                if (input) {
+                    var errorEl = document.createElement('p');
+                    errorEl.className = 'field-error text-error text-xs mt-1';
+                    errorEl.textContent = errors[field];
+                    input.parentNode.appendChild(errorEl);
+                }
+            }
+        } catch(e) {}
     }
 });
 </script>

@@ -1,0 +1,51 @@
+{# Inline edit row for a single network — swaps into the table body in place of the read row #}
+<tr id="network-row-{{ network.id }}">
+    <td class="pr-3">
+        <input type="color" name="color" form="edit-form-{{ network.id }}"
+               value="{{ network.color or '#6B7280' }}"
+               class="h-6 w-6 rounded border-0 bg-transparent cursor-pointer p-0">
+    </td>
+    <td>
+        <input type="text" name="network_name" form="edit-form-{{ network.id }}"
+               value="{{ network.network_name }}" required
+               class="input input-sm input-bordered w-full min-w-32">
+    </td>
+    <td>
+        <div class="flex items-center gap-1">
+            <span class="text-base-content/40 text-xs">$</span>
+            <input type="number" name="cost_per_kwh" form="edit-form-{{ network.id }}"
+                   value="{{ '%.3f'|format(network.cost_per_kwh or 0) }}" step="0.001" min="0"
+                   class="input input-sm input-bordered w-24 text-right">
+        </div>
+    </td>
+    <td>
+        <input type="checkbox" name="is_free" form="edit-form-{{ network.id }}"
+               {% if network.is_free %}checked{% endif %}
+               class="checkbox checkbox-sm checkbox-success">
+    </td>
+    <td class="text-right">
+        <div class="flex justify-end gap-2">
+            <button type="submit" form="edit-form-{{ network.id }}"
+                    class="btn btn-primary btn-xs">
+                Save
+            </button>
+            <button type="button"
+                    hx-get="/settings/networks"
+                    hx-target="#network-management-table"
+                    hx-swap="outerHTML"
+                    class="btn btn-ghost btn-xs">
+                Cancel
+            </button>
+        </div>
+    </td>
+</tr>
+{# Hidden form outside td (forms inside tables have quirky HTML behavior) #}
+<tr style="display:none">
+    <td>
+        <form id="edit-form-{{ network.id }}"
+              hx-put="/settings/networks/{{ network.id }}"
+              hx-target="#network-management-table"
+              hx-swap="outerHTML">
+        </form>
+    </td>
+</tr>

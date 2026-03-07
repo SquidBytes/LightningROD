@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@plugin "daisyui" {
+  themes: dark --default;
+}
 
 @theme {
   /* LightningROD brand palette */
@@ -11,6 +14,9 @@
   --color-accent: #47A8E5;
 }
 
+/* Prevent sidebar flash on navigation — match html bg to sidebar color */
+html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
+
 /* HTMX loading state for sessions table region */
 #sessions-table-region.htmx-request { opacity: 0.4; }
 #sessions-table-region { transition: opacity 0.15s ease; }
@@ -22,3 +28,48 @@
 /* HTMX loading state for energy content region */
 #energy-content.htmx-request { opacity: 0.4; }
 #energy-content { transition: opacity 0.15s ease; }
+
+/* ── Plotly CSS isolation ──────────────────────────────────────────────
+   Tailwind v4 resets (*, ::before, ::after { border: 0 solid; margin: 0; padding: 0 })
+   break Plotly's internal SVG elements. These rules restore defaults inside Plotly containers.
+   ──────────────────────────────────────────────────────────────────── */
+.js-plotly-plot *, .js-plotly-plot *::before, .js-plotly-plot *::after {
+  border-style: initial;
+  margin: initial;
+  padding: initial;
+}
+
+/* Ensure Plotly text elements use their own fill, not inherited CSS color */
+.js-plotly-plot text {
+  fill: currentColor;
+}
+
+/* Plotly modebar buttons should not inherit daisyUI button styles */
+.js-plotly-plot .modebar-btn {
+  all: revert;
+}
+
+/* Plotly containers should fill their parent card width */
+.js-plotly-plot {
+  width: 100% !important;
+}
+.js-plotly-plot .plotly .main-svg {
+  width: 100% !important;
+}
+
+/* ── Plotly modebar positioning ─────────────────────────────────────────
+   Position the modebar above the chart area so it never overlaps
+   chart content, legends, or data.
+   ──────────────────────────────────────────────────────────────────── */
+.plotly-chart-wrap {
+  position: relative;
+}
+.plotly-chart-wrap .modebar-container {
+  position: absolute !important;
+  top: -28px !important;
+  right: 0 !important;
+}
+.plotly-chart-wrap .modebar-group {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+}

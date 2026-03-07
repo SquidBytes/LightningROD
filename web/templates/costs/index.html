@@ -1,42 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-6xl">
-    <h1 class="text-3xl font-bold text-white mb-2">Cost Analytics</h1>
-    <p class="text-gray-400 mb-6">Track your charging costs across networks over time.</p>
+    <h1 class="text-3xl font-bold text-base-content mb-2">Cost Analytics</h1>
+    <p class="text-base-content/60 mb-6">Track your charging costs across networks over time.</p>
 
-    <!-- Time range filter bar -->
-    <div class="flex items-center gap-2 mb-6">
-        <a
-            href="/costs?range=7d"
-            hx-get="/costs?range=7d"
-            hx-target="#costs-content"
-            hx-swap="innerHTML"
-            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {% if active_range == '7d' %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700{% endif %}"
-        >Week</a>
-        <a
-            href="/costs?range=30d"
-            hx-get="/costs?range=30d"
-            hx-target="#costs-content"
-            hx-swap="innerHTML"
-            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {% if active_range == '30d' %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700{% endif %}"
-        >Month</a>
-        <a
-            href="/costs?range=1y"
-            hx-get="/costs?range=1y"
-            hx-target="#costs-content"
-            hx-swap="innerHTML"
-            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {% if active_range == '1y' %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700{% endif %}"
-        >Year</a>
-        <a
-            href="/costs?range=all"
-            hx-get="/costs?range=all"
-            hx-target="#costs-content"
-            hx-swap="innerHTML"
-            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {% if active_range == 'all' or not active_range %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700{% endif %}"
-        >All Time</a>
-    </div>
+    {% with filter_url="/costs", filter_target="#costs-content", active_preset=active_range, date_param_name="range" %}
+      {% include "partials/filter_bar.html" %}
+    {% endwith %}
 
-    <!-- HTMX swap target -->
+    <!-- HTMX swap target — includes summary cards, network breakdown, charts, and comparisons -->
     <div id="costs-content">
         {% include "costs/partials/summary_cards.html" %}
     </div>

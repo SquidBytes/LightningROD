@@ -1,22 +1,131 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-4xl">
-    <h1 class="text-3xl font-bold text-white mb-2">Dashboard</h1>
-    <p class="text-gray-400 mb-8">Your EV charging analytics at a glance.</p>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-gray-900 rounded-xl p-6 border border-gray-800">
-            <p class="text-sm text-gray-400">Total Sessions</p>
-            <p class="text-2xl font-bold text-white mt-1">--</p>
-        </div>
-        <div class="bg-gray-900 rounded-xl p-6 border border-gray-800">
-            <p class="text-sm text-gray-400">Total Energy</p>
-            <p class="text-2xl font-bold text-white mt-1">-- kWh</p>
-        </div>
-        <div class="bg-gray-900 rounded-xl p-6 border border-gray-800">
-            <p class="text-sm text-gray-400">Total Cost</p>
-            <p class="text-2xl font-bold text-white mt-1">$--</p>
+<div class="max-w-6xl">
+    <h1 class="text-3xl font-bold text-base-content mb-2">Dashboard</h1>
+    <p class="text-base-content/60 mb-8">Your EV charging analytics at a glance.</p>
+
+    {% if summary.total_sessions == 0 %}
+    {# ── Empty state ─────────────────────────────────────────────────── #}
+    <div class="card bg-base-200">
+        <div class="card-body items-center text-center">
+            <p class="text-base-content/60 text-lg mb-2">No charging sessions yet.</p>
+            <p class="text-base-content/40 text-sm">Import your data via <a href="/settings" class="link link-primary">Settings -> Import</a> to see your stats here.</p>
         </div>
     </div>
-    <p class="text-gray-500 text-sm mt-8">Data will populated upon availability</p>
+
+    {% else %}
+    {# ── Summary cards ────────────────────────────────────────────────── #}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+
+        {# Total Sessions #}
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <p class="text-sm text-base-content/60">Total Sessions</p>
+                <p class="text-2xl font-bold mt-1">{{ summary.total_sessions }}</p>
+                {% if summary.avg_cost_per_session is not none %}
+                <p class="text-xs text-base-content/40 mt-1">avg ${{ "%.2f"|format(summary.avg_cost_per_session) }} / session</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Total Energy — auto-scale to MWh when >= 1000 kWh #}
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <p class="text-sm text-base-content/60">Total Energy</p>
+                {% if summary.total_kwh >= 1000 %}
+                <p class="text-2xl font-bold mt-1">{{ "%.2f"|format(summary.total_kwh / 1000) }} MWh</p>
+                <p class="text-xs text-base-content/40 mt-1">{{ "%.1f"|format(summary.total_kwh) }} kWh total</p>
+                {% else %}
+                <p class="text-2xl font-bold mt-1">{{ "%.1f"|format(summary.total_kwh) }} kWh</p>
+                {% endif %}
+                {% if summary.avg_kwh_per_session is not none %}
+                <p class="text-xs text-base-content/40 mt-1">avg {{ "%.1f"|format(summary.avg_kwh_per_session) }} kWh / session</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Total Cost #}
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <p class="text-sm text-base-content/60">Total Cost</p>
+                <p class="text-2xl font-bold mt-1">${{ "%.2f"|format(summary.total_cost) }}</p>
+                {% if summary.avg_kwh_per_session is not none and summary.total_kwh > 0 %}
+                <p class="text-xs text-base-content/40 mt-1">avg ${{ "%.3f"|format(summary.total_cost / summary.total_kwh) }} / kWh</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Charging Efficiency ──────────────────────────────────────────── #}
+    <div class="mb-8">
+        <div class="card bg-base-200 shadow-sm">
+            <div class="card-body">
+                <h3 class="card-title text-sm font-medium uppercase tracking-wide text-base-content/50">Charging Efficiency</h3>
+                {% if efficiency.sessions_with_evse > 0 %}
+                    <div class="stats stats-horizontal shadow bg-base-300 w-full">
+                        <div class="stat">
+                            <div class="stat-title">Avg Loss</div>
+                            <div class="stat-value text-lg">
+                                {% if efficiency.avg_loss_pct is not none %}
+                                    {{ "%.1f"|format(efficiency.avg_loss_pct) }}%
+                                {% else %}
+                                    <span class="text-base-content/40">N/A</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title">Total Loss</div>
+                            <div class="stat-value text-lg">
+                                {{ "%.1f"|format(efficiency.total_loss_kwh) }} kWh
+                            </div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title">Avg Utilization</div>
+                            <div class="stat-value text-lg">
+                                {% if efficiency.avg_utilization_pct is not none %}
+                                    {{ "%.0f"|format(efficiency.avg_utilization_pct) }}%
+                                {% else %}
+                                    <span class="text-base-content/40">N/A</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-xs text-base-content/40 mt-2">Based on {{ efficiency.sessions_with_evse }} sessions with EVSE data</p>
+                {% else %}
+                    <p class="text-base-content/40 text-sm py-4">No EVSE data available yet. Add EVSE details to sessions to see efficiency metrics.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Charts ───────────────────────────────────────────────────────── #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+        {# Monthly Energy by Network #}
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <h3 class="card-title text-sm font-medium uppercase tracking-wide text-base-content/50">Monthly Energy by Network</h3>
+                {% if monthly_energy_chart %}
+                {{ monthly_energy_chart|safe }}
+                {% else %}
+                <p class="text-base-content/40 text-sm py-8 text-center">No energy data available.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Energy by Network #}
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <h3 class="card-title text-sm font-medium uppercase tracking-wide text-base-content/50">Energy by Network</h3>
+                {% if energy_by_network_chart %}
+                {{ energy_by_network_chart|safe }}
+                {% else %}
+                <p class="text-base-content/40 text-sm py-8 text-center">No network data available.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
 </div>
 {% endblock %}

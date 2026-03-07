@@ -1,0 +1,41 @@
+{# Read-only location summary for the network table expandable row #}
+<div class="space-y-2">
+    {% for loc in locations %}
+    <div class="flex items-center gap-3 py-1.5">
+        <span class="text-sm font-medium">{{ loc.location_name }}</span>
+        {% if loc.location_type %}
+            <span class="badge badge-sm badge-ghost capitalize">{{ loc.location_type }}</span>
+        {% endif %}
+        {% if loc.cost_per_kwh is not none %}
+            <span class="text-xs text-base-content/60">${{ "%.4f"|format(loc.cost_per_kwh) }}/kWh</span>
+        {% endif %}
+        {% if loc.address %}
+            <span class="text-xs text-base-content/40 truncate max-w-48">{{ loc.address }}</span>
+        {% endif %}
+        {# Stall badges #}
+        {% set sc = stall_counts.get(loc.id, 0) if stall_counts is defined else 0 %}
+        {% if sc > 0 %}
+            <span class="badge badge-sm badge-outline gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/>
+                </svg>
+                {{ sc }} stall{{ 's' if sc != 1 }}
+            </span>
+        {% endif %}
+        {# Stall type badges if available #}
+        {% if stall_types is defined and stall_types.get(loc.id) %}
+            {% for stype in stall_types[loc.id] %}
+                {% if stype == 'DCFC' %}
+                    <span class="badge badge-xs badge-info">DCFC</span>
+                {% elif stype == 'L2' %}
+                    <span class="badge badge-xs badge-warning">L2</span>
+                {% elif stype == 'L1' %}
+                    <span class="badge badge-xs badge-ghost">L1</span>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="text-base-content/40 text-sm">No locations yet. Click <span class="text-info">Edit</span> to add locations and stalls.</p>
+    {% endfor %}
+</div>

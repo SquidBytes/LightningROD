@@ -1,27 +1,27 @@
-# :lucide-dollar-sign: Cost Analytics
+# Cost Analytics
 
-The costs page (`/costs`) breaks down your charging expenses and shows what you're saving compared to gas or different charging networks.
+The costs page (`/costs`) breaks down your charging expenses and shows savings compared to gas or other charging networks.
 
-<!-- TODO: Add screenshot of costs page -->
-
-## Lifetime Summary
+## Summary Cards
 
 Cards at the top show:
 
-- **Total cost** across all sessions
-- **Breakdown by location** -- home, work, public, and free charging
-- **Per-network costs** -- spending at each charging network
+- **Total cost** across all sessions (actual + estimated)
+- **Breakdown by location type** -- home, work, public, and free charging
+- **Per-network costs** -- spending at each charging network with color badges
 
 ## Time Range Filter
 
-Filter costs by time period: 7d, 30d, 90d, YTD, 1y, or all-time. The summary cards and charts update to reflect the selected range.
+Filter costs by time period: 7d, 30d, 90d, YTD, 1y, or all-time. Summary cards and charts update together.
 
 ## Charts
 
 Two interactive Plotly charts:
 
 - **Monthly cost trend** -- Bar chart showing spending over time
-- **Network breakdown** -- Cost distribution across charging networks
+- **Network breakdown** -- Cost distribution across charging networks, using each network's configured color
+
+Charts use network-specific colors for consistent visual identification across the app.
 
 ## Savings Comparisons
 
@@ -29,20 +29,20 @@ Two comparison modes, each togglable from [Settings](settings.md):
 
 ### Gas Comparison
 
-Shows what you would have spent driving a gas vehicle over the same miles. Uses your configured MPG and gas price to calculate equivalent fuel cost, then displays the savings.
+Calculates what you would have spent driving a gas vehicle over the same miles using your configured MPG and gas price, then shows the savings.
 
 ### Network Comparison
 
-Shows what you would have paid if all sessions were charged at a reference network cost (e.g., public DC fast charging). Select any configured network from the dropdown to see the comparison.
+Shows what you would have paid if all sessions were charged at a reference network's cost. Select any configured network from the dropdown to compare.
 
-## Session Costs
+## How Session Costs Work
 
-Individual session costs are calculated at query time, not stored. When you change a network cost in settings, all displayed costs update immediately.
+Session costs follow a priority cascade:
 
-The calculation uses:
+1. **User-entered cost** -- If you manually set a cost on a session, that value is used
+2. **Estimated cost** -- Calculated from the location's `cost_per_kwh` (if set), falling back to the network's `cost_per_kwh`, multiplied by `energy_kwh`
+3. **Free** -- Sessions at free networks show $0
 
-1. **Stored cost** -- If the session has an explicit cost value from the data source, that's used directly.
-2. **Calculated cost** -- Otherwise, the session's energy (kWh) is multiplied by the network cost for its location.
-3. **Free** -- Sessions at free locations show $0.
+The cost page tracks actual and estimated costs separately so you can see how much of your cost data is real vs calculated.
 
-Cost indicators appear in the session list and the session detail drawer.
+When you change a network or location cost in settings, estimated costs can be recalculated for affected sessions.

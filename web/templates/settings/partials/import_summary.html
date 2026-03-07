@@ -1,0 +1,121 @@
+{# Import Summary — shown after import execution completes.
+   Receives: added, skipped, updated, failed (integers)
+   Replaces the preview table in #import-flow-container via HTMX innerHTML swap. #}
+<div class="space-y-6">
+
+    {# Header — green if rows added/updated, amber if everything skipped #}
+    {% set any_imported = (added + updated) > 0 %}
+    <div class="flex items-center gap-3">
+        {% if any_imported %}
+        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-success/20 border border-success/40 flex items-center justify-center">
+            <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+        </div>
+        <div>
+            <h3 class="text-lg font-semibold text-success">Import Complete</h3>
+            <p class="text-base-content/60 text-sm mt-0.5">Your charging sessions have been imported successfully.</p>
+        </div>
+        {% else %}
+        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-warning/20 border border-warning/40 flex items-center justify-center">
+            <svg class="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+        </div>
+        <div>
+            <h3 class="text-lg font-semibold text-warning">Import Complete — Nothing Added</h3>
+            <p class="text-base-content/60 text-sm mt-0.5">All selected rows were skipped or failed.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Summary stat cards #}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+
+        {# Added #}
+        <div class="card bg-base-200">
+            <div class="card-body px-5 py-4 gap-1">
+                <span class="text-xs font-medium text-base-content/40 uppercase tracking-wider">Added</span>
+                <span class="text-3xl font-bold text-success">{{ added }}</span>
+                <span class="text-xs text-base-content/40">new rows</span>
+            </div>
+        </div>
+
+        {# Updated #}
+        <div class="card bg-base-200">
+            <div class="card-body px-5 py-4 gap-1">
+                <span class="text-xs font-medium text-base-content/40 uppercase tracking-wider">Updated</span>
+                <span class="text-3xl font-bold text-info">{{ updated }}</span>
+                <span class="text-xs text-base-content/40">existing rows</span>
+            </div>
+        </div>
+
+        {# Skipped #}
+        <div class="card bg-base-200">
+            <div class="card-body px-5 py-4 gap-1">
+                <span class="text-xs font-medium text-base-content/40 uppercase tracking-wider">Skipped</span>
+                <span class="text-3xl font-bold text-base-content/60">{{ skipped }}</span>
+                <span class="text-xs text-base-content/40">duplicates + unselected</span>
+            </div>
+        </div>
+
+        {# Failed — only shown if > 0 #}
+        {% if failed > 0 %}
+        <div class="card bg-base-200 border border-error/30">
+            <div class="card-body px-5 py-4 gap-1">
+                <span class="text-xs font-medium text-base-content/40 uppercase tracking-wider">Failed</span>
+                <span class="text-3xl font-bold text-error">{{ failed }}</span>
+                <span class="text-xs text-base-content/40">could not insert</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="card bg-base-200">
+            <div class="card-body px-5 py-4 gap-1">
+                <span class="text-xs font-medium text-base-content/40 uppercase tracking-wider">Failed</span>
+                <span class="text-3xl font-bold text-base-content/20">0</span>
+                <span class="text-xs text-base-content/40">no errors</span>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+
+    {# Total processed #}
+    <p class="text-sm text-base-content/40">
+        Total processed:
+        <span class="font-medium">{{ added + updated + skipped + failed }}</span>
+        row{{ 's' if (added + updated + skipped + failed) != 1 else '' }}
+    </p>
+
+    {# Warning message if any rows failed #}
+    {% if failed > 0 %}
+    <div class="alert alert-error">
+        <span>
+            <strong class="font-medium">{{ failed }} row{{ 's' if failed != 1 else '' }} could not be imported.</strong>
+            This may be due to missing required fields or database constraints. Successfully imported rows
+            were still committed.
+        </span>
+    </div>
+    {% endif %}
+
+    {# Action buttons #}
+    <div class="flex items-center gap-4 pt-2">
+        {# Import Another File — HTMX reset to file picker #}
+        <button
+            type="button"
+            hx-get="/settings/import/reset"
+            hx-target="#import-flow-container"
+            hx-swap="innerHTML"
+            class="btn btn-primary"
+        >
+            Import Another File
+        </button>
+
+        {# View Sessions — navigate to sessions list #}
+        <a href="/sessions" class="btn btn-ghost">
+            View Sessions
+        </a>
+    </div>
+
+</div>

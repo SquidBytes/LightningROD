@@ -1,4 +1,4 @@
-# :lucide-download: Installation
+# Installation
 
 LightningROD runs as a Docker Compose stack with two services: the web application and PostgreSQL.
 
@@ -12,7 +12,7 @@ LightningROD runs as a Docker Compose stack with two services: the web applicati
 === "Standard"
 
     ```bash
-    git clone https://github.com/yourusername/LightningROD.git
+    git clone https://github.com/SquidBytes/LightningROD.git
     cd LightningROD
     cp .env.example .env
     ```
@@ -52,12 +52,10 @@ The app will be available at `http://localhost:8000` (or your configured `APP_PO
 
 The container's entrypoint script handles setup automatically:
 
-```bash title="entrypoint.sh"
---8<-- "entrypoint.sh"
-```
-
 1. Alembic runs all pending database migrations
 2. Uvicorn starts the FastAPI application
+
+The Docker build uses a multi-stage process: Node 22 compiles Tailwind CSS + DaisyUI in the first stage, then the Python 3.11 runtime stage copies the compiled CSS and starts the app.
 
 !!! note
     The web service waits for PostgreSQL to pass its health check before starting. If the database is slow to initialize on first run, the web container will retry until it's ready.
@@ -70,7 +68,7 @@ docker compose ps
 
 You should see both `db` and `web` services running. Open `http://localhost:8000` in your browser.
 
-The database starts empty. See [Data Import](data-import.md) to load your charging history.
+The database starts empty. See [Data Import](data-import.md) to load your charging history, or use the [CSV Import](../guide/csv-import.md) feature in the web UI.
 
 ## Stopping and Restarting
 

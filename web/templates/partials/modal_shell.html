@@ -1,0 +1,27 @@
+{#
+  Modal Shell Pattern (DaisyUI dialog)
+  =====================================
+  Use a native <dialog> element with DaisyUI modal classes.
+  HTMX loads the modal partial into the inner content div.
+
+  Shell structure:
+    <dialog id="xxx-modal" class="modal">
+      <div class="modal-box w-11/12 max-w-2xl">
+        <form method="dialog">
+          <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="xxx-modal-content">
+          <!-- HTMX loads content here -->
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
+
+  Open: document.getElementById('xxx-modal').showModal();
+  Close: document.getElementById('xxx-modal').close();
+
+  Click-outside-to-close and Escape key are handled natively by <dialog>.
+  The modal-backdrop form handles the click-outside behavior.
+#}

@@ -1,81 +1,136 @@
 <!-- Summary stats bar -->
 <div class="flex items-center gap-6 mb-4 px-1">
-    <span class="text-gray-300 text-sm">
-        <span class="text-white font-semibold">{{ summary.count }}</span>
+    <span class="text-base-content/70 text-base">
+        <span class="text-base-content font-semibold">{{ summary.count }}</span>
         {{ "session" if summary.count == 1 else "sessions" }}
     </span>
-    <span class="text-gray-300 text-sm">
-        <span class="text-white font-semibold">{{ "%.1f"|format(summary.total_kwh or 0) }}</span> kWh total
+    <span class="text-base-content/70 text-base">
+        <span class="text-base-content font-semibold">{{ "%.1f"|format(summary.total_kwh or 0) }}</span> kWh total
     </span>
 </div>
 
 {% if sessions %}
 <!-- Data table -->
-<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-    <table class="w-full text-sm">
+<div class="overflow-x-auto">
+    <table class="table table-zebra table-pin-rows">
         <thead>
-            <tr class="border-b border-gray-800">
-                <th class="text-left px-4 py-3 text-gray-400 font-medium">Date</th>
-                <th class="text-left px-4 py-3 text-gray-400 font-medium">Location</th>
-                <th class="text-left px-4 py-3 text-gray-400 font-medium">Type</th>
-                <th class="text-right px-4 py-3 text-gray-400 font-medium">kWh</th>
-                <th class="text-right px-4 py-3 text-gray-400 font-medium">Duration</th>
-                <th class="text-right px-4 py-3 text-gray-400 font-medium">Cost</th>
+            <tr>
+                <th class="w-10 group-edit-col hidden"><input type="checkbox" class="checkbox checkbox-sm" id="select-all-sessions" onchange="toggleAllSessionCheckboxes(this)"></th>
+                {% set current_sort_by = sort_by %}
+                {% set current_sort_dir = sort_dir %}
+
+                {% with col_id="date", col_label="Date", sort_key="date", filter_key=None, filter_values=[], filter_form_id="filter-form", col_width="w-[120px]" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% with col_id="location", col_label="Location", sort_key="location", filter_key=None, filter_values=[], filter_form_id="filter-form", col_width="w-[160px]" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% set network_filter_values = [] %}
+                {% set network_id_list = (network_id|string).split(',') if network_id else [] %}
+                {% for net in networks %}
+                    {% set _ = network_filter_values.append({"value": net.id|string, "label": net.network_name, "checked": not network_id or net.id|string in network_id_list}) %}
+                {% endfor %}
+                {% with col_id="network", col_label="Network", sort_key="network", filter_key="network_id", filter_values=network_filter_values, filter_form_id="filter-form", col_width="w-[140px]" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% set charge_type_list = (charge_type|string).split(',') if charge_type else [] %}
+                {% set charge_type_filter_values = [
+                    {"value": "AC", "label": "AC", "checked": not charge_type or "AC" in charge_type_list},
+                    {"value": "DC", "label": "DC", "checked": not charge_type or "DC" in charge_type_list}
+                ] %}
+                {% with col_id="charge_type", col_label="Type", sort_key="charge_type", filter_key="charge_type", filter_values=charge_type_filter_values, filter_form_id="filter-form", col_width="w-[70px]" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% with col_id="energy", col_label="kWh", sort_key="energy", filter_key=None, filter_values=[], filter_form_id="filter-form", col_width="w-[80px]" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% with col_id="duration", col_label="Duration", sort_key="duration", filter_key=None, filter_values=[], filter_form_id="filter-form", col_width="w-[100px]" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
+
+                {% with col_id="cost", col_label="Cost", sort_key="cost", filter_key=None, filter_values=[], filter_form_id="filter-form", col_width="w-[100px]" %}
+                    {% include "partials/column_dropdown.html" %}
+                {% endwith %}
             </tr>
         </thead>
-        <tbody class="divide-y divide-gray-800/60">
+        <tbody>
             {% for item in sessions %}
             {% set session = item.session %}
             {% set cost_info = item.cost_info %}
             <tr
-                class="cursor-pointer hover:bg-gray-800/40 transition-colors"
+                class="hover cursor-pointer"
                 hx-get="/sessions/{{ session.id }}/detail?{% if not loop.first %}prev_id={{ sessions[loop.index0 - 1].session.id }}&{% endif %}{% if not loop.last %}next_id={{ sessions[loop.index0 + 1].session.id }}{% endif %}"
-                hx-target="#drawer-content"
+                hx-target="#drawer-body"
                 hx-swap="innerHTML"
                 onclick="openDrawer()"
             >
+                <td class="group-edit-col hidden" onclick="event.stopPropagation()"><input type="checkbox" class="checkbox checkbox-sm session-checkbox" value="{{ session.id }}"></td>
                 <!-- Date -->
-                <td class="px-4 py-3 text-gray-200">
+                <td class="px-4 py-3 text-base w-[120px]">
                     {% if session.session_start_utc %}
-                        {{ session.session_start_utc.strftime("%b %-d, %Y") }}
+                        {{ session.session_start_utc|localtime(user_tz, "%b %-d, %Y") }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </td>
 
-                <!-- Location -->
-                <td class="px-4 py-3 text-gray-300">
+                <!-- Location with network color badge -->
+                <td class="px-4 py-3 text-base w-[160px] truncate">
                     {% if session.location_name %}
-                        {{ session.location_name }}
+                        {% set net = network_map.get(session.network_id) if session.network_id else None %}
+                        {% set net_color = net.color if net and net.color else '#6B7280' %}
+                        <span class="inline-flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: {{ net_color }}"></span>
+                            {{ session.location_name }}
+                        </span>
                     {% elif session.location_type %}
                         <span class="capitalize">{{ session.location_type }}</span>
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
+                    {% endif %}
+                </td>
+
+                <!-- Network -->
+                <td class="px-4 py-3 text-base w-[140px] truncate">
+                    {% if session.network_id and network_map %}
+                        {% set net = network_map.get(session.network_id) %}
+                        {% if net %}
+                            <span class="badge badge-sm text-white" style="background-color: {{ net.color or '#6B7280' }}">{{ net.network_name }}</span>
+                        {% else %}
+                            <span class="text-base-content/40">—</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </td>
 
                 <!-- Type badge -->
-                <td class="px-4 py-3">
+                <td class="px-4 py-3 text-base w-[70px]">
                     {% if session.charge_type == 'DC' %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">DC</span>
+                        <span class="badge badge-sm badge-info">DC</span>
                     {% elif session.charge_type == 'AC' %}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400">AC</span>
+                        <span class="badge badge-sm badge-ghost">AC</span>
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </td>
 
                 <!-- kWh -->
-                <td class="px-4 py-3 text-right text-gray-200">
+                <td class="px-4 py-3 text-right text-base w-[80px]">
                     {% if session.energy_kwh is not none %}
                         {{ "%.1f"|format(session.energy_kwh) }}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </td>
 
                 <!-- Duration -->
-                <td class="px-4 py-3 text-right text-gray-300">
+                <td class="px-4 py-3 text-right text-base w-[100px]">
                     {% if session.charge_duration_seconds is not none %}
                         {% set total_seconds = session.charge_duration_seconds|int %}
                         {% set hours = total_seconds // 3600 %}
@@ -86,23 +141,26 @@
                             {{ minutes }} min
                         {% endif %}
                     {% else %}
-                        <span class="text-gray-500">—</span>
+                        <span class="text-base-content/40">—</span>
                     {% endif %}
                 </td>
 
                 <!-- Cost -->
-                <td class="px-4 py-3 text-right">
-                    {% if cost_info.is_free %}
-                        <span class="text-green-400">Free</span>
-                    {% elif cost_info.display_cost is not none %}
-                        <span class="text-gray-200">${{ "%.2f"|format(cost_info.display_cost) }}</span>
-                        {% if cost_info.cost_source == 'manual' %}
-                            <span class="text-xs text-blue-400 ml-1" title="Manual entry">&#9998;</span>
-                        {% elif cost_info.cost_source == 'calculated' %}
-                            <span class="text-xs text-gray-500 ml-1" title="Estimated from network cost">~</span>
+                <td class="px-4 py-3 text-right text-base w-[100px]">
+                    {% if cost_info.display_cost is not none %}
+                        ${{ "%.2f"|format(cost_info.display_cost) }}
+                        {% if session.source_system == 'manual_entry' %}
+                            <span class="text-xs text-primary ml-1" title="Manual entry">&#9998;</span>
                         {% endif %}
+                    {% elif cost_info.estimated_cost is not none %}
+                        <span class="text-base-content/50">
+                            ~${{ "%.2f"|format(cost_info.estimated_cost) }}
+                            <span class="badge badge-ghost badge-xs ml-1">Est.</span>
+                        </span>
+                    {% elif cost_info.is_free %}
+                        <span class="text-success text-sm">Free</span>
                     {% else %}
-                        <span class="text-gray-500">---</span>
+                        <span class="text-base-content/40">---</span>
                     {% endif %}
                 </td>
             </tr>
@@ -112,43 +170,19 @@
 </div>
 
 <!-- Pagination -->
-<div class="flex items-center justify-between mt-4 px-1">
-    <div class="text-sm text-gray-400">
-        Page {{ page }} of {{ total_pages }}
-    </div>
-    <div class="flex items-center gap-2">
-        {% if page > 1 %}
-            <a
-                href="/sessions?page={{ page - 1 }}{% if filter_params %}&{{ filter_params | urlencode }}{% endif %}"
-                class="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
-            >Prev</a>
-        {% else %}
-            <span class="px-4 py-2 text-sm bg-gray-800/40 text-gray-600 rounded-lg cursor-not-allowed">Prev</span>
-        {% endif %}
-
-        {% if page < total_pages %}
-            <a
-                href="/sessions?page={{ page + 1 }}{% if filter_params %}&{{ filter_params | urlencode }}{% endif %}"
-                class="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
-            >Next</a>
-        {% else %}
-            <span class="px-4 py-2 text-sm bg-gray-800/40 text-gray-600 rounded-lg cursor-not-allowed">Next</span>
-        {% endif %}
-    </div>
-</div>
+{% include "partials/pagination.html" %}
 
 {% else %}
 <!-- Empty state -->
-<div class="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-    <div class="text-gray-600 mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+<div class="card bg-base-200">
+    <div class="card-body items-center text-center py-12">
+        <div class="text-base-content/30 mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        </div>
+        <p class="text-base-content/60 text-sm mb-4">No sessions match your filters.</p>
+        <a href="/sessions" class="btn btn-sm btn-ghost">Clear filters</a>
     </div>
-    <p class="text-gray-400 text-sm mb-4">No sessions match your filters.</p>
-    <a
-        href="/sessions"
-        class="inline-flex items-center px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
-    >Clear filters</a>
 </div>
 {% endif %}

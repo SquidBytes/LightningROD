@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Index, Integer, Numeric, String, UniqueConstraint, text
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -32,6 +32,9 @@ class EVChargingSession(Base):
     charge_type: Mapped[Optional[str]] = mapped_column(String)
     location_name: Mapped[Optional[str]] = mapped_column(String)
     location_type: Mapped[Optional[str]] = mapped_column(String(20))  # 'home', 'work', 'public'
+    network_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ev_charging_networks.id", ondelete="SET NULL"), nullable=True
+    )
     is_free: Mapped[Optional[bool]] = mapped_column(Boolean)  # whether session was free charging
     plug_status: Mapped[Optional[str]] = mapped_column(String)
     charging_status: Mapped[Optional[str]] = mapped_column(String)
@@ -61,15 +64,33 @@ class EVChargingSession(Base):
     cost: Mapped[Optional[float]] = mapped_column(Numeric)
     cost_without_overrides: Mapped[Optional[float]] = mapped_column(Numeric)
     cost_source: Mapped[Optional[str]] = mapped_column(String(20))  # 'imported', 'manual', 'calculated', None
+    estimated_cost: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
 
     # Session flags
     is_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Location and power range
     location_id: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # HASS-sourced location data
+    address: Mapped[Optional[str]] = mapped_column(Text)
+    latitude: Mapped[Optional[float]] = mapped_column(Numeric)
+    longitude: Mapped[Optional[float]] = mapped_column(Numeric)
     max_power: Mapped[Optional[float]] = mapped_column(Numeric)
     min_power: Mapped[Optional[float]] = mapped_column(Numeric)
     miles_added: Mapped[Optional[float]] = mapped_column(Numeric)
+
+    # EVSE data (charger-side measurements)
+    evse_voltage: Mapped[Optional[float]] = mapped_column(Numeric)
+    evse_amperage: Mapped[Optional[float]] = mapped_column(Numeric)
+    evse_kw: Mapped[Optional[float]] = mapped_column(Numeric)
+    evse_energy_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
+    evse_max_power_kw: Mapped[Optional[float]] = mapped_column(Numeric)
+    charger_rated_kw: Mapped[Optional[float]] = mapped_column(Numeric)
+    evse_source: Mapped[Optional[str]] = mapped_column(String(20))  # 'smart_evse', 'energy_monitor', 'manual', 'estimated', 'stall_default'
+    stall_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ev_charger_stalls.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Pipeline metadata
     source_system: Mapped[Optional[str]] = mapped_column(String(100))

@@ -1,57 +1,78 @@
-# :lucide-battery-charging: Charging Sessions
+# Charging Sessions
 
-The sessions page (`/sessions`) is the primary way to browse your charging history.
+The sessions page (`/sessions`) is the primary interface for viewing and managing your charging history.
 
-<!-- TODO: Add screenshot of sessions page -->
+## Session Table
 
-## Session List
+Sessions are displayed in a paginated table with configurable page size (25, 50, or 100 per page). Columns shown:
 
-All charging sessions are displayed in a paginated table (25 per page) showing:
-
-- Date and time
+- Date and time (displayed in your configured timezone)
 - Location name
+- Network (with color badge)
 - Charge type (AC/DC)
 - Energy delivered (kWh)
-- Cost
+- Cost (actual or estimated with `~` prefix)
 - Duration
 
-## Filtering
+### Sorting
 
-The filter bar at the top of the page lets you narrow results. Filters update the list instantly without a full page reload.
+Click any column header to sort. Headers cycle through three states: none, ascending, descending. An arrow indicator shows the current sort direction. Sort state persists through pagination and filter changes.
 
-### Date Range
+### Filtering
 
-Choose from presets or set a custom range:
+The filter bar supports multiple simultaneous filters:
 
-| Preset | Description |
-|--------|-------------|
-| 7d | Last 7 days |
-| 30d | Last 30 days |
-| 90d | Last 90 days |
-| YTD | Year to date |
-| 1y | Last year |
-| All | All sessions |
-| Custom | Pick specific start and end dates |
+| Filter | Options |
+|--------|---------|
+| Date range | Presets: 7d, 30d, 90d, YTD, 1y, All, or custom start/end dates |
+| Charge type | AC, DC |
+| Location type | Home, Work, Public, and other location types |
+| Network | Multi-select checkboxes with color badges |
 
-### Charge Type
+Active filters display as chips below the filter bar. The summary bar above the table updates to reflect filtered totals.
 
-Filter by `AC` or `DC` charging.
+## Adding Sessions
 
-### Location Type
+Click the **Add Session** button above the table. A modal opens with fields for date, energy (kWh), cost, network, location, charge type, duration, SOC start/end, and notes.
 
-Filter by `home`, `work`, or `public` locations.
+Manually added sessions are tagged with a "Manual Entry" data source badge.
 
-All filters can be combined. The summary bar above the table updates to reflect the filtered totals.
+## Editing Sessions
 
-## Session Detail
+Click any row to open the session detail drawer. From the drawer, click **Edit** to open the edit modal.
 
-Click any row to open a slide-out drawer showing all available fields for that session, organized into sections:
+The edit modal is organized into three tabs:
 
-- Session info (start/end time, duration, type)
-- Energy (kWh delivered, SOC start/end, range added)
-- Cost (calculated cost with network cost breakdown)
-- Location (name, type, coordinates if available)
-- Vehicle (VIN, device ID)
-- Metadata (source, ingestion timestamp)
+| Tab | Fields |
+|-----|--------|
+| Basics | Date, network, energy, cost |
+| Details | Power metrics, SOC, duration, connector, EVSE data, stall selection |
+| Notes | Free-text notes |
 
-Use the prev/next arrows in the drawer to navigate between sessions without closing it.
+A data source badge in the top-right corner shows the origin of the session data (Manual Entry, Imported, HASS, or Edited).
+
+## Deleting Sessions
+
+Open a session's edit modal and click **Delete**. A confirmation dialog prevents accidental deletion.
+
+## Session Detail Drawer
+
+Click any table row to open the slide-out drawer with full session details:
+
+- Session info (date/time, duration, charge type, data source)
+- Energy and SOC (kWh delivered, SOC start/end, range added)
+- Cost breakdown card (actual cost, estimated cost, actual $/kWh, difference)
+- Network and location info with color badge
+- EVSE / Charger section (voltage, amperage, power, energy, max power, rated capacity, stall label)
+- Charging loss and utilization metrics when EVSE data is available
+
+Use the prev/next arrows to navigate between sessions without closing the drawer.
+
+## Cost Display
+
+Sessions display cost in two ways:
+
+- **Actual cost** -- User-entered or imported cost, shown normally
+- **Estimated cost** -- Calculated from network or location cost_per_kwh, shown with a `~` prefix and "Est." badge (e.g., `~$12.50`)
+
+When both exist, the drawer shows a cost breakdown card with the difference between actual and estimated.

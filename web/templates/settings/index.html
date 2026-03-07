@@ -2,37 +2,94 @@
 
 {% block content %}
 <div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-100">Settings</h1>
-    <p class="text-gray-400 mt-1">Configure charging networks and comparison options.</p>
+    <h1 class="text-2xl font-bold">Settings</h1>
+    <p class="text-base-content/60 mt-1">Configure charging networks, comparison options, and data import.</p>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+{# Tab bar using DaisyUI CSS-only radio tabs with adjacent tab-content #}
+<div role="tablist" class="tabs tabs-bordered">
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="General" {{ 'checked' if active_tab == 'general' }} />
+    <div role="tabpanel" class="tab-content pt-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Comparison Settings -->
+            <div class="card bg-base-200">
+                <div class="card-body">
+                    <h2 class="card-title">Comparison Settings</h2>
+                    <div id="gas-settings">
+                        {% include "settings/partials/gas_settings.html" %}
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    <!-- Left column: Charging Networks -->
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <h2 class="text-lg font-semibold text-gray-100 mb-1">Charging Networks</h2>
-        <p class="text-gray-400 text-sm mb-4">Set the $/kWh cost for each charging network. Costs are used to calculate session expenses.</p>
-        <div id="networks-table">
-            {% include "settings/partials/networks_table.html" %}
+        <!-- Unit Preferences -->
+        <div class="card bg-base-200 mt-6 max-w-lg">
+            <div class="card-body">
+                <h2 class="card-title">Unit Preferences</h2>
+                <p class="text-base-content/60 text-sm">Choose how efficiency values display on the energy dashboard.</p>
+                <div id="unit-settings">
+                    {% include "settings/partials/unit_settings.html" %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Timezone -->
+        <div class="card bg-base-200 mt-6 max-w-lg">
+            <div class="card-body">
+                <h2 class="card-title">Timezone</h2>
+                <p class="text-base-content/60 text-sm">Set your local timezone for displaying session timestamps.</p>
+                <div id="timezone-settings">
+                    {% include "settings/partials/timezone_settings.html" %}
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Right column: Comparison Settings -->
-    <div class="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <h2 class="text-lg font-semibold text-gray-100 mb-1">Comparison Settings</h2>
-        <div id="gas-settings">
-            {% include "settings/partials/gas_settings.html" %}
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Networks" {{ 'checked' if active_tab == 'networks' }} />
+    <div role="tabpanel" class="tab-content pt-6">
+        {% include "settings/partials/network_management.html" %}
+    </div>
+
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="CSV Import" {{ 'checked' if active_tab == 'import' }} />
+    <div role="tabpanel" class="tab-content pt-6">
+        {% include "settings/partials/import_tab.html" %}
+    </div>
+</div>
+
+{# Network edit modal using DaisyUI dialog #}
+<dialog id="network-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-4xl">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="network-modal-content">
+            {# Modal content injected by openNetworkModal() #}
         </div>
     </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
 
-</div>
+<script>
+function openNetworkModal(networkId) {
+    htmx.ajax('GET', '/settings/networks/' + networkId + '/edit-modal',
+        {target: '#network-modal-content', swap: 'innerHTML'});
+    document.getElementById('network-modal').showModal();
+}
 
-<!-- Unit Preferences -->
-<div class="mt-6 bg-gray-900 rounded-xl border border-gray-800 p-6 max-w-lg">
-    <h2 class="text-lg font-semibold text-gray-100 mb-1">Unit Preferences</h2>
-    <p class="text-gray-400 text-sm mb-4">Choose how efficiency values display on the energy dashboard.</p>
-    <div id="unit-settings">
-        {% include "settings/partials/unit_settings.html" %}
-    </div>
-</div>
+function closeNetworkModal() {
+    document.getElementById('network-modal').close();
+    document.getElementById('network-modal-content').innerHTML = '';
+}
+
+function openConvertModal(networkId) {
+    htmx.ajax('GET', '/settings/networks/' + networkId + '/convert-modal',
+        {target: '#network-modal-content', swap: 'innerHTML'});
+    document.getElementById('network-modal').showModal();
+}
+
+// Listen for closeNetworkModal HX-Trigger event (fired by PUT on save)
+document.body.addEventListener('closeNetworkModal', closeNetworkModal);
+</script>
 {% endblock %}

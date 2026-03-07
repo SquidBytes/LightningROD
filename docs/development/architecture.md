@@ -1,13 +1,13 @@
-# :lucide-layers: Architecture
+# Architecture
 
 How LightningROD is structured and the patterns used throughout the codebase.
 
 ## Overview
 
-LightningROD is a server-rendered web application. The backend handles all data access, computation, and HTML rendering. The frontend uses HTMX for dynamic updates without full page reloads, and Plotly for interactive charts.
+LightningROD is a server-rendered web application. The backend handles all data access, computation, and HTML rendering. The frontend uses HTMX for dynamic updates without full page reloads, DaisyUI for UI components, and Plotly for interactive charts.
 
 ```
-Browser (HTMX + Plotly)
+Browser (HTMX + DaisyUI + Plotly)
     |
 FastAPI (routes, templates)
     |
@@ -25,12 +25,14 @@ LightningROD/
 ├── config.py                # Application settings (reads .env)
 ├── docker-compose.yml       # Production stack (web + db)
 ├── docker-compose.dev.yml   # Dev override (exposes db port)
-├── Dockerfile               # Container image
+├── Dockerfile               # Multi-stage build (Node CSS + Python app)
 ├── entrypoint.sh            # Migrations + uvicorn startup
+├── input.css                # Tailwind v4 + DaisyUI source styles
+├── package.json             # Node deps (tailwindcss, daisyui)
 │
 ├── db/
 │   ├── engine.py            # Async SQLAlchemy engine + session factory
-│   ├── models/              # ORM models (8 tables)
+│   ├── models/              # ORM models (9 tables)
 │   └── migrations/          # Alembic migration files
 │
 ├── web/
@@ -38,12 +40,13 @@ LightningROD/
 │   ├── dependencies.py      # Database session dependency
 │   ├── routes/              # Route handlers
 │   ├── queries/             # Data access layer
-│   └── templates/           # Jinja2 templates with HTMX partials
+│   ├── services/            # Business logic (csv_parser, etc.)
+│   ├── templates/           # Jinja2 templates with HTMX partials
+│   └── static/              # Compiled CSS, vendor JS (HTMX, Plotly)
 │
 ├── scripts/
 │   └── seed.py              # CSV-to-PostgreSQL import
 │
-├── static/css/              # Compiled Tailwind CSS
 └── data/                    # CSV files for seeding (gitignored)
 ```
 
@@ -53,7 +56,7 @@ The FastAPI app is created by the factory function in `web/main.py`. On startup:
 
 1. The `lifespan` context manager initializes the database engine
 2. Jinja2 templates are loaded from `web/templates/`
-3. Static files are mounted from `static/`
+3. Static files are mounted from `web/static/`
 4. Route modules are included from `web/routes/`
 
 In Docker, `entrypoint.sh` runs Alembic migrations before starting uvicorn.
@@ -77,7 +80,7 @@ Browser                   FastAPI                    Query Layer              Po
 
 ### HTMX Partial Update
 
-When filtering, HTMX sends a request with `HX-Request: true`. The route handler detects this and returns only the partial template:
+When filtering or sorting, HTMX sends a request with `HX-Request: true`. The route returns only the partial template:
 
 ```
 Browser                   FastAPI
@@ -96,7 +99,7 @@ Browser                   FastAPI
 
 Route handlers do not contain SQL or ORM queries. All data access goes through `web/queries/`:
 
-```python title="web/routes/sessions.py"
+```python
 # Route handler -- HTTP concerns only
 sessions, total, summary = await query_sessions(db, filters, page, per_page)
 return templates.TemplateResponse("sessions/index.html", {
@@ -106,7 +109,7 @@ return templates.TemplateResponse("sessions/index.html", {
 })
 ```
 
-```python title="web/queries/sessions.py"
+```python
 # Query function -- data access only
 async def query_sessions(db, filters, page, per_page):
     query = select(EVChargingSession)
@@ -127,21 +130,21 @@ return templates.TemplateResponse("sessions/index.html", context)
 
 ### Settings as Key-Value Store
 
-User preferences are stored in `app_settings` as key-value pairs. This avoids schema changes when adding new settings:
+User preferences are stored in `app_settings` as key-value pairs:
 
 ```python
 # Read multiple settings in one query
 settings = await get_app_settings_dict(db, [
-    "gas_price", "vehicle_mpg", "efficiency_unit"
+    "gas_price", "vehicle_mpg", "efficiency_unit", "user_timezone"
 ])
 
 # Write with upsert semantics
 await set_app_setting(db, "efficiency_unit", "eu")
 ```
 
-### Cost Calculation
+### Cost Hierarchy
 
-Session costs are computed at query time, not stored. `compute_session_cost()` takes a session and a networks dictionary, returns cost info based on the session's location and configured network cost. Changing a network cost immediately affects all displayed costs.
+Session costs follow a cascade: location `cost_per_kwh` > network `cost_per_kwh` > no estimate. The `estimated_cost` field is stored on the session record.
 
 ## Template Structure
 
@@ -150,19 +153,48 @@ Each page has an `index.html` and a `partials/` subdirectory:
 ```
 templates/
 ├── base.html                     # Master layout (sidebar + content area)
+├── partials/
+│   ├── modal_shell.html          # Shared modal component
+│   ├── filter_bar.html           # Shared date-range filter bar
+│   └── pagination.html           # Shared pagination component
 ├── sessions/
 │   ├── index.html                # Full page
 │   └── partials/
 │       ├── table.html            # Session table (HTMX target)
-│       ├── filters.html          # Filter bar
-│       └── drawer.html           # Session detail drawer
+│       ├── filters.html          # Session-specific filters
+│       ├── drawer.html           # Session detail drawer
+│       ├── modal.html            # Session edit modal (3 tabs)
+│       └── add_form.html         # Add session form
+├── settings/
+│   ├── index.html                # Settings page (tabbed)
+│   └── partials/
+│       ├── network_management.html
+│       ├── network_edit_modal.html
+│       ├── location_rows.html
+│       ├── stall_rows.html
+│       ├── import_tab.html
+│       ├── import_preview.html
+│       ├── import_row.html
+│       └── ...
+├── dashboard/
+│   └── index.html
 ├── costs/
 │   ├── index.html
 │   └── partials/
-│       ├── summary_cards.html
-│       ├── chart.html
-│       └── comparisons.html
-└── ...
+└── energy/
+    ├── index.html
+    └── partials/
 ```
 
-The `base.html` template provides the dark-mode sidebar layout, loads HTMX from CDN, and includes Plotly for charts.
+The `base.html` template provides the dark-mode sidebar layout using DaisyUI's drawer component, loads HTMX and Plotly from vendored static files.
+
+## UI Component Library
+
+The app uses [DaisyUI v5](https://daisyui.com/) as a CSS-only component library on top of Tailwind CSS v4. Components used throughout:
+
+- `btn`, `badge`, `card`, `table` -- Core layout
+- `tabs`, `modal`, `drawer` -- Navigation and overlays
+- `select`, `checkbox`, `input` -- Form controls
+- `stats` -- Metric displays
+
+DaisyUI is CSS-only (zero JavaScript), which means components work correctly after HTMX partial swaps without re-initialization.

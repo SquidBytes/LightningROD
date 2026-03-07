@@ -8,9 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from web.dependencies import get_db
 from web.queries.energy import (
     query_energy_summary,
+    query_monthly_energy,
     query_regen_summary,
     query_regen_for_chart,
     build_efficiency_chart,
+    build_monthly_energy_chart,
     CHARGE_TYPE_LABELS,
 )
 from web.queries.settings import get_app_settings_dict
@@ -51,7 +53,7 @@ async def energy(
     if summary["worst_efficiency"] is not None:
         summary["worst_efficiency"] = summary["worst_efficiency"] * factor
 
-    # Build efficiency chart (chart builder applies factor internally)
+    # Build efficiency scatter chart (chart builder applies factor internally)
     regen_chart_data = await query_regen_for_chart(db, time_range=time_range)
     chart_html = build_efficiency_chart(
         sessions=summary["sessions_for_chart"],
@@ -60,10 +62,15 @@ async def energy(
         unit_factor=factor,
     )
 
+    # Build monthly energy stacked area chart
+    monthly_energy_data = await query_monthly_energy(db, time_range=time_range)
+    monthly_energy_chart = build_monthly_energy_chart(monthly_energy_data)
+
     context = {
         "summary": summary,
         "regen": regen,
         "chart_html": chart_html,
+        "monthly_energy_chart": monthly_energy_chart,
         "active_range": time_range,
         "active_page": "energy",
         "page_title": "Energy",

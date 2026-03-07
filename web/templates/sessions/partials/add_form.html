@@ -1,0 +1,77 @@
+<!-- Add session form -- rendered inside drawer content -->
+<div class="flex items-center justify-between p-4 border-b border-base-300 sticky top-0 bg-base-200 z-10">
+    <span class="text-base-content font-semibold">New Session</span>
+    <div class="flex items-center gap-2">
+        <button
+            hx-post="/sessions"
+            hx-target="#drawer-body"
+            hx-swap="innerHTML"
+            hx-include="#add-form"
+            class="btn btn-primary btn-sm"
+        >Save</button>
+        <button onclick="closeDrawer()" class="btn btn-ghost btn-sm btn-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+    </div>
+</div>
+
+<form id="add-form" class="p-4 space-y-4">
+    <!-- Date (required) -->
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Date *</span></div>
+        <input type="date" name="session_date" value="{{ default_date }}" required
+               class="input input-bordered w-full">
+    </label>
+
+    <!-- Energy kWh (required) -->
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Energy (kWh) *</span></div>
+        <input type="number" name="energy_kwh" step="0.1" min="0.1" required placeholder="0.0"
+               class="input input-bordered w-full">
+    </label>
+
+    <!-- Cost (optional) -->
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Cost ($)</span></div>
+        <input type="number" name="cost" step="0.01" min="0" placeholder="0.00"
+               class="input input-bordered w-full">
+    </label>
+
+    <!-- Location Name (optional, smart default) -->
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Location</span></div>
+        <input type="text" name="location_name" value="{{ default_location or '' }}" placeholder="e.g., Home, EA Station"
+               class="input input-bordered w-full">
+    </label>
+
+    <!-- Location Type -->
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Location Type</span></div>
+        <select name="location_type" class="select select-bordered w-full">
+            <option value="">—</option>
+            <option value="home">Home</option>
+            <option value="work">Work</option>
+            <option value="public">Public</option>
+        </select>
+    </label>
+
+    <!-- Charge Type -->
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Charge Type</span></div>
+        <select name="charge_type" class="select select-bordered w-full">
+            <option value="">—</option>
+            <option value="AC">AC</option>
+            <option value="DC">DC</option>
+        </select>
+    </label>
+
+    <!-- Duration (minutes) -->
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text">Duration (minutes)</span></div>
+        <input type="number" name="duration_minutes" step="1" min="0" placeholder="0"
+               class="input input-bordered w-full">
+    </label>
+
+</form>

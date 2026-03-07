@@ -1,0 +1,521 @@
+{# Import Preview — rendered after upload with auto-detected column mappings.
+   Receives: preview_rows, total_rows, new_count, dup_count, error_count,
+             import_data_json, matched_columns, unmatched_columns, import_timezone
+   Submits to: POST /settings/import/execute #}
+<div class="space-y-6">
+
+    {# Header #}
+    <div>
+        <h3 class="text-lg font-semibold">Preview Import</h3>
+        <p class="text-base-content/60 text-sm mt-1">
+            Review the parsed rows before importing. Click any row to edit inline.
+        </p>
+    </div>
+
+    <form id="import-preview-form" class="space-y-4">
+
+        {# Hidden field carrying ALL transformed row data for the import step #}
+        <input type="hidden" name="import_data" value="{{ import_data_json | e }}">
+
+        {# Column match banner #}
+        {% if unmatched_columns %}
+        <div class="alert alert-info text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span>
+                Matched {{ matched_columns|length }}/{{ matched_columns|length + unmatched_columns|length }} columns.
+                Unrecognized: {{ unmatched_columns|join(', ') }} (skipped)
+            </span>
+        </div>
+        {% elif matched_columns %}
+        <div class="card bg-base-200">
+            <div class="card-body py-3">
+                <span class="text-sm text-success">All {{ matched_columns|length }} columns matched.</span>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Summary bar #}
+        <div class="card bg-base-200">
+            <div class="card-body py-4 flex-row flex-wrap items-center gap-4 text-sm">
+                <span class="font-medium">{{ total_rows }} rows</span>
+                <span class="badge badge-success badge-sm">{{ new_count }} new</span>
+                {% if dup_count > 0 %}
+                <span class="badge badge-warning badge-sm">{{ dup_count }} duplicate{{ 's' if dup_count != 1 else '' }}</span>
+                {% endif %}
+                {% if error_count > 0 %}
+                <span class="badge badge-error badge-sm">{{ error_count }} error{{ 's' if error_count != 1 else '' }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Bulk selection + bulk edit controls #}
+        <div class="flex items-center gap-3 flex-wrap">
+            <span class="text-sm text-base-content/60">Select:</span>
+            <button type="button" onclick="selectPreset('non_duplicates')"
+                    class="btn btn-ghost btn-xs">All Non-Duplicates</button>
+            <button type="button" onclick="selectPreset('all')"
+                    class="btn btn-ghost btn-xs">All</button>
+            <button type="button" onclick="selectPreset('none')"
+                    class="btn btn-ghost btn-xs">None</button>
+            <div class="divider divider-horizontal mx-0"></div>
+            <button type="button" id="import-bulk-edit-toggle" onclick="toggleImportBulkEdit()"
+                    class="btn btn-outline btn-sm gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Bulk Edit
+            </button>
+        </div>
+
+        {# Bulk edit bar (hidden by default) #}
+        <div id="import-bulk-bar" class="hidden">
+            <div class="bg-base-200 border-2 border-primary/30 rounded-box shadow-lg px-4 py-3">
+                <div class="flex items-center gap-3 flex-nowrap overflow-x-auto">
+                    <span id="import-selected-count" class="text-sm text-base-content/70 font-medium whitespace-nowrap min-w-[80px]">0 selected</span>
+
+                    <div class="form-control">
+                        <input type="hidden" id="import-bulk-network-id" value="" data-network-hidden>
+                        <input type="text" id="import-bulk-network" list="import-bulk-network-list"
+                               placeholder="Network..."
+                               class="input input-bordered input-sm w-40"
+                               autocomplete="off"
+                               oninput="resolveNetworkCombobox(this)">
+                        <datalist id="import-bulk-network-list">
+                            {% for net in networks %}
+                            <option value="{{ net.network_name }}" data-id="{{ net.id }}"></option>
+                            {% endfor %}
+                        </datalist>
+                    </div>
+
+                    <select id="import-bulk-charge-type" class="select select-bordered select-sm">
+                        <option value="">Charge Type...</option>
+                        <option value="AC">AC</option>
+                        <option value="DC">DC</option>
+                    </select>
+
+                    <input id="import-bulk-location" type="text" placeholder="Location..." class="input input-bordered input-sm w-40">
+
+                    <input id="import-bulk-cost" type="number" step="0.01" min="0" placeholder="Cost $..." class="input input-bordered input-sm w-28">
+
+                    <button type="button" onclick="applyImportBulkEdit()" class="btn btn-primary btn-sm">Apply</button>
+                    <button type="button" onclick="toggleImportBulkEdit()" class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        {# Preview table with virtual scroll #}
+        <div class="max-h-[60vh] overflow-y-auto overflow-x-auto">
+            <table class="table table-zebra table-sm table-pin-rows">
+                <thead>
+                    <tr>
+                        <th class="w-8"></th>
+                        <th class="w-8">#</th>
+                        <th>Date</th>
+                        <th>Location</th>
+                        <th>Network</th>
+                        <th class="text-right">Energy (kWh)</th>
+                        <th class="text-right">Cost</th>
+                        <th>Type</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                {% for row in preview_rows %}
+                {% set row_index = row.get('_row_index', loop.index0) %}
+                {% set row_status = row.get('_status', 'new') %}
+                {% set is_error = row_status == 'error' %}
+                {% set is_dup = row_status in ('duplicate', 'fuzzy_duplicate') %}
+                <tbody id="rowgroup-{{ row_index }}">
+                    {# Data row #}
+                    <tr
+                        class="cursor-pointer{% if is_error %} bg-error/10{% elif is_dup %} bg-warning/10{% endif %}"
+                        data-row-status="{{ row_status }}"
+                        data-row-index="{{ row_index }}"
+                        onclick="toggleEditor({{ row_index }})"
+                    >
+                        {# Checkbox #}
+                        <td>
+                            <input
+                                type="checkbox"
+                                name="selected_rows"
+                                value="{{ row_index }}"
+                                {% if row_status == 'new' %}checked{% endif %}
+                                class="checkbox checkbox-sm checkbox-primary"
+                            >
+                        </td>
+
+                        {# Row number #}
+                        <td class="text-base-content/40 text-xs">{{ row_index + 1 }}</td>
+
+                        {# Date #}
+                        <td class="text-xs whitespace-nowrap">
+                            {% set start = row.get('session_start_utc') %}
+                            {% if start %}
+                                {% if start is string %}{{ start[:10] }}{% else %}{{ start.strftime('%Y-%m-%d') }}{% endif %}
+                            {% else %}
+                                <span class="text-base-content/40">&mdash;</span>
+                            {% endif %}
+                        </td>
+
+                        {# Location #}
+                        <td class="text-xs">{{ row.get('location_name') or '&mdash;' }}</td>
+
+                        {# Network #}
+                        <td class="text-xs">
+                            {%- set net_val = row.get('network_id') -%}
+                            {%- if net_val is not none and net_val != '' -%}
+                                {%- set ns_net = namespace(name='') -%}
+                                {%- if networks is defined -%}
+                                    {%- for net in networks -%}
+                                        {%- if net.id|string == net_val|string -%}
+                                            {%- set ns_net.name = net.network_name -%}
+                                        {%- endif -%}
+                                    {%- endfor -%}
+                                {%- endif -%}
+                                {{ ns_net.name or net_val }}
+                            {%- else -%}
+                                &mdash;
+                            {%- endif -%}
+                        </td>
+
+                        {# Energy #}
+                        <td class="text-xs text-right">
+                            {% set kwh = row.get('energy_kwh') %}
+                            {% if kwh is not none %}{{ "%.2f"|format(kwh|float) }}{% else %}<span class="text-base-content/40">&mdash;</span>{% endif %}
+                        </td>
+
+                        {# Cost #}
+                        <td class="text-xs text-right">
+                            {% set cost = row.get('cost') %}
+                            {% if cost is not none %}${{ "%.2f"|format(cost|float) }}{% else %}<span class="text-base-content/40">&mdash;</span>{% endif %}
+                        </td>
+
+                        {# Charge Type #}
+                        <td class="text-base-content/60 text-xs">{{ row.get('charge_type') or '&mdash;' }}</td>
+
+                        {# Duration #}
+                        <td class="text-xs">
+                            {% set dur = row.get('charge_duration_seconds') %}
+                            {% if dur is not none %}{{ (dur|float / 60)|round(0)|int }} min{% else %}<span class="text-base-content/40">&mdash;</span>{% endif %}
+                        </td>
+
+                        {# Status badge #}
+                        <td>
+                            {% if row_status == 'new' %}
+                                <span class="badge badge-success badge-sm">New</span>
+                            {% elif row_status == 'duplicate' %}
+                                <span class="badge badge-warning badge-sm">Duplicate</span>
+                            {% elif row_status == 'fuzzy_duplicate' %}
+                                <span class="badge badge-warning badge-sm badge-outline">Fuzzy Match</span>
+                            {% elif row_status == 'error' %}
+                                <span class="badge badge-error badge-sm" title="{{ row.get('_error', 'Unknown error') }}">Error</span>
+                            {% endif %}
+                            <span class="loading loading-spinner loading-xs htmx-indicator ml-1"></span>
+                        </td>
+                    </tr>
+
+                    {# Inline editor row (available for all rows) #}
+                    <tr id="editor-{{ row_index }}" class="hidden">
+                        <td colspan="11" class="p-0">
+                            <div class="card bg-base-200 m-2">
+                                <div class="card-body p-4">
+                                    <form hx-post="/settings/import/verify-row"
+                                          hx-target="#rowgroup-{{ row_index }}"
+                                          hx-swap="outerHTML"
+                                          hx-indicator="#rowgroup-{{ row_index }} .htmx-indicator"
+                                    >
+                                        <input type="hidden" name="row_index" value="{{ row_index }}">
+                                        <input type="hidden" name="import_timezone" value="{{ import_timezone }}">
+                                        <input type="hidden" name="editor_open" value="1">
+
+                                        {# Status message (if error or duplicate) #}
+                                        {% if is_error or is_dup %}
+                                        <div class="mb-2">
+                                            <h4 class="text-xs font-semibold text-warning">
+                                                {% if is_error %}
+                                                    Problem: {{ row.get('_error', 'Unknown error') }}
+                                                {% else %}
+                                                    Duplicate detected &mdash; review key fields
+                                                {% endif %}
+                                            </h4>
+                                        </div>
+                                        {% endif %}
+
+                                        {# Editable fields #}
+                                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            <div class="form-control">
+                                                <label class="label"><span class="label-text text-xs">Date/Time</span></label>
+                                                <input type="datetime-local" name="session_start_utc"
+                                                       value="{% set s = row.get('session_start_utc') %}{% if s %}{% if s is string %}{{ s[:16] }}{% else %}{{ s.strftime('%Y-%m-%dT%H:%M') }}{% endif %}{% endif %}"
+                                                       class="input input-bordered input-sm">
+                                            </div>
+                                            <div class="form-control">
+                                                <label class="label"><span class="label-text text-xs">Location</span></label>
+                                                <input type="text" name="location_name"
+                                                       value="{{ row.get('location_name') or '' }}"
+                                                       class="input input-bordered input-sm">
+                                            </div>
+                                            <div class="form-control">
+                                                <label class="label"><span class="label-text text-xs">Energy (kWh)</span></label>
+                                                <input type="number" step="0.01" name="energy_kwh"
+                                                       value="{% if row.get('energy_kwh') is not none %}{{ row.get('energy_kwh') }}{% endif %}"
+                                                       class="input input-bordered input-sm">
+                                            </div>
+                                            <div class="form-control">
+                                                <label class="label"><span class="label-text text-xs">Cost ($)</span></label>
+                                                <input type="number" step="0.01" name="cost"
+                                                       value="{% if row.get('cost') is not none %}{{ row.get('cost') }}{% endif %}"
+                                                       class="input input-bordered input-sm">
+                                            </div>
+                                            <div class="form-control">
+                                                <label class="label"><span class="label-text text-xs">Type</span></label>
+                                                <select name="charge_type" class="select select-bordered select-sm">
+                                                    <option value="">--</option>
+                                                    <option value="AC" {% if row.get('charge_type') == 'AC' %}selected{% endif %}>AC</option>
+                                                    <option value="DC" {% if row.get('charge_type') == 'DC' %}selected{% endif %}>DC</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-control">
+                                                <label class="label"><span class="label-text text-xs">Network</span></label>
+                                                {% set current_network_id = row.get('network_id') if row.get('network_id') is not none and row.get('network_id') != '' else None %}
+                                                {% set input_class = 'input input-bordered input-sm w-full' %}
+                                                {% set datalist_id = 'preview-network-list-' ~ row_index %}
+                                                {% include "partials/network_combobox.html" %}
+                                            </div>
+                                            <div class="form-control">
+                                                <label class="label"><span class="label-text text-xs">Duration (sec)</span></label>
+                                                <input type="number" step="1" name="charge_duration_seconds"
+                                                       value="{% if row.get('charge_duration_seconds') is not none %}{{ row.get('charge_duration_seconds')|int }}{% endif %}"
+                                                       class="input input-bordered input-sm">
+                                            </div>
+                                        </div>
+
+                                        {# Duplicate action options #}
+                                        {% if is_dup %}
+                                        <div class="flex items-center gap-4 mt-3 pt-3 border-t border-base-300">
+                                            <span class="text-xs font-medium">Action:</span>
+                                            <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                                <input type="radio" name="action_{{ row_index }}" value="skip"
+                                                       class="radio radio-sm" checked>
+                                                Skip
+                                            </label>
+                                            <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                                <input type="radio" name="action_{{ row_index }}" value="insert"
+                                                       class="radio radio-sm">
+                                                Insert Anyway
+                                            </label>
+                                            <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                                <input type="radio" name="action_{{ row_index }}" value="update"
+                                                       class="radio radio-sm">
+                                                Update Existing
+                                            </label>
+                                        </div>
+                                        {% endif %}
+
+                                        {# Save / close buttons #}
+                                        <div class="flex items-center gap-2 mt-3 pt-3 border-t border-base-300">
+                                            <button type="submit" class="btn btn-primary btn-sm btn-outline">
+                                                Save
+                                                <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+                                            </button>
+                                            <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEditor({{ row_index }})">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+                {% endfor %}
+            </table>
+        </div>
+
+        {# Action buttons #}
+        <div class="flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <button
+                    type="button"
+                    hx-get="/settings/import/reset"
+                    hx-target="#import-flow-container"
+                    hx-swap="innerHTML"
+                    class="btn btn-ghost btn-sm"
+                >
+                    Back to Upload
+                </button>
+                <button
+                    type="button"
+                    onclick="document.getElementById('import-flow-container').innerHTML = ''"
+                    class="btn btn-ghost btn-sm"
+                >
+                    Cancel
+                </button>
+            </div>
+
+            <button
+                type="button"
+                hx-post="/settings/import/execute"
+                hx-target="#import-flow-container"
+                hx-swap="innerHTML"
+                hx-include="#import-preview-form"
+                class="btn btn-success"
+            >
+                Import Selected Rows
+            </button>
+        </div>
+
+    </form>
+</div>
+
+<script>
+function toggleEditor(rowIndex) {
+    var editor = document.getElementById('editor-' + rowIndex);
+    if (editor) {
+        editor.classList.toggle('hidden');
+    }
+}
+
+function selectPreset(mode) {
+    var checkboxes = document.querySelectorAll('#import-preview-form input[name="selected_rows"]');
+    checkboxes.forEach(function(cb) {
+        var row = cb.closest('tr');
+        var status = row ? row.getAttribute('data-row-status') : 'new';
+        if (mode === 'all') {
+            cb.checked = true;
+        } else if (mode === 'none') {
+            cb.checked = false;
+        } else if (mode === 'non_duplicates') {
+            cb.checked = (status === 'new');
+        }
+    });
+    updateImportSelectedCount();
+}
+
+// --- Import Bulk Edit ---
+var _importBulkActive = false;
+
+function toggleImportBulkEdit() {
+    _importBulkActive = !_importBulkActive;
+    var bar = document.getElementById('import-bulk-bar');
+    var toggle = document.getElementById('import-bulk-edit-toggle');
+    if (_importBulkActive) {
+        bar.classList.remove('hidden');
+        toggle.classList.add('btn-active');
+        updateImportSelectedCount();
+    } else {
+        bar.classList.add('hidden');
+        toggle.classList.remove('btn-active');
+        // Reset fields
+        document.getElementById('import-bulk-network').value = '';
+        document.getElementById('import-bulk-network-id').value = '';
+        document.getElementById('import-bulk-charge-type').value = '';
+        document.getElementById('import-bulk-location').value = '';
+        document.getElementById('import-bulk-cost').value = '';
+    }
+}
+
+function updateImportSelectedCount() {
+    var count = document.querySelectorAll('#import-preview-form input[name="selected_rows"]:checked').length;
+    var el = document.getElementById('import-selected-count');
+    if (el) el.textContent = count + ' selected';
+}
+
+// Update count when checkboxes change
+document.addEventListener('change', function(e) {
+    if (e.target.name === 'selected_rows' && _importBulkActive) {
+        updateImportSelectedCount();
+    }
+});
+
+function applyImportBulkEdit() {
+    var checked = document.querySelectorAll('#import-preview-form input[name="selected_rows"]:checked');
+    if (checked.length === 0) {
+        alert('No rows selected');
+        return;
+    }
+
+    var networkInput = document.getElementById('import-bulk-network');
+    var networkIdInput = document.getElementById('import-bulk-network-id');
+    var chargeType = document.getElementById('import-bulk-charge-type').value;
+    var location = document.getElementById('import-bulk-location').value;
+    var cost = document.getElementById('import-bulk-cost').value;
+
+    var changes = [];
+    if (networkInput.value) changes.push('Network → ' + networkInput.value);
+    if (chargeType) changes.push('Charge Type → ' + chargeType);
+    if (location) changes.push('Location → ' + location);
+    if (cost) changes.push('Cost → $' + cost);
+
+    if (changes.length === 0) {
+        alert('No fields to update. Set at least one field value.');
+        return;
+    }
+
+    if (!confirm(checked.length + ' rows will be updated:\n' + changes.join('\n'))) return;
+
+    // Collect selected row indices
+    var selectedIndices = new Set();
+    checked.forEach(function(cb) { selectedIndices.add(parseInt(cb.value)); });
+
+    // Update the hidden import_data JSON
+    var dataInput = document.querySelector('#import-preview-form input[name="import_data"]');
+    var importData = [];
+    try { importData = JSON.parse(dataInput.value); } catch(e) {}
+
+    importData.forEach(function(row) {
+        var idx = row._row_index;
+        if (idx === undefined) return;
+        if (!selectedIndices.has(idx)) return;
+
+        if (networkIdInput.value) {
+            row.network_id = parseInt(networkIdInput.value);
+        } else if (networkInput.value) {
+            row.network_id = networkInput.value;
+        }
+        if (chargeType) row.charge_type = chargeType;
+        if (location) row.location_name = location;
+        if (cost) row.cost = parseFloat(cost);
+    });
+
+    dataInput.value = JSON.stringify(importData);
+
+    // Update visible table cells
+    checked.forEach(function(cb) {
+        var dataRow = cb.closest('tr');
+        if (!dataRow) return;
+        var cells = dataRow.querySelectorAll('td');
+        // Cell order: checkbox(0), #(1), date(2), location(3), network(4), energy(5), cost(6), type(7), duration(8), status(9)
+        if (location) cells[3].innerHTML = '<span class="text-xs">' + location + '</span>';
+        if (networkInput.value) cells[4].innerHTML = '<span class="text-xs">' + networkInput.value + '</span>';
+        if (cost) cells[6].innerHTML = '<span class="text-xs text-right">$' + parseFloat(cost).toFixed(2) + '</span>';
+        if (chargeType) cells[7].innerHTML = '<span class="text-base-content/60 text-xs">' + chargeType + '</span>';
+    });
+
+    // Also update inline editor inputs for affected rows
+    selectedIndices.forEach(function(idx) {
+        var editor = document.getElementById('editor-' + idx);
+        if (!editor) return;
+        if (location) {
+            var locInput = editor.querySelector('input[name="location_name"]');
+            if (locInput) locInput.value = location;
+        }
+        if (cost) {
+            var costInput = editor.querySelector('input[name="cost"]');
+            if (costInput) costInput.value = cost;
+        }
+        if (chargeType) {
+            var typeSelect = editor.querySelector('select[name="charge_type"]');
+            if (typeSelect) typeSelect.value = chargeType;
+        }
+        if (networkInput.value) {
+            var netNameInput = editor.querySelector('input[name="network_name"]');
+            var netHidden = editor.querySelector('input[name="network_id"]');
+            if (netNameInput) netNameInput.value = networkInput.value;
+            if (netHidden) netHidden.value = networkIdInput.value || '';
+        }
+    });
+
+    toggleImportBulkEdit();
+}
+</script>

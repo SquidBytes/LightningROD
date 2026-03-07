@@ -1,0 +1,139 @@
+<form id="filter-form">
+  <!-- Sort/filter hidden inputs must be inside #filter-form for hx-include to capture them -->
+  <input type="hidden" id="sort_by_input" name="sort_by" value="{{ sort_by or '' }}">
+  <input type="hidden" id="sort_dir_input" name="sort_dir" value="{{ sort_dir or '' }}">
+  <input type="hidden" id="filter_charge_type" name="charge_type" value="{{ charge_type or '' }}">
+  <input type="hidden" id="filter_network_id" name="network_id" value="{{ network_id or '' }}">
+  <input type="hidden" id="page_input" name="page" value="{{ page|default(1) }}">
+  <input type="hidden" id="per_page_input" name="per_page" value="{{ per_page|default(25) }}">
+  <div
+    hx-get="{{ filter_url }}"
+    hx-include="#filter-form"
+    hx-target="{{ filter_target }}"
+    hx-push-url="true"
+    hx-trigger="filterChanged from:body"
+    class="bg-base-200 rounded-box px-3 py-2 mb-2 flex flex-wrap gap-3 items-center"
+  >
+    <input type="hidden" id="date_preset_input" name="{{ date_param_name|default('date_preset') }}" value="{{ active_preset or '' }}">
+
+    <!-- Date presets: DaisyUI join group -->
+    <div class="join">
+      {% set presets = [("7d", "7d"), ("30d", "30d"), ("90d", "90d"), ("ytd", "YTD"), ("1y", "1y"), ("all", "All")] %}
+      {% for value, label in presets %}
+      <button type="button"
+        onclick="activatePreset(this, '{{ value }}')"
+        class="filter-preset-btn join-item btn btn-sm {% if active_preset == value or (not active_preset and value == 'all') %}btn-primary{% else %}btn-ghost{% endif %}"
+      >{{ label }}</button>
+      {% endfor %}
+    </div>
+
+    <!-- Custom date range -->
+    <div class="flex items-center gap-1.5">
+      <span class="text-base-content/60 text-sm">From</span>
+      <input type="date" name="date_from" value="{{ date_from or '' }}"
+        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('btn-primary'); b.classList.add('btn-ghost'); }); var pi=document.getElementById('page_input'); if(pi) pi.value='1'; htmx.trigger(document.body, 'filterChanged')"
+        class="input input-sm input-bordered w-28">
+      <span class="text-base-content/60 text-sm">To</span>
+      <input type="date" name="date_to" value="{{ date_to or '' }}"
+        onchange="document.getElementById('date_preset_input').value = ''; document.querySelectorAll('.filter-preset-btn').forEach(function(b){ b.classList.remove('btn-primary'); b.classList.add('btn-ghost'); }); var pi=document.getElementById('page_input'); if(pi) pi.value='1'; htmx.trigger(document.body, 'filterChanged')"
+        class="input input-sm input-bordered w-28">
+    </div>
+  </div>
+
+  <!-- Filter chips: dismissible pills for active column filters -->
+  <div id="filter-chips" class="flex flex-wrap gap-1.5 mb-4 empty:hidden min-h-0"></div>
+</form>
+<script>
+function setFilter(inputId, value) {
+  document.getElementById(inputId).value = value;
+}
+
+function activatePreset(btn, value) {
+    // Update hidden input
+    document.getElementById('date_preset_input').value = value;
+    // Clear custom date inputs
+    var fromInput = document.querySelector('[name=date_from]');
+    var toInput = document.querySelector('[name=date_to]');
+    if (fromInput) fromInput.value = '';
+    if (toInput) toInput.value = '';
+    // Reset to page 1 when filters change
+    var pageInput = document.getElementById('page_input');
+    if (pageInput) pageInput.value = '1';
+    // Toggle visual active state — DaisyUI btn-primary / btn-ghost
+    btn.closest('.join').querySelectorAll('button').forEach(function(b) {
+        b.classList.remove('btn-primary');
+        b.classList.add('btn-ghost');
+    });
+    btn.classList.remove('btn-ghost');
+    btn.classList.add('btn-primary');
+    // Trigger filter
+    htmx.trigger(document.body, 'filterChanged');
+}
+
+function createFilterChip(text, filterKey, filterValue) {
+    var chip = document.createElement('span');
+    chip.className = 'badge badge-outline gap-1';
+    var label = document.createTextNode(text + ' ');
+    chip.appendChild(label);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ml-0.5 hover:text-white transition-colors leading-none';
+    btn.setAttribute('aria-label', 'Remove filter');
+    btn.innerHTML = '&times;';
+    btn.onclick = function() { removeFilter(filterKey, filterValue); };
+    chip.appendChild(btn);
+    return chip;
+}
+
+function renderFilterChips() {
+    var container = document.getElementById('filter-chips');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Network filter chips
+    var networkInput = document.getElementById('filter_network_id');
+    if (networkInput && networkInput.value) {
+        var ids = networkInput.value.split(',').filter(function(v) { return v; });
+        ids.forEach(function(id) {
+            // Find display name from checkbox label
+            var cb = document.querySelector('.col-filter-checkbox[data-filter-key="network_id"][data-filter-value="' + id + '"]');
+            var labelText = 'Network ' + id;
+            if (cb) {
+                var labelEl = cb.closest('label');
+                if (labelEl) {
+                    var span = labelEl.querySelector('span');
+                    if (span) labelText = span.textContent.trim();
+                }
+            }
+            container.appendChild(createFilterChip('Network: ' + labelText, 'network_id', id));
+        });
+    }
+
+    // Charge type filter chips
+    var chargeInput = document.getElementById('filter_charge_type');
+    if (chargeInput && chargeInput.value) {
+        var types = chargeInput.value.split(',').filter(function(v) { return v; });
+        types.forEach(function(type) {
+            container.appendChild(createFilterChip('Type: ' + type, 'charge_type', type));
+        });
+    }
+}
+
+function removeFilter(filterKey, filterValue) {
+    var hiddenInput = document.getElementById('filter_' + filterKey);
+    if (hiddenInput) {
+        var values = hiddenInput.value.split(',').filter(function(v) { return v && v !== filterValue; });
+        hiddenInput.value = values.join(',');
+    }
+    // Uncheck the corresponding checkbox
+    var cb = document.querySelector('.col-filter-checkbox[data-filter-key="' + filterKey + '"][data-filter-value="' + filterValue + '"]');
+    if (cb) cb.checked = false;
+    renderFilterChips();
+    htmx.trigger(document.body, 'filterChanged');
+}
+
+// Render chips on page load (handles server-rendered initial filter state)
+document.addEventListener('DOMContentLoaded', function() {
+    renderFilterChips();
+});
+</script>

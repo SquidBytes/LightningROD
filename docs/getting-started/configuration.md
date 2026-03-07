@@ -1,6 +1,6 @@
-# :lucide-settings: Configuration
+# Configuration
 
-LightningROD is configured through environment variables, loaded from a `.env` file.
+LightningROD is configured through environment variables and in-app settings.
 
 ## Environment Variables
 
@@ -48,11 +48,16 @@ You do not need to change `POSTGRES_HOST` in your `.env` file when using Docker 
 
 ## In-App Settings
 
-Some settings are configured through the web UI rather than environment variables:
+Settings configured through the web UI at `/settings`:
 
-- **Charging networks** -- Per-network electricity costs ($/kWh)
-- **Gas comparison** -- MPG and gas price for savings calculations
-- **Unit preferences** -- US (mi/kWh) or EU (km/kWh)
-- **Comparison toggles** -- Show or hide cost comparison sections
+| Setting | Storage | Description |
+|---------|---------|-------------|
+| Charging networks | `ev_charging_networks` table | Per-network electricity costs and colors |
+| Locations | `ev_location_lookup` table | Named locations with optional cost override |
+| Charger stalls | `ev_charger_stalls` table | Charger specs per location |
+| Gas comparison | `app_settings` | MPG and gas price for savings calculations |
+| Unit preferences | `app_settings` | US (mi/kWh) or EU (km/kWh) |
+| Timezone | `app_settings` | Display timezone (e.g., America/New_York) |
+| Comparison toggles | `app_settings` | Show or hide cost comparison sections |
 
-These are stored in the `app_settings` database table and managed at `/settings`.
+These are managed at `/settings` and stored in the database.

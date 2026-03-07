@@ -1,0 +1,119 @@
+<!-- Reusable pagination component.
+     Required context variables: page, total_pages, per_page
+     Depends on: #filter-form (with #page_input and #per_page_input hidden inputs)
+-->
+<div class="flex items-center justify-between mt-4 px-1">
+    <!-- Page info -->
+    <div class="text-base text-base-content/60">
+        Page {{ page }} of {{ total_pages }}
+    </div>
+
+    <div class="flex items-center gap-4">
+        <!-- Items per page dropdown -->
+        <div class="flex items-center gap-2">
+            <span class="text-base text-base-content/60">Show</span>
+            <select id="per-page-select"
+                onchange="changePerPage(this.value)"
+                class="select select-sm select-bordered">
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+            </select>
+            <span class="text-base text-base-content/60">per page</span>
+        </div>
+
+        <!-- Page navigation -->
+        <div class="join" aria-label="Pagination">
+            <!-- Previous -->
+            {% if page > 1 %}
+                <button type="button" onclick="goToPage({{ page - 1 }})"
+                    class="join-item btn btn-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+            {% else %}
+                <button type="button" class="join-item btn btn-sm btn-disabled" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+            {% endif %}
+
+            <!-- Page numbers: show ~5 pages around current -->
+            {% set start_page = [1, page - 2]|max %}
+            {% set end_page = [total_pages, page + 2]|min %}
+
+            {% if start_page > 1 %}
+                <button type="button" onclick="goToPage(1)"
+                    class="join-item btn btn-sm">1</button>
+                {% if start_page > 2 %}
+                    <button type="button" class="join-item btn btn-sm btn-disabled" disabled>...</button>
+                {% endif %}
+            {% endif %}
+
+            {% for p in range(start_page, end_page + 1) %}
+                {% if p == page %}
+                    <button type="button" class="join-item btn btn-sm btn-active">{{ p }}</button>
+                {% else %}
+                    <button type="button" onclick="goToPage({{ p }})"
+                        class="join-item btn btn-sm">{{ p }}</button>
+                {% endif %}
+            {% endfor %}
+
+            {% if end_page < total_pages %}
+                {% if end_page < total_pages - 1 %}
+                    <button type="button" class="join-item btn btn-sm btn-disabled" disabled>...</button>
+                {% endif %}
+                <button type="button" onclick="goToPage({{ total_pages }})"
+                    class="join-item btn btn-sm">{{ total_pages }}</button>
+            {% endif %}
+
+            <!-- Next -->
+            {% if page < total_pages %}
+                <button type="button" onclick="goToPage({{ page + 1 }})"
+                    class="join-item btn btn-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+            {% else %}
+                <button type="button" class="join-item btn btn-sm btn-disabled" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    if (window._paginationInit) return;
+    window._paginationInit = true;
+
+    window.goToPage = function(pageNum) {
+        var pageInput = document.getElementById('page_input');
+        if (!pageInput) {
+            // Create dynamically if not present in filter-form
+            var form = document.getElementById('filter-form');
+            if (!form) return;
+            pageInput = document.createElement('input');
+            pageInput.type = 'hidden';
+            pageInput.id = 'page_input';
+            pageInput.name = 'page';
+            form.appendChild(pageInput);
+        }
+        pageInput.value = pageNum;
+        htmx.trigger(document.body, 'filterChanged');
+    };
+
+    window.changePerPage = function(value) {
+        var perPageInput = document.getElementById('per_page_input');
+        if (perPageInput) perPageInput.value = value;
+        // Reset to page 1 when changing per-page
+        goToPage(1);
+    };
+})();
+</script>

@@ -1,19 +1,19 @@
 {% if show_comparisons %}
 <!-- Savings Scenarios Section -->
 <div class="mt-8">
-    <h2 class="text-xl font-bold text-white mb-1">Savings Scenarios</h2>
-    <p class="text-gray-400 text-sm mb-4">See how your EV charging costs compare to alternatives.</p>
+    <h2 class="text-xl font-bold text-base-content mb-1">Savings Scenarios</h2>
+    <p class="text-base-content/60 text-sm mb-4">See how your EV charging costs compare to alternatives.</p>
 
     <!-- Tab buttons -->
     {% if gas_comparison or network_comparison %}
     <div class="flex gap-2 mb-4">
         {% if gas_comparison %}
             <button id="tab-gas" onclick="showTab('gas')"
-                class="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white transition-colors">vs Gasoline</button>
+                class="btn btn-sm btn-primary">vs Gasoline</button>
         {% endif %}
         {% if network_comparison %}
             <button id="tab-network" onclick="showTab('network')"
-                class="px-4 py-2 text-sm rounded-lg {% if gas_comparison %}bg-gray-800 text-gray-400 hover:bg-gray-700{% else %}bg-blue-600 text-white{% endif %} transition-colors">vs Network Rate</button>
+                class="btn btn-sm {% if gas_comparison %}btn-ghost{% else %}btn-primary{% endif %}">vs Network Rate</button>
         {% endif %}
     </div>
     {% endif %}
@@ -22,23 +22,29 @@
     {% if gas_comparison %}
     <div id="panel-gas">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 text-center">
-                <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Your EV Cost</p>
-                <p class="text-3xl font-bold text-white">${{ "%.2f"|format(gas_comparison.ev_total) }}</p>
-                <p class="text-sm text-gray-400 mt-2">{{ gas_comparison.session_count }} sessions</p>
+            <div class="card bg-base-200">
+                <div class="card-body items-center text-center">
+                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Your EV Cost</p>
+                    <p class="text-3xl font-bold">${{ "%.2f"|format(gas_comparison.ev_total) }}</p>
+                    <p class="text-sm text-base-content/60 mt-2">{{ gas_comparison.session_count }} sessions</p>
+                </div>
             </div>
-            <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 text-center">
-                <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Equivalent Gas Cost</p>
-                <p class="text-3xl font-bold text-white">${{ "%.2f"|format(gas_comparison.gas_total) }}</p>
-                <p class="text-sm text-gray-400 mt-2">{{ "%.0f"|format(gas_comparison.total_miles) }} miles at {{ gas_comparison.mpg }} MPG, ${{ "%.2f"|format(gas_comparison.gas_price) }}/gal</p>
+            <div class="card bg-base-200">
+                <div class="card-body items-center text-center">
+                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Equivalent Gas Cost</p>
+                    <p class="text-3xl font-bold">${{ "%.2f"|format(gas_comparison.gas_total) }}</p>
+                    <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(gas_comparison.total_miles) }} miles at {{ gas_comparison.mpg }} MPG, ${{ "%.2f"|format(gas_comparison.gas_price) }}/gal</p>
+                </div>
             </div>
-            <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 text-center">
-                <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">You Saved</p>
-                <p class="text-3xl font-bold {% if gas_comparison.savings >= 0 %}text-green-400{% else %}text-red-400{% endif %}">${{ "%.2f"|format(gas_comparison.savings|abs) }}</p>
-                <p class="text-sm text-gray-400 mt-2">{{ "%.0f"|format(gas_comparison.savings_pct|abs) }}% {% if gas_comparison.savings >= 0 %}less than gas{% else %}more than gas{% endif %}</p>
+            <div class="card bg-base-200">
+                <div class="card-body items-center text-center">
+                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">You Saved</p>
+                    <p class="text-3xl font-bold {% if gas_comparison.savings >= 0 %}text-green-400{% else %}text-red-400{% endif %}">${{ "%.2f"|format(gas_comparison.savings|abs) }}</p>
+                    <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(gas_comparison.savings_pct|abs) }}% {% if gas_comparison.savings >= 0 %}less than gas{% else %}more than gas{% endif %}</p>
+                </div>
             </div>
         </div>
-        <p class="text-xs text-gray-500">Based on your configured settings. Update in Settings.</p>
+        <p class="text-xs text-base-content/40">Based on your configured settings. Update in Settings.</p>
     </div>
     {% endif %}
 
@@ -46,7 +52,7 @@
     {% if network_comparison %}
     <div id="panel-network" {% if gas_comparison %}class="hidden"{% endif %}>
         <div class="flex items-center gap-3 mb-4">
-            <label class="text-gray-400 text-sm">Compare against:</label>
+            <label class="text-base-content/60 text-sm">Compare against:</label>
             <form class="flex items-center gap-2">
                 <input type="hidden" name="range" value="{{ active_range }}">
                 <select id="ref-rate-select"
@@ -55,7 +61,7 @@
                         hx-swap="innerHTML"
                         hx-include="closest form"
                         name="ref_rate"
-                        class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200">
+                        class="select select-sm select-bordered">
                     {% for network in networks %}
                         {% if not network.is_free and network.cost_per_kwh %}
                             <option value="{{ network.cost_per_kwh }}"
@@ -68,37 +74,43 @@
             </form>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 text-center">
-                <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Your Actual Cost</p>
-                <p class="text-3xl font-bold text-white">${{ "%.2f"|format(network_comparison.ev_total) }}</p>
-                <p class="text-sm text-gray-400 mt-2">{{ network_comparison.session_count }} sessions</p>
+            <div class="card bg-base-200">
+                <div class="card-body items-center text-center">
+                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Your Actual Cost</p>
+                    <p class="text-3xl font-bold">${{ "%.2f"|format(network_comparison.ev_total) }}</p>
+                    <p class="text-sm text-base-content/60 mt-2">{{ network_comparison.session_count }} sessions</p>
+                </div>
             </div>
-            <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 text-center">
-                <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">At Reference Rate</p>
-                <p class="text-3xl font-bold text-white">${{ "%.2f"|format(network_comparison.hypothetical_total) }}</p>
-                <p class="text-sm text-gray-400 mt-2">{{ network_comparison.session_count }} sessions at ${{ "%.3f"|format(network_comparison.reference_rate) }}/kWh</p>
+            <div class="card bg-base-200">
+                <div class="card-body items-center text-center">
+                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">At Reference Rate</p>
+                    <p class="text-3xl font-bold">${{ "%.2f"|format(network_comparison.hypothetical_total) }}</p>
+                    <p class="text-sm text-base-content/60 mt-2">{{ network_comparison.session_count }} sessions at ${{ "%.3f"|format(network_comparison.reference_rate) }}/kWh</p>
+                </div>
             </div>
-            <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 text-center">
-                {% if network_comparison.difference > 0 %}
-                    <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">You Saved</p>
-                    <p class="text-3xl font-bold text-green-400">${{ "%.2f"|format(network_comparison.difference) }}</p>
-                    <p class="text-sm text-gray-400 mt-2">{{ "%.0f"|format(network_comparison.difference_pct) }}% less than reference rate</p>
-                {% elif network_comparison.difference < 0 %}
-                    <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">You Paid More</p>
-                    <p class="text-3xl font-bold text-red-400">${{ "%.2f"|format(network_comparison.difference|abs) }}</p>
-                    <p class="text-sm text-gray-400 mt-2">{{ "%.0f"|format(network_comparison.difference_pct|abs) }}% more than reference rate</p>
-                {% else %}
-                    <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">No Difference</p>
-                    <p class="text-3xl font-bold text-gray-400">$0.00</p>
-                    <p class="text-sm text-gray-400 mt-2">Same as reference rate</p>
-                {% endif %}
+            <div class="card bg-base-200">
+                <div class="card-body items-center text-center">
+                    {% if network_comparison.difference > 0 %}
+                        <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">You Saved</p>
+                        <p class="text-3xl font-bold text-green-400">${{ "%.2f"|format(network_comparison.difference) }}</p>
+                        <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(network_comparison.difference_pct) }}% less than reference rate</p>
+                    {% elif network_comparison.difference < 0 %}
+                        <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">You Paid More</p>
+                        <p class="text-3xl font-bold text-red-400">${{ "%.2f"|format(network_comparison.difference|abs) }}</p>
+                        <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(network_comparison.difference_pct|abs) }}% more than reference rate</p>
+                    {% else %}
+                        <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">No Difference</p>
+                        <p class="text-3xl font-bold text-base-content/60">$0.00</p>
+                        <p class="text-sm text-base-content/60 mt-2">Same as reference rate</p>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
     {% endif %}
 
     {% if not gas_comparison and not network_comparison and show_comparisons %}
-    <p class="text-gray-500 text-sm">No comparison data available. Configure charging networks in Settings to see savings scenarios.</p>
+    <p class="text-base-content/40 text-sm">No comparison data available. Configure charging networks in Settings to see savings scenarios.</p>
     {% endif %}
 </div>
 
@@ -113,11 +125,11 @@ function showTab(tab) {
         }
         if (tabBtn) {
             if (p === tab) {
-                tabBtn.classList.remove('bg-gray-800', 'text-gray-400', 'hover:bg-gray-700');
-                tabBtn.classList.add('bg-blue-600', 'text-white');
+                tabBtn.classList.remove('btn-ghost');
+                tabBtn.classList.add('btn-primary');
             } else {
-                tabBtn.classList.remove('bg-blue-600', 'text-white');
-                tabBtn.classList.add('bg-gray-800', 'text-gray-400', 'hover:bg-gray-700');
+                tabBtn.classList.remove('btn-primary');
+                tabBtn.classList.add('btn-ghost');
             }
         }
     });

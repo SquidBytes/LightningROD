@@ -1,0 +1,132 @@
+<div class="space-y-2">
+    <p class="text-sm uppercase tracking-wide text-base-content/40 mb-3">Locations</p>
+    {% for loc in locations %}
+    {% set sc = stall_counts.get(loc.id, 0) if stall_counts is defined else 0 %}
+    <div class="bg-base-300/50 rounded-lg px-4 py-3" id="location-{{ loc.id }}">
+        {# Read mode #}
+        <div class="flex items-center justify-between location-read" data-loc="{{ loc.id }}">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <span>{{ loc.location_name }}</span>
+                {% if loc.location_type %}
+                    <span class="badge badge-sm badge-ghost capitalize">{{ loc.location_type }}</span>
+                {% endif %}
+                {% if loc.cost_per_kwh is not none %}
+                    <span class="text-xs text-base-content/60">${{ "%.4f"|format(loc.cost_per_kwh) }}/kWh</span>
+                    <span class="badge badge-xs badge-warning">Override</span>
+                {% endif %}
+                {% if loc.address %}
+                    <span class="text-xs text-base-content/40 truncate">{{ loc.address }}</span>
+                {% endif %}
+            </div>
+            <div class="flex gap-2 flex-shrink-0 ml-3">
+                <button type="button"
+                        onclick="editLocation({{ loc.id }})"
+                        class="btn btn-ghost btn-xs text-info">Edit</button>
+                <button
+                    hx-delete="/settings/locations/{{ loc.id }}?network_id={{ network_id }}"
+                    hx-target="closest div.space-y-2"
+                    hx-swap="outerHTML"
+                    hx-confirm="Delete location {{ loc.location_name }}?"
+                    class="btn btn-ghost btn-xs text-error">Delete</button>
+            </div>
+        </div>
+        {# Edit mode -- hidden by default #}
+        <form class="hidden location-edit" data-loc="{{ loc.id }}"
+              hx-put="/settings/locations/{{ loc.id }}"
+              hx-target="closest div.space-y-2"
+              hx-swap="outerHTML">
+            <input type="hidden" name="network_id" value="{{ network_id }}">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+                <input type="text" name="location_name" value="{{ loc.location_name }}" required
+                       class="input input-sm input-bordered flex-1 min-w-32">
+                <select name="location_type"
+                        class="select select-sm select-bordered">
+                    <option value="">Type</option>
+                    <option value="home" {% if loc.location_type == 'home' %}selected{% endif %}>Home</option>
+                    <option value="work" {% if loc.location_type == 'work' %}selected{% endif %}>Work</option>
+                    <option value="public" {% if loc.location_type == 'public' %}selected{% endif %}>Public</option>
+                    <option value="retail" {% if loc.location_type == 'retail' %}selected{% endif %}>Retail</option>
+                    <option value="destination" {% if loc.location_type == 'destination' %}selected{% endif %}>Destination</option>
+                    <option value="highway" {% if loc.location_type == 'highway' %}selected{% endif %}>Highway</option>
+                    <option value="other" {% if loc.location_type == 'other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+                <input type="text" name="address" value="{{ loc.address or '' }}" placeholder="Address (optional)"
+                       class="input input-sm input-bordered flex-1 min-w-40">
+                <input type="number" name="latitude" step="0.000001" value="{{ loc.latitude or '' }}" placeholder="Lat"
+                       class="input input-sm input-bordered w-24">
+                <input type="number" name="longitude" step="0.000001" value="{{ loc.longitude or '' }}" placeholder="Lon"
+                       class="input input-sm input-bordered w-24">
+                <input type="number" name="cost_per_kwh" step="0.0001" min="0"
+                       value="{{ loc.cost_per_kwh if loc.cost_per_kwh is not none else '' }}"
+                       placeholder="Cost/kWh (inherit)"
+                       class="input input-sm input-bordered w-32">
+            </div>
+            <div class="flex gap-2">
+                <button type="submit" class="btn btn-primary btn-xs">Save</button>
+                <button type="button" onclick="cancelLocationEdit({{ loc.id }})"
+                        class="btn btn-ghost btn-xs">Cancel</button>
+            </div>
+        </form>
+
+        {# Charger Stalls expandable section #}
+        <details class="mt-2">
+            <summary class="cursor-pointer text-sm text-base-content/50 hover:text-base-content/70 select-none">
+                Charger Stalls ({{ sc }})
+            </summary>
+            <div class="bg-base-300 rounded-box p-3 mt-2"
+                 hx-get="/settings/locations/{{ loc.id }}/stalls"
+                 hx-trigger="intersect once"
+                 hx-swap="innerHTML">
+                <p class="text-base-content/40 text-xs">Loading stalls...</p>
+            </div>
+        </details>
+    </div>
+    {% else %}
+    <p class="text-base-content/40 text-sm">No locations yet.</p>
+    {% endfor %}
+
+    {# Add location form #}
+    <form
+        hx-post="/settings/networks/{{ network_id }}/locations"
+        hx-target="closest div.space-y-2"
+        hx-swap="outerHTML"
+        hx-on::after-request="if(event.detail.successful) this.reset()"
+        class="flex flex-wrap items-end gap-2 mt-2"
+    >
+        <input type="text" name="location_name" required placeholder="Location name"
+               class="input input-sm input-bordered flex-1 min-w-32">
+        <select name="location_type" class="select select-sm select-bordered">
+            <option value="">Type</option>
+            <option value="home">Home</option>
+            <option value="work">Work</option>
+            <option value="public">Public</option>
+            <option value="retail">Retail</option>
+            <option value="destination">Destination</option>
+            <option value="highway">Highway</option>
+            <option value="other">Other</option>
+        </select>
+        <input type="text" name="address" placeholder="Address (optional)"
+               class="input input-sm input-bordered flex-1 min-w-40">
+        <input type="number" name="cost_per_kwh" step="0.0001" min="0"
+               placeholder="Cost/kWh (inherit)"
+               class="input input-sm input-bordered w-32">
+        <button type="submit" class="btn btn-primary btn-xs">Add</button>
+    </form>
+</div>
+
+<script>
+function editLocation(locId) {
+    var readEls = document.querySelectorAll('.location-read[data-loc="' + locId + '"]');
+    var editEls = document.querySelectorAll('.location-edit[data-loc="' + locId + '"]');
+    readEls.forEach(function(el) { el.classList.add('hidden'); });
+    editEls.forEach(function(el) { el.classList.remove('hidden'); });
+}
+function cancelLocationEdit(locId) {
+    var readEls = document.querySelectorAll('.location-read[data-loc="' + locId + '"]');
+    var editEls = document.querySelectorAll('.location-edit[data-loc="' + locId + '"]');
+    readEls.forEach(function(el) { el.classList.remove('hidden'); });
+    editEls.forEach(function(el) { el.classList.add('hidden'); });
+}
+</script>

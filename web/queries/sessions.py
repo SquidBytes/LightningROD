@@ -1,22 +1,54 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
 
 PAGE_SIZE = 25
+VALID_PER_PAGE = {25, 50, 100}
+
+_COST_SORT_EXPR = case(
+    (EVChargingSession.is_free.is_(True), 0),
+    else_=func.coalesce(EVChargingSession.cost, 0),
+)
+
+SORTABLE_COLUMNS = {
+    "date": EVChargingSession.session_start_utc,
+    "energy": EVChargingSession.energy_kwh,
+    "cost": _COST_SORT_EXPR,
+    "location": EVChargingSession.location_name,
+    "network": EVChargingSession.network_id,
+    "charge_type": EVChargingSession.charge_type,
+    "duration": EVChargingSession.charge_duration_seconds,
+}
+
+
+async def get_most_recent_location(db: AsyncSession) -> Optional[str]:
+    """Return the location_name of the most recent session, or None."""
+    stmt = (
+        select(EVChargingSession.location_name)
+        .where(EVChargingSession.location_name.isnot(None))
+        .order_by(EVChargingSession.session_start_utc.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
 
 
 async def query_sessions(
     db: AsyncSession,
     page: int = 1,
+    per_page: int = 25,
     date_preset: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     charge_type: Optional[str] = None,
     location_type: Optional[str] = None,
+    network_ids: Optional[list[int]] = None,
+    sort_by: Optional[str] = None,
+    sort_dir: Optional[str] = None,
 ) -> tuple[list[EVChargingSession], int, dict]:
     """Query charging sessions with optional filters and pagination.
 
@@ -25,10 +57,19 @@ async def query_sessions(
     """
     now = datetime.now(timezone.utc)
 
-    # Base statement ordered by session_start_utc DESC
-    stmt = select(EVChargingSession).order_by(
-        EVChargingSession.session_start_utc.desc()
-    )
+    # Determine sort column and direction
+    sort_col = SORTABLE_COLUMNS.get(sort_by) if sort_by else None
+    if sort_col is not None:
+        order_expr = (
+            sort_col.asc().nulls_last()
+            if sort_dir == "asc"
+            else sort_col.desc().nulls_last()
+        )
+    else:
+        order_expr = EVChargingSession.session_start_utc.desc()
+
+    # Base statement with resolved order
+    stmt = select(EVChargingSession).order_by(order_expr)
 
     # Accumulate filter clauses
     filters = []
@@ -68,13 +109,24 @@ async def query_sessions(
             except ValueError:
                 pass
 
-    # Charge type filter
+    # Charge type filter — supports comma-separated multi-select (e.g. "AC,DC")
     if charge_type:
-        filters.append(EVChargingSession.charge_type == charge_type)
+        charge_types = [ct.strip() for ct in charge_type.split(",") if ct.strip()]
+        if len(charge_types) == 1:
+            filters.append(EVChargingSession.charge_type == charge_types[0])
+        elif len(charge_types) > 1:
+            filters.append(EVChargingSession.charge_type.in_(charge_types))
 
     # Location type filter
     if location_type:
         filters.append(EVChargingSession.location_type == location_type)
+
+    # Network filter — supports multi-select via list of ints
+    if network_ids:
+        if len(network_ids) == 1:
+            filters.append(EVChargingSession.network_id == network_ids[0])
+        else:
+            filters.append(EVChargingSession.network_id.in_(network_ids))
 
     # Apply all filters
     for f in filters:
@@ -100,7 +152,10 @@ async def query_sessions(
     }
 
     # Data query with pagination
-    data_stmt = stmt.limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE)
+    # Clamp per_page to allowed values, defaulting to PAGE_SIZE
+    effective_per_page = per_page if per_page in VALID_PER_PAGE else PAGE_SIZE
+    offset = (page - 1) * effective_per_page
+    data_stmt = stmt.limit(effective_per_page).offset(offset)
     data_result = await db.execute(data_stmt)
     sessions = list(data_result.scalars().all())
 

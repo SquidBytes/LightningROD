@@ -1,0 +1,259 @@
+<!-- Reusable column header dropdown component.
+     Required context variables:
+       col_id        — unique column identifier (e.g., "charge_type")
+       col_label     — display label (e.g., "Type")
+       sort_key      — sort_by value for this column (e.g., "charge_type")
+       current_sort_by  — current sort state (from template context)
+       current_sort_dir — current sort direction ("asc" or "desc")
+       filter_key    — query param name for value filtering, or None if not filterable
+       filter_values — list of {value, label, checked} dicts, or empty list
+       filter_form_id — id of the filter form to trigger (e.g., "filter-form")
+-->
+<th class="text-left px-4 py-3 font-medium whitespace-nowrap {{ col_width|default('') }}">
+    <div class="relative inline-block col-header-wrapper">
+        <div class="flex items-center gap-1">
+            <!-- Header click button for sort cycling -->
+            <button
+                type="button"
+                onclick="cycleSortColumn('{{ sort_key }}', '{{ filter_form_id }}')"
+                class="btn btn-ghost btn-sm gap-1"
+            >
+                <span>{{ col_label }}</span>
+                <!-- Sort indicator -->
+                {% if current_sort_by == sort_key %}
+                    {% if current_sort_dir == 'asc' %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                        </svg>
+                    {% else %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    {% endif %}
+                {% else %}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                {% endif %}
+            </button>
+
+            <!-- Filter icon button (only if there are filter values) -->
+            {% if filter_values %}
+            <button
+                type="button"
+                data-dropdown-id="col-dropdown-{{ col_id }}"
+                onclick="toggleColumnDropdown('{{ col_id }}', this)"
+                class="col-filter-btn btn btn-ghost btn-sm btn-square"
+                title="Filter {{ col_label }}"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+                </svg>
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- Dropdown source (hidden, used as template — portaled to body on open) -->
+        {% if filter_values %}
+        <template id="col-dropdown-{{ col_id }}">
+            <div class="px-2 py-1.5 border-b border-base-300 flex items-center justify-between">
+                <p class="text-xs uppercase tracking-wide text-base-content/50">Filter</p>
+                <div class="flex gap-2">
+                    <button type="button" onclick="selectAllFilter('{{ filter_key }}')" class="text-xs text-primary hover:text-primary/80">All</button>
+                    <span class="text-base-content/30">|</span>
+                    <button type="button" onclick="deselectAllFilter('{{ filter_key }}')" class="text-xs text-primary hover:text-primary/80">None</button>
+                </div>
+            </div>
+            <ul class="max-h-96 p-1 overflow-y-auto">
+            {% for fv in filter_values %}
+                <li>
+                <label class="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-base-300 rounded cursor-pointer">
+                    <input
+                        type="checkbox"
+                        class="checkbox checkbox-sm col-filter-checkbox"
+                        data-filter-key="{{ filter_key }}"
+                        data-filter-value="{{ fv.value }}"
+                        {% if fv.checked %}checked{% endif %}
+                        onchange="stageColumnFilter('{{ filter_key }}')"
+                    >
+                    <span class="label-text">{{ fv.label }}</span>
+                </label>
+                </li>
+            {% endfor %}
+            </ul>
+        </template>
+        {% endif %}
+    </div>
+</th>
+
+<script>
+(function() {
+    if (window._colDropdownInit) return;
+    window._colDropdownInit = true;
+
+    window._filterDirty = false;
+    var _activePortal = null;  // currently open portal element on body
+
+    function closeActivePortal() {
+        var wasDirty = window._filterDirty;
+        if (_activePortal) {
+            _activePortal.remove();
+            _activePortal = null;
+        }
+        if (wasDirty) {
+            window._filterDirty = false;
+            var pageInput = document.getElementById('page_input');
+            if (pageInput) pageInput.value = '1';
+            if (typeof renderFilterChips === 'function') renderFilterChips();
+            htmx.trigger(document.body, 'filterChanged');
+        }
+    }
+
+    window.toggleColumnDropdown = function(colId, btnEl) {
+        var wasOpen = _activePortal && _activePortal.dataset.colId === colId;
+
+        // Close any open portal (applies staged filters if dirty)
+        closeActivePortal();
+
+        if (wasOpen) return;  // toggle off — already closed above
+
+        // Clone from <template> and create portal on document.body
+        var tmpl = document.getElementById('col-dropdown-' + colId);
+        if (!tmpl) return;
+
+        var portal = document.createElement('div');
+        portal.className = 'col-dropdown-portal dropdown-content fixed z-50 bg-base-200 rounded-box w-52 p-2 shadow-xl';
+        portal.dataset.colId = colId;
+        portal.style.minWidth = '200px';
+        portal.appendChild(tmpl.content.cloneNode(true));
+
+        // Sync checkbox state from hidden inputs to the cloned checkboxes
+        var filterKey = portal.querySelector('.col-filter-checkbox') ?
+            portal.querySelector('.col-filter-checkbox').dataset.filterKey : null;
+        if (filterKey) {
+            var hiddenInput = document.getElementById('filter_' + filterKey);
+            var activeValues = (hiddenInput && hiddenInput.value) ? hiddenInput.value.split(',') : [];
+            portal.querySelectorAll('.col-filter-checkbox').forEach(function(cb) {
+                if (activeValues.length === 0) {
+                    cb.checked = true;  // no filter = all checked
+                } else {
+                    cb.checked = activeValues.indexOf(cb.dataset.filterValue) !== -1;
+                }
+            });
+        }
+
+        document.body.appendChild(portal);
+
+        // Position below the button
+        var rect = btnEl.getBoundingClientRect();
+        var portalHeight = portal.offsetHeight;
+        var spaceBelow = window.innerHeight - rect.bottom - 8;
+        var spaceAbove = rect.top - 8;
+
+        // Prefer below, flip above if not enough room
+        if (spaceBelow >= Math.min(portalHeight, 320)) {
+            portal.style.top = (rect.bottom + 4) + 'px';
+        } else if (spaceAbove >= Math.min(portalHeight, 320)) {
+            portal.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        } else {
+            // Neither fits well — anchor below with constrained height
+            portal.style.top = (rect.bottom + 4) + 'px';
+            portal.style.maxHeight = (spaceBelow - 4) + 'px';
+        }
+        portal.style.left = Math.min(rect.left, window.innerWidth - 240) + 'px';
+
+        _activePortal = portal;
+        window._filterDirty = false;
+    };
+
+    // Close on click outside — but not inside the portal
+    document.addEventListener('click', function(e) {
+        if (!_activePortal) return;
+        if (e.target.closest('.col-dropdown-portal')) return;
+        if (e.target.closest('.col-filter-btn')) return;  // handled by toggle
+        closeActivePortal();
+    });
+
+    window.cycleSortColumn = function(sortKey, formId) {
+        closeActivePortal();  // close any open filter dropdown
+        var sortByInput = document.getElementById('sort_by_input');
+        var sortDirInput = document.getElementById('sort_dir_input');
+        var currentSortBy = sortByInput ? sortByInput.value : '';
+        var currentSortDir = sortDirInput ? sortDirInput.value : '';
+
+        if (currentSortBy !== sortKey) {
+            sortByInput.value = sortKey;
+            sortDirInput.value = 'asc';
+        } else if (currentSortDir === 'asc') {
+            sortDirInput.value = 'desc';
+        } else {
+            sortByInput.value = '';
+            sortDirInput.value = '';
+        }
+        htmx.trigger(document.body, 'filterChanged');
+    };
+
+    window.setSortAndFilter = function(sortKey, sortDir, formId) {
+        var sortByInput = document.getElementById('sort_by_input');
+        var sortDirInput = document.getElementById('sort_dir_input');
+        if (sortByInput) sortByInput.value = sortKey;
+        if (sortDirInput) sortDirInput.value = sortDir;
+        closeActivePortal();
+        htmx.trigger(document.body, 'filterChanged');
+    };
+
+    // Stage filter change — updates hidden input, marks dirty, no HTMX trigger
+    window.stageColumnFilter = function(filterKey) {
+        if (!_activePortal) return;
+        var checkboxes = _activePortal.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]');
+        var checked = [];
+        checkboxes.forEach(function(cb) {
+            if (cb.checked) checked.push(cb.dataset.filterValue);
+        });
+
+        var hiddenInput = document.getElementById('filter_' + filterKey);
+        if (hiddenInput) {
+            if (checked.length === 0 || checked.length === checkboxes.length) {
+                hiddenInput.value = '';
+            } else {
+                hiddenInput.value = checked.join(',');
+            }
+        }
+        window._filterDirty = true;
+    };
+
+    // Immediate apply — used by chip removal outside dropdown context
+    window.applyColumnFilter = function(filterKey) {
+        // Collect from the source template's original state won't work,
+        // so just use the hidden input directly and trigger
+        window._filterDirty = false;
+        var pageInput = document.getElementById('page_input');
+        if (pageInput) pageInput.value = '1';
+        if (typeof renderFilterChips === 'function') renderFilterChips();
+        htmx.trigger(document.body, 'filterChanged');
+    };
+
+    window.selectAllFilter = function(filterKey) {
+        if (!_activePortal) return;
+        _activePortal.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]').forEach(function(cb) {
+            cb.checked = true;
+        });
+        stageColumnFilter(filterKey);
+    };
+
+    window.deselectAllFilter = function(filterKey) {
+        if (!_activePortal) return;
+        _activePortal.querySelectorAll('.col-filter-checkbox[data-filter-key="' + filterKey + '"]').forEach(function(cb) {
+            cb.checked = false;
+        });
+        stageColumnFilter(filterKey);
+    };
+
+    // Re-render filter chips after HTMX table swap
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target && evt.detail.target.id === 'sessions-table-region') {
+            if (typeof renderFilterChips === 'function') renderFilterChips();
+        }
+    });
+})();
+</script>

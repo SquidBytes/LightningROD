@@ -1,0 +1,98 @@
+{# Network edit modal -- tabbed modal for editing a network's details and managing its locations #}
+
+{# Header #}
+<p class="text-sm text-base-content/50 uppercase tracking-wide font-medium">Edit Network</p>
+<h3 class="text-xl font-semibold text-base-content">{{ network.network_name }}</h3>
+
+{# Tabbed content using DaisyUI radio tabs #}
+<form id="network-modal-form" class="mt-5">
+    <div role="tablist" class="tabs tabs-bordered tabs-lg">
+
+        {# Details tab #}
+        <input type="radio" name="network-modal-tabs" role="tab" class="tab" aria-label="Details" checked="checked" />
+        <div role="tabpanel" class="tab-content p-6 min-h-[320px]">
+            <div class="space-y-5">
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text text-sm">Network Name</span></div>
+                    <input type="text" name="network_name" required
+                           value="{{ network.network_name }}"
+                           class="input input-bordered w-full">
+                </label>
+
+                <div class="grid grid-cols-3 gap-6">
+                    <label class="form-control">
+                        <div class="label"><span class="label-text text-sm">Color Badge</span></div>
+                        <input type="color" name="color"
+                               value="{{ network.color or '#6B7280' }}"
+                               class="h-10 w-16 rounded border border-base-300 bg-base-200 cursor-pointer p-0.5">
+                    </label>
+
+                    <label class="form-control">
+                        <div class="label"><span class="label-text text-sm">Cost per kWh</span></div>
+                        <input type="number" name="cost_per_kwh" step="0.001" min="0" placeholder="0.000"
+                               value="{{ '%.3f'|format(network.cost_per_kwh) if network.cost_per_kwh is not none else '' }}"
+                               class="input input-bordered w-full text-right">
+                    </label>
+
+                    <label class="form-control">
+                        <div class="label"><span class="label-text text-sm">Free</span></div>
+                        <label class="flex items-center gap-2 cursor-pointer h-12">
+                            <input type="checkbox" name="is_free"
+                                   {% if network.is_free %}checked{% endif %}
+                                   class="checkbox checkbox-sm checkbox-success">
+                            <span class="text-base-content/60 text-sm">Is free</span>
+                        </label>
+                    </label>
+                </div>
+
+                <div>
+                    <button type="button"
+                        hx-post="/settings/networks/{{ network.id }}/recalculate"
+                        hx-target="#recalc-result-{{ network.id }}"
+                        hx-swap="innerHTML"
+                        class="btn btn-warning btn-sm btn-outline mt-2"
+                    >
+                        Recalculate Session Costs
+                    </button>
+                    <span id="recalc-result-{{ network.id }}" class="text-sm ml-2"></span>
+                </div>
+
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text text-sm">Notes</span></div>
+                    <textarea name="notes" rows="3" placeholder="Optional notes..."
+                              class="textarea textarea-bordered w-full resize-none">{{ network.notes or '' }}</textarea>
+                </label>
+            </div>
+        </div>
+
+        {# Locations tab #}
+        <input type="radio" name="network-modal-tabs" role="tab" class="tab" aria-label="Locations" />
+        <div role="tabpanel" class="tab-content p-6 min-h-[320px]">
+            <div id="network-locations-list"
+                 hx-get="/settings/networks/{{ network.id }}/locations"
+                 hx-trigger="intersect once"
+                 hx-swap="innerHTML">
+                <p class="text-base-content/50 text-sm">Loading locations...</p>
+            </div>
+        </div>
+
+    </div>
+
+    {# Footer: Cancel + Save #}
+    <div class="flex items-center justify-end pt-5 mt-5 border-t border-base-300">
+        <div class="flex items-center gap-3">
+            <button type="button" onclick="closeNetworkModal()"
+                    class="btn btn-ghost">
+                Cancel
+            </button>
+            <button type="button"
+                    hx-put="/settings/networks/{{ network.id }}"
+                    hx-target="#network-management-card"
+                    hx-swap="outerHTML"
+                    hx-include="#network-modal-form"
+                    class="btn btn-primary">
+                Save
+            </button>
+        </div>
+    </div>
+</form>

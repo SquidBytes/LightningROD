@@ -1,0 +1,84 @@
+{# Column Mapper — rendered after CSV upload, before import preview.
+   Receives: csv_headers, db_fields, auto_mappings, row_count, rows_json, headers_json, filename
+   Submits to: POST /settings/import/preview #}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h3 class="text-lg font-semibold">Map CSV Columns</h3>
+            <p class="text-base-content/60 text-sm mt-1">
+                Match your CSV columns to the database fields.
+                Auto-detected mappings are pre-selected.
+                Parsed <span class="font-medium">{{ row_count }}</span> rows
+                from <span class="font-medium">{{ filename }}</span>.
+            </p>
+        </div>
+    </div>
+
+    <form
+        id="column-mapper-form"
+        hx-post="/settings/import/preview"
+        hx-target="#import-flow-container"
+        hx-swap="innerHTML"
+        hx-include="closest form"
+        class="space-y-4"
+    >
+        {# Pass serialized CSV data through as hidden fields for stateless flow #}
+        <input type="hidden" name="csv_data" value="{{ rows_json | e }}">
+        <input type="hidden" name="csv_headers" value="{{ headers_json | e }}">
+
+        {# Column mapping dropdowns — one row per CSV column #}
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th class="w-1/3">CSV Column</th>
+                                <th>Maps To</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for header in csv_headers %}
+                            <tr>
+                                <td class="pr-4">
+                                    <span class="font-mono text-xs font-bold">{{ header }}</span>
+                                </td>
+                                <td>
+                                    <select
+                                        name="mapping_{{ header }}"
+                                        class="select select-bordered select-sm w-full"
+                                    >
+                                        <option value="">— Skip this column —</option>
+                                        {% for field in db_fields %}
+                                        <option
+                                            value="{{ field.field }}"
+                                            {% if auto_mappings.get(header) == field.field %}selected{% endif %}
+                                        >
+                                            {{ field.label }} — {{ field.description }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {# Action buttons #}
+        <div class="flex justify-between items-center">
+            <button
+                type="button"
+                onclick="document.getElementById('import-flow-container').innerHTML = ''"
+                class="btn btn-ghost btn-sm"
+            >
+                Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">
+                Continue to Preview
+            </button>
+        </div>
+    </form>
+</div>

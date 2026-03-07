@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, Integer, Numeric, String, Text, text
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +26,7 @@ class EVChargingNetwork(Base):
     effective_date: Mapped[Optional[date]] = mapped_column(Date)
     notes: Mapped[Optional[str]] = mapped_column(Text)
     is_free: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    color: Mapped[Optional[str]] = mapped_column(String(7))  # hex color e.g. '#FF0000'
 
 
 class EVLocationLookup(Base):
@@ -39,10 +40,38 @@ class EVLocationLookup(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     location_name: Mapped[str] = mapped_column(String, nullable=False)
+    address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     latitude: Mapped[Optional[float]] = mapped_column(Numeric)
     longitude: Mapped[Optional[float]] = mapped_column(Numeric)
     location_type: Mapped[Optional[str]] = mapped_column(String)
     notes: Mapped[Optional[str]] = mapped_column(Text)
+    network_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ev_charging_networks.id", ondelete="SET NULL"), nullable=True
+    )
+    cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+
+
+class EVChargerStall(Base):
+    """Charger stall configuration for a location.
+
+    Each location can have multiple stalls with different specs.
+    Used for auto-populating EVSE fields on sessions.
+    """
+
+    __tablename__ = "ev_charger_stalls"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ev_location_lookup.id", ondelete="CASCADE"), nullable=False
+    )
+    stall_label: Mapped[str] = mapped_column(String, nullable=False)
+    charger_type: Mapped[Optional[str]] = mapped_column(String(10))  # 'L1', 'L2', 'DCFC'
+    rated_kw: Mapped[Optional[float]] = mapped_column(Numeric)
+    voltage: Mapped[Optional[float]] = mapped_column(Numeric)
+    amperage: Mapped[Optional[float]] = mapped_column(Numeric)
+    connector_type: Mapped[Optional[str]] = mapped_column(String(20))  # 'CCS', 'CHAdeMO', 'J1772', 'NACS', 'Tesla'
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class EVStatistics(Base):
