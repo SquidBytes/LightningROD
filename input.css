@@ -56,3 +56,20 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
 .js-plotly-plot .plotly .main-svg {
   width: 100% !important;
 }
+
+/* ── Plotly modebar positioning ─────────────────────────────────────────
+   Position the modebar above the chart area so it never overlaps
+   chart content, legends, or data.
+   ──────────────────────────────────────────────────────────────────── */
+.plotly-chart-wrap {
+  position: relative;
+}
+.plotly-chart-wrap .modebar-container {
+  position: absolute !important;
+  top: -28px !important;
+  right: 0 !important;
+}
+.plotly-chart-wrap .modebar-group {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+}

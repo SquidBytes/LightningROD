@@ -45,7 +45,11 @@
     --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     --default-font-family: var(--font-sans);
     --default-mono-font-family: var(--font-mono);
+    --color-brand-darkest: #081534;
+    --color-brand-dark: #133A7C;
+    --color-brand-mid: #2A6BAC;
     --color-brand-accent: #47A8E5;
+    --color-brand-silver: #C6C6C6;
     --color-accent: #47A8E5;
   }
 }
@@ -4883,6 +4887,18 @@ html[data-theme="dark"] {
 }
 .js-plotly-plot .plotly .main-svg {
   width: 100% !important;
+}
+.plotly-chart-wrap {
+  position: relative;
+}
+.plotly-chart-wrap .modebar-container {
+  position: absolute !important;
+  top: -28px !important;
+  right: 0 !important;
+}
+.plotly-chart-wrap .modebar-group {
+  display: flex !important;
+  flex-wrap: nowrap !important;
 }
 @layer base {
   :where(:root),:root:has(input.theme-controller[value=dark]:checked),[data-theme=dark] {
