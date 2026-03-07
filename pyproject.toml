@@ -17,6 +17,7 @@ dependencies = [
     "uvicorn[standard]>=0.41.0",
     "plotly>=6.0.0",
     "pandas>=2.0.0",
+    "websockets>=15.0",
 ]
 
 [dependency-groups]
