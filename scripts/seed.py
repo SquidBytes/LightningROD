@@ -63,6 +63,18 @@ UPDATABLE_COLUMNS = [
     "is_complete",
     "recorded_at",
     "source_system",
+    "network_id",
+    "location_id",
+    "address",
+    "latitude",
+    "longitude",
+    "evse_voltage",
+    "evse_amperage",
+    "evse_kw",
+    "evse_energy_kwh",
+    "evse_max_power_kw",
+    "evse_source",
+    "stall_id",
 ]
 
 
@@ -99,9 +111,28 @@ def float_or_none(v: str) -> Optional[float]:
         return None
 
 
+def int_or_none(v: str) -> Optional[int]:
+    """Return int or None if empty/invalid."""
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    try:
+        return int(float(v))
+    except (ValueError, TypeError):
+        return None
+
+
 def parse_bool(v: str) -> bool:
     """Return True for 'True'/'1'/'true', False otherwise."""
     return v.strip().lower() in ("true", "1", "yes") if v else False
+
+
+def parse_bool_or_none(v: str) -> Optional[bool]:
+    """Return True/False for explicit values, None if empty."""
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    return v.lower() in ("true", "1", "yes")
 
 
 def parse_timestamp(v: str) -> Optional[datetime]:
@@ -198,6 +229,22 @@ COLUMN_MAP = {
     "charging_amperage": ("charging_amperage", float_or_none),
     "is_complete": ("is_complete", parse_bool),
     "recorded_at": ("recorded_at", parse_timestamp),
+    # Location metadata
+    "location_id": ("location_id", int_or_none),
+    "location_address": ("address", str_or_none),
+    "latitude": ("latitude", float_or_none),
+    "longitude": ("longitude", float_or_none),
+    # EVSE fields
+    "evse_voltage": ("evse_voltage", float_or_none),
+    "evse_amperage": ("evse_amperage", float_or_none),
+    "evse_kw": ("evse_kw", float_or_none),
+    "evse_energy_kwh": ("evse_energy_kwh", float_or_none),
+    "evse_max_power_kw": ("evse_max_power_kw", float_or_none),
+    "evse_source": ("evse_source", str_or_none),
+    "stall_id": ("stall_id", int_or_none),
+    # CSV-explicit overrides (precedence over classifier)
+    "is_free": ("is_free", parse_bool_or_none),
+    "location_type": ("location_type", str_or_none),
 }
 
 
@@ -286,6 +333,7 @@ def transform_row(
     csv_row: dict,
     vin: str,
     ll_lookup: dict,
+    network_lookup: Optional[dict[str, Optional[int]]] = None,
 ) -> Optional[dict]:
     """Transform a single CSV row into a DB-ready dict.
 
@@ -334,8 +382,23 @@ def transform_row(
     db_row["device_id"] = vin
     db_row["source_system"] = "csv_seed"
     db_row["charge_type"] = normalize_charge_type(csv_charger_type, location_name)
-    db_row["location_type"] = classify_location_type(location_name)
-    db_row["is_free"] = classify_is_free(location_name)
+
+    # CSV-provided location_type and is_free take precedence over classifier
+    if not db_row.get("location_type"):
+        db_row["location_type"] = classify_location_type(location_name)
+    if db_row.get("is_free") is None:
+        db_row["is_free"] = classify_is_free(location_name)
+
+    # Resolve network_id from CSV network name columns
+    if network_lookup is not None:
+        net_name = None
+        for col in ("charging_network", "network_name", "ll_charge_network"):
+            val = csv_row.get(col, "").strip()
+            if val:
+                net_name = val
+                break
+        if net_name:
+            db_row["network_id"] = network_lookup.get(net_name)
 
     # Handle session_id: use CSV value if valid UUID, else generate deterministic UUID
     session_id = db_row.get("session_id")
@@ -383,12 +446,35 @@ async def seed(args: argparse.Namespace) -> None:
     print(f"\nLoading LubeLogger: {ll_path}")
     ll_lookup = load_lubelogger(ll_path)
 
+    # --- Build network name -> id lookup ---
+    print("\nResolving network names...")
+    network_names: set[str] = set()
+    for raw_row in raw_rows:
+        for col in ("charging_network", "network_name", "ll_charge_network"):
+            val = raw_row.get(col, "").strip()
+            if val:
+                network_names.add(val)
+                break  # first non-empty wins per row
+
+    network_lookup: dict[str, Optional[int]] = {}
+    if network_names:
+        from web.queries.settings import resolve_network
+
+        async with AsyncSessionLocal() as db:
+            for name in sorted(network_names):
+                resolved_id = await resolve_network(db, network_name=name)
+                network_lookup[name] = resolved_id
+            await db.commit()
+        print(f"  Resolved {len(network_lookup)} network names: {network_lookup}")
+    else:
+        print("  No network names found in CSV")
+
     # --- Transform rows ---
     print("\nTransforming rows...")
     transformed: list[dict] = []
     skipped = 0
     for raw_row in raw_rows:
-        db_row = transform_row(raw_row, vin, ll_lookup)
+        db_row = transform_row(raw_row, vin, ll_lookup, network_lookup)
         if db_row is None:
             skipped += 1
         else:
