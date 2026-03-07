@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if page_title %}LightningROD - {{ page_title }}{% else %}LightningROD{% endif %}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='css/output.css') }}">
+    <script src="{{ url_for('static', path='vendor/plotly/plotly.min.js') }}"></script>
 </head>
 <body class="bg-base-100 text-base-content min-h-screen">
 
@@ -70,7 +71,6 @@
     </div>
 
     <script src="{{ url_for('static', path='vendor/htmx/htmx.min.js') }}"></script>
-    <script src="{{ url_for('static', path='vendor/plotly/plotly.min.js') }}"></script>
     <script>
     /* Network combobox: resolve typed name to network_id via datalist */
     function resolveNetworkCombobox(input) {
