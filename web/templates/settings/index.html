@@ -54,6 +54,16 @@
     <div role="tabpanel" class="tab-content pt-6">
         {% include "settings/partials/import_tab.html" %}
     </div>
+
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Home Assistant" {{ 'checked' if active_tab == 'hass' }} />
+    <div role="tabpanel" class="tab-content pt-6">
+        <div id="hass-settings-content"
+             hx-get="/settings/hass"
+             hx-trigger="intersect once"
+             hx-swap="innerHTML">
+            <span class="loading loading-spinner loading-md"></span>
+        </div>
+    </div>
 </div>
 
 {# Network edit modal using DaisyUI dialog #}
