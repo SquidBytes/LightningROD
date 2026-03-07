@@ -25,7 +25,7 @@ node_modules/
 
 # Seed data (CSV files)
 data/*.csv
-!data/fake_charging_sessions_sample.csv
+!data/ev_charging_sample.csv
 
 # Documentation site
 site/
