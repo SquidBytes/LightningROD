@@ -59,5 +59,10 @@ Settings configured through the web UI at `/settings`:
 | Unit preferences | `app_settings` | US (mi/kWh) or EU (km/kWh) |
 | Timezone | `app_settings` | Display timezone (e.g., America/New_York) |
 | Comparison toggles | `app_settings` | Show or hide cost comparison sections |
+| HA URL | `app_settings` | Home Assistant instance URL |
+| HA Access Token | `app_settings` | Long-lived access token for HA WebSocket |
+| HA VIN Override | `app_settings` | Override auto-detected vehicle VIN |
+| HA Unit System | `app_settings` | Auto-detect, metric, or imperial |
+| HA Auto-connect | `app_settings` | Connect to HA automatically on startup |
 
 These are managed at `/settings` and stored in the database.

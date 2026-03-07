@@ -86,6 +86,16 @@ Control which comparison sections appear on the costs page:
 
 Disabling a comparison skips its database queries.
 
+## Home Assistant Tab
+
+Configure the connection to Home Assistant for automatic charging session detection and vehicle telemetry ingestion. See the dedicated [Home Assistant Integration](home-assistant.md) guide for full details.
+
+The tab includes:
+
+- **Connection settings** -- HA URL, long-lived access token, VIN override, unit system, auto-connect toggle
+- **Connection status** -- Live status badge, event counters, detected VIN, and error display (polls every 10 seconds)
+- **Controls** -- Reconnect, disconnect, and history backfill buttons
+
 ## CSV Import Tab
 
 See the dedicated [CSV Import](csv-import.md) guide.
