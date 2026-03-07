@@ -751,6 +751,70 @@ async def save_hass_settings(
     return response
 
 
+@router.get("/settings/hass/status", response_class=HTMLResponse)
+async def hass_status(request: Request):
+    """Return HASS connection status partial for polling."""
+    from web.services.hass_client import hass_service
+
+    health = hass_service.health
+    detected_vin = getattr(hass_service, "detected_vin", None)
+    ha_config = getattr(hass_service, "_ha_config", None)
+    unit_system = None
+    if ha_config and "unit_system" in ha_config:
+        unit_system = ha_config["unit_system"]
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_status.html",
+        {
+            "health": health,
+            "detected_vin": detected_vin,
+            "unit_system": unit_system,
+        },
+    )
+
+
+@router.post("/settings/hass/reconnect", response_class=HTMLResponse)
+async def hass_reconnect(request: Request):
+    """Stop and restart the HASS websocket service."""
+    from web.services.hass_client import hass_service, start_hass_service
+
+    await hass_service.stop()
+    await start_hass_service()
+    health = hass_service.health
+    detected_vin = getattr(hass_service, "detected_vin", None)
+    ha_config = getattr(hass_service, "_ha_config", None)
+    unit_system = None
+    if ha_config and "unit_system" in ha_config:
+        unit_system = ha_config["unit_system"]
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_status.html",
+        {
+            "health": health,
+            "detected_vin": detected_vin,
+            "unit_system": unit_system,
+        },
+    )
+
+
+@router.post("/settings/hass/disconnect", response_class=HTMLResponse)
+async def hass_disconnect(request: Request):
+    """Stop the HASS websocket service."""
+    from web.services.hass_client import hass_service
+
+    await hass_service.stop()
+    health = hass_service.health
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_status.html",
+        {
+            "health": health,
+            "detected_vin": None,
+            "unit_system": None,
+        },
+    )
+
+
 @router.post("/settings/gas", response_class=HTMLResponse)
 async def update_gas_settings(
     request: Request,
