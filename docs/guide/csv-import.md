@@ -1,73 +1,91 @@
-# :lucide-file-up: CSV Import
+# CSV Import
 
-Import charging sessions in bulk from CSV files. The import flow walks you through upload, column mapping, preview, and confirmation — all from the Settings page.
+Import charging sessions in bulk from CSV files. The import flow is available from the **CSV Import** tab on the Settings page.
 
-## Getting Started
+## Import Flow
 
-Navigate to `/settings` and click the **CSV Import** tab.
+The import uses a three-step flow:
 
-1. **Upload** — Select a CSV file and click Upload & Process
-2. **Map Columns** — Match CSV headers to database fields (auto-detected where possible)
-3. **Preview** — Review parsed rows, check for duplicates, select which rows to import
-4. **Import** — Confirm and import selected rows
-5. **Summary** — See counts of added, skipped, and failed rows
+1. **Upload** -- Select a CSV file, choose a timezone, and upload
+2. **Preview** -- Review parsed rows, fix errors inline, handle duplicates
+3. **Summary** -- See counts of added, updated, skipped, and failed rows
 
-## CSV Format
+## CSV Template
 
-Your CSV should have a header row. Column names are flexible — the mapper auto-detects common patterns. At minimum you need a date and energy value.
+Download the template CSV from the upload screen. It contains headers for all mappable fields -- fill in what you have and leave the rest blank.
 
-| Field | Example | Notes |
-|-------|---------|-------|
-| Start time | `2025-06-15 14:30:00` | ISO datetime or similar |
-| Energy (kWh) | `32.5` | Required |
-| Cost | `8.12` | Dollars |
-| Location | `Home` | Free text |
-| Charge type | `AC` or `DC` | |
-| Duration | `45` | Minutes |
-| SOC start/end | `20` / `80` | Percent, 0-100 |
-| Miles added | `95.2` | |
+The template includes columns for:
 
-Additional columns are accepted — the mapper shows all available database fields.
+| Field | Example | Required |
+|-------|---------|----------|
+| session_start_utc | `2025-06-15 14:30:00` | Soft (flagged if missing) |
+| energy_kwh | `32.5` | Soft (flagged if missing) |
+| cost | `8.12` | No |
+| location_name | `Home` | No |
+| charge_type | `AC` or `DC` | No |
+| duration_minutes | `45` | No |
+| soc_start / soc_end | `20` / `80` | No |
+| miles_added | `95.2` | No |
+| network_name | `Electrify America` | No |
+| evse_voltage | `480` | No |
+| evse_kw | `150` | No |
 
-## Column Mapping
+The full template has ~24 columns covering all session and EVSE fields.
 
-After upload, the mapper presents each CSV column with a dropdown of database fields. Auto-detection uses several strategies:
+## Auto-Detection
 
-- Exact header match against known column names
+You don't have to use the template. The importer auto-detects common column name patterns:
+
+- Exact matches against known column names
 - Normalized matching (lowercase, stripped punctuation)
 - Keyword hints (e.g., "kwh" maps to energy, "soc" maps to state of charge)
 
-Set any column to **Skip** to exclude it from the import. Adjust mappings as needed before proceeding.
+An info banner shows which columns were matched and which were skipped.
 
-## Preview and Duplicates
+## Timezone Handling
 
-The preview table shows the first 25 rows with status badges:
+The upload form includes a timezone selector, defaulting to your app timezone setting.
 
-| Badge | Meaning |
-|-------|---------|
-| New | No matching session found — will be imported |
-| Duplicate | Matches an existing session by ID or fuzzy criteria |
+- **Naive timestamps** (no timezone info in the CSV) are interpreted as the selected timezone and converted to UTC for storage
+- **Timezone-aware timestamps** (with explicit offset or zone) are respected as-is
+- All stored timestamps are UTC; display uses your configured timezone
+
+## Preview Table
+
+The preview shows all parsed rows (no row cap) in a scrollable table with columns for date, location, energy, cost, type, network, duration, and status.
+
+### Row Status
+
+| Status | Meaning |
+|--------|---------|
+| New | No matching session found -- will be imported |
+| Duplicate | Matches an existing session |
 | Error | Row has a parsing issue |
 
-Duplicate detection uses two layers:
+### Inline Editing
 
-- **Exact match** — same `session_id` already in the database
-- **Fuzzy match** — same start time (within 1 hour), location, and energy (within 10%)
+Click an error or duplicate row to expand an inline editor below it. Edit problematic fields directly -- the row re-verifies automatically when you move focus away from a field (blur triggers server-side validation via HTMX).
 
-Use the bulk selection buttons to quickly select all new rows, all rows, or clear the selection. Individual row checkboxes are also available.
+### Duplicate Handling
+
+Duplicate rows offer three actions:
+
+- **Skip** -- Don't import this row
+- **Insert anyway** -- Import as a new session regardless
+- **Update existing** -- Overwrite the existing session with CSV values
+
+Duplicate detection uses exact match on `session_id` and fuzzy match on start time (within 1 hour), location, and energy (within 10%).
 
 ## Import Results
 
 After confirming, the summary shows:
 
-- **Added** — New sessions inserted
-- **Updated** — Existing sessions updated (if you selected duplicates with "update" action)
-- **Skipped** — Rows you deselected
-- **Failed** — Rows that couldn't be inserted (shown with details)
+- **Added** -- New sessions inserted
+- **Updated** -- Existing sessions updated
+- **Skipped** -- Rows you deselected or marked as skip
+- **Failed** -- Rows that couldn't be inserted (shown with error details)
 
-Each row is imported independently — a failed row doesn't affect others.
-
-Click **Import Another File** to start a new import without leaving the page.
+Each row is imported independently -- a failed row doesn't affect others.
 
 !!! tip "Large Imports"
-    For initial bulk imports (hundreds of sessions), consider using the [seed script](../getting-started/data-import.md) instead. It runs server-side with direct database access and handles large files more efficiently.
+    For initial bulk imports (hundreds of sessions), consider using the [seed script](../getting-started/data-import.md) instead. It runs server-side with direct database access.

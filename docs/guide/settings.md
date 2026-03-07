@@ -1,23 +1,60 @@
-# :lucide-sliders-horizontal: Settings
+# Settings
 
-The settings page (`/settings`) controls charging networks, comparison parameters, and display preferences. All settings take effect immediately.
+The settings page (`/settings`) is organized into tabs for managing networks, preferences, and data import. All settings take effect immediately.
 
-## Charging Networks
+## Network Management
 
-Manage your cost per kWh for each charging network. Each network has:
+Networks are the primary organizational unit for charging locations and costs. Each network has:
 
 | Field | Description |
 |-------|-------------|
 | Name | Network name (e.g., "Home", "Electrify America") |
-| Cost | Cost per kWh in dollars |
+| Cost per kWh | Default electricity rate for this network |
+| Color | Hex color for badges and charts |
 | Free | Whether this network charges nothing |
+| Notes | Optional description |
 
-Network costs are used to calculate session costs throughout the application. Editing a network cost immediately updates all cost displays.
+The network table shows each network with its color badge, location count, and session count. Networks are read-only in the table -- click **Edit** to open the network modal.
 
-!!! tip
-    The seed script populates default costs for common networks. Edit these to match your actual costs.
+### Network Edit Modal
 
-## Gas Comparison Settings
+The network modal has two tabs:
+
+**Details** -- Edit name, cost per kWh, color, free toggle, and notes.
+
+**Locations** -- Manage locations belonging to this network. Each location has:
+
+| Field | Description |
+|-------|-------------|
+| Name | Location name (e.g., "Main St Station") |
+| Location type | Home, work, public, retail, destination, highway, other |
+| Address | Street address |
+| Latitude/Longitude | GPS coordinates |
+| Cost per kWh | Optional override of network cost |
+| Notes | Optional description |
+
+Locations can override the network's cost_per_kwh. When a location has its own cost, that takes priority over the network default for sessions at that location.
+
+### Charger Stalls
+
+Each location can have multiple charger stalls with different specs. Stalls are managed via a tab in the location edit area:
+
+| Field | Description |
+|-------|-------------|
+| Label | User-defined name (e.g., "350kW CCS", "L2 West Wall") |
+| Charger type | L1, L2, or DCFC |
+| Rated kW | Maximum rated power |
+| Voltage / Amperage | Typical electrical specs |
+| Connector type | CCS, CHAdeMO, J1772, NACS, Tesla |
+| Default | Auto-select this stall when the location is chosen |
+
+When editing a session, selecting a location populates a stall dropdown. Choosing a stall auto-fills EVSE fields (rated kW, voltage, amperage) on the session.
+
+Popular networks include pre-built charger templates. Click "Pre-fill from [Network]" when adding stalls to auto-populate known configurations.
+
+## General Settings
+
+### Gas Comparison
 
 Parameters for the gas vehicle savings comparison on the costs page:
 
@@ -26,18 +63,20 @@ Parameters for the gas vehicle savings comparison on the costs page:
 | Gas price ($/gallon) | Current gas price in your area | 3.50 |
 | Vehicle MPG | The gas vehicle you're comparing against | 25 |
 
-These values are used to calculate what you would have spent driving an equivalent gas vehicle over the same miles.
-
-## Unit Preferences
-
-Choose between US and EU display units:
+### Unit Preferences
 
 | Preference | Efficiency unit | Used on |
 |-----------|----------------|---------|
 | US | mi/kWh | Energy dashboard |
 | EU | km/kWh | Energy dashboard |
 
-## Comparison Toggles
+### Timezone
+
+Set your local timezone (e.g., `America/New_York`). All timestamps throughout the app are converted from UTC to your selected timezone for display. This is display-only -- stored data remains in UTC.
+
+The timezone setting also serves as the default for CSV imports.
+
+### Comparison Toggles
 
 Control which comparison sections appear on the costs page:
 
@@ -45,4 +84,8 @@ Control which comparison sections appear on the costs page:
 - **Gas comparison** -- Show/hide the gas vehicle comparison
 - **Network comparison** -- Show/hide the network cost comparison
 
-Disabling a comparison also skips the database queries for that section, so there's no performance cost for hidden comparisons.
+Disabling a comparison skips its database queries.
+
+## CSV Import Tab
+
+See the dedicated [CSV Import](csv-import.md) guide.
