@@ -376,8 +376,11 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
     """Handle GPS location updates.
 
     Parses GPS state (object-string with latitude, longitude)
-    and stores as part of vehicle status batch.
+    and stores EVLocation snapshots with deduplication (60s + 50m).
     """
+    from db.models.location import EVLocation
+    from web.queries.locations import haversine_meters
+
     attrs = _get_attributes(new_state)
 
     # GPS data is in attributes.value.location
@@ -386,14 +389,43 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
 
     lat = _safe_float(location.get("lat"))
     lon = _safe_float(location.get("lon"))
+    gps_accuracy = _safe_float(location.get("accuracy") or gps_value.get("accuracy"))
 
     if lat is not None and lon is not None:
         logger.debug("GPS update: lat=%.6f, lon=%.6f", lat, lon)
-        # Store in pending vehicle status for the batch
-        # GPS doesn't have dedicated columns on EVVehicleStatus but we log it
-        # Future: could add lat/lon columns to vehicle_status
-        # For now, just log the position
-        pass
+
+        # Deduplication: skip if last record for this device is within 60s AND 50m
+        from sqlalchemy import select
+
+        last_result = await db.execute(
+            select(EVLocation)
+            .where(EVLocation.device_id == device_id)
+            .order_by(EVLocation.recorded_at.desc())
+            .limit(1)
+        )
+        last_loc = last_result.scalar_one_or_none()
+
+        now = datetime.now(timezone.utc)
+
+        if last_loc is not None:
+            time_diff = (now - last_loc.recorded_at).total_seconds()
+            if time_diff < 60 and last_loc.latitude is not None and last_loc.longitude is not None:
+                dist = haversine_meters(float(last_loc.latitude), float(last_loc.longitude), lat, lon)
+                if dist < 50:
+                    logger.debug("GPS dedup: skipping (%.1fs, %.1fm)", time_diff, dist)
+                    return
+
+        # Store new EVLocation snapshot
+        new_loc = EVLocation(
+            device_id=device_id,
+            recorded_at=now,
+            latitude=lat,
+            longitude=lon,
+            gps_accuracy=gps_accuracy,
+            source_system="home_assistant",
+        )
+        db.add(new_loc)
+        logger.debug("Stored GPS snapshot for %s", device_id)
 
 
 # ---------------------------------------------------------------------------
@@ -575,6 +607,25 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         network_id = await resolve_network(db, network_name=network_name)
 
     # -----------------------------------------------------------------------
+    # Location resolution
+    # -----------------------------------------------------------------------
+    from web.queries.locations import resolve_location
+
+    location_id = await resolve_location(
+        db,
+        latitude=latitude,
+        longitude=longitude,
+        address=address,
+        network_name=network_name,
+        network_id=network_id,
+        location_name=location_name,
+        address_dict=address_dict,
+        source_system="home_assistant",
+        _location_data=location_data,
+        _network_name_raw=network_name,
+    )
+
+    # -----------------------------------------------------------------------
     # Create session record
     # -----------------------------------------------------------------------
     session = EVChargingSession(
@@ -582,6 +633,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         source_system="home_assistant",
         charge_type=charge_type,
         location_name=location_name,
+        location_id=location_id,
         network_id=network_id,
         session_start_utc=session_start_utc,
         session_end_utc=session_end_utc,
