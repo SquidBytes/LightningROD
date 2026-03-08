@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from db.engine import AsyncSessionLocal, engine
-from web.queries.settings import seed_charger_templates
+from web.queries.settings import seed_charger_templates, seed_predefined_networks
 from web.routes import csv_import, dashboard, sessions, costs, energy, settings
 
 
@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI):
     # Startup: seed charger templates (idempotent)
     async with AsyncSessionLocal() as session:
         await seed_charger_templates(session)
+        await seed_predefined_networks(session)
     # Start HASS service (if configured)
     from web.services.hass_client import start_hass_service
     await start_hass_service()
