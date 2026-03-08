@@ -1,7 +1,7 @@
 """Add is_verified and source_system columns to ev_location_lookup and ev_charging_networks.
 
 Revision ID: g1h2i3j4k5l6
-Revises: f1a2b3c4d5e6
+Revises: 208b4ddefdd2
 Create Date: 2026-03-08
 """
 from typing import Union
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'g1h2i3j4k5l6'
-down_revision: Union[str, None] = 'f1a2b3c4d5e6'
+down_revision: Union[str, None] = '208b4ddefdd2'
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 
