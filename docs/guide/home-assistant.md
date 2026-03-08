@@ -2,6 +2,8 @@
 
 LightningROD connects to [Home Assistant](https://www.home-assistant.io/) via WebSocket to ingest real-time FordPass vehicle data from the [ha-fordpass](https://github.com/marq24/ha_fordpass) integration. This is the primary method for automatic charging session detection.
 
+![hass](../assets/images/lr_hass.png)
+
 ## Prerequisites
 
 - A running Home Assistant instance with [ha-fordpass](https://github.com/marq24/ha_fordpass) installed and configured

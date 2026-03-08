@@ -4,6 +4,8 @@ Self-hosted charging analytics for Ford electric vehicles.
 
 Track charging sessions, analyze costs, and monitor energy consumption with a web-based dashboard. Built for the Ford F-150 Lightning, designed to work with any Ford EV using data from [ha-fordpass](https://github.com/marq24/ha_fordpass) or CSV imports.
 
+![overview](assets/images/lr_overview.gif)
+
 ---
 
 ## Features

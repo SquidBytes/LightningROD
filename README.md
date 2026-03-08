@@ -44,21 +44,24 @@ Screenshots are from `v0.1.5` and may not be up to date
 
 ### Session List and drawer
 
-![Screenshot of the main session page v0.1.5](docs/assets/images/lr_sessions.png)
+![sessionList v0.2](docs/assets/images/lr_sessions.gif)
 
-![Screenshot of the per session drawer v0.1.5](docs/assets/images/lr_sessions_drawer.png)
 
 ### Cost Page
 
-![Screenshot of the cost page v0.1.5](docs/assets/images/lr_costs.png)
+![cost page v0.2](docs/assets/images/lr_costs.gif)
 
 ### Energy Page
 
-![Screenshot of the energy page v0.1.5](docs/assets/images/lr_energy.png)
+![energy v0.2](docs/assets/images/lr_energy.gif)
 
 ### Settings Page
 
-![Screenshot of the settings page v0.1.5](docs/assets/images/lr_settings.png)
+![main settings page v0.2](docs/assets/images/lr_settings.gif)
+
+![settings networks v0.2](docs/assets/images/lr_settings_networks.gif)
+
+![settings csv import v0.2](docs/assets/images/lr_csv_import.gif)
 
 
 ## Quick Start

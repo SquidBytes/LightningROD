@@ -2,6 +2,8 @@
 
 The dashboard (`/`) provides an overview of your charging analytics.
 
+![dashboard](../assets/images/lr_dashboard.gif)
+
 ## Summary Cards
 
 Three cards at the top:

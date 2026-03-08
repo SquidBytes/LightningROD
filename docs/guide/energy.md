@@ -2,6 +2,8 @@
 
 The energy page (`/energy`) tracks total energy consumption and charging efficiency over time.
 
+![energy](../assets/images/lr_energy.gif)
+
 ## Summary Cards
 
 Three cards at the top:

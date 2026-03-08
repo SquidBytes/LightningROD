@@ -2,6 +2,8 @@
 
 The costs page (`/costs`) breaks down your charging expenses and shows savings compared to gas or other charging networks.
 
+![costs](../assets/images/lr_costs.gif)
+
 ## Summary Cards
 
 Cards at the top show:

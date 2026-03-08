@@ -2,6 +2,8 @@
 
 The settings page (`/settings`) is organized into tabs for managing networks, preferences, and data import. All settings take effect immediately.
 
+![settings](../assets/images/lr_settings.gif)
+
 ## Network Management
 
 Networks are the primary organizational unit for charging locations and costs. Each network has:
@@ -34,6 +36,8 @@ The network modal has two tabs:
 | Notes | Optional description |
 
 Locations can override the network's cost_per_kwh. When a location has its own cost, that takes priority over the network default for sessions at that location.
+
+![settings network](../assets/images/lr_settings_networks.gif)
 
 ### Charger Stalls
 
