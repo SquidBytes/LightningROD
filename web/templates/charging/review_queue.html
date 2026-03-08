@@ -12,4 +12,43 @@
         {% include "charging/partials/review_table.html" %}
     </div>
 </div>
+
+{# Shared modal for network edit / convert-to-location (reuses settings modals) #}
+<dialog id="network-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-4xl">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="network-modal-content">
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<script>
+function openNetworkModal(networkId) {
+    htmx.ajax('GET', '/settings/networks/' + networkId + '/edit-modal',
+        {target: '#network-modal-content', swap: 'innerHTML'});
+    document.getElementById('network-modal').showModal();
+}
+
+function openConvertModal(networkId) {
+    htmx.ajax('GET', '/settings/networks/' + networkId + '/convert-modal',
+        {target: '#network-modal-content', swap: 'innerHTML'});
+    document.getElementById('network-modal').showModal();
+}
+
+function closeNetworkModal() {
+    document.getElementById('network-modal').close();
+    document.getElementById('network-modal-content').innerHTML = '';
+}
+
+// When network modal closes (after save/convert), refresh the review table
+document.body.addEventListener('closeNetworkModal', function() {
+    closeNetworkModal();
+    htmx.ajax('GET', '/charging/review/table', {target: '#review-content', swap: 'innerHTML'});
+});
+</script>
 {% endblock %}

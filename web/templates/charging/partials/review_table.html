@@ -26,7 +26,11 @@
                 <tr id="loc-row-{{ loc.id }}">
                     <td>{{ loc.location_name }}</td>
                     <td>{{ loc.address or '-' }}</td>
-                    <td>{{ loc.location_type or '-' }}</td>
+                    <td>
+                        {% if loc.location_type %}
+                        <span class="badge badge-sm badge-ghost capitalize">{{ loc.location_type }}</span>
+                        {% else %}-{% endif %}
+                    </td>
                     <td>
                         {% set ns = namespace(network_name='-') %}
                         {% for net in all_networks %}
@@ -65,57 +69,95 @@
                                 hx-post="/charging/review/location/{{ loc.id }}/delete"
                                 hx-target="#review-content"
                                 hx-swap="innerHTML"
-                                hx-confirm="Delete this location? This cannot be undone.">
+                                hx-confirm="Delete this location? Sessions will be unlinked.">
                             Delete
                         </button>
                     </td>
                 </tr>
 
-                <!-- Edit modal for this location -->
+                <!-- Edit modal for this location (matches settings location edit fields) -->
                 <dialog id="edit-loc-{{ loc.id }}" class="modal">
-                    <div class="modal-box">
-                        <h3 class="text-lg font-bold mb-4">Edit Location</h3>
+                    <div class="modal-box max-w-lg">
+                        <form method="dialog">
+                            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+                        </form>
+                        <p class="text-sm text-base-content/50 uppercase tracking-wide font-medium">Edit Location</p>
+                        <h3 class="text-xl font-semibold text-base-content">{{ loc.location_name }}</h3>
+
                         <form hx-post="/charging/review/location/{{ loc.id }}/edit"
                               hx-target="#review-content"
                               hx-swap="innerHTML"
-                              class="flex flex-col gap-3">
-                            <label class="form-control">
-                                <div class="label"><span class="label-text">Name</span></div>
+                              class="mt-5 space-y-4">
+
+                            <label class="form-control w-full">
+                                <div class="label"><span class="label-text text-sm">Location Name</span></div>
                                 <input type="text" name="location_name" value="{{ loc.location_name }}"
-                                       class="input input-bordered input-sm" required>
+                                       class="input input-bordered w-full" required>
                             </label>
-                            <label class="form-control">
-                                <div class="label"><span class="label-text">Address</span></div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <label class="form-control">
+                                    <div class="label"><span class="label-text text-sm">Type</span></div>
+                                    <select name="location_type" class="select select-bordered w-full">
+                                        <option value="">--</option>
+                                        {% for t in ['home', 'work', 'public', 'retail', 'destination', 'highway', 'other'] %}
+                                        <option value="{{ t }}" {{ 'selected' if loc.location_type == t }}>{{ t|capitalize }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </label>
+
+                                <label class="form-control">
+                                    <div class="label"><span class="label-text text-sm">Network</span></div>
+                                    <select name="network_id" class="select select-bordered w-full">
+                                        <option value="">None (standalone)</option>
+                                        {% for net in all_networks %}
+                                        <option value="{{ net.id }}" {{ 'selected' if net.id == loc.network_id }}>{{ net.network_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </label>
+                            </div>
+
+                            <label class="form-control w-full">
+                                <div class="label"><span class="label-text text-sm">Address</span></div>
                                 <input type="text" name="address" value="{{ loc.address or '' }}"
-                                       class="input input-bordered input-sm">
+                                       placeholder="Street address (optional)"
+                                       class="input input-bordered w-full">
                             </label>
-                            <label class="form-control">
-                                <div class="label"><span class="label-text">Type</span></div>
-                                <select name="location_type" class="select select-bordered select-sm">
-                                    <option value="">--</option>
-                                    {% for t in ['home', 'work', 'public', 'private', 'destination'] %}
-                                    <option value="{{ t }}" {{ 'selected' if loc.location_type == t }}>{{ t|capitalize }}</option>
-                                    {% endfor %}
-                                </select>
-                            </label>
-                            <label class="form-control">
-                                <div class="label"><span class="label-text">Network</span></div>
-                                <select name="network_id" class="select select-bordered select-sm">
-                                    <option value="">None</option>
-                                    {% for net in all_networks %}
-                                    <option value="{{ net.id }}" {{ 'selected' if net.id == loc.network_id }}>{{ net.network_name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </label>
-                            <div class="modal-action">
-                                <button type="submit" class="btn btn-sm btn-primary"
-                                        onclick="document.getElementById('edit-loc-{{ loc.id }}').close()">
-                                    Save
-                                </button>
-                                <button type="button" class="btn btn-sm"
-                                        onclick="document.getElementById('edit-loc-{{ loc.id }}').close()">
-                                    Cancel
-                                </button>
+
+                            <div class="grid grid-cols-3 gap-4">
+                                <label class="form-control">
+                                    <div class="label"><span class="label-text text-sm">Latitude</span></div>
+                                    <input type="number" name="latitude" step="0.000001"
+                                           value="{{ loc.latitude or '' }}" placeholder="Lat"
+                                           class="input input-bordered w-full">
+                                </label>
+                                <label class="form-control">
+                                    <div class="label"><span class="label-text text-sm">Longitude</span></div>
+                                    <input type="number" name="longitude" step="0.000001"
+                                           value="{{ loc.longitude or '' }}" placeholder="Lon"
+                                           class="input input-bordered w-full">
+                                </label>
+                                <label class="form-control">
+                                    <div class="label"><span class="label-text text-sm">Cost/kWh</span></div>
+                                    <input type="number" name="cost_per_kwh" step="0.0001" min="0"
+                                           value="{{ loc.cost_per_kwh if loc.cost_per_kwh is not none else '' }}"
+                                           placeholder="Inherit"
+                                           class="input input-bordered w-full">
+                                </label>
+                            </div>
+
+                            <div class="flex items-center justify-end pt-4 mt-2 border-t border-base-300">
+                                <div class="flex items-center gap-3">
+                                    <button type="button"
+                                            onclick="document.getElementById('edit-loc-{{ loc.id }}').close()"
+                                            class="btn btn-ghost">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" class="btn btn-primary"
+                                            onclick="document.getElementById('edit-loc-{{ loc.id }}').close()">
+                                        Save
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -170,18 +212,26 @@
                         <span class="badge badge-sm badge-ghost">-</span>
                         {% endif %}
                     </td>
-                    <td class="flex gap-1">
+                    <td class="flex gap-1 flex-wrap">
                         <button class="btn btn-xs btn-success"
                                 hx-post="/charging/review/network/{{ net.id }}/verify"
                                 hx-target="#review-content"
                                 hx-swap="innerHTML">
                             Verify
                         </button>
+                        <button class="btn btn-xs btn-info"
+                                onclick="openNetworkModal({{ net.id }})">
+                            Edit
+                        </button>
+                        <button class="btn btn-xs btn-warning"
+                                onclick="openConvertModal({{ net.id }})">
+                            Convert to Location
+                        </button>
                         <button class="btn btn-xs btn-error"
                                 hx-post="/charging/review/network/{{ net.id }}/delete"
                                 hx-target="#review-content"
                                 hx-swap="innerHTML"
-                                hx-confirm="Delete this network? This cannot be undone.">
+                                hx-confirm="Delete this network? Sessions will be unlinked.">
                             Delete
                         </button>
                     </td>

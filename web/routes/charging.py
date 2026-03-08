@@ -85,6 +85,20 @@ async def review_queue(
     )
 
 
+@router.get("/review/table", response_class=HTMLResponse)
+async def review_table(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the review table partial (used to refresh after network modal actions)."""
+    ctx = await _review_context(db)
+    return templates.TemplateResponse(
+        request,
+        "charging/partials/review_table.html",
+        ctx,
+    )
+
+
 @router.post("/review/location/{location_id}/verify", response_class=HTMLResponse)
 async def verify_location(
     location_id: int,
@@ -140,6 +154,9 @@ async def edit_location(
     address: Optional[str] = Form(None),
     location_type: Optional[str] = Form(None),
     network_id: Optional[int] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
+    cost_per_kwh: Optional[float] = Form(None),
 ):
     """Edit an unverified location."""
     result = await db.execute(
@@ -151,6 +168,9 @@ async def edit_location(
         loc.address = address or None
         loc.location_type = location_type or None
         loc.network_id = network_id or None
+        loc.latitude = latitude
+        loc.longitude = longitude
+        loc.cost_per_kwh = cost_per_kwh
         await db.commit()
     ctx = await _review_context(db)
     return templates.TemplateResponse(
