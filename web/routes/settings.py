@@ -682,6 +682,9 @@ HASS_SETTINGS_KEYS = [
     "ha_vin_override",
     "ha_unit_system",
     "ha_auto_connect",
+    "home_latitude",
+    "home_longitude",
+    "home_location_name",
 ]
 
 
@@ -749,6 +752,36 @@ async def save_hass_settings(
         {"hass": settings, "masked_token": masked_token, "saved": True},
     )
     return response
+
+
+@router.post("/settings/hass/home-location", response_class=HTMLResponse)
+async def save_home_location_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    home_location_name: str = Form(""),
+    home_latitude: str = Form(""),
+    home_longitude: str = Form(""),
+):
+    """Save home location settings to app_settings."""
+    await set_app_setting(db, "home_location_name", home_location_name)
+    await set_app_setting(db, "home_latitude", home_latitude)
+    await set_app_setting(db, "home_longitude", home_longitude)
+
+    # Re-read saved values for display
+    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
+    token = settings.get("ha_token", "")
+    masked_token = ""
+    if token:
+        if len(token) > 8:
+            masked_token = "*" * (len(token) - 8) + token[-8:]
+        else:
+            masked_token = token
+
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_settings.html",
+        {"hass": settings, "masked_token": masked_token, "saved": True},
+    )
 
 
 @router.get("/settings/hass/status", response_class=HTMLResponse)

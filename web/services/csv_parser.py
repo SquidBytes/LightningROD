@@ -994,6 +994,27 @@ async def import_rows(
                     # Ensure device_id has a fallback (model requires NOT NULL)
                     if not clean_row.get("device_id"):
                         clean_row["device_id"] = "csv_import"
+
+                    # Resolve location_id if lat/lon or address present and not already set
+                    if not clean_row.get("location_id"):
+                        lat = clean_row.get("latitude")
+                        lon = clean_row.get("longitude")
+                        addr = clean_row.get("address")
+                        if (lat is not None and lon is not None) or addr:
+                            from web.queries.locations import resolve_location
+
+                            resolved_loc_id = await resolve_location(
+                                db_session,
+                                latitude=lat,
+                                longitude=lon,
+                                address=addr,
+                                network_id=clean_row.get("network_id"),
+                                location_name=clean_row.get("location_name"),
+                                source_system="csv_import",
+                            )
+                            if resolved_loc_id:
+                                clean_row["location_id"] = resolved_loc_id
+
                     session_obj = EVChargingSession(**clean_row)
                     db_session.add(session_obj)
                 added += 1

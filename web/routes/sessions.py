@@ -366,6 +366,26 @@ async def create_session(
         evse_source=evse_source or None,
     )
 
+    # Resolve location_id if not explicitly set and location data is available
+    if not new_session.location_id:
+        lat = new_session.latitude
+        lon = new_session.longitude
+        addr = new_session.address
+        if (lat is not None and lon is not None) or addr:
+            from web.queries.locations import resolve_location
+
+            resolved_loc_id = await resolve_location(
+                db,
+                latitude=float(lat) if lat is not None else None,
+                longitude=float(lon) if lon is not None else None,
+                address=addr,
+                network_id=new_session.network_id,
+                location_name=new_session.location_name,
+                source_system="manual",
+            )
+            if resolved_loc_id:
+                new_session.location_id = resolved_loc_id
+
     # DC V/A estimation: if evse_kw set and V/A blank for DC sessions
     if new_session.charge_type == 'DC' and new_session.evse_kw and not new_session.evse_voltage and not new_session.evse_amperage:
         pack_voltage = 400  # F-150 Lightning ~400V pack
@@ -567,6 +587,26 @@ async def update_session(
         session.stall_id = stall_id or None
     if evse_source is not None:
         session.evse_source = evse_source or None
+
+    # Resolve location_id if not explicitly set by form and location data is available
+    if location_id is None and session.location_id is None:
+        s_lat = session.latitude
+        s_lon = session.longitude
+        s_addr = session.address
+        if (s_lat is not None and s_lon is not None) or s_addr:
+            from web.queries.locations import resolve_location as _resolve_loc
+
+            resolved_loc = await _resolve_loc(
+                db,
+                latitude=float(s_lat) if s_lat is not None else None,
+                longitude=float(s_lon) if s_lon is not None else None,
+                address=s_addr,
+                network_id=session.network_id,
+                location_name=session.location_name,
+                source_system="manual",
+            )
+            if resolved_loc:
+                session.location_id = resolved_loc
 
     # DC V/A estimation: if evse_kw set and V/A blank for DC sessions
     if session.charge_type == 'DC' and session.evse_kw and not session.evse_voltage and not session.evse_amperage:

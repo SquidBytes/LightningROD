@@ -94,6 +94,52 @@
     </div>
 </div>
 
+<!-- Home Location Settings -->
+<div class="card bg-base-200 max-w-2xl mt-4">
+    <div class="card-body">
+        <h2 class="card-title">Home Location</h2>
+        <p class="text-base-content/60 text-sm mb-2">Configure your home address for automatic home charging detection. When HA reports a home charging session, it will be linked to this location.</p>
+
+        <form hx-post="/settings/hass/home-location" hx-target="#hass-settings-content" hx-swap="innerHTML"
+              class="space-y-4">
+
+            <!-- Home Location Name -->
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text">Location Name</span></div>
+                <input type="text" name="home_location_name"
+                       value="{{ hass.get('home_location_name', '') }}"
+                       placeholder="Home"
+                       class="input input-bordered w-full">
+            </label>
+
+            <!-- Home Latitude -->
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text">Latitude</span></div>
+                <input type="number" name="home_latitude" step="any"
+                       value="{{ hass.get('home_latitude', '') }}"
+                       placeholder="e.g. 40.7128"
+                       class="input input-bordered w-full">
+            </label>
+
+            <!-- Home Longitude -->
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text">Longitude</span></div>
+                <input type="number" name="home_longitude" step="any"
+                       value="{{ hass.get('home_longitude', '') }}"
+                       placeholder="e.g. -74.0060"
+                       class="input input-bordered w-full">
+            </label>
+
+            <!-- Save Button -->
+            <div class="pt-2">
+                <button type="submit" class="btn btn-primary">
+                    Save Home Location
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Connection status — loaded on tab view, auto-refreshes every 10s -->
 <div id="hass-connection-status" class="mt-4"
      hx-get="/settings/hass/status"
