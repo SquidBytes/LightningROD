@@ -42,6 +42,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up db -d
 uv run alembic upgrade head
 ```
 
+> **Note:** Reference data (charging networks, charger templates) is seeded automatically when the app starts. No manual seed step is required for the app to function on a fresh database.
+
 ### 5. Build CSS
 
 ```bash
@@ -54,7 +56,9 @@ For auto-rebuild on file changes during development:
 npx @tailwindcss/cli -i input.css -o web/static/css/output.css --watch
 ```
 
-### 6. Seed data (optional)
+### 6. Import charging history (optional)
+
+Import your own charging session data from a CSV export. Predefined networks and charger templates are seeded automatically on app startup, so this step is only needed if you have historical charging data to import.
 
 ```bash
 uv run python scripts/seed.py --vin YOUR_VIN_HERE
