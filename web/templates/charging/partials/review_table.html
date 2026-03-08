@@ -1,0 +1,198 @@
+<!-- Unverified Locations Section -->
+<div class="mb-8">
+    <h2 class="text-xl font-semibold mb-3 flex items-center gap-2">
+        Unverified Locations
+        {% if unverified_locations %}
+        <span class="badge badge-warning">{{ unverified_locations|length }} pending</span>
+        {% endif %}
+    </h2>
+
+    {% if unverified_locations %}
+    <div class="overflow-x-auto">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Address</th>
+                    <th>Type</th>
+                    <th>Network</th>
+                    <th>Sessions</th>
+                    <th>Source</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for loc in unverified_locations %}
+                <tr id="loc-row-{{ loc.id }}">
+                    <td>{{ loc.location_name }}</td>
+                    <td>{{ loc.address or '-' }}</td>
+                    <td>{{ loc.location_type or '-' }}</td>
+                    <td>
+                        {% set ns = namespace(network_name='-') %}
+                        {% for net in all_networks %}
+                            {% if net.id == loc.network_id %}
+                                {% set ns.network_name = net.network_name %}
+                            {% endif %}
+                        {% endfor %}
+                        {{ ns.network_name }}
+                    </td>
+                    <td>
+                        <span class="badge badge-sm badge-ghost">{{ loc_session_counts.get(loc.id, 0) }}</span>
+                    </td>
+                    <td>
+                        {% if loc.source_system == 'home_assistant' %}
+                        <span class="badge badge-sm badge-info">HA</span>
+                        {% elif loc.source_system == 'csv_import' %}
+                        <span class="badge badge-sm badge-accent">CSV</span>
+                        {% elif loc.source_system %}
+                        <span class="badge badge-sm">{{ loc.source_system }}</span>
+                        {% else %}
+                        <span class="badge badge-sm badge-ghost">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="flex gap-1 flex-wrap">
+                        <button class="btn btn-xs btn-success"
+                                hx-post="/charging/review/location/{{ loc.id }}/verify"
+                                hx-target="#review-content"
+                                hx-swap="innerHTML">
+                            Verify
+                        </button>
+                        <button class="btn btn-xs btn-info"
+                                onclick="document.getElementById('edit-loc-{{ loc.id }}').showModal()">
+                            Edit
+                        </button>
+                        <button class="btn btn-xs btn-error"
+                                hx-post="/charging/review/location/{{ loc.id }}/delete"
+                                hx-target="#review-content"
+                                hx-swap="innerHTML"
+                                hx-confirm="Delete this location? This cannot be undone.">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+
+                <!-- Edit modal for this location -->
+                <dialog id="edit-loc-{{ loc.id }}" class="modal">
+                    <div class="modal-box">
+                        <h3 class="text-lg font-bold mb-4">Edit Location</h3>
+                        <form hx-post="/charging/review/location/{{ loc.id }}/edit"
+                              hx-target="#review-content"
+                              hx-swap="innerHTML"
+                              class="flex flex-col gap-3">
+                            <label class="form-control">
+                                <div class="label"><span class="label-text">Name</span></div>
+                                <input type="text" name="location_name" value="{{ loc.location_name }}"
+                                       class="input input-bordered input-sm" required>
+                            </label>
+                            <label class="form-control">
+                                <div class="label"><span class="label-text">Address</span></div>
+                                <input type="text" name="address" value="{{ loc.address or '' }}"
+                                       class="input input-bordered input-sm">
+                            </label>
+                            <label class="form-control">
+                                <div class="label"><span class="label-text">Type</span></div>
+                                <select name="location_type" class="select select-bordered select-sm">
+                                    <option value="">--</option>
+                                    {% for t in ['home', 'work', 'public', 'private', 'destination'] %}
+                                    <option value="{{ t }}" {{ 'selected' if loc.location_type == t }}>{{ t|capitalize }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label class="form-control">
+                                <div class="label"><span class="label-text">Network</span></div>
+                                <select name="network_id" class="select select-bordered select-sm">
+                                    <option value="">None</option>
+                                    {% for net in all_networks %}
+                                    <option value="{{ net.id }}" {{ 'selected' if net.id == loc.network_id }}>{{ net.network_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <div class="modal-action">
+                                <button type="submit" class="btn btn-sm btn-primary"
+                                        onclick="document.getElementById('edit-loc-{{ loc.id }}').close()">
+                                    Save
+                                </button>
+                                <button type="button" class="btn btn-sm"
+                                        onclick="document.getElementById('edit-loc-{{ loc.id }}').close()">
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                </dialog>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert">
+        <span>All locations verified -- nothing to review.</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Unverified Networks Section -->
+<div class="mb-8">
+    <h2 class="text-xl font-semibold mb-3 flex items-center gap-2">
+        Unverified Networks
+        {% if unverified_networks %}
+        <span class="badge badge-warning">{{ unverified_networks|length }} pending</span>
+        {% endif %}
+    </h2>
+
+    {% if unverified_networks %}
+    <div class="overflow-x-auto">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Sessions</th>
+                    <th>Source</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for net in unverified_networks %}
+                <tr id="net-row-{{ net.id }}">
+                    <td>{{ net.network_name }}</td>
+                    <td>
+                        <span class="badge badge-sm badge-ghost">{{ net_session_counts.get(net.id, 0) }}</span>
+                    </td>
+                    <td>
+                        {% if net.source_system == 'home_assistant' %}
+                        <span class="badge badge-sm badge-info">HA</span>
+                        {% elif net.source_system == 'csv_import' %}
+                        <span class="badge badge-sm badge-accent">CSV</span>
+                        {% elif net.source_system %}
+                        <span class="badge badge-sm">{{ net.source_system }}</span>
+                        {% else %}
+                        <span class="badge badge-sm badge-ghost">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="flex gap-1">
+                        <button class="btn btn-xs btn-success"
+                                hx-post="/charging/review/network/{{ net.id }}/verify"
+                                hx-target="#review-content"
+                                hx-swap="innerHTML">
+                            Verify
+                        </button>
+                        <button class="btn btn-xs btn-error"
+                                hx-post="/charging/review/network/{{ net.id }}/delete"
+                                hx-target="#review-content"
+                                hx-swap="innerHTML"
+                                hx-confirm="Delete this network? This cannot be undone.">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert">
+        <span>All networks verified -- nothing to review.</span>
+    </div>
+    {% endif %}
+</div>

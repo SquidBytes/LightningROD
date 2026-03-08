@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">Review Queue</h1>
+    <p class="text-base-content/70 mb-6">
+        Auto-created networks and locations from Home Assistant or CSV imports appear here for review.
+        Verify entries to confirm they are correct, edit to fix details, or delete if they were created in error.
+    </p>
+
+    <div id="review-content">
+        {% include "charging/partials/review_table.html" %}
+    </div>
+</div>
+{% endblock %}
