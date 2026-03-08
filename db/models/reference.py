@@ -12,10 +12,10 @@ TIMESTAMPTZ = TIMESTAMP(timezone=True)
 
 
 class EVChargingNetwork(Base):
-    """Static charging network configuration (5 columns).
+    """Static charging network configuration.
 
     Source: 003_create_reference_tables.sql, ev_charging_networks table.
-    Not a pipeline target — manually maintained.
+    Not a pipeline target — manually maintained or auto-created from HA data.
     """
 
     __tablename__ = "ev_charging_networks"
@@ -27,13 +27,17 @@ class EVChargingNetwork(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text)
     is_free: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     color: Mapped[Optional[str]] = mapped_column(String(7))  # hex color e.g. '#FF0000'
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    source_system: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
 
 class EVLocationLookup(Base):
-    """Known location definitions for EV charging and parking (6 columns).
+    """Known location definitions for EV charging and parking.
 
     Source: 003_create_reference_tables.sql, ev_location_lookup table.
-    Not a pipeline target — manually maintained.
+    Manually maintained or auto-created from HA/CSV data.
     """
 
     __tablename__ = "ev_location_lookup"
@@ -49,6 +53,10 @@ class EVLocationLookup(Base):
         Integer, ForeignKey("ev_charging_networks.id", ondelete="SET NULL"), nullable=True
     )
     cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    source_system: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
 
 class EVChargerStall(Base):
