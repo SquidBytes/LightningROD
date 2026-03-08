@@ -190,6 +190,85 @@ DB_FIELD_OPTIONS = [
         "required": False,
         "important": False,
     },
+    # Location metadata
+    {
+        "field": "location_id",
+        "label": "Location ID",
+        "description": "FK to location lookup table",
+        "required": False,
+        "important": False,
+    },
+    {
+        "field": "address",
+        "label": "Address",
+        "description": "Street address of charging location",
+        "required": False,
+        "important": False,
+    },
+    {
+        "field": "latitude",
+        "label": "Latitude",
+        "description": "GPS latitude",
+        "required": False,
+        "important": False,
+    },
+    {
+        "field": "longitude",
+        "label": "Longitude",
+        "description": "GPS longitude",
+        "required": False,
+        "important": False,
+    },
+    # EVSE / stall fields
+    {
+        "field": "stall_id",
+        "label": "Stall ID",
+        "description": "FK to charger stall",
+        "required": False,
+        "important": False,
+    },
+    {
+        "field": "evse_voltage",
+        "label": "EVSE Voltage (V)",
+        "description": "Charger-side voltage",
+        "required": False,
+        "important": False,
+    },
+    {
+        "field": "evse_amperage",
+        "label": "EVSE Amperage (A)",
+        "description": "Charger-side current",
+        "required": False,
+        "important": False,
+    },
+    {
+        "field": "evse_kw",
+        "label": "EVSE Power (kW)",
+        "description": "Charger-side power",
+        "required": False,
+        "important": False,
+    },
+    {
+        "field": "evse_energy_kwh",
+        "label": "EVSE Energy (kWh)",
+        "description": "Energy measured at charger",
+        "required": False,
+        "important": False,
+    },
+    {
+        "field": "evse_max_power_kw",
+        "label": "EVSE Max Power (kW)",
+        "description": "Peak charger power",
+        "required": False,
+        "important": False,
+    },
+    {
+        "field": "evse_source",
+        "label": "EVSE Source",
+        "description": "Source of EVSE measurements",
+        "required": False,
+        "important": False,
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -233,6 +312,20 @@ _SEED_COLUMN_MAP: dict[str, str] = {
     "charger_kwh": "energy_kwh",
     "session_start": "session_start_utc",
     "session_end": "session_end_utc",
+    # Location metadata aliases
+    "location_address": "address",
+    "location_id": "location_id",
+    "latitude": "latitude",
+    "longitude": "longitude",
+    "address": "address",
+    # EVSE / stall aliases
+    "stall_id": "stall_id",
+    "evse_voltage": "evse_voltage",
+    "evse_amperage": "evse_amperage",
+    "evse_kw": "evse_kw",
+    "evse_energy_kwh": "evse_energy_kwh",
+    "evse_max_power_kw": "evse_max_power_kw",
+    "evse_source": "evse_source",
 }
 
 
@@ -284,6 +377,19 @@ _KEYWORD_HINTS: list[tuple[list[str], str]] = [
     (["is", "free"], "is_free"),
     (["is", "complete"], "is_complete"),
     (["recorded"], "recorded_at"),
+    # Location metadata
+    (["location", "address"], "address"),
+    (["latitude"], "latitude"),
+    (["longitude"], "longitude"),
+    (["location", "id"], "location_id"),
+    # EVSE / stall fields
+    (["evse", "voltage"], "evse_voltage"),
+    (["evse", "amperage"], "evse_amperage"),
+    (["evse", "kw"], "evse_kw"),
+    (["evse", "energy"], "evse_energy_kwh"),
+    (["evse", "max"], "evse_max_power_kw"),
+    (["evse", "source"], "evse_source"),
+    (["stall", "id"], "stall_id"),
 ]
 
 
@@ -416,6 +522,17 @@ _WORK_LOCATIONS = {"Work"}
 _HOME_LOCATIONS = {"Home"}
 _NETWORK_NAMES = {"Tesla", "Supercharger", "Electrify America", "ElectrifyAmerica", "EA", "EVgo", "Charge Point", "ChargePoint"}
 
+def _int_or_none(v: str) -> Optional[int]:
+    """Return int or None if empty/invalid."""
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    try:
+        return int(float(v))
+    except (ValueError, TypeError):
+        return None
+
+
 def _str_or_none(v: str) -> Optional[str]:
     """Return stripped string or None if empty."""
     v = v.strip() if v else ""
@@ -436,6 +553,23 @@ def _float_or_none(v: str) -> Optional[float]:
 def _parse_bool(v: str) -> bool:
     """Return True for 'True'/'1'/'true'/'yes', False otherwise."""
     return v.strip().lower() in ("true", "1", "yes") if v else False
+
+
+def _parse_bool_or_none(v: str) -> Optional[bool]:
+    """Return True/False for explicit bool strings, None for empty/whitespace.
+
+    Used for nullable boolean fields like ``is_free`` where an empty CSV value
+    should trigger classifier fallback rather than defaulting to False.
+    """
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    low = v.lower()
+    if low in ("true", "1", "yes"):
+        return True
+    if low in ("false", "0", "no"):
+        return False
+    return None
 
 
 def _parse_timestamp(v: str) -> Optional[datetime]:
@@ -547,7 +681,7 @@ _DB_FIELD_PARSERS: dict[str, object] = {
     "charging_voltage": _float_or_none,
     "charging_amperage": _float_or_none,
     "is_complete": _parse_bool,
-    "is_free": _parse_bool,
+    "is_free": _parse_bool_or_none,
     "location_name": _str_or_none,
     "network_id": _str_or_none,
     "charge_type": _str_or_none,
@@ -556,6 +690,19 @@ _DB_FIELD_PARSERS: dict[str, object] = {
     "source_system": _str_or_none,
     "session_id": _parse_uuid,
     # charge_duration_seconds is handled specially (may come as minutes)
+    # Location metadata
+    "location_id": _int_or_none,
+    "address": _str_or_none,
+    "latitude": _float_or_none,
+    "longitude": _float_or_none,
+    # EVSE / stall fields
+    "stall_id": _int_or_none,
+    "evse_voltage": _float_or_none,
+    "evse_amperage": _float_or_none,
+    "evse_kw": _float_or_none,
+    "evse_energy_kwh": _float_or_none,
+    "evse_max_power_kw": _float_or_none,
+    "evse_source": _str_or_none,
 }
 
 
@@ -629,8 +776,12 @@ def transform_rows(
 
         # Normalize charge_type (overwrite whatever was parsed from CSV)
         db_row["charge_type"] = _normalize_charge_type(charger_type_raw, location_name)
-        db_row["location_type"] = _classify_location_type(location_name)
-        db_row["is_free"] = _classify_is_free(location_name)
+
+        # CSV-provided location_type and is_free take precedence over classifier
+        if not db_row.get("location_type"):
+            db_row["location_type"] = _classify_location_type(location_name)
+        if db_row.get("is_free") is None:
+            db_row["is_free"] = _classify_is_free(location_name)
         db_row["source_system"] = "csv_import"
         db_row["is_complete"] = True
 
@@ -751,6 +902,13 @@ async def detect_duplicates(rows: list[dict], db_session: AsyncSession) -> list[
 
 _INTERNAL_FIELDS = {"_status", "_row_index", "_error", "_matched_id"}
 
+# Columns safe to pass to EVChargingSession(**kwargs).  Built from DB_FIELD_OPTIONS
+# (the importable subset) plus auto-set fields.  stall_id is excluded — stalls are
+# managed via the stall management UI and arbitrary CSV values cause FK violations.
+_VALID_SESSION_COLUMNS = (
+    {opt["field"] for opt in DB_FIELD_OPTIONS} | {"device_id", "source_system"}
+) - {"stall_id"}
+
 
 async def import_rows(
     rows: list[dict],
@@ -826,6 +984,9 @@ async def import_rows(
                     clean_row["network_id"] = resolved_id
                 else:
                     del clean_row["network_id"]
+
+        # Strip any keys not in the valid column set (e.g. connector_type, stall_id)
+        clean_row = {k: v for k, v in clean_row.items() if k in _VALID_SESSION_COLUMNS}
 
         if action == "insert":
             try:

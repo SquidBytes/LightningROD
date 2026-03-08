@@ -2,6 +2,8 @@
 
 The sessions page (`/sessions`) is the primary interface for viewing and managing your charging history.
 
+![sessions](../assets/images/lr_sessions.gif)
+
 ## Session Table
 
 Sessions are displayed in a paginated table with configurable page size (25, 50, or 100 per page). Columns shown:

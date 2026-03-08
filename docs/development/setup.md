@@ -54,7 +54,9 @@ For auto-rebuild on file changes during development:
 npx @tailwindcss/cli -i input.css -o web/static/css/output.css --watch
 ```
 
-### 6. Seed data (optional)
+### 6. Import charging history (optional)
+
+Import your own charging session data from a CSV export.
 
 ```bash
 uv run python scripts/seed.py --vin YOUR_VIN_HERE

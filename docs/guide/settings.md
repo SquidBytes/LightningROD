@@ -2,6 +2,8 @@
 
 The settings page (`/settings`) is organized into tabs for managing networks, preferences, and data import. All settings take effect immediately.
 
+![settings](../assets/images/lr_settings.gif)
+
 ## Network Management
 
 Networks are the primary organizational unit for charging locations and costs. Each network has:
@@ -34,6 +36,8 @@ The network modal has two tabs:
 | Notes | Optional description |
 
 Locations can override the network's cost_per_kwh. When a location has its own cost, that takes priority over the network default for sessions at that location.
+
+![settings network](../assets/images/lr_settings_networks.gif)
 
 ### Charger Stalls
 
@@ -85,6 +89,16 @@ Control which comparison sections appear on the costs page:
 - **Network comparison** -- Show/hide the network cost comparison
 
 Disabling a comparison skips its database queries.
+
+## Home Assistant Tab
+
+Configure the connection to Home Assistant for automatic charging session detection and vehicle telemetry ingestion. See the dedicated [Home Assistant Integration](home-assistant.md) guide for full details.
+
+The tab includes:
+
+- **Connection settings** -- HA URL, long-lived access token, VIN override, unit system, auto-connect toggle
+- **Connection status** -- Live status badge, event counters, detected VIN, and error display (polls every 10 seconds)
+- **Controls** -- Reconnect, disconnect, and history backfill buttons
 
 ## CSV Import Tab
 

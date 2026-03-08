@@ -44,8 +44,13 @@ async def lifespan(app: FastAPI):
     # Startup: seed charger templates (idempotent)
     async with AsyncSessionLocal() as session:
         await seed_charger_templates(session)
+    # Start HASS service (if configured)
+    from web.services.hass_client import start_hass_service
+    await start_hass_service()
     yield
-    # Shutdown: dispose engine connections
+    # Shutdown: stop HASS service, dispose engine
+    from web.services.hass_client import hass_service
+    await hass_service.stop()
     await engine.dispose()
 
 

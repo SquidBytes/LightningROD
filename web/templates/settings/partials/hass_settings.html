@@ -1,0 +1,117 @@
+{% if saved %}
+<div class="alert alert-success text-sm mb-3">Home Assistant settings saved.</div>
+{% endif %}
+
+<div class="card bg-base-200 max-w-2xl">
+    <div class="card-body">
+        <h2 class="card-title">Home Assistant Connection</h2>
+        <p class="text-base-content/60 text-sm mb-2">Configure connection to your Home Assistant instance for automatic FordPass data ingestion.</p>
+
+        <form hx-post="/settings/hass" hx-target="#hass-settings-content" hx-swap="innerHTML"
+              class="space-y-4">
+
+            <!-- HA URL -->
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text">Home Assistant URL</span></div>
+                <input type="url" name="ha_url"
+                       value="{{ hass.get('ha_url', '') }}"
+                       placeholder="http://homeassistant.local:8123"
+                       class="input input-bordered w-full">
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Full URL including port (e.g. http://192.168.1.100:8123)</span>
+                </div>
+            </label>
+
+            <!-- Access Token -->
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text">Long-Lived Access Token</span></div>
+                <div class="join w-full">
+                    <input type="password" name="ha_token" id="ha-token-input"
+                           value="{{ masked_token }}"
+                           placeholder="Long-lived access token from HA"
+                           class="input input-bordered join-item w-full">
+                    <button type="button" class="btn btn-square join-item" onclick="toggleTokenVisibility()" title="Toggle visibility">
+                        <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
+                    </button>
+                </div>
+                {% if masked_token %}
+                <div class="label">
+                    <span class="label-text-alt text-success">Token saved. Leave unchanged to keep current token.</span>
+                </div>
+                {% else %}
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Generate in HA: Profile > Long-Lived Access Tokens > Create Token</span>
+                </div>
+                {% endif %}
+            </label>
+
+            <!-- VIN Override -->
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text">VIN Override</span></div>
+                <input type="text" name="ha_vin_override"
+                       value="{{ hass.get('ha_vin_override', '') }}"
+                       placeholder="Auto-detected from entity IDs"
+                       class="input input-bordered w-full">
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Leave blank to auto-detect from HA entity names</span>
+                </div>
+            </label>
+
+            <!-- Unit System -->
+            <label class="form-control w-full max-w-xs">
+                <div class="label"><span class="label-text">Unit System</span></div>
+                {% set current_unit = hass.get('ha_unit_system', 'auto') %}
+                <select name="ha_unit_system" class="select select-bordered w-full">
+                    <option value="auto" {% if current_unit == 'auto' or not current_unit %}selected{% endif %}>Auto-detect</option>
+                    <option value="metric" {% if current_unit == 'metric' %}selected{% endif %}>Metric</option>
+                    <option value="imperial" {% if current_unit == 'imperial' %}selected{% endif %}>Imperial</option>
+                </select>
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Auto-detect reads HA configuration on connect</span>
+                </div>
+            </label>
+
+            <!-- Auto-connect Toggle -->
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-3">
+                    <input type="checkbox" name="ha_auto_connect"
+                           {% if hass.get('ha_auto_connect', 'true') == 'true' %}checked{% endif %}
+                           class="toggle toggle-primary">
+                    <span class="label-text">Auto-connect on startup</span>
+                </label>
+            </div>
+
+            <!-- Save Button -->
+            <div class="pt-2">
+                <button type="submit" class="btn btn-primary">
+                    Save Settings
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Connection status — loaded on tab view, auto-refreshes every 10s -->
+<div id="hass-connection-status" class="mt-4"
+     hx-get="/settings/hass/status"
+     hx-trigger="load"
+     hx-target="#hass-connection-status"
+     hx-swap="innerHTML">
+</div>
+
+<script>
+if (!window._hassTokenInit) {
+    window._hassTokenInit = true;
+    window.toggleTokenVisibility = function() {
+        var input = document.getElementById('ha-token-input');
+        if (input.type === 'password') {
+            input.type = 'text';
+        } else {
+            input.type = 'password';
+        }
+    };
+}
+</script>

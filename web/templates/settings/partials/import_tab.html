@@ -34,6 +34,10 @@
                         View column reference ({{ db_fields | length }} columns)
                     </div>
                     <div class="collapse-content">
+                        <p class="text-xs text-base-content/50 mb-2">
+                            <span class="badge badge-warning badge-xs">Recommended</span> fields produce the most useful data.
+                            All fields are optional — the importer auto-generates IDs and fills defaults.
+                        </p>
                         <div class="overflow-x-auto">
                             <table class="table table-sm table-zebra">
                                 <thead>
@@ -49,10 +53,12 @@
                                         <td class="font-mono text-xs">{{ field.field }}</td>
                                         <td class="text-xs">{{ field.description }}</td>
                                         <td>
-                                            {% if field.important %}
-                                                <span class="badge badge-info badge-xs">Recommended</span>
+                                            {% if field.required %}
+                                                <span class="badge badge-error badge-xs">Required</span>
+                                            {% elif field.important %}
+                                                <span class="badge badge-warning badge-xs">Recommended</span>
                                             {% else %}
-                                                <span class="text-base-content/40 text-xs">Optional</span>
+                                                <span class="badge badge-ghost badge-xs">Optional</span>
                                             {% endif %}
                                         </td>
                                     </tr>
@@ -65,7 +71,7 @@
                 {% endif %}
 
                 <p class="text-xs text-base-content/40 mt-2">
-                    Column mappping by name is automatically attempted.
+                    Column mapping by name is automatically attempted.
                 </p>
             </div>
 

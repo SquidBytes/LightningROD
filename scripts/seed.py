@@ -63,6 +63,18 @@ UPDATABLE_COLUMNS = [
     "is_complete",
     "recorded_at",
     "source_system",
+    "network_id",
+    "location_id",
+    "address",
+    "latitude",
+    "longitude",
+    "evse_voltage",
+    "evse_amperage",
+    "evse_kw",
+    "evse_energy_kwh",
+    "evse_max_power_kw",
+    "evse_source",
+    "stall_id",
 ]
 
 
@@ -99,9 +111,28 @@ def float_or_none(v: str) -> Optional[float]:
         return None
 
 
+def int_or_none(v: str) -> Optional[int]:
+    """Return int or None if empty/invalid."""
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    try:
+        return int(float(v))
+    except (ValueError, TypeError):
+        return None
+
+
 def parse_bool(v: str) -> bool:
     """Return True for 'True'/'1'/'true', False otherwise."""
     return v.strip().lower() in ("true", "1", "yes") if v else False
+
+
+def parse_bool_or_none(v: str) -> Optional[bool]:
+    """Return True/False for explicit values, None if empty."""
+    v = v.strip() if v else ""
+    if not v:
+        return None
+    return v.lower() in ("true", "1", "yes")
 
 
 def parse_timestamp(v: str) -> Optional[datetime]:
@@ -125,22 +156,19 @@ def parse_timestamp(v: str) -> Optional[datetime]:
 def normalize_charge_type(charger_type: str, location_name: str) -> Optional[str]:
     """Normalize charger type to 'AC' or 'DC'.
 
-    Rules:
-    - 'AC Level 2' or 'AC_BASIC' → 'AC'
-    - 'DC_FAST' → 'DC'
-    - empty + location is "Other Public" → 'AC'
-    - Otherwise None
+    Handles canonical values (AC, DC), legacy FordPass values (AC Level 2,
+    AC_BASIC, DC_FAST), and various common aliases.
     """
-    ct = charger_type.strip() if charger_type else ""
-    if ct in ("AC Level 2", "AC_BASIC", "level_2", "ac_charging", "AC Level 1"):
+    ct = charger_type.strip().upper() if charger_type else ""
+    if ct in ("AC", "AC LEVEL 2", "AC_BASIC", "LEVEL_2", "AC_CHARGING", "AC LEVEL 1", "L2", "LEVEL 2", "LEVEL 1"):
         return "AC"
-    if ct in ("DC_FAST", "dc_fast", "dc_charging"):
+    if ct in ("DC", "DC_FAST", "DC_CHARGING", "DCFC", "L3", "LEVEL 3"):
         return "DC"
     # Fallback for work location with no charger type
     loc = location_name.strip() if location_name else ""
     if not ct and loc == "Work":
         return "AC"
-    return None
+    return ct if ct else None
 
 
 def classify_location_type(location_name: str) -> str:
@@ -177,27 +205,66 @@ def make_session_id(
 # ---------------------------------------------------------------------------
 
 COLUMN_MAP = {
+    # --- Identity & timestamps ---
     "session_id": ("session_id", parse_uuid),
     "location_name": ("location_name", str_or_none),
     "start_time": ("session_start_utc", parse_timestamp),
     "end_time": ("session_end_utc", parse_timestamp),
+    "session_start_utc": ("session_start_utc", parse_timestamp),
+    "session_end_utc": ("session_end_utc", parse_timestamp),
+    "session_start": ("session_start_utc", parse_timestamp),
+    "session_end": ("session_end_utc", parse_timestamp),
+    "recorded_at": ("recorded_at", parse_timestamp),
+    # --- Duration (minutes needs *60, seconds pass through) ---
     "duration_minutes": (
         "charge_duration_seconds",
         lambda v: float(v.strip()) * 60 if v.strip() else None,
     ),
+    "charge_duration_seconds": ("charge_duration_seconds", float_or_none),
+    # --- Energy & power ---
     "energy_consumed_kwh": ("energy_kwh", float_or_none),
+    "energy_kwh": ("energy_kwh", float_or_none),
     "average_power_kw": ("charging_kw", float_or_none),
+    "charging_kw": ("charging_kw", float_or_none),
     "max_power": ("max_power", float_or_none),
     "min_power": ("min_power", float_or_none),
+    # --- SOC ---
     "start_soc_percent": ("start_soc", float_or_none),
     "end_soc_percent": ("end_soc", float_or_none),
+    "start_soc": ("start_soc", float_or_none),
+    "end_soc": ("end_soc", float_or_none),
+    # --- Cost & range ---
     "cost_total": ("cost", float_or_none),
+    "cost": ("cost", float_or_none),
     "cost_without_overrides": ("cost_without_overrides", float_or_none),
     "miles_added": ("miles_added", float_or_none),
+    # --- Electrical ---
     "charging_voltage": ("charging_voltage", float_or_none),
     "charging_amperage": ("charging_amperage", float_or_none),
+    # --- Flags ---
     "is_complete": ("is_complete", parse_bool),
-    "recorded_at": ("recorded_at", parse_timestamp),
+    # --- Classification (CSV-explicit values take precedence over classifier) ---
+    "charge_type": ("charge_type", str_or_none),
+    "charger_type": ("charge_type", str_or_none),
+    "is_free": ("is_free", parse_bool_or_none),
+    "location_type": ("location_type", str_or_none),
+    # --- Location metadata ---
+    "location_id": ("location_id", int_or_none),
+    "location_address": ("address", str_or_none),
+    "address": ("address", str_or_none),
+    "latitude": ("latitude", float_or_none),
+    "longitude": ("longitude", float_or_none),
+    # --- EVSE / stall fields ---
+    "evse_voltage": ("evse_voltage", float_or_none),
+    "evse_amperage": ("evse_amperage", float_or_none),
+    "evse_kw": ("evse_kw", float_or_none),
+    "evse_energy_kwh": ("evse_energy_kwh", float_or_none),
+    "evse_max_power_kw": ("evse_max_power_kw", float_or_none),
+    "evse_source": ("evse_source", str_or_none),
+    "stall_id": ("stall_id", int_or_none),
+    # --- Pipeline metadata ---
+    "device_id": ("device_id", str_or_none),
+    "source_system": ("source_system", str_or_none),
 }
 
 
@@ -286,19 +353,26 @@ def transform_row(
     csv_row: dict,
     vin: str,
     ll_lookup: dict,
+    network_lookup: Optional[dict[str, Optional[int]]] = None,
 ) -> Optional[dict]:
     """Transform a single CSV row into a DB-ready dict.
 
     Returns None if the row should be skipped (missing core fields after gap-fill).
     """
     # Apply COLUMN_MAP to build initial DB dict
+    # Multiple CSV column names may map to the same DB field (aliases).
+    # First non-None value wins — skip empty/missing CSV columns.
     db_row: dict[str, Any] = {}
     for csv_col, (db_col, transform_fn) in COLUMN_MAP.items():
         raw = csv_row.get(csv_col, "")
+        if not raw.strip() if isinstance(raw, str) else not raw:
+            continue  # skip empty CSV values so they don't overwrite a good alias
+        if db_col in db_row and db_row[db_col] is not None:
+            continue  # already have a value from a prior alias
         db_row[db_col] = transform_fn(raw)
 
-    # Charger type from CSV (before computed fields)
-    csv_charger_type = csv_row.get("charger_type", "")
+    # Charge type from CSV (via COLUMN_MAP or legacy charger_type column)
+    csv_charge_type = db_row.get("charge_type") or csv_row.get("charger_type", "")
     location_name = db_row.get("location_name") or ""
 
     # Attempt LubeLogger gap-fill if core fields are missing
@@ -309,7 +383,7 @@ def transform_row(
             ll_date_str = start.strftime("%Y-%m-%d")
         else:
             # Try to extract date from start_time CSV field directly
-            start_raw = csv_row.get("start_time", "").strip()
+            start_raw = (csv_row.get("start_time") or csv_row.get("session_start_utc", "")).strip()
             if start_raw:
                 try:
                     dt = datetime.fromisoformat(start_raw)
@@ -331,11 +405,27 @@ def transform_row(
         return None
 
     # Computed / overridden fields
-    db_row["device_id"] = vin
-    db_row["source_system"] = "csv_seed"
-    db_row["charge_type"] = normalize_charge_type(csv_charger_type, location_name)
-    db_row["location_type"] = classify_location_type(location_name)
-    db_row["is_free"] = classify_is_free(location_name)
+    # VIN arg always wins; CSV device_id is fallback only if --vin not given
+    db_row["device_id"] = vin or db_row.get("device_id") or "csv_seed"
+    db_row["source_system"] = db_row.get("source_system") or "csv_seed"
+    db_row["charge_type"] = normalize_charge_type(csv_charge_type, location_name)
+
+    # CSV-provided location_type and is_free take precedence over classifier
+    if not db_row.get("location_type"):
+        db_row["location_type"] = classify_location_type(location_name)
+    if db_row.get("is_free") is None:
+        db_row["is_free"] = classify_is_free(location_name)
+
+    # Resolve network_id from CSV network name columns
+    if network_lookup is not None:
+        net_name = None
+        for col in ("charging_network", "network_name", "ll_charge_network"):
+            val = csv_row.get(col, "").strip()
+            if val:
+                net_name = val
+                break
+        if net_name:
+            db_row["network_id"] = network_lookup.get(net_name)
 
     # Handle session_id: use CSV value if valid UUID, else generate deterministic UUID
     session_id = db_row.get("session_id")
@@ -383,12 +473,35 @@ async def seed(args: argparse.Namespace) -> None:
     print(f"\nLoading LubeLogger: {ll_path}")
     ll_lookup = load_lubelogger(ll_path)
 
+    # --- Build network name -> id lookup ---
+    print("\nResolving network names...")
+    network_names: set[str] = set()
+    for raw_row in raw_rows:
+        for col in ("charging_network", "network_name", "ll_charge_network"):
+            val = raw_row.get(col, "").strip()
+            if val:
+                network_names.add(val)
+                break  # first non-empty wins per row
+
+    network_lookup: dict[str, Optional[int]] = {}
+    if network_names:
+        from web.queries.settings import resolve_network
+
+        async with AsyncSessionLocal() as db:
+            for name in sorted(network_names):
+                resolved_id = await resolve_network(db, network_name=name)
+                network_lookup[name] = resolved_id
+            await db.commit()
+        print(f"  Resolved {len(network_lookup)} network names: {network_lookup}")
+    else:
+        print("  No network names found in CSV")
+
     # --- Transform rows ---
     print("\nTransforming rows...")
     transformed: list[dict] = []
     skipped = 0
     for raw_row in raw_rows:
-        db_row = transform_row(raw_row, vin, ll_lookup)
+        db_row = transform_row(raw_row, vin, ll_lookup, network_lookup)
         if db_row is None:
             skipped += 1
         else:

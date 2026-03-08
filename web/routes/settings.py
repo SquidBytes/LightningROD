@@ -73,6 +73,8 @@ async def settings_index(
         active_tab = "import"
     elif tab == "networks":
         active_tab = "networks"
+    elif tab == "hass":
+        active_tab = "hass"
     else:
         active_tab = "general"
 
@@ -671,6 +673,171 @@ async def prefill_stalls(
         request,
         "settings/partials/stall_rows.html",
         ctx,
+    )
+
+
+HASS_SETTINGS_KEYS = [
+    "ha_url",
+    "ha_token",
+    "ha_vin_override",
+    "ha_unit_system",
+    "ha_auto_connect",
+]
+
+
+@router.get("/settings/hass", response_class=HTMLResponse)
+async def hass_settings_partial(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return HASS configuration partial with current values."""
+    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
+    # Mask token for display: show only last 8 chars
+    token = settings.get("ha_token", "")
+    masked_token = ""
+    if token:
+        if len(token) > 8:
+            masked_token = "*" * (len(token) - 8) + token[-8:]
+        else:
+            masked_token = token
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_settings.html",
+        {"hass": settings, "masked_token": masked_token},
+    )
+
+
+@router.post("/settings/hass", response_class=HTMLResponse)
+async def save_hass_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ha_url: str = Form(""),
+    ha_token: str = Form(""),
+    ha_vin_override: str = Form(""),
+    ha_unit_system: str = Form("auto"),
+    ha_auto_connect: Optional[str] = Form(None),
+):
+    """Save HASS configuration to app_settings."""
+    if ha_url:
+        # Strip trailing slash for consistency
+        ha_url = ha_url.rstrip("/")
+    await set_app_setting(db, "ha_url", ha_url)
+    # Only overwrite token if a new value was provided (not the masked placeholder)
+    if ha_token and not ha_token.startswith("*"):
+        await set_app_setting(db, "ha_token", ha_token)
+    await set_app_setting(db, "ha_vin_override", ha_vin_override)
+    if ha_unit_system not in ("auto", "metric", "imperial"):
+        ha_unit_system = "auto"
+    await set_app_setting(db, "ha_unit_system", ha_unit_system)
+    await set_app_setting(
+        db, "ha_auto_connect", "true" if ha_auto_connect is not None else "false"
+    )
+
+    # Re-read saved values for display
+    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
+    token = settings.get("ha_token", "")
+    masked_token = ""
+    if token:
+        if len(token) > 8:
+            masked_token = "*" * (len(token) - 8) + token[-8:]
+        else:
+            masked_token = token
+
+    response = templates.TemplateResponse(
+        request,
+        "settings/partials/hass_settings.html",
+        {"hass": settings, "masked_token": masked_token, "saved": True},
+    )
+    return response
+
+
+@router.get("/settings/hass/status", response_class=HTMLResponse)
+async def hass_status(request: Request):
+    """Return HASS connection status partial for polling."""
+    from web.services.hass_client import hass_service
+
+    health = hass_service.health
+    detected_vin = getattr(hass_service, "detected_vin", None)
+    ha_config = getattr(hass_service, "_ha_config", None)
+    unit_system = None
+    if ha_config and "unit_system" in ha_config:
+        unit_system = ha_config["unit_system"]
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_status.html",
+        {
+            "health": health,
+            "detected_vin": detected_vin,
+            "unit_system": unit_system,
+        },
+    )
+
+
+@router.post("/settings/hass/reconnect", response_class=HTMLResponse)
+async def hass_reconnect(request: Request):
+    """Stop and restart the HASS websocket service."""
+    from web.services.hass_client import hass_service, start_hass_service
+
+    await hass_service.stop()
+    await start_hass_service()
+    health = hass_service.health
+    detected_vin = getattr(hass_service, "detected_vin", None)
+    ha_config = getattr(hass_service, "_ha_config", None)
+    unit_system = None
+    if ha_config and "unit_system" in ha_config:
+        unit_system = ha_config["unit_system"]
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_status.html",
+        {
+            "health": health,
+            "detected_vin": detected_vin,
+            "unit_system": unit_system,
+        },
+    )
+
+
+@router.post("/settings/hass/backfill", response_class=HTMLResponse)
+async def hass_backfill(request: Request):
+    """Trigger history backfill from HA REST API for past charging sessions."""
+    from web.services.hass_client import hass_service
+
+    if not hass_service.health.get("connected"):
+        return HTMLResponse(
+            '<div class="alert alert-error text-sm">Must be connected to HA to backfill.</div>'
+        )
+
+    result = await hass_service.backfill_history(days=30)
+
+    if result.get("error"):
+        return HTMLResponse(
+            f'<div class="alert alert-error text-sm">{result["error"]}</div>'
+        )
+
+    return HTMLResponse(
+        f'<div class="alert alert-success text-sm">'
+        f'Backfill complete: {result["processed"]} sessions processed'
+        f'{", " + str(result["errors"]) + " errors" if result["errors"] else ""}. '
+        f'Duplicates are automatically skipped.'
+        f'</div>'
+    )
+
+
+@router.post("/settings/hass/disconnect", response_class=HTMLResponse)
+async def hass_disconnect(request: Request):
+    """Stop the HASS websocket service."""
+    from web.services.hass_client import hass_service
+
+    await hass_service.stop()
+    health = hass_service.health
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_status.html",
+        {
+            "health": health,
+            "detected_vin": None,
+            "unit_system": None,
+        },
     )
 
 
