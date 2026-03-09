@@ -80,7 +80,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         })
 
     # Get user timezone for template
-    app_settings = await get_app_settings_dict(db)
+    app_settings = await get_app_settings_dict(db, ["user_timezone"])
     user_tz = app_settings.get("user_timezone", "UTC")
 
     return templates.TemplateResponse(
