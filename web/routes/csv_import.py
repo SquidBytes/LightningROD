@@ -132,6 +132,7 @@ async def upload_csv(
             "networks": all_networks,
             "vehicles": vehicles,
             "active_vehicle": active_vehicle,
+            "all_vehicles": vehicles,
         },
     )
 
@@ -309,6 +310,7 @@ async def reset_import(
             "user_tz": user_tz,
             "vehicles": vehicles,
             "active_vehicle": active_vehicle,
+            "all_vehicles": vehicles,
         },
     )
 

@@ -114,6 +114,8 @@ async def sessions(
     if per_page != 25:
         filter_params["per_page"] = per_page
 
+    all_vehicles = await get_all_vehicles(db)
+
     context = {
         "sessions": enriched_sessions,
         "total": total,
@@ -136,6 +138,7 @@ async def sessions(
         "active_page": "sessions",
         "page_title": "Sessions",
         "active_vehicle": active_vehicle,
+        "all_vehicles": all_vehicles,
     }
 
     if hx_request:

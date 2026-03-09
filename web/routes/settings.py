@@ -108,6 +108,8 @@ async def settings_index(
         user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
         import_ctx = {"db_fields": get_db_field_options(), "user_tz": user_tz}
 
+    all_vehicles = await get_all_vehicles(db)
+
     return templates.TemplateResponse(
         request,
         "settings/index.html",
@@ -119,6 +121,7 @@ async def settings_index(
             "active_page": "settings",
             "page_title": "Settings",
             "active_tab": active_tab,
+            "all_vehicles": all_vehicles,
         },
     )
 

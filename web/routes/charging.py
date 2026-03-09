@@ -10,6 +10,7 @@ from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargingNetwork, EVLocationLookup
 from web.dependencies import get_db
 from web.queries.settings import get_all_networks
+from web.queries.vehicles import get_active_vehicle, get_all_vehicles
 
 router = APIRouter(prefix="/charging")
 templates = Jinja2Templates(directory="web/templates")
@@ -74,6 +75,8 @@ async def review_queue(
 ):
     """Review queue page for unverified networks and locations."""
     ctx = await _review_context(db)
+    active_vehicle = await get_active_vehicle(db)
+    all_vehicles = await get_all_vehicles(db)
     return templates.TemplateResponse(
         request,
         "charging/review_queue.html",
@@ -81,6 +84,8 @@ async def review_queue(
             **ctx,
             "active_page": "review_queue",
             "page_title": "Review Queue",
+            "active_vehicle": active_vehicle,
+            "all_vehicles": all_vehicles,
         },
     )
 

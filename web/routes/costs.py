@@ -14,7 +14,7 @@ from web.queries.costs import (
     query_monthly_costs,
 )
 from web.queries.settings import get_all_networks, get_app_settings_dict
-from web.queries.vehicles import get_active_device_id, get_active_vehicle
+from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -64,6 +64,8 @@ async def costs(
                 reference_rate = float(non_free_networks[0].cost_per_kwh) if non_free_networks else 0.48
             network_comparison = await query_network_comparison(db, reference_rate, time_range=range or "all")
 
+    all_vehicles = await get_all_vehicles(db)
+
     context = {
         "summary": summary,
         "network_chart": network_chart,
@@ -78,6 +80,7 @@ async def costs(
         "toggles": toggles,
         "network_colors": network_colors,
         "active_vehicle": active_vehicle,
+        "all_vehicles": all_vehicles,
     }
 
     if hx_request:

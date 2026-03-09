@@ -16,7 +16,7 @@ from web.queries.energy import (
     CHARGE_TYPE_LABELS,
 )
 from web.queries.settings import get_app_settings_dict
-from web.queries.vehicles import get_active_device_id, get_active_vehicle
+from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -71,6 +71,8 @@ async def energy(
     monthly_energy_data = await query_monthly_energy(db, time_range=time_range, device_id=active_device_id)
     monthly_energy_chart = build_monthly_energy_chart(monthly_energy_data)
 
+    all_vehicles = await get_all_vehicles(db)
+
     context = {
         "summary": summary,
         "regen": regen,
@@ -82,6 +84,7 @@ async def energy(
         "unit_label": unit["label"],
         "charge_type_labels": CHARGE_TYPE_LABELS,
         "active_vehicle": active_vehicle,
+        "all_vehicles": all_vehicles,
     }
 
     if hx_request:

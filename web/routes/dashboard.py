@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ from web.queries.costs import (
     query_cost_summary,
 )
 from web.queries.settings import get_all_networks, get_app_settings_dict
-from web.queries.vehicles import get_active_device_id, get_active_vehicle
+from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles, set_active_vehicle
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -67,6 +67,8 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     # Charging efficiency aggregates (EVSE loss + utilization)
     efficiency = await query_charging_efficiency(db, device_id=active_device_id)
 
+    all_vehicles = await get_all_vehicles(db)
+
     return templates.TemplateResponse(
         request,
         "dashboard/index.html",
@@ -78,5 +80,18 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "energy_by_network_chart": energy_by_network_chart,
             "efficiency": efficiency,
             "active_vehicle": active_vehicle,
+            "all_vehicles": all_vehicles,
         },
     )
+
+
+@router.post("/vehicles/{vehicle_id}/activate")
+async def activate_vehicle(
+    vehicle_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    redirect_to: str = Form("/charging/sessions"),
+):
+    """Switch active vehicle and redirect back to current page."""
+    await set_active_vehicle(db, vehicle_id)
+    return RedirectResponse(url=redirect_to, status_code=303)
