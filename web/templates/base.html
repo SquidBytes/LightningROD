@@ -33,6 +33,16 @@
                     </svg>
                     <span class="text-brand-accent font-bold text-xl">LightningROD</span>
                 </div>
+                {% if active_vehicle is defined and active_vehicle %}
+                <a href="/settings?tab=vehicles" class="flex items-center gap-1.5 px-4 py-2 text-sm text-base-content/70 hover:text-base-content transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10M19 16V8a1 1 0 00-1-1h-3.5L13 5H8l-1 2" />
+                    </svg>
+                    {{ active_vehicle.display_name }}
+                </a>
+                {% endif %}
+
                 <ul class="menu flex-1 p-3 gap-1">
                     <li><a href="/" class="{{ 'active' if active_page == 'dashboard' }}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

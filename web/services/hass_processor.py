@@ -670,6 +670,49 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
 # ---------------------------------------------------------------------------
 
 
+async def _ensure_vehicle_exists(device_id: str, entity_id: str, db) -> None:
+    """Ensure an EVVehicle record exists for this device_id.
+
+    If no vehicle record exists, creates one with display_name=device_id,
+    source_system='home_assistant'. Auto-activates only when no active vehicle
+    is currently set.
+    """
+    from db.models.vehicle import EVVehicle
+    from sqlalchemy import select
+    from sqlalchemy.exc import IntegrityError
+    from web.queries.settings import get_app_setting, set_app_setting
+
+    # Check if vehicle already exists
+    result = await db.execute(
+        select(EVVehicle.id).where(EVVehicle.device_id == device_id).limit(1)
+    )
+    if result.scalar_one_or_none() is not None:
+        return  # Already exists
+
+    # Create new vehicle record
+    vehicle = EVVehicle(
+        display_name=device_id,
+        device_id=device_id,
+        vin=device_id,  # For FordPass, device_id IS the VIN
+        source_system="home_assistant",
+    )
+    db.add(vehicle)
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Another concurrent request already created it
+        await db.rollback()
+        return
+
+    logger.info("Auto-created vehicle record for device_id=%s", device_id)
+
+    # Auto-activate only if no active vehicle is set
+    active_vid = await get_app_setting(db, "active_vehicle_id", "")
+    if not active_vid:
+        await set_app_setting(db, "active_vehicle_id", str(vehicle.id))
+        logger.info("Auto-activated vehicle %s (id=%d) -- no prior active vehicle", device_id, vehicle.id)
+
+
 async def process_state_change(
     entity_id: str, old_state: dict, new_state: dict, ha_config: dict
 ) -> None:
@@ -689,6 +732,8 @@ async def process_state_change(
 
     async with AsyncSessionLocal() as db:
         try:
+            # Ensure vehicle record exists before processing any sensor data
+            await _ensure_vehicle_exists(device_id, entity_id, db)
             await handler(slug, new_state, ha_config, device_id, db)
             await db.commit()
         except Exception as e:
