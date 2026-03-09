@@ -154,7 +154,7 @@ async def new_vehicle_form(
     return templates.TemplateResponse(
         request,
         "settings/partials/vehicle_edit_modal.html",
-        {"battery_presets": BATTERY_PRESETS},
+        {"battery_presets": BATTERY_PRESETS, "vehicle": None},
     )
 
 

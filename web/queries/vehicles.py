@@ -15,15 +15,6 @@ BATTERY_PRESETS = [
     {"label": "Mustang Mach-E SR RWD", "kwh": 72.0},
     {"label": "Mustang Mach-E ER RWD", "kwh": 91.0},
     {"label": "Mustang Mach-E GT", "kwh": 91.0},
-    {"label": "E-Transit (2022-2024)", "kwh": 68.0},
-    {"label": "Tesla Model 3 SR+", "kwh": 60.0},
-    {"label": "Tesla Model 3 LR", "kwh": 82.0},
-    {"label": "Tesla Model Y LR", "kwh": 75.0},
-    {"label": "Rivian R1T Large", "kwh": 135.0},
-    {"label": "Rivian R1T Max", "kwh": 180.0},
-    {"label": "Chevy Bolt EV/EUV", "kwh": 66.0},
-    {"label": "Hyundai Ioniq 5 LR", "kwh": 77.0},
-    {"label": "Hyundai Ioniq 6 LR", "kwh": 77.0},
     {"label": "Custom", "kwh": None},
 ]
 
