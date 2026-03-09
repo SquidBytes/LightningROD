@@ -226,7 +226,7 @@ async def get_session_cost_context(
     return network, location
 
 
-async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
+async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict:
     """Compute lifetime (or time-filtered) cost summary aggregated by network.
 
     Uses network_id FK lookup with location cost cascade.
@@ -246,6 +246,8 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
     time_filter = build_time_filter(time_range)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
 
     result = await db.execute(stmt)
     sessions = result.scalars().all()
@@ -325,7 +327,7 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all") -> dict:
     }
 
 
-async def query_monthly_costs(db: AsyncSession, time_range: str = "all") -> list[dict]:
+async def query_monthly_costs(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> list[dict]:
     """Return monthly cost data grouped by month and network.
 
     Uses network_id FK lookup with location cost cascade.
@@ -338,6 +340,8 @@ async def query_monthly_costs(db: AsyncSession, time_range: str = "all") -> list
     time_filter = build_time_filter(time_range)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
 
     result = await db.execute(stmt)
     sessions = result.scalars().all()

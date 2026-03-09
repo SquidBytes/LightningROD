@@ -2,6 +2,8 @@
 
 Provides summary aggregation for the landing dashboard page.
 """
+from typing import Optional
+
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -30,7 +32,7 @@ def _wrap_chart(html: str) -> str:
     return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
-async def query_dashboard_summary(db: AsyncSession) -> dict:
+async def query_dashboard_summary(db: AsyncSession, device_id: Optional[str] = None) -> dict:
     """Aggregate lifetime charging data for dashboard summary cards.
 
     Returns dict with:
@@ -42,7 +44,10 @@ async def query_dashboard_summary(db: AsyncSession) -> dict:
     """
     networks_by_name = await get_networks_by_name(db)
 
-    result = await db.execute(select(EVChargingSession))
+    stmt = select(EVChargingSession)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+    result = await db.execute(stmt)
     sessions = result.scalars().all()
 
     total_sessions = len(sessions)
@@ -73,7 +78,7 @@ async def query_dashboard_summary(db: AsyncSession) -> dict:
     }
 
 
-async def query_charging_efficiency(db: AsyncSession) -> dict:
+async def query_charging_efficiency(db: AsyncSession, device_id: Optional[str] = None) -> dict:
     """Aggregate charging efficiency metrics from sessions with EVSE data.
 
     Returns dict with:
@@ -83,14 +88,15 @@ async def query_charging_efficiency(db: AsyncSession) -> dict:
     - avg_utilization_pct: float | None (average max_power/charger_rated_kw)
     """
     # Loss metrics: sessions with both evse_energy_kwh and energy_kwh
+    loss_filters = [
+        EVChargingSession.evse_energy_kwh.isnot(None),
+        EVChargingSession.energy_kwh.isnot(None),
+        EVChargingSession.evse_energy_kwh > 0,
+    ]
+    if device_id:
+        loss_filters.append(EVChargingSession.device_id == device_id)
     loss_result = await db.execute(
-        select(EVChargingSession).where(
-            and_(
-                EVChargingSession.evse_energy_kwh.isnot(None),
-                EVChargingSession.energy_kwh.isnot(None),
-                EVChargingSession.evse_energy_kwh > 0,
-            )
-        )
+        select(EVChargingSession).where(and_(*loss_filters))
     )
     loss_sessions = loss_result.scalars().all()
 
@@ -108,13 +114,14 @@ async def query_charging_efficiency(db: AsyncSession) -> dict:
     avg_loss_pct = loss_pct_sum / sessions_with_evse if sessions_with_evse > 0 else None
 
     # Utilization metrics: sessions with max power and charger_rated_kw
+    util_filters = [
+        EVChargingSession.charger_rated_kw.isnot(None),
+        EVChargingSession.charger_rated_kw > 0,
+    ]
+    if device_id:
+        util_filters.append(EVChargingSession.device_id == device_id)
     util_result = await db.execute(
-        select(EVChargingSession).where(
-            and_(
-                EVChargingSession.charger_rated_kw.isnot(None),
-                EVChargingSession.charger_rated_kw > 0,
-            )
-        )
+        select(EVChargingSession).where(and_(*util_filters))
     )
     util_sessions = util_result.scalars().all()
 

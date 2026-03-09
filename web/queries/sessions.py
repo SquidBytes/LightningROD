@@ -25,7 +25,9 @@ SORTABLE_COLUMNS = {
 }
 
 
-async def get_most_recent_location(db: AsyncSession) -> Optional[str]:
+async def get_most_recent_location(
+    db: AsyncSession, device_id: Optional[str] = None
+) -> Optional[str]:
     """Return the location_name of the most recent session, or None."""
     stmt = (
         select(EVChargingSession.location_name)
@@ -33,6 +35,8 @@ async def get_most_recent_location(db: AsyncSession) -> Optional[str]:
         .order_by(EVChargingSession.session_start_utc.desc())
         .limit(1)
     )
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -49,6 +53,7 @@ async def query_sessions(
     network_ids: Optional[list[int]] = None,
     sort_by: Optional[str] = None,
     sort_dir: Optional[str] = None,
+    device_id: Optional[str] = None,
 ) -> tuple[list[EVChargingSession], int, dict]:
     """Query charging sessions with optional filters and pagination.
 
@@ -73,6 +78,10 @@ async def query_sessions(
 
     # Accumulate filter clauses
     filters = []
+
+    # Vehicle scoping filter
+    if device_id:
+        filters.append(EVChargingSession.device_id == device_id)
 
     # Date preset filter
     if date_preset and date_preset != "all":

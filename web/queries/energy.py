@@ -61,7 +61,7 @@ def build_time_filter_trip(range_str: str):
     return EVTripMetrics.start_time >= cutoff
 
 
-async def query_energy_summary(db: AsyncSession, time_range: str = "all") -> dict:
+async def query_energy_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict:
     """Compute energy summary from EVChargingSession rows.
 
     Returns dict with:
@@ -84,6 +84,8 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all") -> dic
     time_filter = build_time_filter(time_range)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
 
     result = await db.execute(stmt)
     sessions = result.scalars().all()
@@ -135,7 +137,7 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all") -> dic
     }
 
 
-async def query_regen_summary(db: AsyncSession, time_range: str = "all") -> dict | None:
+async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict | None:
     """Compute regen braking summary from EVTripMetrics.
 
     Returns None when ev_trip_metrics has no rows with range_regenerated data
@@ -160,6 +162,8 @@ async def query_regen_summary(db: AsyncSession, time_range: str = "all") -> dict
     )
     if trip_filter is not None:
         count_stmt = count_stmt.where(trip_filter)
+    if device_id:
+        count_stmt = count_stmt.where(EVTripMetrics.device_id == device_id)
 
     count_result = await db.execute(count_stmt)
     row_count = count_result.scalar_one()
@@ -174,6 +178,8 @@ async def query_regen_summary(db: AsyncSession, time_range: str = "all") -> dict
     ).where(EVTripMetrics.range_regenerated.isnot(None))
     if trip_filter is not None:
         sum_stmt = sum_stmt.where(trip_filter)
+    if device_id:
+        sum_stmt = sum_stmt.where(EVTripMetrics.device_id == device_id)
 
     sum_result = await db.execute(sum_stmt)
     row = sum_result.one()
@@ -186,7 +192,7 @@ async def query_regen_summary(db: AsyncSession, time_range: str = "all") -> dict
 
 
 async def query_regen_for_chart(
-    db: AsyncSession, time_range: str = "all"
+    db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None,
 ) -> list[dict] | None:
     """Return per-trip regen data for chart secondary y-axis overlay.
 
@@ -200,6 +206,8 @@ async def query_regen_for_chart(
     stmt = select(EVTripMetrics).where(EVTripMetrics.range_regenerated.isnot(None))
     if trip_filter is not None:
         stmt = stmt.where(trip_filter)
+    if device_id:
+        stmt = stmt.where(EVTripMetrics.device_id == device_id)
 
     result = await db.execute(stmt)
     rows = result.scalars().all()
@@ -216,7 +224,7 @@ async def query_regen_for_chart(
     ]
 
 
-async def query_monthly_energy(db: AsyncSession, time_range: str = "all") -> list[dict]:
+async def query_monthly_energy(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> list[dict]:
     """Return monthly kWh grouped by charge type for stacked area chart.
 
     Returns list of dicts: [{"month": "2025-01", "charge_type": "AC", "kwh": 45.2}, ...]
@@ -225,6 +233,8 @@ async def query_monthly_energy(db: AsyncSession, time_range: str = "all") -> lis
     time_filter = build_time_filter(time_range)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
 
     result = await db.execute(stmt)
     sessions = result.scalars().all()
