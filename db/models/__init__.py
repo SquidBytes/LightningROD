@@ -7,6 +7,7 @@ from db.models.charging_session import EVChargingSession
 from db.models.location import EVLocation
 from db.models.reference import EVChargingNetwork, EVChargerStall, EVLocationLookup, EVStatistics, AppSettings
 from db.models.trip_metrics import EVTripMetrics
+from db.models.vehicle import EVVehicle
 from db.models.vehicle_status import EVVehicleStatus
 
 __all__ = [
@@ -20,5 +21,6 @@ __all__ = [
     "EVChargerStall",
     "EVLocationLookup",
     "EVStatistics",
+    "EVVehicle",
     "AppSettings",
 ]
