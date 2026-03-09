@@ -64,7 +64,7 @@
             {% set cost_info = item.cost_info %}
             <tr
                 class="hover cursor-pointer"
-                hx-get="/sessions/{{ session.id }}/detail?{% if not loop.first %}prev_id={{ sessions[loop.index0 - 1].session.id }}&{% endif %}{% if not loop.last %}next_id={{ sessions[loop.index0 + 1].session.id }}{% endif %}"
+                hx-get="/charging/sessions/{{ session.id }}/detail?{% if not loop.first %}prev_id={{ sessions[loop.index0 - 1].session.id }}&{% endif %}{% if not loop.last %}next_id={{ sessions[loop.index0 + 1].session.id }}{% endif %}"
                 hx-target="#drawer-body"
                 hx-swap="innerHTML"
                 onclick="openDrawer()"
@@ -182,7 +182,7 @@
             </svg>
         </div>
         <p class="text-base-content/60 text-sm mb-4">No sessions match your filters.</p>
-        <a href="/sessions" class="btn btn-sm btn-ghost">Clear filters</a>
+        <a href="/charging/sessions" class="btn btn-sm btn-ghost">Clear filters</a>
     </div>
 </div>
 {% endif %}

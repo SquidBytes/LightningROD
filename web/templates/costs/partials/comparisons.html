@@ -56,7 +56,7 @@
             <form class="flex items-center gap-2">
                 <input type="hidden" name="range" value="{{ active_range }}">
                 <select id="ref-rate-select"
-                        hx-get="/costs"
+                        hx-get="/charging/costs"
                         hx-target="#costs-content"
                         hx-swap="innerHTML"
                         hx-include="closest form"

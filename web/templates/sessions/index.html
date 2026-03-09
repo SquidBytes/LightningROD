@@ -86,7 +86,7 @@
         <div class="drawer-content">
             <!-- Table region -- HTMX swap target, auto-refreshes on CRUD events -->
             <div id="sessions-table-region"
-                 hx-get="/sessions"
+                 hx-get="/charging/sessions"
                  hx-trigger="session-updated from:body, session-deleted from:body, session-created from:body"
                  hx-target="#sessions-table-region"
                  hx-swap="innerHTML"

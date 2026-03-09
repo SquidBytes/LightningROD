@@ -50,7 +50,7 @@
         <button
             id="save-btn"
             type="button"
-            hx-put="/sessions/{{ session.id }}"
+            hx-put="/charging/sessions/{{ session.id }}"
             hx-target="#drawer-body"
             hx-swap="innerHTML"
             hx-include="#edit-form"
@@ -637,7 +637,7 @@
 <div class="sticky bottom-0 bg-base-200 border-t border-base-300 p-4 flex items-center justify-between">
     {% if prev_id %}
         <button
-            hx-get="/sessions/{{ prev_id }}/detail?next_id={{ session.id }}"
+            hx-get="/charging/sessions/{{ prev_id }}/detail?next_id={{ session.id }}"
             hx-target="#drawer-body"
             hx-swap="innerHTML"
             class="btn btn-ghost btn-sm gap-1"
@@ -660,7 +660,7 @@
 
     {% if next_id %}
         <button
-            hx-get="/sessions/{{ next_id }}/detail?prev_id={{ session.id }}"
+            hx-get="/charging/sessions/{{ next_id }}/detail?prev_id={{ session.id }}"
             hx-target="#drawer-body"
             hx-swap="innerHTML"
             class="btn btn-ghost btn-sm gap-1"

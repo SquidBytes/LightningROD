@@ -487,7 +487,7 @@
             {% if modal_mode == 'edit' and session %}
                 <button
                     type="button"
-                    hx-put="/sessions/{{ session.id }}"
+                    hx-put="/charging/sessions/{{ session.id }}"
                     hx-target="#drawer-body"
                     hx-swap="innerHTML"
                     hx-include="#modal-form"
@@ -498,7 +498,7 @@
             {% else %}
                 <button
                     type="button"
-                    hx-post="/sessions"
+                    hx-post="/charging/sessions"
                     hx-target="#drawer-body"
                     hx-swap="innerHTML"
                     hx-include="#modal-form"
