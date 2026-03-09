@@ -8,6 +8,11 @@
 
 {# Tab bar using DaisyUI CSS-only radio tabs with adjacent tab-content #}
 <div role="tablist" class="tabs tabs-bordered">
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Vehicles" {{ 'checked' if active_tab == 'vehicles' }} />
+    <div role="tabpanel" class="tab-content pt-6">
+        {% include "settings/partials/vehicle_management.html" %}
+    </div>
+
     <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="General" {{ 'checked' if active_tab == 'general' }} />
     <div role="tabpanel" class="tab-content pt-6">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -66,6 +71,21 @@
     </div>
 </div>
 
+{# Vehicle add/edit modal using DaisyUI dialog #}
+<dialog id="vehicle-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="vehicle-modal-content">
+            {# Modal content injected by openVehicleModal() #}
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
 {# Network edit modal using DaisyUI dialog #}
 <dialog id="network-modal" class="modal">
     <div class="modal-box w-11/12 max-w-4xl">
@@ -82,6 +102,24 @@
 </dialog>
 
 <script>
+function openVehicleModal(vehicleId) {
+    if (vehicleId > 0) {
+        htmx.ajax('GET', '/settings/vehicles/' + vehicleId + '/edit',
+            {target: '#vehicle-modal-content', swap: 'innerHTML'});
+    } else {
+        htmx.ajax('GET', '/settings/vehicles/new',
+            {target: '#vehicle-modal-content', swap: 'innerHTML'});
+    }
+    document.getElementById('vehicle-modal').showModal();
+}
+
+function closeVehicleModal() {
+    document.getElementById('vehicle-modal').close();
+    document.getElementById('vehicle-modal-content').innerHTML = '';
+}
+
+document.body.addEventListener('closeVehicleModal', closeVehicleModal);
+
 function openNetworkModal(networkId) {
     htmx.ajax('GET', '/settings/networks/' + networkId + '/edit-modal',
         {target: '#network-modal-content', swap: 'innerHTML'});

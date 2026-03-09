@@ -1,0 +1,111 @@
+{# Vehicle add/edit modal — reused for both add and edit #}
+<h3 class="text-lg font-bold mb-4">{{ 'Edit Vehicle' if vehicle else 'Add Vehicle' }}</h3>
+
+<form
+    {% if vehicle %}
+    hx-put="/settings/vehicles/{{ vehicle.id }}"
+    {% else %}
+    hx-post="/settings/vehicles"
+    {% endif %}
+    hx-target="#vehicle-management-card"
+    hx-swap="outerHTML"
+    hx-on::after-request="if(event.detail.successful) closeVehicleModal()"
+    class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    {# Display Name (required) #}
+    <label class="form-control">
+        <div class="label"><span class="label-text text-xs">Display Name *</span></div>
+        <input type="text" name="display_name" required
+               value="{{ vehicle.display_name if vehicle else '' }}"
+               placeholder="e.g. My Lightning"
+               class="input input-sm input-bordered w-full">
+    </label>
+
+    {# Make #}
+    <label class="form-control">
+        <div class="label"><span class="label-text text-xs">Make</span></div>
+        <input type="text" name="make"
+               value="{{ vehicle.make or '' }}"
+               placeholder="e.g. Ford"
+               class="input input-sm input-bordered w-full">
+    </label>
+
+    {# Model #}
+    <label class="form-control">
+        <div class="label"><span class="label-text text-xs">Model</span></div>
+        <input type="text" name="model"
+               value="{{ vehicle.model or '' }}"
+               placeholder="e.g. F-150 Lightning"
+               class="input input-sm input-bordered w-full">
+    </label>
+
+    {# Year #}
+    <label class="form-control">
+        <div class="label"><span class="label-text text-xs">Year</span></div>
+        <input type="number" name="year" min="1990" max="2099"
+               value="{{ vehicle.year or '' }}"
+               placeholder="e.g. 2024"
+               class="input input-sm input-bordered w-full">
+    </label>
+
+    {# Trim #}
+    <label class="form-control">
+        <div class="label"><span class="label-text text-xs">Trim</span></div>
+        <input type="text" name="trim"
+               value="{{ vehicle.trim or '' }}"
+               placeholder="e.g. XLT Extended Range"
+               class="input input-sm input-bordered w-full">
+    </label>
+
+    {# Battery Capacity with preset dropdown #}
+    <label class="form-control">
+        <div class="label"><span class="label-text text-xs">Battery Capacity (kWh)</span></div>
+        <div class="flex gap-2">
+            <input type="number" name="battery_capacity_kwh" step="0.1" min="0"
+                   value="{{ vehicle.battery_capacity_kwh or '' }}"
+                   placeholder="kWh"
+                   class="input input-sm input-bordered w-24">
+            <select class="select select-sm select-bordered flex-1"
+                    onchange="if(this.value) this.form.battery_capacity_kwh.value = this.value">
+                <option value="">Preset...</option>
+                {% for preset in battery_presets %}
+                    {% if preset.kwh is not none %}
+                    <option value="{{ preset.kwh }}"
+                        {% if vehicle and vehicle.battery_capacity_kwh == preset.kwh %}selected{% endif %}>
+                        {{ preset.label }} ({{ preset.kwh }} kWh)
+                    </option>
+                    {% else %}
+                    <option value="">{{ preset.label }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+    </label>
+
+    {# VIN #}
+    <label class="form-control">
+        <div class="label"><span class="label-text text-xs">VIN</span></div>
+        <input type="text" name="vin"
+               value="{{ vehicle.vin or '' }}"
+               placeholder="Optional"
+               class="input input-sm input-bordered w-full">
+    </label>
+
+    {# Device ID #}
+    <label class="form-control">
+        <div class="label"><span class="label-text text-xs">Device ID</span></div>
+        <input type="text" name="device_id"
+               value="{{ vehicle.device_id if vehicle else '' }}"
+               placeholder="Auto-generated if blank"
+               class="input input-sm input-bordered w-full">
+        <div class="label"><span class="label-text-alt text-xs text-base-content/40">Used to link sensor data. Auto-generated for manual vehicles.</span></div>
+    </label>
+
+    {# Submit buttons #}
+    <div class="md:col-span-2 flex justify-end gap-2 mt-2">
+        <button type="button" onclick="closeVehicleModal()" class="btn btn-ghost btn-sm">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">
+            {{ 'Save Changes' if vehicle else 'Add Vehicle' }}
+        </button>
+    </div>
+</form>

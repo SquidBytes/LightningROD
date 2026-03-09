@@ -1,0 +1,97 @@
+{# Vehicle management partial — full CRUD for ev_vehicles #}
+<div id="vehicle-management-card" class="card bg-base-200">
+    <div class="card-body">
+        <h2 class="card-title">Vehicles</h2>
+        <p class="text-base-content/60 text-sm">Manage your electric vehicles. Set one as active to scope dashboard data.</p>
+
+        {# Vehicle table #}
+        <div class="overflow-x-auto">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th>Display Name</th>
+                        <th>Make / Model</th>
+                        <th class="w-16">Year</th>
+                        <th class="w-24">Battery (kWh)</th>
+                        <th>Device ID</th>
+                        <th class="w-20">Status</th>
+                        <th class="text-right w-40">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vehicle in vehicles %}
+                    <tr>
+                        <td class="font-medium">{{ vehicle.display_name }}</td>
+                        <td class="text-base-content/60 text-sm">
+                            {% if vehicle.make or vehicle.model %}
+                                {{ vehicle.make or '' }}{% if vehicle.make and vehicle.model %} {% endif %}{{ vehicle.model or '' }}
+                            {% else %}
+                                <span class="text-base-content/30">--</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-base-content/60 text-sm">
+                            {{ vehicle.year or '' }}
+                        </td>
+                        <td class="text-base-content/60 text-sm">
+                            {% if vehicle.battery_capacity_kwh %}
+                                {{ '%.1f'|format(vehicle.battery_capacity_kwh) }}
+                            {% else %}
+                                <span class="text-base-content/30">--</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-base-content/40 text-xs font-mono truncate max-w-32" title="{{ vehicle.device_id }}">
+                            {{ vehicle.device_id }}
+                        </td>
+                        <td>
+                            {% if active_vehicle and active_vehicle.id == vehicle.id %}
+                                <span class="badge badge-success badge-sm">Active</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <div class="flex justify-end gap-1">
+                                {% if not (active_vehicle and active_vehicle.id == vehicle.id) %}
+                                <button
+                                    hx-post="/settings/vehicles/{{ vehicle.id }}/activate"
+                                    hx-target="#vehicle-management-card"
+                                    hx-swap="outerHTML"
+                                    class="btn btn-ghost btn-xs text-success"
+                                    title="Set as active vehicle">
+                                    Activate
+                                </button>
+                                {% endif %}
+                                <button
+                                    type="button"
+                                    onclick="openVehicleModal({{ vehicle.id }})"
+                                    class="btn btn-ghost btn-xs">
+                                    Edit
+                                </button>
+                                {% if not (active_vehicle and active_vehicle.id == vehicle.id) %}
+                                <button
+                                    hx-delete="/settings/vehicles/{{ vehicle.id }}"
+                                    hx-target="#vehicle-management-card"
+                                    hx-swap="outerHTML"
+                                    hx-confirm="Delete {{ vehicle.display_name }}?"
+                                    class="btn btn-error btn-ghost btn-xs">
+                                    Delete
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-4 text-center text-base-content/40">No vehicles registered yet. Add one below or connect Home Assistant to auto-create.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Add Vehicle button #}
+        <div class="mt-4">
+            <button type="button" onclick="openVehicleModal(0)" class="btn btn-primary btn-sm">
+                Add Vehicle
+            </button>
+        </div>
+    </div>
+</div>

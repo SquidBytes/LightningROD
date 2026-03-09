@@ -27,6 +27,16 @@ from web.queries.settings import (
     update_network,
     update_stall,
 )
+from web.queries.vehicles import (
+    BATTERY_PRESETS,
+    create_vehicle,
+    delete_vehicle,
+    get_active_vehicle,
+    get_all_vehicles,
+    get_vehicle_by_id,
+    set_active_vehicle,
+    update_vehicle,
+)
 from web.services.csv_parser import get_db_field_options
 
 router = APIRouter()
@@ -50,6 +60,17 @@ async def _network_management_context(db: AsyncSession) -> dict:
     return {"networks": networks, "location_counts": location_counts, "session_counts": session_counts}
 
 
+async def _vehicle_management_context(db: AsyncSession) -> dict:
+    """Build context dict for vehicle_management.html — vehicles + active vehicle + presets."""
+    vehicles = await get_all_vehicles(db)
+    active_vehicle = await get_active_vehicle(db)
+    return {
+        "vehicles": vehicles,
+        "active_vehicle": active_vehicle,
+        "battery_presets": BATTERY_PRESETS,
+    }
+
+
 SETTINGS_KEYS = [
     "gas_price_per_gallon",
     "vehicle_mpg",
@@ -68,8 +89,11 @@ async def settings_index(
     tab: Optional[str] = Query(None),
 ):
     net_ctx = await _network_management_context(db)
+    veh_ctx = await _vehicle_management_context(db)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
-    if tab == "import":
+    if tab == "vehicles":
+        active_tab = "vehicles"
+    elif tab == "import":
         active_tab = "import"
     elif tab == "networks":
         active_tab = "networks"
@@ -89,6 +113,7 @@ async def settings_index(
         "settings/index.html",
         {
             **net_ctx,
+            **veh_ctx,
             **import_ctx,
             "settings": settings,
             "active_page": "settings",
@@ -96,6 +121,175 @@ async def settings_index(
             "active_tab": active_tab,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Vehicle CRUD routes
+# ---------------------------------------------------------------------------
+
+
+@router.get("/settings/vehicles", response_class=HTMLResponse)
+async def vehicles_partial(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the vehicle management partial (for HTMX refresh)."""
+    veh_ctx = await _vehicle_management_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_management.html",
+        veh_ctx,
+    )
+
+
+@router.get("/settings/vehicles/new", response_class=HTMLResponse)
+async def new_vehicle_form(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the vehicle add modal form."""
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_edit_modal.html",
+        {"battery_presets": BATTERY_PRESETS},
+    )
+
+
+@router.post("/settings/vehicles", response_class=HTMLResponse)
+async def create_vehicle_route(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    display_name: str = Form(""),
+    make: Optional[str] = Form(None),
+    model: Optional[str] = Form(None),
+    year: Optional[int] = Form(None),
+    trim: Optional[str] = Form(None),
+    battery_capacity_kwh: Optional[float] = Form(None),
+    vin: Optional[str] = Form(None),
+    device_id: Optional[str] = Form(None),
+):
+    if not display_name or not display_name.strip():
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Display name is required"},
+        )
+    await create_vehicle(
+        db,
+        display_name=display_name.strip(),
+        make=make or None,
+        model=model or None,
+        year=year,
+        trim=trim or None,
+        battery_capacity_kwh=battery_capacity_kwh,
+        vin=vin or None,
+        device_id=device_id or None,
+    )
+    veh_ctx = await _vehicle_management_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_management.html",
+        veh_ctx,
+    )
+
+
+@router.get("/settings/vehicles/{vehicle_id}/edit", response_class=HTMLResponse)
+async def edit_vehicle_form(
+    vehicle_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the vehicle edit modal form with vehicle data + presets."""
+    vehicle = await get_vehicle_by_id(db, vehicle_id)
+    if vehicle is None:
+        return HTMLResponse(status_code=404)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_edit_modal.html",
+        {"vehicle": vehicle, "battery_presets": BATTERY_PRESETS},
+    )
+
+
+@router.put("/settings/vehicles/{vehicle_id}", response_class=HTMLResponse)
+async def update_vehicle_route(
+    vehicle_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    display_name: str = Form(""),
+    make: Optional[str] = Form(None),
+    model: Optional[str] = Form(None),
+    year: Optional[int] = Form(None),
+    trim: Optional[str] = Form(None),
+    battery_capacity_kwh: Optional[float] = Form(None),
+    vin: Optional[str] = Form(None),
+    device_id: Optional[str] = Form(None),
+):
+    if not display_name or not display_name.strip():
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Display name is required"},
+        )
+    await update_vehicle(
+        db,
+        vehicle_id,
+        display_name=display_name.strip(),
+        make=make or None,
+        model=model or None,
+        year=year,
+        trim=trim or None,
+        battery_capacity_kwh=battery_capacity_kwh,
+        vin=vin or None,
+        device_id=device_id or None,
+    )
+    veh_ctx = await _vehicle_management_context(db)
+    response = templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_management.html",
+        veh_ctx,
+    )
+    response.headers["HX-Trigger"] = "closeVehicleModal"
+    return response
+
+
+@router.delete("/settings/vehicles/{vehicle_id}", response_class=HTMLResponse)
+async def delete_vehicle_route(
+    vehicle_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    deleted = await delete_vehicle(db, vehicle_id)
+    if not deleted:
+        return HTMLResponse(
+            '<div class="alert alert-error text-sm">Cannot delete the active vehicle. Set another vehicle as active first.</div>',
+            status_code=400,
+        )
+    veh_ctx = await _vehicle_management_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_management.html",
+        veh_ctx,
+    )
+
+
+@router.post("/settings/vehicles/{vehicle_id}/activate", response_class=HTMLResponse)
+async def activate_vehicle_route(
+    vehicle_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await set_active_vehicle(db, vehicle_id)
+    veh_ctx = await _vehicle_management_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_management.html",
+        veh_ctx,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Network CRUD routes
+# ---------------------------------------------------------------------------
 
 
 @router.post("/settings/networks", response_class=HTMLResponse)
