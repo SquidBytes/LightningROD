@@ -16,6 +16,7 @@ from web.dependencies import get_db
 from web.queries.costs import compute_session_cost, get_locations_by_id, get_session_cost_context
 from web.queries.sessions import get_most_recent_location, query_sessions
 from web.queries.settings import get_all_networks, get_app_setting, get_stalls_for_location, resolve_network
+from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -43,6 +44,10 @@ async def sessions(
     sort_dir: Optional[str] = None,
     hx_request: Annotated[Optional[str], Header()] = None,
 ):
+    # Vehicle scoping
+    active_device_id = await get_active_device_id(db)
+    active_vehicle = await get_active_vehicle(db)
+
     # Clamp per_page to allowed values
     if per_page not in VALID_PER_PAGE:
         per_page = 25
@@ -67,6 +72,7 @@ async def sessions(
         network_ids=network_ids,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        device_id=active_device_id,
     )
 
     total_pages = max(math.ceil(total / per_page), 1)
@@ -129,6 +135,7 @@ async def sessions(
         "user_tz": user_tz,
         "active_page": "sessions",
         "page_title": "Sessions",
+        "active_vehicle": active_vehicle,
     }
 
     if hx_request:
@@ -328,9 +335,13 @@ async def create_session(
         except ValueError:
             pass
 
+    # Use active vehicle's device_id instead of hardcoded "manual"
+    active_vehicle = await get_active_vehicle(db)
+    session_device_id = active_vehicle.device_id if active_vehicle else "manual"
+
     new_session = EVChargingSession(
         session_id=uuid.uuid4(),
-        device_id="manual",
+        device_id=session_device_id,
         session_start_utc=parsed_date,
         session_end_utc=session_end_utc,
         energy_kwh=energy_kwh,
@@ -425,6 +436,7 @@ async def create_session(
     cost_info = compute_session_cost(new_session, network=network_obj, location=location_obj)
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
 
+    vehicles = await get_all_vehicles(db)
     context = {
         "session": new_session,
         "cost_info": cost_info,
@@ -433,6 +445,7 @@ async def create_session(
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
         "user_tz": user_tz,
+        "vehicles": vehicles,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
     response.headers["HX-Trigger"] = json.dumps({
@@ -479,6 +492,7 @@ async def update_session(
     charger_rated_kw: Annotated[Optional[float], Form()] = None,
     stall_id: Annotated[Optional[int], Form()] = None,
     evse_source: Annotated[Optional[str], Form()] = None,
+    vehicle_device_id: Annotated[Optional[str], Form()] = None,
 ):
     # Validate enum fields
     errors: dict[str, str] = {}
@@ -588,6 +602,10 @@ async def update_session(
     if evse_source is not None:
         session.evse_source = evse_source or None
 
+    # Vehicle reassignment via dropdown
+    if vehicle_device_id is not None and vehicle_device_id != "":
+        session.device_id = vehicle_device_id
+
     # Resolve location_id if not explicitly set by form and location data is available
     if location_id is None and session.location_id is None:
         s_lat = session.latitude
@@ -651,6 +669,7 @@ async def update_session(
 
     cost_info = compute_session_cost(session, network=network_obj, location=location_obj)
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
+    vehicles = await get_all_vehicles(db)
 
     context = {
         "session": session,
@@ -660,6 +679,7 @@ async def update_session(
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
         "user_tz": user_tz,
+        "vehicles": vehicles,
     }
     response = templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
     response.headers["HX-Trigger"] = json.dumps({
@@ -714,6 +734,7 @@ async def session_detail(
     cost_info = compute_session_cost(session, network=network_obj, location=location_obj)
 
     all_networks = await get_all_networks(db)
+    vehicles = await get_all_vehicles(db)
 
     # Look up stall label if session has a stall_id
     stall_label = None
@@ -735,6 +756,7 @@ async def session_detail(
         "networks": all_networks,
         "stall_label": stall_label,
         "user_tz": user_tz,
+        "vehicles": vehicles,
     }
     return templates.TemplateResponse(request, "sessions/partials/drawer.html", context)
 

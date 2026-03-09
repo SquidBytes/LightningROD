@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
 from web.queries.settings import get_all_networks, get_app_setting, resolve_network
+from web.queries.vehicles import get_active_vehicle, get_all_vehicles, get_vehicle_by_id
 from web.services.csv_parser import (
     DB_FIELD_OPTIONS,
     auto_detect_mappings,
@@ -112,6 +113,8 @@ async def upload_csv(
 
     import_data = _serialize_rows(transformed)
     all_networks = await get_all_networks(db)
+    vehicles = await get_all_vehicles(db)
+    active_vehicle = await get_active_vehicle(db)
 
     return templates.TemplateResponse(
         request,
@@ -127,6 +130,8 @@ async def upload_csv(
             "unmatched_columns": unmatched_columns,
             "import_timezone": import_timezone,
             "networks": all_networks,
+            "vehicles": vehicles,
+            "active_vehicle": active_vehicle,
         },
     )
 
@@ -243,11 +248,31 @@ async def execute_import(
             except (ValueError, TypeError):
                 pass
 
+    # Determine device_id for imported sessions from vehicle picker
+    import_vehicle_id = form.get("import_vehicle_id")
+    import_device_id = None
+    if import_vehicle_id:
+        try:
+            vehicle = await get_vehicle_by_id(db, int(import_vehicle_id))
+            if vehicle:
+                import_device_id = vehicle.device_id
+        except (ValueError, TypeError):
+            pass
+    if not import_device_id:
+        active_vehicle = await get_active_vehicle(db)
+        if active_vehicle:
+            import_device_id = active_vehicle.device_id
+
     # Re-parse row values from JSON serialized form (datetimes are ISO strings)
     # The rows are already in serialized form; import_rows handles string UUIDs/datetimes
     # via the EVChargingSession model accepting strings for UUID columns
     # We need to convert back to proper types for the model
     rows = _deserialize_rows(rows)
+
+    # Assign selected vehicle's device_id to all imported rows
+    if import_device_id:
+        for row in rows:
+            row["device_id"] = import_device_id
 
     # Execute the import
     counts = await import_rows(rows, selected_indices, duplicate_actions, db)
@@ -274,12 +299,16 @@ async def reset_import(
     Called by the 'Import Another File' button on the summary page via HTMX.
     """
     user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
+    vehicles = await get_all_vehicles(db)
+    active_vehicle = await get_active_vehicle(db)
     return templates.TemplateResponse(
         request,
         "settings/partials/import_tab.html",
         {
             "db_fields": get_db_field_options(),
             "user_tz": user_tz,
+            "vehicles": vehicles,
+            "active_vehicle": active_vehicle,
         },
     )
 

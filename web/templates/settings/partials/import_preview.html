@@ -45,6 +45,17 @@
                 {% if error_count > 0 %}
                 <span class="badge badge-error badge-sm">{{ error_count }} error{{ 's' if error_count != 1 else '' }}</span>
                 {% endif %}
+                {% if vehicles is defined and vehicles|length > 0 %}
+                <div class="divider divider-horizontal mx-0"></div>
+                <label class="text-base-content/60 whitespace-nowrap">Assign to:</label>
+                <select name="import_vehicle_id" class="select select-bordered select-sm">
+                    {% for v in vehicles %}
+                    <option value="{{ v.id }}" {% if active_vehicle and v.id == active_vehicle.id %}selected{% endif %}>
+                        {{ v.display_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% endif %}
             </div>
         </div>
 

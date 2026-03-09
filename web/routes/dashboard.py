@@ -16,6 +16,7 @@ from web.queries.costs import (
     query_cost_summary,
 )
 from web.queries.settings import get_all_networks, get_app_settings_dict
+from web.queries.vehicles import get_active_device_id, get_active_vehicle
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -23,11 +24,15 @@ templates = Jinja2Templates(directory="web/templates")
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
+    # Vehicle scoping
+    active_device_id = await get_active_device_id(db)
+    active_vehicle = await get_active_vehicle(db)
+
     # Summary cards
-    summary = await query_dashboard_summary(db)
+    summary = await query_dashboard_summary(db, device_id=active_device_id)
 
     # Cost data for energy-by-network donut
-    cost_summary = await query_cost_summary(db)
+    cost_summary = await query_cost_summary(db, device_id=active_device_id)
 
     # Build network colors map and id->name map for chart builders
     networks = await get_all_networks(db)
@@ -41,11 +46,16 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     )
 
     # Build monthly energy by network stacked bar chart
-    all_sessions_result = await db.execute(
+    monthly_sessions_stmt = (
         select(EVChargingSession)
         .where(EVChargingSession.energy_kwh.isnot(None))
         .order_by(EVChargingSession.session_start_utc)
     )
+    if active_device_id:
+        monthly_sessions_stmt = monthly_sessions_stmt.where(
+            EVChargingSession.device_id == active_device_id
+        )
+    all_sessions_result = await db.execute(monthly_sessions_stmt)
     all_sessions = all_sessions_result.scalars().all()
 
     monthly_energy_chart = build_monthly_energy_by_network_chart(
@@ -55,7 +65,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     )
 
     # Charging efficiency aggregates (EVSE loss + utilization)
-    efficiency = await query_charging_efficiency(db)
+    efficiency = await query_charging_efficiency(db, device_id=active_device_id)
 
     return templates.TemplateResponse(
         request,
@@ -67,5 +77,6 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "monthly_energy_chart": monthly_energy_chart,
             "energy_by_network_chart": energy_by_network_chart,
             "efficiency": efficiency,
+            "active_vehicle": active_vehicle,
         },
     )

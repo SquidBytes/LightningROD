@@ -14,6 +14,7 @@ from web.queries.costs import (
     query_monthly_costs,
 )
 from web.queries.settings import get_all_networks, get_app_settings_dict
+from web.queries.vehicles import get_active_device_id, get_active_vehicle
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -26,8 +27,12 @@ async def costs(
     range: Optional[str] = "all",
     hx_request: Annotated[Optional[str], Header()] = None,
 ):
-    summary = await query_cost_summary(db, time_range=range or "all")
-    monthly = await query_monthly_costs(db, time_range=range or "all")
+    # Vehicle scoping
+    active_device_id = await get_active_device_id(db)
+    active_vehicle = await get_active_vehicle(db)
+
+    summary = await query_cost_summary(db, time_range=range or "all", device_id=active_device_id)
+    monthly = await query_monthly_costs(db, time_range=range or "all", device_id=active_device_id)
 
     # Build network colors map for consistent chart coloring
     all_networks = await get_all_networks(db)
@@ -72,6 +77,7 @@ async def costs(
         "networks": networks,
         "toggles": toggles,
         "network_colors": network_colors,
+        "active_vehicle": active_vehicle,
     }
 
     if hx_request:

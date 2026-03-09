@@ -570,9 +570,20 @@
                 </dd>
             </div>
             <div class="flex justify-between gap-4">
-                <dt class="text-base-content/60 text-base shrink-0">Device ID</dt>
-                <dd class="text-base-content text-base font-mono text-right truncate">
-                    {{ session.device_id or '—' }}
+                <dt class="text-base-content/60 text-base shrink-0">Vehicle</dt>
+                <dd class="text-base-content text-base text-right truncate">
+                    {% if vehicles is defined and vehicles|length > 1 %}
+                    <select name="vehicle_device_id" form="edit-session-{{ session.id }}"
+                            class="select select-bordered select-xs font-mono">
+                        {% for v in vehicles %}
+                        <option value="{{ v.device_id }}" {% if v.device_id == session.device_id %}selected{% endif %}>
+                            {{ v.display_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% else %}
+                    <span class="font-mono">{{ session.device_id or '—' }}</span>
+                    {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
