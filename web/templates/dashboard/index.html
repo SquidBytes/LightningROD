@@ -1,8 +1,44 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-6xl">
-    <h1 class="text-3xl font-bold text-base-content mb-2">Dashboard</h1>
-    <p class="text-base-content/60 mb-8">Your EV charging analytics at a glance.</p>
+    <h1 class="text-3xl font-bold text-base-content mb-2">Home</h1>
+    <p class="text-base-content/60 mb-8">Your EV charging overview across all vehicles.</p>
+
+    <!-- Vehicle Selector Cards -->
+    {% if vehicle_cards %}
+    <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-3">Your Vehicles</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for vc in vehicle_cards %}
+            <form method="post" action="/vehicles/{{ vc.vehicle.id }}/activate">
+                <input type="hidden" name="redirect_to" value="/charging/sessions">
+                <button type="submit" class="card bg-base-200 w-full text-left hover:bg-base-300 hover:shadow-md transition-all cursor-pointer
+                    {{ 'ring-2 ring-primary' if active_vehicle and vc.vehicle.id == active_vehicle.id else '' }}">
+                    <div class="card-body p-4">
+                        <h3 class="card-title text-base">
+                            {{ vc.vehicle.display_name }}
+                            {% if active_vehicle and vc.vehicle.id == active_vehicle.id %}
+                            <span class="badge badge-primary badge-sm">Active</span>
+                            {% endif %}
+                        </h3>
+                        {% if vc.vehicle.year or vc.vehicle.make or vc.vehicle.model %}
+                        <p class="text-sm text-base-content/60">
+                            {{ vc.vehicle.year or '' }} {{ vc.vehicle.make or '' }} {{ vc.vehicle.model or '' }}
+                        </p>
+                        {% endif %}
+                        <div class="flex gap-4 mt-2 text-sm text-base-content/70">
+                            <span>{{ vc.session_count }} sessions</span>
+                            {% if vc.last_charge %}
+                            <span>Last: {{ vc.last_charge|localtime(user_tz, '%b %d') }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
     {% if summary.total_sessions == 0 %}
     {# ── Empty state ─────────────────────────────────────────────────── #}

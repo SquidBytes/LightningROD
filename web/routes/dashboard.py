@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
@@ -16,7 +16,7 @@ from web.queries.costs import (
     query_cost_summary,
 )
 from web.queries.settings import get_all_networks, get_app_settings_dict
-from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles, set_active_vehicle
+from web.queries.vehicles import get_active_vehicle, get_all_vehicles, set_active_vehicle
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -24,15 +24,15 @@ templates = Jinja2Templates(directory="web/templates")
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
-    # Vehicle scoping
-    active_device_id = await get_active_device_id(db)
+    # Home page shows GLOBAL stats across all vehicles (device_id=None)
     active_vehicle = await get_active_vehicle(db)
+    all_vehicles = await get_all_vehicles(db)
 
-    # Summary cards
-    summary = await query_dashboard_summary(db, device_id=active_device_id)
+    # Summary cards (global -- all vehicles)
+    summary = await query_dashboard_summary(db, device_id=None)
 
-    # Cost data for energy-by-network donut
-    cost_summary = await query_cost_summary(db, device_id=active_device_id)
+    # Cost data for energy-by-network donut (global)
+    cost_summary = await query_cost_summary(db, device_id=None)
 
     # Build network colors map and id->name map for chart builders
     networks = await get_all_networks(db)
@@ -45,16 +45,12 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         network_colors=network_colors,
     )
 
-    # Build monthly energy by network stacked bar chart
+    # Build monthly energy by network stacked bar chart (all vehicles)
     monthly_sessions_stmt = (
         select(EVChargingSession)
         .where(EVChargingSession.energy_kwh.isnot(None))
         .order_by(EVChargingSession.session_start_utc)
     )
-    if active_device_id:
-        monthly_sessions_stmt = monthly_sessions_stmt.where(
-            EVChargingSession.device_id == active_device_id
-        )
     all_sessions_result = await db.execute(monthly_sessions_stmt)
     all_sessions = all_sessions_result.scalars().all()
 
@@ -64,16 +60,34 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         network_colors=network_colors,
     )
 
-    # Charging efficiency aggregates (EVSE loss + utilization)
-    efficiency = await query_charging_efficiency(db, device_id=active_device_id)
+    # Charging efficiency aggregates (global)
+    efficiency = await query_charging_efficiency(db, device_id=None)
 
-    all_vehicles = await get_all_vehicles(db)
+    # Per-vehicle card stats
+    vehicle_cards = []
+    for vehicle in all_vehicles:
+        stats_result = await db.execute(
+            select(
+                func.count(EVChargingSession.id).label("session_count"),
+                func.max(EVChargingSession.session_start_utc).label("last_charge"),
+            ).where(EVChargingSession.device_id == vehicle.device_id)
+        )
+        stats = stats_result.one()
+        vehicle_cards.append({
+            "vehicle": vehicle,
+            "session_count": stats.session_count or 0,
+            "last_charge": stats.last_charge,
+        })
+
+    # Get user timezone for template
+    app_settings = await get_app_settings_dict(db)
+    user_tz = app_settings.get("user_timezone", "UTC")
 
     return templates.TemplateResponse(
         request,
         "dashboard/index.html",
         {
-            "page_title": "Dashboard",
+            "page_title": "Home",
             "active_page": "dashboard",
             "summary": summary,
             "monthly_energy_chart": monthly_energy_chart,
@@ -81,6 +95,8 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "efficiency": efficiency,
             "active_vehicle": active_vehicle,
             "all_vehicles": all_vehicles,
+            "vehicle_cards": vehicle_cards,
+            "user_tz": user_tz,
         },
     )
 
