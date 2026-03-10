@@ -15,7 +15,7 @@ from db.models.reference import EVChargerStall, EVLocationLookup
 from web.dependencies import get_db
 from web.queries.costs import compute_session_cost, get_locations_by_id, get_session_cost_context
 from web.queries.sessions import get_most_recent_location, query_sessions
-from web.queries.settings import get_all_networks, get_app_setting, get_stalls_for_location, resolve_network
+from web.queries.settings import get_all_networks, get_app_setting, get_stalls_for_location, get_subscriptions_for_network, resolve_network
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
 
 router = APIRouter()
@@ -734,7 +734,8 @@ async def session_detail(
         return HTMLResponse(content="<p class='text-gray-400 p-4'>Session not found.</p>", status_code=404)
 
     network_obj, location_obj = await get_session_cost_context(db, session)
-    cost_info = compute_session_cost(session, network=network_obj, location=location_obj)
+    sub_periods = await get_subscriptions_for_network(db, network_obj.id) if network_obj else []
+    cost_info = compute_session_cost(session, network=network_obj, location=location_obj, subscription_periods=sub_periods)
 
     all_networks = await get_all_networks(db)
     vehicles = await get_all_vehicles(db)
@@ -780,7 +781,8 @@ async def session_modal(
         return HTMLResponse(content="<p class='text-gray-400 p-4'>Session not found.</p>", status_code=404)
 
     network_obj, location_obj = await get_session_cost_context(db, session)
-    cost_info = compute_session_cost(session, network=network_obj, location=location_obj)
+    sub_periods = await get_subscriptions_for_network(db, network_obj.id) if network_obj else []
+    cost_info = compute_session_cost(session, network=network_obj, location=location_obj, subscription_periods=sub_periods)
 
     all_networks = await get_all_networks(db)
 

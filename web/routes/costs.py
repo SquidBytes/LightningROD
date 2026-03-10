@@ -12,6 +12,7 @@ from web.queries.costs import (
     build_network_cost_chart,
     query_cost_summary,
     query_monthly_costs,
+    query_subscription_savings,
 )
 from web.queries.settings import get_all_networks, get_app_settings_dict
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
@@ -33,6 +34,7 @@ async def costs(
 
     summary = await query_cost_summary(db, time_range=range or "all", device_id=active_device_id)
     monthly = await query_monthly_costs(db, time_range=range or "all", device_id=active_device_id)
+    subscription_savings = await query_subscription_savings(db, time_range=range or "all", device_id=active_device_id)
 
     # Build network colors map for consistent chart coloring
     all_networks = await get_all_networks(db)
@@ -81,6 +83,7 @@ async def costs(
         "network_colors": network_colors,
         "active_vehicle": active_vehicle,
         "all_vehicles": all_vehicles,
+        "subscription_savings": subscription_savings,
     }
 
     if hx_request:

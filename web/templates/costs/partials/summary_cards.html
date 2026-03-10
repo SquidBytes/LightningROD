@@ -66,6 +66,42 @@
 </div>
 {% endif %}
 
+<!-- Subscription Savings card -->
+{% if subscription_savings is defined and subscription_savings and subscription_savings.total_saved > 0 %}
+<div class="card bg-base-200 shadow-sm mb-6">
+    <div class="card-body p-5">
+        <h3 class="card-title text-base font-semibold">Subscription Savings</h3>
+        <div class="grid grid-cols-3 gap-4 mt-3">
+            <div>
+                <div class="text-xs text-base-content/50 uppercase tracking-wide">Total Saved</div>
+                <div class="text-lg font-bold text-success">${{ "%.2f"|format(subscription_savings.total_saved) }}</div>
+            </div>
+            <div>
+                <div class="text-xs text-base-content/50 uppercase tracking-wide">Monthly Fees</div>
+                <div class="text-lg font-bold text-error">-${{ "%.2f"|format(subscription_savings.total_fees) }}</div>
+            </div>
+            <div>
+                <div class="text-xs text-base-content/50 uppercase tracking-wide">Net Savings</div>
+                <div class="text-lg font-bold {% if subscription_savings.net_savings > 0 %}text-success{% else %}text-error{% endif %}">
+                    ${{ "%.2f"|format(subscription_savings.net_savings) }}
+                </div>
+            </div>
+        </div>
+        {% if subscription_savings.by_network %}
+        <div class="divider my-2"></div>
+        <div class="space-y-2">
+            {% for net in subscription_savings.by_network %}
+            <div class="flex justify-between text-sm">
+                <span>{{ net.network }} <span class="text-base-content/50">({{ net.session_count }} sessions)</span></span>
+                <span class="text-success font-medium">${{ "%.2f"|format(net.saved) }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Charts -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <!-- Cost by Network chart -->

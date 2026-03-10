@@ -156,11 +156,17 @@
                                 {% if cost_info.cost_source == 'manual' %}
                                     <span class="badge badge-info badge-xs ml-2">User Set</span>
                                 {% endif %}
+                                {% if cost_info.subscription_active %}
+                                    <span class="badge badge-info badge-xs ml-1">Member</span>
+                                {% endif %}
                             </div>
                         {% elif cost_info.estimated_cost is not none %}
                             <div class="text-center">
                                 <span class="text-2xl font-bold text-base-content/60">~${{ "%.2f"|format(cost_info.estimated_cost) }}</span>
                                 <span class="badge badge-ghost badge-xs ml-2">Estimated</span>
+                                {% if cost_info.subscription_active %}
+                                    <span class="badge badge-info badge-xs ml-1">Member</span>
+                                {% endif %}
                             </div>
                         {% else %}
                             <div class="text-center">
@@ -207,6 +213,21 @@
                                     <div class="text-xs text-base-content/40 pt-1">{{ cost_info.calculation }}</div>
                                 {% endif %}
                             </dl>
+                            {% if cost_info.subscription_active %}
+                                <div class="divider my-1"></div>
+                                <dl class="space-y-1.5 text-sm">
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Without Subscription</dt>
+                                        <dd class="text-base-content">${{ "%.2f"|format(cost_info.non_member_cost) }}</dd>
+                                    </div>
+                                    {% if cost_info.savings is not none and cost_info.savings > 0 %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">You Saved</dt>
+                                        <dd class="text-success font-medium">${{ "%.2f"|format(cost_info.savings) }}</dd>
+                                    </div>
+                                    {% endif %}
+                                </dl>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
