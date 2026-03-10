@@ -436,7 +436,8 @@ async def create_session(
     await db.commit()
     await db.refresh(new_session)
 
-    cost_info = compute_session_cost(new_session, network=network_obj, location=location_obj)
+    sub_periods = await get_subscriptions_for_network(db, network_obj.id) if network_obj else []
+    cost_info = compute_session_cost(new_session, network=network_obj, location=location_obj, subscription_periods=sub_periods)
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
 
     vehicles = await get_all_vehicles(db)
@@ -670,7 +671,8 @@ async def update_session(
     await db.commit()
     await db.refresh(session)
 
-    cost_info = compute_session_cost(session, network=network_obj, location=location_obj)
+    sub_periods = await get_subscriptions_for_network(db, network_obj.id) if network_obj else []
+    cost_info = compute_session_cost(session, network=network_obj, location=location_obj, subscription_periods=sub_periods)
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
     vehicles = await get_all_vehicles(db)
 

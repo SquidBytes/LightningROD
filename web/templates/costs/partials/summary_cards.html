@@ -93,7 +93,7 @@
             {% for net in subscription_savings.by_network %}
             <div class="flex justify-between text-sm">
                 <span>{{ net.network }} <span class="text-base-content/50">({{ net.session_count }} sessions)</span></span>
-                <span class="text-success font-medium">${{ "%.2f"|format(net.saved) }}</span>
+                <span class="text-success font-medium">${{ "%.2f"|format(net.total_saved) }}</span>
             </div>
             {% endfor %}
         </div>
