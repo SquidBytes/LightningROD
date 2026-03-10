@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.reference import AppSettings, EVChargerStall, EVChargingNetwork, EVLocationLookup
+from db.models.reference import AppSettings, EVChargerStall, EVChargingNetwork, EVLocationLookup, EVNetworkSubscription
 
 # Predefined EV charging networks with brand-accurate colors
 PREDEFINED_NETWORKS = [
@@ -278,6 +278,147 @@ async def delete_location(db: AsyncSession, location_id: int) -> bool:
     if loc is None:
         return False
     await db.delete(loc)
+    await db.commit()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Subscription CRUD
+# ---------------------------------------------------------------------------
+
+
+async def get_subscriptions_for_network(
+    db: AsyncSession, network_id: int
+) -> list[EVNetworkSubscription]:
+    """Return all subscription periods for a network, ordered by start_date desc."""
+    result = await db.execute(
+        select(EVNetworkSubscription)
+        .where(EVNetworkSubscription.network_id == network_id)
+        .order_by(EVNetworkSubscription.start_date.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_all_subscriptions_by_network(
+    db: AsyncSession,
+) -> dict[int, list[EVNetworkSubscription]]:
+    """Return dict mapping network_id to list of EVNetworkSubscription objects.
+
+    Used by cost summary to batch-load all subscriptions.
+    """
+    result = await db.execute(
+        select(EVNetworkSubscription).order_by(EVNetworkSubscription.start_date)
+    )
+    all_subs = result.scalars().all()
+    by_network: dict[int, list[EVNetworkSubscription]] = {}
+    for sub in all_subs:
+        by_network.setdefault(sub.network_id, []).append(sub)
+    return by_network
+
+
+async def validate_no_overlap(
+    db: AsyncSession,
+    network_id: int,
+    start_date,
+    end_date=None,
+    exclude_id: int = None,
+) -> bool:
+    """Check that a new/edited period does not overlap any existing period for the same network.
+
+    Treat null end_date as date.max. Return True if no overlap.
+    """
+    from datetime import date as date_type
+
+    stmt = select(EVNetworkSubscription).where(
+        EVNetworkSubscription.network_id == network_id
+    )
+    if exclude_id:
+        stmt = stmt.where(EVNetworkSubscription.id != exclude_id)
+
+    result = await db.execute(stmt)
+    existing = result.scalars().all()
+
+    for period in existing:
+        # Two ranges overlap if: start1 <= end2 AND start2 <= end1
+        p_end = period.end_date or date_type.max
+        new_end = end_date or date_type.max
+        if start_date <= p_end and period.start_date <= new_end:
+            return False  # overlap detected
+    return True
+
+
+async def create_subscription(
+    db: AsyncSession,
+    network_id: int,
+    member_rate: float,
+    monthly_fee: float,
+    start_date,
+    end_date=None,
+    notes: str = None,
+) -> EVNetworkSubscription:
+    """Create a new subscription period. Validates no overlap first.
+
+    Raises ValueError if overlap detected.
+    """
+    if not await validate_no_overlap(db, network_id, start_date, end_date):
+        raise ValueError("Subscription period overlaps with an existing period for this network")
+
+    sub = EVNetworkSubscription(
+        network_id=network_id,
+        member_rate=member_rate,
+        monthly_fee=monthly_fee,
+        start_date=start_date,
+        end_date=end_date,
+        notes=notes,
+    )
+    db.add(sub)
+    await db.commit()
+    await db.refresh(sub)
+    return sub
+
+
+async def update_subscription(
+    db: AsyncSession,
+    subscription_id: int,
+    member_rate: float,
+    monthly_fee: float,
+    start_date,
+    end_date=None,
+    notes: str = None,
+) -> Optional[EVNetworkSubscription]:
+    """Update an existing subscription period. Validates no overlap (excluding self).
+
+    Returns updated row or None if not found. Raises ValueError if overlap detected.
+    """
+    result = await db.execute(
+        select(EVNetworkSubscription).where(EVNetworkSubscription.id == subscription_id)
+    )
+    sub = result.scalar_one_or_none()
+    if sub is None:
+        return None
+
+    if not await validate_no_overlap(db, sub.network_id, start_date, end_date, exclude_id=subscription_id):
+        raise ValueError("Subscription period overlaps with an existing period for this network")
+
+    sub.member_rate = member_rate
+    sub.monthly_fee = monthly_fee
+    sub.start_date = start_date
+    sub.end_date = end_date
+    sub.notes = notes
+    await db.commit()
+    await db.refresh(sub)
+    return sub
+
+
+async def delete_subscription(db: AsyncSession, subscription_id: int) -> bool:
+    """Delete a subscription period. Returns True if deleted, False if not found."""
+    result = await db.execute(
+        select(EVNetworkSubscription).where(EVNetworkSubscription.id == subscription_id)
+    )
+    sub = result.scalar_one_or_none()
+    if sub is None:
+        return False
+    await db.delete(sub)
     await db.commit()
     return True
 

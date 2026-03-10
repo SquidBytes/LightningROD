@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
-from db.models.reference import EVChargingNetwork, EVLocationLookup
+from db.models.reference import EVChargingNetwork, EVLocationLookup, EVNetworkSubscription
 
 # Shared Plotly modebar config — show minimal controls, hide logo
 _PLOTLY_CONFIG = {
@@ -52,12 +52,25 @@ def build_time_filter(range_str: str):
     return EVChargingSession.session_start_utc >= cutoff
 
 
+def find_active_subscription(
+    periods: list,
+    session_date,
+) -> Optional[EVNetworkSubscription]:
+    """Find the subscription period active on a given date, if any."""
+    for period in periods:
+        if period.start_date <= session_date:
+            if period.end_date is None or session_date <= period.end_date:
+                return period
+    return None
+
+
 def compute_session_cost(
     session,
     network=None,
     location=None,
     *,
     networks_by_name: dict = None,
+    subscription_periods: list = None,
 ) -> dict:
     """Compute display cost for a session using the cost hierarchy cascade.
 
@@ -105,9 +118,19 @@ def compute_session_cost(
         "estimated_cost": None,
         "actual_cost_per_kwh": None,
         "cost_difference": None,
+        "subscription_active": False,
+        "non_member_cost": None,
+        "savings": None,
     }
 
     energy_kwh = float(session.energy_kwh or 0)
+
+    # --- Resolve active subscription for this session ---
+    active_sub = None
+    session_date = None
+    if subscription_periods and session.session_start_utc:
+        session_date = session.session_start_utc.date()
+        active_sub = find_active_subscription(subscription_periods, session_date)
 
     # --- Compute estimated_cost from hierarchy (location -> network -> none) ---
     estimated_cost = None
@@ -118,7 +141,10 @@ def compute_session_cost(
         estimated_cost = energy_kwh * cost_val
         estimated_source = "location"
     elif network and not network.is_free and network.cost_per_kwh:
-        cost_val = float(network.cost_per_kwh)
+        if active_sub:
+            cost_val = float(active_sub.member_rate)
+        else:
+            cost_val = float(network.cost_per_kwh)
         estimated_cost = energy_kwh * cost_val
         estimated_source = "network"
 
@@ -140,40 +166,53 @@ def compute_session_cost(
         result["display_cost"] = 0.0
         result["cost_source"] = "calculated"
         result["is_free"] = True
-        return result
 
     # (b) Stored cost (manual or imported) always takes priority for display
-    if session.cost is not None:
+    elif session.cost is not None:
         result["display_cost"] = float(session.cost)
         result["cost_source"] = session.cost_source or "imported"
-        return result
 
     # (c) Network-level is_free
-    if network and network.is_free:
+    elif network and network.is_free:
         result["display_cost"] = 0.0
         result["cost_source"] = "calculated"
         result["is_free"] = True
-        return result
 
     # (d) Location cost override
-    if location and location.cost_per_kwh:
+    elif location and location.cost_per_kwh:
         cost_val = float(location.cost_per_kwh)
         result["display_cost"] = round(energy_kwh * cost_val, 4)
         result["cost_source"] = "calculated"
         result["cost_per_kwh"] = cost_val
         result["calculation"] = f"{energy_kwh} kWh x ${cost_val}/kWh (location)"
-        return result
 
-    # (e) Network cost
-    if network and network.cost_per_kwh:
-        cost_val = float(network.cost_per_kwh)
-        result["display_cost"] = round(energy_kwh * cost_val, 4)
-        result["cost_source"] = "calculated"
-        result["cost_per_kwh"] = cost_val
-        result["calculation"] = f"{energy_kwh} kWh x ${cost_val}/kWh"
-        return result
+    # (e) Network cost — use subscription member_rate if active, else network base rate
+    elif network and network.cost_per_kwh:
+        if active_sub:
+            cost_val = float(active_sub.member_rate)
+            result["display_cost"] = round(energy_kwh * cost_val, 4)
+            result["cost_source"] = "calculated"
+            result["cost_per_kwh"] = cost_val
+            result["calculation"] = f"{energy_kwh} kWh x ${cost_val}/kWh (member)"
+        else:
+            cost_val = float(network.cost_per_kwh)
+            result["display_cost"] = round(energy_kwh * cost_val, 4)
+            result["cost_source"] = "calculated"
+            result["cost_per_kwh"] = cost_val
+            result["calculation"] = f"{energy_kwh} kWh x ${cost_val}/kWh"
 
-    # (f) No cost data available
+    # (f) No cost data available — result stays with None display_cost
+
+    # --- Subscription savings calculation ---
+    # Runs regardless of which cascade step determined display_cost.
+    # non_member_cost is always energy_kwh x network.cost_per_kwh (the non-member rate).
+    if active_sub and network and network.cost_per_kwh and energy_kwh > 0:
+        result["subscription_active"] = True
+        non_member = energy_kwh * float(network.cost_per_kwh)
+        result["non_member_cost"] = round(non_member, 4)
+        if result["display_cost"] is not None:
+            result["savings"] = round(non_member - result["display_cost"], 4)
+
     return result
 
 
@@ -239,8 +278,12 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
     - unconfigured_count: int
     - total_sessions: int
     - total_kwh: float
+    - subscription_total_saved: float
+    - subscription_by_network: dict of network_name -> {total_saved, session_count, member_sessions}
     """
+    from web.queries.settings import get_all_subscriptions_by_network
     networks_by_id = await get_networks_by_id(db)
+    subs_by_network = await get_all_subscriptions_by_network(db)
 
     stmt = select(EVChargingSession)
     time_filter = build_time_filter(time_range)
@@ -266,12 +309,15 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
     estimated_total_cost = 0.0
     actual_session_count = 0
     estimated_session_count = 0
+    subscription_total_saved = 0.0
+    subscription_by_network: dict[str, dict] = {}
     by_network: dict[str, dict] = {}
 
     for s in sessions:
         network = networks_by_id.get(s.network_id) if s.network_id else None
         location = locations_by_id.get(s.location_id) if s.location_id else None
-        cost_info = compute_session_cost(s, network=network, location=location)
+        sub_periods = subs_by_network.get(s.network_id, []) if s.network_id else []
+        cost_info = compute_session_cost(s, network=network, location=location, subscription_periods=sub_periods)
 
         if cost_info["display_cost"] is None:
             unconfigured_count += 1
@@ -312,6 +358,19 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
         by_network[net_name]["session_count"] += 1
         by_network[net_name]["total_kwh"] += kwh
 
+        # Accumulate subscription savings
+        if cost_info["subscription_active"] and cost_info["savings"] is not None:
+            subscription_total_saved += cost_info["savings"]
+            if net_name not in subscription_by_network:
+                subscription_by_network[net_name] = {
+                    "total_saved": 0.0,
+                    "session_count": 0,
+                    "member_sessions": 0,
+                }
+            subscription_by_network[net_name]["total_saved"] += cost_info["savings"]
+            subscription_by_network[net_name]["session_count"] += 1
+            subscription_by_network[net_name]["member_sessions"] += 1
+
     return {
         "total_cost": total_cost,
         "free_total_kwh": free_total_kwh,
@@ -324,6 +383,8 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
         "estimated_total_cost": estimated_total_cost,
         "actual_session_count": actual_session_count,
         "estimated_session_count": estimated_session_count,
+        "subscription_total_saved": subscription_total_saved,
+        "subscription_by_network": subscription_by_network,
     }
 
 
@@ -371,6 +432,153 @@ async def query_monthly_costs(db: AsyncSession, time_range: str = "all", device_
         {"month": month, "network": network, "cost": cost}
         for (month, network), cost in sorted(monthly.items())
     ]
+
+
+def calculate_monthly_fees_in_range(
+    periods: list,
+    range_start,
+    range_end,
+) -> float:
+    """Sum monthly fees for subscription periods that overlap the given date range.
+
+    Each calendar month with any overlap is counted as a full month,
+    matching how subscription services typically bill.
+    """
+    total_fees = 0.0
+    for period in periods:
+        p_start = max(period.start_date, range_start)
+        p_end = min(period.end_date or range_end, range_end)
+        if p_start > p_end:
+            continue
+        # Count each calendar month touched as a full month
+        months = ((p_end.year - p_start.year) * 12 + p_end.month - p_start.month) + 1
+        total_fees += float(period.monthly_fee) * months
+    return total_fees
+
+
+async def query_subscription_savings(
+    db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None
+) -> dict:
+    """Return subscription savings card data.
+
+    Returns dict with:
+    - total_saved: float (sum of savings across sessions with active subscriptions)
+    - total_fees: float (prorated monthly fees within the time range)
+    - net_savings: float (total_saved - total_fees)
+    - by_network: list of dicts [{network, total_saved, total_fees, net_savings, session_count}, ...]
+    """
+    from datetime import date as date_type
+    from web.queries.settings import get_all_subscriptions_by_network
+
+    networks_by_id = await get_networks_by_id(db)
+    subs_by_network = await get_all_subscriptions_by_network(db)
+
+    stmt = select(EVChargingSession)
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+
+    result = await db.execute(stmt)
+    sessions = result.scalars().all()
+
+    # Pre-load locations
+    location_ids = [s.location_id for s in sessions if s.location_id]
+    locations_by_id = await get_locations_by_id(db, location_ids)
+
+    # Determine time range boundaries for fee proration
+    now = datetime.now(timezone.utc)
+    if not time_range or time_range == "all":
+        # Use earliest session date to now
+        range_start = date_type(2020, 1, 1)
+        range_end = now.date()
+    elif time_range == "7d":
+        range_start = (now - timedelta(days=7)).date()
+        range_end = now.date()
+    elif time_range == "30d":
+        range_start = (now - timedelta(days=30)).date()
+        range_end = now.date()
+    elif time_range == "90d":
+        range_start = (now - timedelta(days=90)).date()
+        range_end = now.date()
+    elif time_range == "ytd":
+        range_start = date_type(now.year, 1, 1)
+        range_end = now.date()
+    elif time_range == "1y":
+        range_start = (now - timedelta(days=365)).date()
+        range_end = now.date()
+    else:
+        range_start = date_type(2020, 1, 1)
+        range_end = now.date()
+
+    # Accumulate savings per network
+    savings_by_network: dict[int, dict] = {}
+
+    for s in sessions:
+        network = networks_by_id.get(s.network_id) if s.network_id else None
+        location = locations_by_id.get(s.location_id) if s.location_id else None
+        sub_periods = subs_by_network.get(s.network_id, []) if s.network_id else []
+        cost_info = compute_session_cost(
+            s, network=network, location=location, subscription_periods=sub_periods
+        )
+
+        if not cost_info["subscription_active"] or cost_info["savings"] is None:
+            continue
+
+        net_id = s.network_id
+        if net_id not in savings_by_network:
+            net_name = network.network_name if network else "Unknown"
+            savings_by_network[net_id] = {
+                "network": net_name,
+                "network_id": net_id,
+                "total_saved": 0.0,
+                "session_count": 0,
+            }
+        savings_by_network[net_id]["total_saved"] += cost_info["savings"]
+        savings_by_network[net_id]["session_count"] += 1
+
+    # Calculate monthly fees per network within the time range
+    total_saved = 0.0
+    total_fees = 0.0
+    by_network_result = []
+
+    for net_id, info in savings_by_network.items():
+        periods = subs_by_network.get(net_id, [])
+        fees = calculate_monthly_fees_in_range(periods, range_start, range_end)
+        net_saved = info["total_saved"]
+        total_saved += net_saved
+        total_fees += fees
+        by_network_result.append({
+            "network": info["network"],
+            "total_saved": round(net_saved, 2),
+            "total_fees": round(fees, 2),
+            "net_savings": round(net_saved - fees, 2),
+            "session_count": info["session_count"],
+        })
+
+    # Also include networks with subscriptions but no sessions in range (fee-only)
+    for net_id, periods in subs_by_network.items():
+        if net_id not in savings_by_network:
+            fees = calculate_monthly_fees_in_range(periods, range_start, range_end)
+            if fees > 0:
+                network = networks_by_id.get(net_id)
+                net_name = network.network_name if network else "Unknown"
+                total_fees += fees
+                by_network_result.append({
+                    "network": net_name,
+                    "total_saved": 0.0,
+                    "total_fees": round(fees, 2),
+                    "net_savings": round(-fees, 2),
+                    "session_count": 0,
+                })
+
+    return {
+        "total_saved": round(total_saved, 2),
+        "total_fees": round(total_fees, 2),
+        "net_savings": round(total_saved - total_fees, 2),
+        "by_network": by_network_result,
+    }
 
 
 def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, str] = None) -> str:
