@@ -33,6 +33,26 @@ class EVChargingNetwork(Base):
     source_system: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
 
+class EVNetworkSubscription(Base):
+    """Subscription period for a charging network with member rate and monthly fee.
+
+    Each row represents a date range during which a subscription was active.
+    Multiple periods per network enable tracking historical rate changes.
+    """
+
+    __tablename__ = "ev_network_subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    network_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ev_charging_networks.id", ondelete="CASCADE"), nullable=False
+    )
+    member_rate: Mapped[float] = mapped_column(Numeric, nullable=False)  # $/kWh with subscription
+    monthly_fee: Mapped[float] = mapped_column(Numeric, nullable=False, server_default=text("0"))
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # null = still active
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
 class EVLocationLookup(Base):
     """Known location definitions for EV charging and parking.
 
