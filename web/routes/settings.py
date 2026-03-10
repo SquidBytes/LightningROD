@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -13,19 +14,23 @@ from web.queries.settings import (
     create_location,
     create_network,
     create_stall,
+    create_subscription,
     delete_location,
     delete_network,
     delete_stall,
+    delete_subscription,
     get_all_networks,
     get_app_setting,
     get_app_settings_dict,
     get_charger_templates,
     get_locations_for_network,
     get_stalls_for_location,
+    get_subscriptions_for_network,
     set_app_setting,
     update_location,
     update_network,
     update_stall,
+    update_subscription,
 )
 from web.queries.vehicles import (
     BATTERY_PRESETS,
@@ -871,6 +876,158 @@ async def prefill_stalls(
         "settings/partials/stall_rows.html",
         ctx,
     )
+
+
+# ---------------------------------------------------------------------------
+# Subscription CRUD routes
+# ---------------------------------------------------------------------------
+
+
+async def _subscription_tab_context(db: AsyncSession, network_id: int) -> dict:
+    """Build context for subscription_tab.html partial."""
+    periods = await get_subscriptions_for_network(db, network_id)
+    return {"periods": periods, "network_id": network_id}
+
+
+@router.get("/settings/networks/{network_id}/subscriptions", response_class=HTMLResponse)
+async def network_subscriptions(
+    network_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
+    """Return subscription tab partial for a given network (lazy-loaded in modal)."""
+    ctx = await _subscription_tab_context(db, network_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/subscription_tab.html",
+        ctx,
+    )
+
+
+@router.post("/settings/networks/{network_id}/subscriptions", response_class=HTMLResponse)
+async def create_subscription_route(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    member_rate: float = Form(...),
+    monthly_fee: float = Form(0),
+    start_date: str = Form(...),
+    end_date: str = Form(""),
+    notes: str = Form(""),
+):
+    """Create a new subscription period for a network."""
+    parsed_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    parsed_end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date.strip() else None
+
+    try:
+        await create_subscription(
+            db,
+            network_id=network_id,
+            member_rate=member_rate,
+            monthly_fee=monthly_fee,
+            start_date=parsed_start,
+            end_date=parsed_end,
+            notes=notes.strip() or None,
+        )
+    except ValueError as e:
+        ctx = await _subscription_tab_context(db, network_id)
+        ctx["error"] = str(e)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/subscription_tab.html",
+            ctx,
+        )
+
+    ctx = await _subscription_tab_context(db, network_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/subscription_tab.html",
+        ctx,
+    )
+
+
+@router.get("/settings/subscriptions/{subscription_id}/edit", response_class=HTMLResponse)
+async def edit_subscription_form(
+    subscription_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return inline edit form for a subscription period."""
+    from db.models.reference import EVNetworkSubscription
+    from sqlalchemy import select as sa_select
+
+    result = await db.execute(
+        sa_select(EVNetworkSubscription).where(EVNetworkSubscription.id == subscription_id)
+    )
+    sub = result.scalar_one_or_none()
+    if sub is None:
+        return HTMLResponse(status_code=404)
+
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/subscription_edit_row.html",
+        {"sub": sub, "network_id": sub.network_id},
+    )
+
+
+@router.put("/settings/subscriptions/{subscription_id}", response_class=HTMLResponse)
+async def update_subscription_route(
+    subscription_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    member_rate: float = Form(...),
+    monthly_fee: float = Form(0),
+    start_date: str = Form(...),
+    end_date: str = Form(""),
+    notes: str = Form(""),
+    network_id: int = Form(...),
+):
+    """Update a subscription period."""
+    parsed_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    parsed_end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date.strip() else None
+
+    try:
+        await update_subscription(
+            db,
+            subscription_id=subscription_id,
+            member_rate=member_rate,
+            monthly_fee=monthly_fee,
+            start_date=parsed_start,
+            end_date=parsed_end,
+            notes=notes.strip() or None,
+        )
+    except ValueError as e:
+        ctx = await _subscription_tab_context(db, network_id)
+        ctx["error"] = str(e)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/subscription_tab.html",
+            ctx,
+        )
+
+    ctx = await _subscription_tab_context(db, network_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/subscription_tab.html",
+        ctx,
+    )
+
+
+@router.delete("/settings/subscriptions/{subscription_id}", response_class=HTMLResponse)
+async def delete_subscription_route(
+    subscription_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    network_id: int = 0,
+):
+    """Delete a subscription period and return refreshed list."""
+    await delete_subscription(db, subscription_id)
+    if network_id:
+        ctx = await _subscription_tab_context(db, network_id)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/subscription_tab.html",
+            ctx,
+        )
+    return HTMLResponse("")
 
 
 HASS_SETTINGS_KEYS = [

@@ -1,0 +1,97 @@
+{# Subscription periods list with add/edit/delete -- loaded into #subscription-periods-list #}
+<div class="space-y-2">
+    <p class="text-sm uppercase tracking-wide text-base-content/40 mb-3">Subscription Periods</p>
+
+    {% if error is defined and error %}
+    <div class="alert alert-error text-sm mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z" />
+        </svg>
+        <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    {% for sub in periods %}
+    <div class="bg-base-300/50 rounded-lg px-4 py-3" id="subscription-{{ sub.id }}">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <span class="font-medium">${{ "%.3f"|format(sub.member_rate) }}/kWh</span>
+                {% if sub.monthly_fee and sub.monthly_fee > 0 %}
+                    <span class="text-xs text-base-content/60">${{ "%.2f"|format(sub.monthly_fee) }}/mo</span>
+                {% endif %}
+                <span class="text-xs text-base-content/50">
+                    {{ sub.start_date.strftime('%Y-%m-%d') }}
+                    &ndash;
+                    {% if sub.end_date %}
+                        {{ sub.end_date.strftime('%Y-%m-%d') }}
+                    {% else %}
+                        <span class="badge badge-success badge-xs">Present</span>
+                    {% endif %}
+                </span>
+                {% if sub.notes %}
+                    <span class="text-xs text-base-content/40 truncate">{{ sub.notes }}</span>
+                {% endif %}
+            </div>
+            <div class="flex gap-2 flex-shrink-0 ml-3">
+                <button type="button"
+                        hx-get="/settings/subscriptions/{{ sub.id }}/edit"
+                        hx-target="#subscription-periods-list"
+                        hx-swap="innerHTML"
+                        class="btn btn-ghost btn-xs text-info">Edit</button>
+                <button type="button"
+                        hx-delete="/settings/subscriptions/{{ sub.id }}?network_id={{ network_id }}"
+                        hx-target="#subscription-periods-list"
+                        hx-swap="innerHTML"
+                        hx-confirm="Delete this subscription period?"
+                        class="btn btn-ghost btn-xs text-error">Delete</button>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <p class="text-base-content/40 text-sm">No subscription periods configured.</p>
+    {% endfor %}
+
+    {# Add subscription form #}
+    <details class="mt-3">
+        <summary class="cursor-pointer text-sm text-info hover:text-info/80 select-none font-medium">
+            + Add Subscription Period
+        </summary>
+        <form class="bg-base-300/30 rounded-lg p-4 mt-2 space-y-3"
+              hx-post="/settings/networks/{{ network_id }}/subscriptions"
+              hx-target="#subscription-periods-list"
+              hx-swap="innerHTML">
+            <div class="grid grid-cols-2 gap-3">
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Member Rate ($/kWh)</span></div>
+                    <input type="number" name="member_rate" step="0.001" min="0" required
+                           placeholder="0.000"
+                           class="input input-sm input-bordered w-full">
+                </label>
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Monthly Fee ($)</span></div>
+                    <input type="number" name="monthly_fee" step="0.01" min="0" value="0"
+                           placeholder="0.00"
+                           class="input input-sm input-bordered w-full">
+                </label>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Start Date</span></div>
+                    <input type="date" name="start_date" required
+                           class="input input-sm input-bordered w-full">
+                </label>
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">End Date (blank = active)</span></div>
+                    <input type="date" name="end_date"
+                           class="input input-sm input-bordered w-full">
+                </label>
+            </div>
+            <label class="form-control">
+                <div class="label"><span class="label-text text-xs">Notes (optional)</span></div>
+                <textarea name="notes" rows="2" placeholder="Optional notes..."
+                          class="textarea textarea-bordered textarea-sm w-full resize-none"></textarea>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm">Add Period</button>
+        </form>
+    </details>
+</div>

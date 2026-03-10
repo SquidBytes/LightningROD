@@ -76,6 +76,17 @@
             </div>
         </div>
 
+        {# Subscription tab #}
+        <input type="radio" name="network-modal-tabs" role="tab" class="tab" aria-label="Subscription" />
+        <div role="tabpanel" class="tab-content p-6 min-h-[320px]">
+            <div id="subscription-periods-list"
+                 hx-get="/settings/networks/{{ network.id }}/subscriptions"
+                 hx-trigger="intersect once"
+                 hx-swap="innerHTML">
+                <p class="text-base-content/50 text-sm">Loading subscription periods...</p>
+            </div>
+        </div>
+
     </div>
 
     {# Footer: Cancel + Save #}
