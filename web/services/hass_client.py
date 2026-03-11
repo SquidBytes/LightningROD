@@ -151,7 +151,7 @@ class HASSClient:
         ws_url = ws_url + "/api/websocket"
 
         logger.info("Connecting to %s", ws_url)
-        self._ws = await websockets.connect(ws_url)
+        self._ws = await websockets.connect(ws_url, max_size=16 * 1024 * 1024)  # 16MB - This can be made larger or set to NONE if we really want it that way... 
 
         # Step 1: Receive auth_required
         msg = await self._recv_json()
