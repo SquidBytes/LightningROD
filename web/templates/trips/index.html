@@ -49,15 +49,30 @@
         </button>
     </div>
 
-    <!-- HTMX swap target -->
-    <div id="trips-content"
-         hx-get="/trips"
-         hx-trigger="trip-created from:body"
-         hx-target="#trips-content"
-         hx-swap="innerHTML"
-         hx-include="#filter-form"
-    >
-        {% include "trips/partials/summary.html" %}
+    <!-- Drawer wrapper for trip detail panel -->
+    <div class="drawer drawer-end">
+        <input id="trip-drawer" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content">
+            <!-- HTMX swap target -->
+            <div id="trips-content"
+                 hx-get="/trips"
+                 hx-trigger="trip-created from:body"
+                 hx-target="#trips-content"
+                 hx-swap="innerHTML"
+                 hx-include="#filter-form"
+            >
+                {% include "trips/partials/summary.html" %}
+            </div>
+        </div>
+        <div class="drawer-side z-40">
+            <label for="trip-drawer" class="drawer-overlay" aria-label="close drawer"></label>
+            <div class="bg-base-200 min-h-full w-[32rem] overflow-y-auto" id="trip-drawer-body">
+                <!-- HTMX loads drawer content here -->
+                <div class="flex items-center justify-center h-32 text-base-content/30">
+                    <span>Select a trip to view details</span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -74,6 +89,20 @@
     <form method="dialog" class="modal-backdrop">
         <button>close</button>
     </form>
+</dialog>
+
+<!-- Expanded trip detail modal -->
+<dialog id="trip-expanded-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-5xl max-h-[90vh] overflow-y-auto">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <h3 class="font-bold text-lg mb-4">Trip Details</h3>
+        <div id="trip-expanded-content">
+            <!-- HTMX loads expanded charts here -->
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
 <!-- Toast container -->
@@ -103,6 +132,13 @@
         form.appendChild(dirInput);
     }
 })();
+
+// Auto-open drawer when HTMX loads content into it
+document.body.addEventListener('htmx:afterSettle', function(evt) {
+    if (evt.target.id === 'trip-drawer-body') {
+        document.getElementById('trip-drawer').checked = true;
+    }
+});
 
 function setTripSort(value) {
     document.getElementById('trip_sort_input').value = value;

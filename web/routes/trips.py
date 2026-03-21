@@ -112,6 +112,34 @@ async def trip_detail(
     return templates.TemplateResponse(request, "trips/partials/trip_detail.html", context)
 
 
+@router.get("/trips/{trip_id}/drawer", response_class=HTMLResponse)
+async def trip_drawer(
+    request: Request,
+    trip_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
+    )
+    trip = result.scalar_one_or_none()
+
+    if trip is None:
+        return HTMLResponse(
+            content="<p class='text-base-content/40 p-4'>Trip not found.</p>",
+            status_code=404,
+        )
+
+    radar_chart = build_driving_score_radar(trip)
+
+    context = {
+        "trip": trip,
+        "radar_chart": radar_chart,
+        "start_location": None,
+        "end_location": None,
+    }
+    return templates.TemplateResponse(request, "trips/partials/drawer.html", context)
+
+
 @router.get("/trips/new", response_class=HTMLResponse)
 async def new_trip_form(
     request: Request,

@@ -1,0 +1,94 @@
+<!-- Trip drawer content - loaded via HTMX -->
+<div class="flex items-center justify-between p-4 border-b border-base-300 sticky top-0 bg-base-200 z-10">
+    <div class="flex items-center gap-3">
+        <span class="text-base-content font-semibold">
+            {% if trip.end_time %}{{ trip.end_time|localtime(user_tz|default('UTC'), "%b %-d, %Y") }}{% else %}Unknown Date{% endif %}
+        </span>
+        {% if trip.source_system == 'home_assistant' %}
+            <span class="badge badge-accent badge-sm">HASS</span>
+        {% elif trip.source_system == 'manual' %}
+            <span class="badge badge-info badge-sm">Manual</span>
+        {% endif %}
+    </div>
+    <label for="trip-drawer" class="btn btn-ghost btn-sm btn-square" aria-label="close">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+    </label>
+</div>
+
+<div class="p-4 space-y-6">
+    <!-- Section 1: Overview -->
+    <div>
+        <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Overview</h4>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><span class="text-base-content/40">Distance</span><p class="font-medium">{% if trip.distance is not none %}{{ "%.1f"|format(trip.distance) }} mi{% else %}--{% endif %}</p></div>
+            <div><span class="text-base-content/40">Duration</span><p class="font-medium">{% if trip.duration is not none %}{{ (trip.duration|int) // 60 }}h {{ (trip.duration|int) % 60 }}m{% else %}--{% endif %}</p></div>
+            <div><span class="text-base-content/40">Energy</span><p class="font-medium">{% if trip.energy_consumed is not none %}{{ "%.1f"|format(trip.energy_consumed) }} kWh{% else %}--{% endif %}</p></div>
+            <div><span class="text-base-content/40">Reported Eff.</span><p class="font-medium">{% if trip.efficiency is not none %}{{ "%.1f"|format(trip.efficiency) }} mi/kWh{% else %}--{% endif %}</p></div>
+            <div><span class="text-base-content/40">Calculated Eff.</span><p class="font-medium">{% if trip.distance is not none and trip.energy_consumed is not none and trip.energy_consumed > 0 %}{{ "%.1f"|format(trip.distance / trip.energy_consumed) }} mi/kWh{% else %}--{% endif %}</p></div>
+            <div><span class="text-base-content/40">Regen</span><p class="font-medium">{% if trip.range_regenerated is not none %}{{ "%.1f"|format(trip.range_regenerated) }} mi{% else %}--{% endif %}</p></div>
+        </div>
+    </div>
+
+    <!-- Section 2: Driving Scores -->
+    <div>
+        <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Driving Scores</h4>
+        {% if radar_chart %}
+            {{ radar_chart | safe }}
+            <div class="grid grid-cols-2 gap-2 text-sm mt-3">
+                {% if trip.speed_score is not none %}<div><span class="text-base-content/40">Speed:</span> {{ "%.0f"|format(trip.speed_score) }}</div>{% endif %}
+                {% if trip.acceleration_score is not none %}<div><span class="text-base-content/40">Accel:</span> {{ "%.0f"|format(trip.acceleration_score) }}</div>{% endif %}
+                {% if trip.deceleration_score is not none %}<div><span class="text-base-content/40">Decel:</span> {{ "%.0f"|format(trip.deceleration_score) }}</div>{% endif %}
+                {% if trip.driving_score is not none %}<div><span class="text-base-content/40">Overall:</span> {{ "%.0f"|format(trip.driving_score) }}</div>{% endif %}
+            </div>
+        {% else %}
+            <p class="text-base-content/30 text-sm">No driving score data available.</p>
+        {% endif %}
+    </div>
+
+    <!-- Section 3: Environment (placeholder for Plan 02 charts) -->
+    <div>
+        <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Environment</h4>
+        <div id="trip-env-chart"
+             hx-get="/trips/{{ trip.id }}/charts/environment"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <div class="flex justify-center py-8"><span class="loading loading-spinner loading-md"></span></div>
+        </div>
+    </div>
+
+    <!-- Section 4: Drive Graphs (placeholder for Plan 02 charts) -->
+    <div>
+        <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Drive Graphs</h4>
+        <div id="trip-drive-chart"
+             hx-get="/trips/{{ trip.id }}/charts/drive"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <div class="flex justify-center py-8"><span class="loading loading-spinner loading-md"></span></div>
+        </div>
+        <button type="button"
+                hx-get="/trips/{{ trip.id }}/expanded"
+                hx-target="#trip-expanded-content"
+                hx-swap="innerHTML"
+                onclick="document.getElementById('trip-expanded-modal').showModal()"
+                class="btn btn-ghost btn-sm btn-block mt-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+            Expand Charts
+        </button>
+    </div>
+
+    <!-- Section 5: Location (placeholder for Plan 02 auto-detect) -->
+    <div>
+        <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Location</h4>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><span class="text-base-content/40">Start</span><p class="font-medium">{{ start_location or '--' }}</p></div>
+            <div><span class="text-base-content/40">End</span><p class="font-medium">{{ end_location or '--' }}</p></div>
+        </div>
+    </div>
+
+    {% if trip.tire_pressure_snapshot %}
+    <div>
+        <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Tire Pressure</h4>
+        <p class="text-sm text-base-content/60">{{ trip.tire_pressure_snapshot }}</p>
+    </div>
+    {% endif %}
+</div>
