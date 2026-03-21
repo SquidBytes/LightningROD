@@ -1,0 +1,43 @@
+<!-- Expanded trip detail modal content - loaded via HTMX -->
+<div class="space-y-8">
+    <!-- Trip header -->
+    <div class="text-center">
+        <h3 class="text-xl font-bold">
+            {% if trip.end_time %}{{ trip.end_time|localtime(user_tz|default('UTC'), "%b %-d, %Y %-I:%M %p") }}{% else %}Trip Details{% endif %}
+        </h3>
+        <p class="text-base-content/60 text-sm mt-1">
+            {% if trip.distance is not none %}{{ "%.1f"|format(trip.distance) }} mi{% endif %}
+            {% if trip.duration is not none %} &middot; {{ (trip.duration|int) // 60 }}h {{ (trip.duration|int) % 60 }}m{% endif %}
+        </p>
+    </div>
+
+    <!-- Section 1: Battery -->
+    <div>
+        <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Battery</h4>
+        {% if battery_chart %}
+            {{ battery_chart | safe }}
+        {% else %}
+            <p class="text-base-content/30 text-sm py-6 text-center">No battery data available for this trip.</p>
+        {% endif %}
+    </div>
+
+    <!-- Section 2: Environment -->
+    <div>
+        <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Environment</h4>
+        {% if environment_chart %}
+            {{ environment_chart | safe }}
+        {% else %}
+            <p class="text-base-content/30 text-sm py-6 text-center">No temperature data available for this trip.</p>
+        {% endif %}
+    </div>
+
+    <!-- Section 3: Driving -->
+    <div>
+        <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Driving</h4>
+        {% if driving_chart %}
+            {{ driving_chart | safe }}
+        {% else %}
+            <p class="text-base-content/30 text-sm py-6 text-center">No driving data available for this trip.</p>
+        {% endif %}
+    </div>
+</div>

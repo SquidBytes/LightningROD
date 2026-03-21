@@ -2,6 +2,7 @@ import math
 from datetime import date, datetime, timezone
 from typing import Annotated, Optional
 
+import pandas as pd
 from fastapi import APIRouter, Depends, Form, Header, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -11,9 +12,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.trip_metrics import EVTripMetrics
 from web.dependencies import get_db
 from web.queries.trips import (
+    build_drive_graph,
     build_driving_score_radar,
     build_efficiency_trend_chart,
+    build_environment_chart,
+    build_expanded_battery_chart,
+    build_expanded_driving_chart,
+    build_expanded_environment_chart,
+    detect_trip_locations,
     query_efficiency_trend,
+    query_trip_battery_series,
+    query_trip_vehicle_series,
     query_trips,
 )
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
@@ -131,13 +140,95 @@ async def trip_drawer(
 
     radar_chart = build_driving_score_radar(trip)
 
+    start_location, end_location = None, None
+    if trip.start_time and trip.end_time:
+        start_location, end_location = await detect_trip_locations(
+            db, trip.device_id, trip.start_time, trip.end_time
+        )
+
     context = {
         "trip": trip,
         "radar_chart": radar_chart,
-        "start_location": None,
-        "end_location": None,
+        "start_location": start_location,
+        "end_location": end_location,
     }
     return templates.TemplateResponse(request, "trips/partials/drawer.html", context)
+
+
+@router.get("/trips/{trip_id}/charts/environment", response_class=HTMLResponse)
+async def trip_environment_chart(
+    request: Request,
+    trip_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
+    )
+    trip = result.scalar_one_or_none()
+    if not trip or not trip.start_time or not trip.end_time:
+        return HTMLResponse(
+            '<p class="text-base-content/30 text-sm py-4 text-center">No temperature data available for this trip.</p>'
+        )
+    vehicle_df = await query_trip_vehicle_series(db, trip.device_id, trip.start_time, trip.end_time)
+    chart_html = build_environment_chart(vehicle_df)
+    if not chart_html:
+        return HTMLResponse(
+            '<p class="text-base-content/30 text-sm py-4 text-center">No temperature data available for this trip.</p>'
+        )
+    return HTMLResponse(chart_html)
+
+
+@router.get("/trips/{trip_id}/charts/drive", response_class=HTMLResponse)
+async def trip_drive_chart(
+    request: Request,
+    trip_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
+    )
+    trip = result.scalar_one_or_none()
+    if not trip or not trip.start_time or not trip.end_time:
+        return HTMLResponse(
+            '<p class="text-base-content/30 text-sm py-4 text-center">No drive data available for this trip.</p>'
+        )
+    battery_df = await query_trip_battery_series(db, trip.device_id, trip.start_time, trip.end_time)
+    vehicle_df = await query_trip_vehicle_series(db, trip.device_id, trip.start_time, trip.end_time)
+    chart_html = build_drive_graph(battery_df, vehicle_df)
+    if not chart_html:
+        return HTMLResponse(
+            '<p class="text-base-content/30 text-sm py-4 text-center">No drive data available for this trip.</p>'
+        )
+    return HTMLResponse(chart_html)
+
+
+@router.get("/trips/{trip_id}/expanded", response_class=HTMLResponse)
+async def trip_expanded(
+    request: Request,
+    trip_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
+    )
+    trip = result.scalar_one_or_none()
+    if not trip:
+        return HTMLResponse(
+            '<p class="text-base-content/30 p-4">Trip not found.</p>',
+            status_code=404,
+        )
+    battery_df = pd.DataFrame()
+    vehicle_df = pd.DataFrame()
+    if trip.start_time and trip.end_time:
+        battery_df = await query_trip_battery_series(db, trip.device_id, trip.start_time, trip.end_time)
+        vehicle_df = await query_trip_vehicle_series(db, trip.device_id, trip.start_time, trip.end_time)
+    context = {
+        "trip": trip,
+        "battery_chart": build_expanded_battery_chart(battery_df),
+        "environment_chart": build_expanded_environment_chart(vehicle_df),
+        "driving_chart": build_expanded_driving_chart(vehicle_df),
+    }
+    return templates.TemplateResponse(request, "trips/partials/expanded_modal.html", context)
 
 
 @router.get("/trips/new", response_class=HTMLResponse)
