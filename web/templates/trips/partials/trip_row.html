@@ -1,7 +1,9 @@
-{# Desktop table row with accordion detail - used inside <tbody> loop #}
-<tr class="hover:bg-base-300/50 cursor-pointer"
-    onclick="this.nextElementSibling.querySelector('input[type=checkbox]').click()"
->
+{# Desktop table row with 10 columns and drawer trigger #}
+<tr hx-get="/trips/{{ trip.id }}/drawer"
+    hx-target="#trip-drawer-body"
+    hx-swap="innerHTML"
+    class="cursor-pointer hover:bg-base-300/50">
+    <td class="text-base-content/60 font-mono text-sm">#{{ total - ((page - 1) * per_page) - loop.index0 }}</td>
     <td>{% if trip.end_time %}{{ trip.end_time|localtime(user_tz|default('UTC'), "%b %-d, %Y") }}{% else %}--{% endif %}</td>
     <td>{% if trip.distance is not none %}{{ "%.1f"|format(trip.distance) }} mi{% else %}--{% endif %}</td>
     <td>
@@ -11,27 +13,47 @@
             --
         {% endif %}
     </td>
-    <td>{% if trip.efficiency is not none %}<span class="text-primary font-medium">{{ "%.1f"|format(trip.efficiency) }} mi/kWh</span>{% else %}--{% endif %}</td>
-    <td>{% if trip.energy_consumed is not none %}{{ "%.1f"|format(trip.energy_consumed) }} kWh{% else %}--{% endif %}</td>
     <td>
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+        {% if trip.outside_air_temp is not none %}
+            <div class="text-sm">{{ "%.0f"|format(trip.outside_air_temp) }}&deg;F</div>
+            {% if trip.cabin_temp is not none %}
+            <div class="text-xs text-base-content/40">{{ "%.0f"|format(trip.cabin_temp) }}&deg;F cabin</div>
+            {% endif %}
+        {% elif trip.ambient_temp is not none %}
+            <div class="text-sm">{{ "%.0f"|format(trip.ambient_temp) }}&deg;F</div>
+        {% else %}
+            <span class="text-base-content/30">--</span>
+        {% endif %}
     </td>
-</tr>
-<tr class="bg-base-200/50">
-    <td colspan="6" class="p-0">
-        <div class="collapse">
-            <input type="checkbox"
-                   hx-get="/trips/{{ trip.id }}/detail"
-                   hx-target="#detail-{{ trip.id }}"
-                   hx-swap="innerHTML"
-                   hx-trigger="change[this.checked]"
-                   class="peer"
-            />
-            <div class="collapse-content peer-checked:pb-4">
-                <div id="detail-{{ trip.id }}" class="pt-2">
-                    <span class="loading loading-spinner loading-sm"></span>
-                </div>
-            </div>
+    <td>{% if trip.energy_consumed is not none %}{{ "%.1f"|format(trip.energy_consumed) }} kWh{% else %}--{% endif %}</td>
+    <td>{% if trip.efficiency is not none %}<span class="text-primary font-medium">{{ "%.1f"|format(trip.efficiency) }} mi/kWh</span>{% else %}--{% endif %}</td>
+    <td>
+        {% if trip.distance is not none and trip.energy_consumed is not none and trip.energy_consumed > 0 %}
+            {{ "%.1f"|format(trip.distance / trip.energy_consumed) }} mi/kWh
+        {% else %}
+            --
+        {% endif %}
+    </td>
+    <td>
+        {% if trip.driving_score is not none %}
+        <div class="relative h-6 w-16 rounded overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-r from-error via-warning to-success"></div>
+            <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
+                {{ "%.0f"|format(trip.driving_score) }}
+            </span>
         </div>
+        {% else %}
+        <span class="text-base-content/30">--</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if trip.range_regenerated is not none %}
+            <div class="text-sm">{{ "%.1f"|format(trip.range_regenerated) }} mi</div>
+            {% if trip.efficiency is not none and trip.efficiency > 0 %}
+            <div class="text-xs text-base-content/40">{{ "%.1f"|format(trip.range_regenerated / trip.efficiency) }} kWh (est)</div>
+            {% endif %}
+        {% else %}
+            <span class="text-base-content/30">--</span>
+        {% endif %}
     </td>
 </tr>

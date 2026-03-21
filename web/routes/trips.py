@@ -74,6 +74,7 @@ async def trips(
         "total_pages": total_pages,
         "has_prev": has_prev,
         "has_next": has_next,
+        "per_page": PER_PAGE,
         "active_page": "trips",
         "page_title": "Trip History",
         "active_vehicle": active_vehicle,

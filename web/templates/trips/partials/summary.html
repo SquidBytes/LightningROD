@@ -52,12 +52,16 @@
         <table class="table table-sm w-full">
             <thead>
                 <tr>
+                    <th>#</th>
                     <th>Date</th>
                     <th>Distance</th>
                     <th>Duration</th>
-                    <th>Efficiency</th>
+                    <th>Temp</th>
                     <th>Energy</th>
-                    <th></th>
+                    <th>Reported Eff.</th>
+                    <th>Calc. Eff.</th>
+                    <th>Score</th>
+                    <th>Regen</th>
                 </tr>
             </thead>
             <tbody>
@@ -71,7 +75,10 @@
     <!-- Mobile cards (hidden on desktop) -->
     <div class="lg:hidden space-y-3">
         {% for trip in trips %}
-        <div class="card bg-base-200">
+        <div class="card bg-base-200 cursor-pointer hover:bg-base-300/50"
+             hx-get="/trips/{{ trip.id }}/drawer"
+             hx-target="#trip-drawer-body"
+             hx-swap="innerHTML">
             <div class="card-body p-4">
                 <div class="flex justify-between items-start">
                     <div>
@@ -94,23 +101,16 @@
                         {% endif %}
                     </div>
                 </div>
-                <!-- Mobile accordion detail -->
-                <div class="collapse collapse-arrow bg-base-300 mt-2">
-                    <input type="checkbox"
-                           hx-get="/trips/{{ trip.id }}/detail"
-                           hx-target="#mobile-detail-{{ trip.id }}"
-                           hx-swap="innerHTML"
-                           hx-trigger="change[this.checked]"
-                    />
-                    <div class="collapse-title text-sm font-medium py-2 min-h-0">
-                        Details
-                    </div>
-                    <div class="collapse-content">
-                        <div id="mobile-detail-{{ trip.id }}">
-                            <span class="loading loading-spinner loading-sm"></span>
-                        </div>
+                {% if trip.driving_score is not none %}
+                <div class="mt-2">
+                    <div class="relative h-5 w-full rounded overflow-hidden">
+                        <div class="absolute inset-0 bg-gradient-to-r from-error via-warning to-success"></div>
+                        <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
+                            {{ "%.0f"|format(trip.driving_score) }}
+                        </span>
                     </div>
                 </div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}

@@ -24,6 +24,9 @@ SORTABLE_COLUMNS = {
     "distance": EVTripMetrics.distance,
     "efficiency": EVTripMetrics.efficiency,
     "duration": EVTripMetrics.duration,
+    "temperature": EVTripMetrics.outside_air_temp,
+    "score": EVTripMetrics.driving_score,
+    "regen": EVTripMetrics.range_regenerated,
 }
 
 
