@@ -7,14 +7,20 @@ data with 7-day rolling average chart, and driving score radar chart.
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 from sqlalchemy import asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.battery_status import EVBatteryStatus
+from db.models.location import EVLocation
+from db.models.reference import EVLocationLookup
 from db.models.trip_metrics import EVTripMetrics
+from db.models.vehicle_status import EVVehicleStatus
 from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
+from web.queries.locations import LOCATION_MATCH_RADIUS_M, _find_geo_match
 
 PAGE_SIZE = 25
 VALID_PER_PAGE = {25, 50, 100}
@@ -313,6 +319,553 @@ def build_driving_score_radar(trip) -> str:
         font_color="#e5e7eb",
         margin=dict(l=40, r=40, t=20, b=20),
         showlegend=False,
+    )
+
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Time-series query functions
+# ---------------------------------------------------------------------------
+
+
+async def query_trip_battery_series(
+    db: AsyncSession,
+    device_id: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> pd.DataFrame:
+    """Query EVBatteryStatus for the trip time window.
+
+    Returns DataFrame with columns: time, soc, range, kw, battery_temp, voltage.
+    """
+    cols = [
+        EVBatteryStatus.recorded_at,
+        EVBatteryStatus.hv_battery_soc,
+        EVBatteryStatus.hv_battery_range,
+        EVBatteryStatus.hv_battery_kw,
+        EVBatteryStatus.hv_battery_temperature,
+        EVBatteryStatus.hv_battery_voltage,
+    ]
+    stmt = (
+        select(*cols)
+        .where(
+            EVBatteryStatus.device_id == device_id,
+            EVBatteryStatus.recorded_at >= start_time,
+            EVBatteryStatus.recorded_at <= end_time,
+        )
+        .order_by(EVBatteryStatus.recorded_at)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    col_names = ["time", "soc", "range", "kw", "battery_temp", "voltage"]
+    if not rows:
+        return pd.DataFrame(columns=col_names)
+
+    df = pd.DataFrame(rows, columns=col_names)
+    # Convert Decimal to float for numeric columns
+    for c in col_names[1:]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+
+async def query_trip_vehicle_series(
+    db: AsyncSession,
+    device_id: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> pd.DataFrame:
+    """Query EVVehicleStatus for the trip time window.
+
+    Returns DataFrame with columns: time, speed, outside_temp, cabin_temp, acceleration.
+    """
+    cols = [
+        EVVehicleStatus.recorded_at,
+        EVVehicleStatus.speed,
+        EVVehicleStatus.outside_temperature,
+        EVVehicleStatus.cabin_temperature,
+        EVVehicleStatus.acceleration,
+    ]
+    stmt = (
+        select(*cols)
+        .where(
+            EVVehicleStatus.device_id == device_id,
+            EVVehicleStatus.recorded_at >= start_time,
+            EVVehicleStatus.recorded_at <= end_time,
+        )
+        .order_by(EVVehicleStatus.recorded_at)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    col_names = ["time", "speed", "outside_temp", "cabin_temp", "acceleration"]
+    if not rows:
+        return pd.DataFrame(columns=col_names)
+
+    df = pd.DataFrame(rows, columns=col_names)
+    for c in col_names[1:]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Interpolation helper
+# ---------------------------------------------------------------------------
+
+
+def _interpolate_series(
+    df: pd.DataFrame,
+    value_cols: list[str],
+    max_gap_minutes: int = 5,
+) -> pd.DataFrame:
+    """Interpolate value columns, marking interpolated positions.
+
+    For each column in value_cols:
+    - Creates a {col}_interpolated boolean column (True where value was NaN)
+    - Applies linear interpolation
+    - Resets interpolated values back to NaN for gaps wider than max_gap_minutes
+
+    Returns the modified DataFrame.
+    """
+    if df.empty or "time" not in df.columns:
+        return df
+
+    df = df.copy()
+
+    # Compute time gaps
+    time_diffs = df["time"].diff()
+    gap_threshold = pd.Timedelta(minutes=max_gap_minutes)
+
+    # Find indices where gap exceeds threshold
+    gap_indices = df.index[time_diffs > gap_threshold].tolist()
+
+    for col in value_cols:
+        if col not in df.columns:
+            continue
+
+        # Mark where values are NaN before interpolation
+        is_nan = df[col].isna()
+        df[f"{col}_interpolated"] = is_nan
+
+        # Interpolate
+        df[col] = df[col].interpolate(method="linear")
+
+        # Reset interpolated values in gap spans
+        for gap_idx in gap_indices:
+            # Find the position in the index
+            pos = df.index.get_loc(gap_idx)
+            prev_pos = pos - 1 if pos > 0 else 0
+
+            # Walk backward from gap to find last real value before gap
+            j = prev_pos
+            while j >= 0 and is_nan.iloc[j]:
+                df.loc[df.index[j], col] = np.nan
+                j -= 1
+
+            # Walk forward from gap to find first real value after gap
+            k = pos
+            while k < len(df) and is_nan.iloc[k]:
+                df.loc[df.index[k], col] = np.nan
+                k += 1
+
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Location auto-detection
+# ---------------------------------------------------------------------------
+
+
+async def detect_trip_locations(
+    db: AsyncSession,
+    device_id: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> tuple[Optional[str], Optional[str]]:
+    """Detect start and end locations for a trip from GPS data.
+
+    Finds the closest GPS point to start_time and end_time (within 30 min),
+    then matches against known EVLocationLookup entries.
+
+    Returns (start_location_name, end_location_name).
+    """
+    tolerance_seconds = 30 * 60  # 30 minutes
+
+    async def _find_nearest_gps(target_time: datetime) -> Optional[tuple[float, float]]:
+        stmt = (
+            select(EVLocation.latitude, EVLocation.longitude)
+            .where(
+                EVLocation.device_id == device_id,
+                EVLocation.latitude.isnot(None),
+                EVLocation.longitude.isnot(None),
+                func.abs(func.extract("epoch", EVLocation.recorded_at - target_time)) <= tolerance_seconds,
+            )
+            .order_by(func.abs(func.extract("epoch", EVLocation.recorded_at - target_time)))
+            .limit(1)
+        )
+        result = await db.execute(stmt)
+        row = result.one_or_none()
+        if row:
+            return (float(row.latitude), float(row.longitude))
+        return None
+
+    # Load all known locations for geo matching
+    loc_result = await db.execute(select(EVLocationLookup))
+    all_locations = list(loc_result.scalars().all())
+
+    def _resolve_name(coords: Optional[tuple[float, float]]) -> Optional[str]:
+        if coords is None:
+            return None
+        lat, lon = coords
+        match = _find_geo_match(all_locations, lat, lon)
+        if match:
+            return match.location_name
+        return f"{lat:.2f}, {lon:.2f}"
+
+    start_coords = await _find_nearest_gps(start_time)
+    end_coords = await _find_nearest_gps(end_time)
+
+    return (_resolve_name(start_coords), _resolve_name(end_coords))
+
+
+# ---------------------------------------------------------------------------
+# Chart builders — drawer charts
+# ---------------------------------------------------------------------------
+
+_DARK_LAYOUT = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font_color="#e5e7eb",
+    hovermode="x unified",
+    hoverlabel=_HOVER_LABEL,
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+)
+
+
+def _add_interpolated_traces(
+    fig: go.Figure,
+    df: pd.DataFrame,
+    col: str,
+    color: str,
+    yaxis: str = "y1",
+) -> None:
+    """Add dashed overlay traces for interpolated segments."""
+    interp_col = f"{col}_interpolated"
+    if interp_col not in df.columns:
+        return
+
+    mask = df[interp_col] & df[col].notna()
+    if not mask.any():
+        return
+
+    fig.add_trace(
+        go.Scatter(
+            x=df.loc[mask, "time"],
+            y=df.loc[mask, col],
+            mode="lines",
+            line=dict(color=color, dash="dot", width=1),
+            opacity=0.4,
+            showlegend=False,
+            yaxis=yaxis,
+            hoverinfo="skip",
+            connectgaps=False,
+        )
+    )
+
+
+def build_drive_graph(battery_df: pd.DataFrame, vehicle_df: pd.DataFrame) -> str:
+    """Build combined SOC + Speed + Range chart with dual Y-axes.
+
+    Returns HTML string. Empty string if both DataFrames are empty.
+    """
+    b_empty = battery_df.empty or battery_df.drop(columns=["time"], errors="ignore").isna().all().all()
+    v_empty = vehicle_df.empty or vehicle_df.drop(columns=["time"], errors="ignore").isna().all().all()
+
+    if b_empty and v_empty:
+        return ""
+
+    pio.templates.default = "plotly_dark"
+
+    # Interpolate
+    if not battery_df.empty:
+        battery_df = _interpolate_series(battery_df, ["soc", "range", "kw"])
+    if not vehicle_df.empty:
+        vehicle_df = _interpolate_series(vehicle_df, ["speed"])
+
+    fig = go.Figure()
+
+    # SOC trace (left y-axis)
+    if not battery_df.empty and battery_df["soc"].notna().any():
+        fig.add_trace(
+            go.Scatter(
+                x=battery_df["time"], y=battery_df["soc"],
+                name="SOC %", line=dict(color="#47A8E5"),
+                yaxis="y1", connectgaps=False,
+            )
+        )
+        _add_interpolated_traces(fig, battery_df, "soc", "#47A8E5", "y1")
+
+    # Range trace (left y-axis)
+    if not battery_df.empty and battery_df["range"].notna().any():
+        fig.add_trace(
+            go.Scatter(
+                x=battery_df["time"], y=battery_df["range"],
+                name="Range", line=dict(color="#22c55e"),
+                yaxis="y1", connectgaps=False,
+            )
+        )
+        _add_interpolated_traces(fig, battery_df, "range", "#22c55e", "y1")
+
+    # Speed trace (right y-axis)
+    if not vehicle_df.empty and vehicle_df["speed"].notna().any():
+        fig.add_trace(
+            go.Scatter(
+                x=vehicle_df["time"], y=vehicle_df["speed"],
+                name="Speed", line=dict(color="#f97316"),
+                yaxis="y2", connectgaps=False,
+            )
+        )
+        _add_interpolated_traces(fig, vehicle_df, "speed", "#f97316", "y2")
+
+    fig.update_layout(
+        height=300,
+        **_DARK_LAYOUT,
+        margin=dict(l=20, r=60, t=20, b=20),
+        yaxis=dict(title="SOC % / Range (mi)"),
+        yaxis2=dict(title="Speed (mph)", overlaying="y", side="right"),
+    )
+
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+def build_environment_chart(vehicle_df: pd.DataFrame) -> str:
+    """Build temperature chart (outside + cabin) for trip time window.
+
+    Returns HTML string. Empty string if no temperature data.
+    """
+    if vehicle_df.empty:
+        return ""
+
+    has_outside = "outside_temp" in vehicle_df.columns and vehicle_df["outside_temp"].notna().any()
+    has_cabin = "cabin_temp" in vehicle_df.columns and vehicle_df["cabin_temp"].notna().any()
+
+    if not has_outside and not has_cabin:
+        return ""
+
+    pio.templates.default = "plotly_dark"
+
+    vehicle_df = _interpolate_series(vehicle_df, ["outside_temp", "cabin_temp"])
+
+    fig = go.Figure()
+
+    if has_outside:
+        fig.add_trace(
+            go.Scatter(
+                x=vehicle_df["time"], y=vehicle_df["outside_temp"],
+                name="Outside", line=dict(color="#47A8E5"),
+                connectgaps=False,
+            )
+        )
+        _add_interpolated_traces(fig, vehicle_df, "outside_temp", "#47A8E5")
+
+    if has_cabin:
+        fig.add_trace(
+            go.Scatter(
+                x=vehicle_df["time"], y=vehicle_df["cabin_temp"],
+                name="Cabin", line=dict(color="#f97316"),
+                connectgaps=False,
+            )
+        )
+        _add_interpolated_traces(fig, vehicle_df, "cabin_temp", "#f97316")
+
+    fig.update_layout(
+        height=250,
+        **_DARK_LAYOUT,
+        margin=dict(l=20, r=20, t=20, b=20),
+        yaxis=dict(title="Temperature (F)"),
+    )
+
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Chart builders — expanded modal charts
+# ---------------------------------------------------------------------------
+
+
+def build_expanded_battery_chart(battery_df: pd.DataFrame) -> str:
+    """Full battery detail chart: SOC, Range, Battery Temp, Voltage, kW.
+
+    Dual Y-axes: left for SOC%/Range, right for kW/Voltage.
+    """
+    if battery_df.empty:
+        return ""
+
+    has_data = False
+    for col in ["soc", "range", "kw", "battery_temp", "voltage"]:
+        if col in battery_df.columns and battery_df[col].notna().any():
+            has_data = True
+            break
+
+    if not has_data:
+        return ""
+
+    pio.templates.default = "plotly_dark"
+
+    battery_df = _interpolate_series(
+        battery_df, ["soc", "range", "kw", "battery_temp", "voltage"]
+    )
+
+    fig = go.Figure()
+
+    # Left axis: SOC, Range
+    if battery_df["soc"].notna().any():
+        fig.add_trace(go.Scatter(
+            x=battery_df["time"], y=battery_df["soc"],
+            name="SOC %", line=dict(color="#47A8E5"),
+            yaxis="y1", connectgaps=False,
+        ))
+        _add_interpolated_traces(fig, battery_df, "soc", "#47A8E5", "y1")
+
+    if battery_df["range"].notna().any():
+        fig.add_trace(go.Scatter(
+            x=battery_df["time"], y=battery_df["range"],
+            name="Range (mi)", line=dict(color="#22c55e"),
+            yaxis="y1", connectgaps=False,
+        ))
+        _add_interpolated_traces(fig, battery_df, "range", "#22c55e", "y1")
+
+    # Right axis: kW, Voltage
+    if battery_df["kw"].notna().any():
+        fig.add_trace(go.Scatter(
+            x=battery_df["time"], y=battery_df["kw"],
+            name="Power (kW)", line=dict(color="#f97316"),
+            yaxis="y2", connectgaps=False,
+        ))
+        _add_interpolated_traces(fig, battery_df, "kw", "#f97316", "y2")
+
+    if battery_df["voltage"].notna().any():
+        fig.add_trace(go.Scatter(
+            x=battery_df["time"], y=battery_df["voltage"],
+            name="Voltage (V)", line=dict(color="#a855f7"),
+            yaxis="y2", connectgaps=False,
+        ))
+        _add_interpolated_traces(fig, battery_df, "voltage", "#a855f7", "y2")
+
+    # Battery temp as legendonly toggle
+    if battery_df["battery_temp"].notna().any():
+        fig.add_trace(go.Scatter(
+            x=battery_df["time"], y=battery_df["battery_temp"],
+            name="Batt Temp (F)", line=dict(color="#ef4444"),
+            yaxis="y1", connectgaps=False,
+            visible="legendonly",
+        ))
+        _add_interpolated_traces(fig, battery_df, "battery_temp", "#ef4444", "y1")
+
+    fig.update_layout(
+        height=400,
+        **_DARK_LAYOUT,
+        margin=dict(l=30, r=70, t=20, b=30),
+        yaxis=dict(title="SOC % / Range (mi)"),
+        yaxis2=dict(title="kW / Voltage", overlaying="y", side="right"),
+    )
+
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+def build_expanded_environment_chart(vehicle_df: pd.DataFrame) -> str:
+    """Expanded environment chart -- same as drawer version but taller."""
+    if vehicle_df.empty:
+        return ""
+
+    has_outside = "outside_temp" in vehicle_df.columns and vehicle_df["outside_temp"].notna().any()
+    has_cabin = "cabin_temp" in vehicle_df.columns and vehicle_df["cabin_temp"].notna().any()
+
+    if not has_outside and not has_cabin:
+        return ""
+
+    pio.templates.default = "plotly_dark"
+
+    vehicle_df = _interpolate_series(vehicle_df, ["outside_temp", "cabin_temp"])
+
+    fig = go.Figure()
+
+    if has_outside:
+        fig.add_trace(go.Scatter(
+            x=vehicle_df["time"], y=vehicle_df["outside_temp"],
+            name="Outside", line=dict(color="#47A8E5"),
+            connectgaps=False,
+        ))
+        _add_interpolated_traces(fig, vehicle_df, "outside_temp", "#47A8E5")
+
+    if has_cabin:
+        fig.add_trace(go.Scatter(
+            x=vehicle_df["time"], y=vehicle_df["cabin_temp"],
+            name="Cabin", line=dict(color="#f97316"),
+            connectgaps=False,
+        ))
+        _add_interpolated_traces(fig, vehicle_df, "cabin_temp", "#f97316")
+
+    fig.update_layout(
+        height=350,
+        **_DARK_LAYOUT,
+        margin=dict(l=30, r=30, t=20, b=30),
+        yaxis=dict(title="Temperature (F)"),
+    )
+
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+def build_expanded_driving_chart(vehicle_df: pd.DataFrame) -> str:
+    """Speed and acceleration over time with dual Y-axes."""
+    if vehicle_df.empty:
+        return ""
+
+    has_speed = "speed" in vehicle_df.columns and vehicle_df["speed"].notna().any()
+    has_accel = "acceleration" in vehicle_df.columns and vehicle_df["acceleration"].notna().any()
+
+    if not has_speed and not has_accel:
+        return ""
+
+    pio.templates.default = "plotly_dark"
+
+    vehicle_df = _interpolate_series(vehicle_df, ["speed", "acceleration"])
+
+    fig = go.Figure()
+
+    if has_speed:
+        fig.add_trace(go.Scatter(
+            x=vehicle_df["time"], y=vehicle_df["speed"],
+            name="Speed", line=dict(color="#47A8E5"),
+            yaxis="y1", connectgaps=False,
+        ))
+        _add_interpolated_traces(fig, vehicle_df, "speed", "#47A8E5", "y1")
+
+    if has_accel:
+        fig.add_trace(go.Scatter(
+            x=vehicle_df["time"], y=vehicle_df["acceleration"],
+            name="Acceleration", line=dict(color="#f97316"),
+            yaxis="y2", connectgaps=False,
+        ))
+        _add_interpolated_traces(fig, vehicle_df, "acceleration", "#f97316", "y2")
+
+    fig.update_layout(
+        height=350,
+        **_DARK_LAYOUT,
+        margin=dict(l=30, r=70, t=20, b=30),
+        yaxis=dict(title="Speed (mph)"),
+        yaxis2=dict(title="Acceleration", overlaying="y", side="right"),
     )
 
     return _wrap_chart(
