@@ -96,13 +96,13 @@
                                 <option value="L2" {% if stall.charger_type == 'L2' %}selected{% endif %}>L2</option>
                                 <option value="DCFC" {% if stall.charger_type == 'DCFC' %}selected{% endif %}>DCFC</option>
                             </select>
-                            <input type="number" name="rated_kw" step="0.1" min="0"
+                            <input type="number" name="rated_kw" id="edit-stall-kw-{{ stall.id }}" step="0.1" min="0"
                                    value="{{ stall.rated_kw if stall.rated_kw else '' }}"
                                    placeholder="kW" class="input input-sm input-bordered w-20">
-                            <input type="number" name="voltage" step="1" min="0"
+                            <input type="number" name="voltage" id="edit-stall-volt-{{ stall.id }}" step="1" min="0"
                                    value="{{ stall.voltage|int if stall.voltage else '' }}"
                                    placeholder="V" class="input input-sm input-bordered w-16">
-                            <input type="number" name="amperage" step="1" min="0"
+                            <input type="number" name="amperage" id="edit-stall-amp-{{ stall.id }}" step="1" min="0"
                                    value="{{ stall.amperage|int if stall.amperage else '' }}"
                                    placeholder="A" class="input input-sm input-bordered w-16">
                             <select name="connector_type" class="select select-sm select-bordered">
@@ -149,11 +149,11 @@
                 <option value="L2">L2</option>
                 <option value="DCFC">DCFC</option>
             </select>
-            <input type="number" name="rated_kw" step="0.1" min="0" placeholder="kW"
+            <input type="number" name="rated_kw" id="add-stall-kw-{{ location_id }}" step="0.1" min="0" placeholder="kW"
                    class="input input-sm input-bordered w-20">
-            <input type="number" name="voltage" step="1" min="0" placeholder="V"
+            <input type="number" name="voltage" id="add-stall-volt-{{ location_id }}" step="1" min="0" placeholder="V"
                    class="input input-sm input-bordered w-16">
-            <input type="number" name="amperage" step="1" min="0" placeholder="A"
+            <input type="number" name="amperage" id="add-stall-amp-{{ location_id }}" step="1" min="0" placeholder="A"
                    class="input input-sm input-bordered w-16">
             <select name="connector_type" class="select select-sm select-bordered">
                 <option value="">Connector</option>
@@ -184,4 +184,14 @@ if (!window._stallEditInit) {
         document.querySelectorAll('.stall-edit[data-stall="' + stallId + '"]').forEach(function(el) { el.classList.add('hidden'); });
     };
 }
+</script>
+
+{% include 'partials/evse_autocalc.html' %}
+<script>
+    if (typeof attachEvseAutoCalc === 'function') {
+        attachEvseAutoCalc('add-stall-kw-{{ location_id }}', 'add-stall-volt-{{ location_id }}', 'add-stall-amp-{{ location_id }}');
+        {% for stall in stalls %}
+        attachEvseAutoCalc('edit-stall-kw-{{ stall.id }}', 'edit-stall-volt-{{ stall.id }}', 'edit-stall-amp-{{ stall.id }}');
+        {% endfor %}
+    }
 </script>

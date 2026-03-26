@@ -597,3 +597,10 @@
     });
 })();
 </script>
+
+{% include 'partials/evse_autocalc.html' %}
+<script>
+    if (typeof attachEvseAutoCalc === 'function') {
+        attachEvseAutoCalc('modal-evse-kw', 'modal-evse-voltage', 'modal-evse-amperage');
+    }
+</script>
