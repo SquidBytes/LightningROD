@@ -7,16 +7,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.vehicle import EVVehicle
 from web.queries.settings import get_app_setting, set_app_setting
 
-# Common EV battery capacity presets for auto-fill dropdown
-BATTERY_PRESETS = [
-    {"label": "F-150 Lightning SR (2022-2024)", "kwh": 98.0},
-    {"label": "F-150 Lightning ER (2022-2024)", "kwh": 131.0},
-    {"label": "F-150 Lightning Flash (2024)", "kwh": 100.0},
-    {"label": "Mustang Mach-E SR RWD", "kwh": 72.0},
-    {"label": "Mustang Mach-E ER RWD", "kwh": 91.0},
-    {"label": "Mustang Mach-E GT", "kwh": 91.0},
-    {"label": "Custom", "kwh": None},
+# Structured vehicle presets for cascading combo-box auto-fill
+# Each entry: make, model, trim, battery_kwh, year_min, year_max
+VEHICLE_PRESETS = [
+    # F-150 Lightning
+    {"make": "Ford", "model": "F-150 Lightning", "trim": "Standard Range", "battery_kwh": 98.0, "year_min": 2022, "year_max": 2025},
+    {"make": "Ford", "model": "F-150 Lightning", "trim": "Extended Range", "battery_kwh": 131.0, "year_min": 2022, "year_max": 2025},
+    {"make": "Ford", "model": "F-150 Lightning", "trim": "Flash", "battery_kwh": 100.0, "year_min": 2024, "year_max": 2024},
+    {"make": "Ford", "model": "F-150 Lightning", "trim": "Flash", "battery_kwh": 123.0, "year_min": 2025, "year_max": 2025},
+
+    # Mustang Mach-E
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Select SR RWD", "battery_kwh": 72.0, "year_min": 2023, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Premium SR RWD", "battery_kwh": 72.0, "year_min": 2023, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Premium ER RWD", "battery_kwh": 91.0, "year_min": 2023, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Premium ER AWD", "battery_kwh": 91.0, "year_min": 2023, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "GT", "battery_kwh": 91.0, "year_min": 2023, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Rally", "battery_kwh": 91.0, "year_min": 2025, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Standard Range", "battery_kwh": 68.0, "year_min": 2021, "year_max": 2022},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Extended Range", "battery_kwh": 88.0, "year_min": 2021, "year_max": 2022},
+
+    # E-Transit
+    {"make": "Ford", "model": "E-Transit", "trim": "Standard Range", "battery_kwh": 68.0, "year_min": 2022, "year_max": 2024},
+    {"make": "Ford", "model": "E-Transit", "trim": "Extended Range", "battery_kwh": 89.0, "year_min": 2024, "year_max": 2025},
 ]
+
+# Backward-compat alias -- old code imports BATTERY_PRESETS
+# Convert to old format for any remaining references
+BATTERY_PRESETS = [
+    {"label": f"{p['model']} {p['trim']} ({p['year_min']}-{p['year_max']})", "kwh": p["battery_kwh"]}
+    for p in VEHICLE_PRESETS
+] + [{"label": "Custom", "kwh": None}]
 
 
 async def get_all_vehicles(db: AsyncSession) -> list[EVVehicle]:

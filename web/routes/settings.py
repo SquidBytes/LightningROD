@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -34,6 +35,7 @@ from web.queries.settings import (
 )
 from web.queries.vehicles import (
     BATTERY_PRESETS,
+    VEHICLE_PRESETS,
     create_vehicle,
     delete_vehicle,
     get_active_vehicle,
@@ -74,6 +76,8 @@ async def _vehicle_management_context(db: AsyncSession) -> dict:
         "vehicles": vehicles,
         "active_vehicle": active_vehicle,
         "battery_presets": BATTERY_PRESETS,
+        "vehicle_presets": VEHICLE_PRESETS,
+        "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
     }
 
 
