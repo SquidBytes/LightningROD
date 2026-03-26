@@ -164,12 +164,12 @@ function toggleEditMode() {
 }
 
 function openSessionModal(sessionId) {
-    htmx.ajax('GET', '/sessions/' + sessionId + '/modal', {target: '#session-modal-content', swap: 'innerHTML'});
+    htmx.ajax('GET', '/charging/sessions/' + sessionId + '/modal', {target: '#session-modal-content', swap: 'innerHTML'});
     document.getElementById('session-modal').showModal();
 }
 
 function openNewSessionModal() {
-    htmx.ajax('GET', '/sessions/new/modal', {target: '#session-modal-content', swap: 'innerHTML'});
+    htmx.ajax('GET', '/charging/sessions/new/modal', {target: '#session-modal-content', swap: 'innerHTML'});
     document.getElementById('session-modal').showModal();
 }
 
@@ -180,7 +180,7 @@ function closeSessionModal() {
 
 function confirmDeleteFromModal(sessionId) {
     if (confirm('Are you sure you want to delete this session?')) {
-        htmx.ajax('DELETE', '/sessions/' + sessionId, {target: '#drawer-body', swap: 'innerHTML'});
+        htmx.ajax('DELETE', '/charging/sessions/' + sessionId, {target: '#drawer-body', swap: 'innerHTML'});
         closeSessionModal();
     }
 }
@@ -205,7 +205,7 @@ function highlightRow(sessionId) {
     var rows = document.querySelectorAll('#sessions-table-region tbody tr');
     rows.forEach(function(row) {
         var hxGet = row.getAttribute('hx-get');
-        if (hxGet && hxGet.includes('/sessions/' + sessionId + '/detail')) {
+        if (hxGet && hxGet.includes('/charging/sessions/' + sessionId + '/detail')) {
             row.classList.add('bg-blue-900/30');
             setTimeout(function() {
                 row.style.transition = 'background-color 2s ease-out';
@@ -329,7 +329,7 @@ function applyGroupEdit() {
     if (locInput.value) formData.append('bulk_location_name', locInput.value);
     if (costInput.value) formData.append('bulk_cost', costInput.value);
 
-    fetch('/sessions/bulk', {
+    fetch('/charging/sessions/bulk', {
         method: 'PUT',
         body: formData,
         headers: { 'HX-Request': 'true' }

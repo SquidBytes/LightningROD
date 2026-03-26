@@ -657,7 +657,7 @@
     <div class="pt-2">
         <button
             type="button"
-            onclick="if(confirm('Delete this session?')) { htmx.ajax('DELETE', '/sessions/{{ session.id }}', {swap:'none'}); closeDrawer(); }"
+            onclick="if(confirm('Delete this session?')) { htmx.ajax('DELETE', '/charging/sessions/{{ session.id }}', {swap:'none'}); closeDrawer(); }"
             class="btn btn-error btn-outline btn-sm w-full"
         >
             Delete Session

@@ -192,18 +192,26 @@ class HASSClient:
             logger.info("Loaded %d entity states from HA", len(self._entity_states))
             self._detect_vin()
 
-            # Detect FordPass preferred units from elveh sensor attributes
+            # Detect FordPass preferred distance units from elveh sensor attributes
             if self._ha_config:
                 for eid, state in self._entity_states.items():
                     if eid.startswith("sensor.fordpass_") and eid.endswith("_elveh"):
                         uom = (state.get("attributes", {}).get("unit_of_measurement") or "").lower()
                         self._ha_config["_fordpass_distance_unit"] = "mi" if "mi" in uom else "km"
-                        # Temperature unit: FordPass uses F when distance is mi, C when km
-                        self._ha_config["_fordpass_temp_unit"] = "degF" if "mi" in uom else "degC"
-                        logger.info("FordPass preferred units: distance=%s, temp=%s",
-                                    self._ha_config["_fordpass_distance_unit"],
+                        logger.info("FordPass preferred units: distance=%s",
+                                    self._ha_config["_fordpass_distance_unit"])
+                        break
+                        
+            # Detect temperature units from fordpass - can be different from distance units.
+            if self._ha_config:
+                for eid, state in self._entity_states.items():
+                    if eid.startswith("sensor.fordpass_") and eid.endswith("outsidetemp"):
+                        uom = (state.get("attributes", {}).get("unit_of_measurement") or "")
+                        self._ha_config["_fordpass_temp_unit"] = "degF" if "°F" in uom else "degC"
+                        logger.info("FordPass preferred units: temp=%s",
                                     self._ha_config["_fordpass_temp_unit"])
                         break
+                        
 
         # Step 6: Process initial snapshot through event handler
         # This captures current state (e.g. last energytransferlogentry) as DB records
@@ -234,6 +242,7 @@ class HASSClient:
 
         self._health["connected"] = True
         self._health["connection_state"] = "connected"
+        self._health["last_error"] = None  
         logger.info("HASS client fully connected and subscribed")
 
     async def _event_loop(self) -> None:
@@ -359,8 +368,8 @@ class HASSClient:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.get(
-                    f"{ha_url}/api/history/period/{start_time}",
-                    params={"filter_entity_id": entity_id},
+                    f"{ha_url}/api/history/period",
+                    params={"filter_entity_id": entity_id, "start_time": start_time},
                     headers={"Authorization": f"Bearer {ha_token}"},
                 )
                 resp.raise_for_status()
