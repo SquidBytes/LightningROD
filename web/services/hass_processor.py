@@ -670,7 +670,8 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     plug_data = attrs.get("plugDetails", {}) or {}
     plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
     total_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
-    miles_added = normalize_value(total_distance_added, "mi", unit_system) if total_distance_added is not None else None
+    fordpass_dist_unit = ha_config.get("_fordpass_distance_unit", "km")
+    miles_added = total_distance_added / 1.60934 if (total_distance_added is not None and fordpass_dist_unit == "mi") else total_distance_added
 
     # State of charge
     soc_data = attrs.get("stateOfCharge", {}) or {}
