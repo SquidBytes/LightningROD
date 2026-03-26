@@ -50,8 +50,9 @@ def normalize_value(value, unit: str, ha_unit_system: dict) -> float:
         return None
 
     # FordPass preferred units (injected by hass_client from elveh sensor)
-    fp_distance = ha_unit_system.get("_fordpass_distance_unit", "mi")
-    fp_temp = ha_unit_system.get("_fordpass_temp_unit", "degF")
+    # Default to metric (no conversion) if detection hasn't run
+    fp_distance = ha_unit_system.get("_fordpass_distance_unit", "km")
+    fp_temp = ha_unit_system.get("_fordpass_temp_unit", "degC")
 
     if unit in ("mi", "mph") or (
         unit in ("distance", "length")

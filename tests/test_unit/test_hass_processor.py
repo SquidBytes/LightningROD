@@ -70,9 +70,9 @@ def test_normalize_value_miles_metric_passthrough():
 
 
 def test_normalize_value_miles_default_fallback():
-    """No FordPass unit info -> default to imperial, convert."""
+    """No FordPass unit info -> default to metric, pass through."""
     result = normalize_value(100, "mi", {})
-    assert result == pytest.approx(160.934, abs=0.001)
+    assert result == 100.0
 
 
 def test_normalize_value_fahrenheit_imperial():
@@ -88,9 +88,9 @@ def test_normalize_value_fahrenheit_metric_passthrough():
 
 
 def test_normalize_value_fahrenheit_default_fallback():
-    """No FordPass temp info -> default to imperial, convert."""
+    """No FordPass temp info -> default to metric, pass through."""
     result = normalize_value(212, "degF", {})
-    assert result == pytest.approx(100.0, abs=0.01)
+    assert result == 212.0
 
 
 def test_normalize_value_wh():
