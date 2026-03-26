@@ -164,7 +164,7 @@ async def new_vehicle_form(
     return templates.TemplateResponse(
         request,
         "settings/partials/vehicle_edit_modal.html",
-        {"battery_presets": BATTERY_PRESETS, "vehicle": None},
+        {"battery_presets": BATTERY_PRESETS, "vehicle": None, "vehicle_presets_json": json.dumps(VEHICLE_PRESETS)},
     )
 
 
@@ -225,7 +225,7 @@ async def edit_vehicle_form(
     return templates.TemplateResponse(
         request,
         "settings/partials/vehicle_edit_modal.html",
-        {"vehicle": vehicle, "battery_presets": BATTERY_PRESETS},
+        {"vehicle": vehicle, "battery_presets": BATTERY_PRESETS, "vehicle_presets_json": json.dumps(VEHICLE_PRESETS)},
     )
 
 
