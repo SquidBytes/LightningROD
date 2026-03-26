@@ -28,6 +28,7 @@ data/*.csv
 !data/charging_sessions_sample.csv
 !data/battery_status_sample.csv
 !data/trip_metrics_sample.csv
+scripts/generate_sample_data.py
 
 # Documentation site
 site/
