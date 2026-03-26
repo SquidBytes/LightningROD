@@ -9,14 +9,16 @@ from db.models.reference import AppSettings, EVChargerStall, EVChargingNetwork, 
 
 # Predefined EV charging networks with brand-accurate colors
 PREDEFINED_NETWORKS = [
-    {"name": "Tesla Supercharger", "color": "#E31937", "cost_per_kwh": 0.35, "is_free": False},
-    {"name": "Electrify America", "color": "#00B140", "cost_per_kwh": 0.48, "is_free": False},
-    {"name": "ChargePoint", "color": "#00A4E4", "cost_per_kwh": 0.39, "is_free": False},
-    {"name": "EVgo", "color": "#F7941D", "cost_per_kwh": 0.35, "is_free": False},
+    {"name": "Tesla Supercharger", "color": "#CC0000", "cost_per_kwh": 0.42, "is_free": False},
+    {"name": "Electrify America", "color": "#00A94F", "cost_per_kwh": 0.48, "is_free": False},
+    {"name": "ChargePoint", "color": "#FF6B2D", "cost_per_kwh": 0.35, "is_free": False},
+    {"name": "EVgo", "color": "#00AEEF", "cost_per_kwh": 0.39, "is_free": False},
+    {"name": "EV Connect", "color": "#4CAF50", "cost_per_kwh": 0.30, "is_free": False},
+    {"name": "IONNA", "color": "#1A1A2E", "cost_per_kwh": 0.40, "is_free": False},
+    {"name": "Rivian Adventure Network", "color": "#517B50", "cost_per_kwh": 0.35, "is_free": False},
     {"name": "Blink", "color": "#0072CE", "cost_per_kwh": 0.49, "is_free": False},
     {"name": "Flo", "color": "#6CBE45", "cost_per_kwh": 0.35, "is_free": False},
     {"name": "Ford BlueOval", "color": "#003478", "cost_per_kwh": 0.33, "is_free": False},
-    {"name": "Rivian Adventure Network", "color": "#4DB848", "cost_per_kwh": 0.35, "is_free": False},
     {"name": "Shell Recharge", "color": "#FFD500", "cost_per_kwh": 0.39, "is_free": False},
     {"name": "BP Pulse", "color": "#009B3A", "cost_per_kwh": 0.36, "is_free": False},
     {"name": "Home", "color": "#6366F1", "cost_per_kwh": 0.12, "is_free": True},
@@ -471,16 +473,35 @@ async def set_app_setting(db: AsyncSession, key: str, value: str) -> None:
 # ---------------------------------------------------------------------------
 
 NETWORK_CHARGER_TEMPLATES = {
+    "Tesla Supercharger": [
+        {"label": "V3 Supercharger", "charger_type": "DCFC", "rated_kw": 250, "voltage": 500, "amperage": 350, "connector_type": "NACS"},
+        {"label": "V4 Supercharger", "charger_type": "DCFC", "rated_kw": 325, "voltage": 1000, "amperage": 615, "connector_type": "NACS"},
+    ],
     "Electrify America": [
         {"label": "150kW CCS", "charger_type": "DCFC", "rated_kw": 150, "voltage": 400, "amperage": 375, "connector_type": "CCS"},
         {"label": "350kW CCS", "charger_type": "DCFC", "rated_kw": 350, "voltage": 800, "amperage": 500, "connector_type": "CCS"},
     ],
-    "Tesla Supercharger": [
-        {"label": "250kW V3", "charger_type": "DCFC", "rated_kw": 250, "voltage": 400, "amperage": 625, "connector_type": "NACS"},
-    ],
     "ChargePoint": [
         {"label": "L2 Charger", "charger_type": "L2", "rated_kw": 7.7, "voltage": 240, "amperage": 32, "connector_type": "J1772"},
         {"label": "62.5kW DCFC", "charger_type": "DCFC", "rated_kw": 62.5, "voltage": 400, "amperage": 156, "connector_type": "CCS"},
+        {"label": "240kW Express Plus", "charger_type": "DCFC", "rated_kw": 240, "voltage": 800, "amperage": 300, "connector_type": "CCS"},
+    ],
+    "EVgo": [
+        {"label": "50kW DCFC", "charger_type": "DCFC", "rated_kw": 50, "voltage": 400, "amperage": 125, "connector_type": "CCS"},
+        {"label": "150kW DCFC", "charger_type": "DCFC", "rated_kw": 150, "voltage": 400, "amperage": 375, "connector_type": "CCS"},
+        {"label": "350kW DCFC", "charger_type": "DCFC", "rated_kw": 350, "voltage": 1000, "amperage": 500, "connector_type": "CCS"},
+    ],
+    "EV Connect": [
+        {"label": "L2 Charger", "charger_type": "L2", "rated_kw": 7.7, "voltage": 240, "amperage": 32, "connector_type": "J1772"},
+        {"label": "DCFC", "charger_type": "DCFC", "rated_kw": 60, "voltage": 400, "amperage": 150, "connector_type": "CCS"},
+    ],
+    "IONNA": [
+        {"label": "400kW HYC400 CCS", "charger_type": "DCFC", "rated_kw": 400, "voltage": 1000, "amperage": 500, "connector_type": "CCS"},
+        {"label": "400kW HYC400 NACS", "charger_type": "DCFC", "rated_kw": 400, "voltage": 1000, "amperage": 500, "connector_type": "NACS"},
+    ],
+    "Rivian Adventure Network": [
+        {"label": "300kW DCFC CCS", "charger_type": "DCFC", "rated_kw": 300, "voltage": 920, "amperage": 500, "connector_type": "CCS"},
+        {"label": "300kW DCFC NACS", "charger_type": "DCFC", "rated_kw": 300, "voltage": 920, "amperage": 500, "connector_type": "NACS"},
     ],
     "Home": [
         {"label": "L2 Wall Connector", "charger_type": "L2", "rated_kw": 9.6, "voltage": 240, "amperage": 40, "connector_type": "NACS"},
