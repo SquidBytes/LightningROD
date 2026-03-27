@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, Form, Header, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
@@ -27,6 +27,17 @@ VALID_CHARGE_TYPES = {"AC", "DC"}
 
 
 VALID_PER_PAGE = {25, 50, 100}
+
+
+async def get_review_count(db: AsyncSession, device_id: Optional[str] = None) -> int:
+    """Count sessions needing review (duplicates + first-time auto-associations)."""
+    stmt = select(func.count()).select_from(EVChargingSession).where(
+        EVChargingSession.needs_review == True  # noqa: E712
+    )
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+    result = await db.execute(stmt)
+    return result.scalar() or 0
 
 
 @router.get("/sessions", response_class=HTMLResponse)
@@ -116,6 +127,7 @@ async def sessions(
         filter_params["per_page"] = per_page
 
     all_vehicles = await get_all_vehicles(db)
+    review_count = await get_review_count(db, active_device_id)
 
     context = {
         "sessions": enriched_sessions,
@@ -140,6 +152,7 @@ async def sessions(
         "page_title": "Sessions",
         "active_vehicle": active_vehicle,
         "all_vehicles": all_vehicles,
+        "review_count": review_count,
     }
 
     if hx_request:
@@ -823,3 +836,57 @@ async def session_modal(
         "user_tz": user_tz,
     }
     return templates.TemplateResponse(request, "sessions/partials/modal.html", context)
+
+
+@router.post("/sessions/check-duplicate", response_class=HTMLResponse)
+async def check_duplicate(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    session_date: Annotated[Optional[str], Form()] = None,
+    energy_kwh: Annotated[Optional[float], Form()] = None,
+):
+    """Check for potential duplicates before manual session creation.
+
+    Returns a warning banner HTML if potential duplicates found, empty otherwise.
+    """
+    from datetime import timedelta
+    from dateutil.parser import parse as parse_date
+
+    if not session_date:
+        return HTMLResponse("")
+
+    try:
+        start_dt = parse_date(session_date)
+    except (ValueError, TypeError):
+        return HTMLResponse("")
+
+    window_start = start_dt - timedelta(hours=2)
+    window_end = start_dt + timedelta(hours=2)
+
+    stmt = (
+        select(EVChargingSession)
+        .where(EVChargingSession.session_start_utc.between(window_start, window_end))
+    )
+
+    result = await db.execute(stmt)
+    matches = result.scalars().all()
+
+    # Filter by energy tolerance if provided
+    filtered = []
+    for m in matches:
+        if energy_kwh is not None and m.energy_kwh is not None:
+            tolerance = abs(float(m.energy_kwh)) * 0.1 if float(m.energy_kwh) != 0 else 0.5
+            if abs(float(energy_kwh) - float(m.energy_kwh)) <= tolerance:
+                filtered.append(m)
+        elif energy_kwh is None:
+            filtered.append(m)  # No energy to compare, show all time matches
+
+    if not filtered:
+        return HTMLResponse("")
+
+    # Return warning banner
+    return templates.TemplateResponse(
+        request,
+        "sessions/partials/duplicate_warning.html",
+        {"matches": filtered},
+    )

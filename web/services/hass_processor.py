@@ -703,22 +703,45 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     original_timestamp = _parse_iso_datetime(attrs.get("timeStamp"))
 
     # -----------------------------------------------------------------------
-    # Duplicate detection: match on session_start_utc + energy_kwh
+    # Duplicate detection: fuzzy match +-30min + +-10% energy
     # -----------------------------------------------------------------------
-    if session_start_utc is not None and energy_kwh is not None:
-        existing = await db.execute(
-            select(EVChargingSession.id)
-            .where(EVChargingSession.session_start_utc == session_start_utc)
-            .where(EVChargingSession.energy_kwh == energy_kwh)
-            .where(EVChargingSession.source_system == "home_assistant")
-            .limit(1)
-        )
-        if existing.scalar_one_or_none() is not None:
-            logger.info(
-                "Duplicate session detected (start=%s, energy=%.3f kWh), skipping",
-                session_start_utc, energy_kwh,
+    duplicate_of_id = None
+    if session_start_utc is not None:
+        from datetime import timedelta
+        window_start = session_start_utc - timedelta(minutes=30)
+        window_end = session_start_utc + timedelta(minutes=30)
+
+        fuzzy_result = await db.execute(
+            select(
+                EVChargingSession.id,
+                EVChargingSession.energy_kwh,
+                EVChargingSession.source_system,
             )
-            return
+            .where(EVChargingSession.session_start_utc.between(window_start, window_end))
+            .where(EVChargingSession.device_id == device_id)
+        )
+        for match_id, match_energy, match_source in fuzzy_result.all():
+            if energy_kwh is not None and match_energy is not None:
+                tolerance = abs(float(match_energy)) * 0.1 if float(match_energy) != 0 else 0.5
+                if abs(float(energy_kwh) - float(match_energy)) <= tolerance:
+                    if match_source == "home_assistant":
+                        # Same source duplicate -- skip silently (existing behavior)
+                        logger.info(
+                            "Duplicate HA session detected (start=%s, energy=%.3f kWh), skipping",
+                            session_start_utc, energy_kwh,
+                        )
+                        return
+                    else:
+                        # Cross-source duplicate -- create but flag for review
+                        duplicate_of_id = match_id
+                        break
+            elif energy_kwh is None and match_energy is None:
+                if match_source == "home_assistant":
+                    logger.info("Duplicate HA session detected (start=%s, no energy), skipping", session_start_utc)
+                    return
+                else:
+                    duplicate_of_id = match_id
+                    break
 
     # -----------------------------------------------------------------------
     # Network resolution
@@ -774,6 +797,9 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         original_timestamp=original_timestamp,
         is_complete=True,  # energytransferlogentry fires after session completes
         recorded_at=datetime.now(timezone.utc),
+        duplicate_of_id=duplicate_of_id,
+        needs_review=duplicate_of_id is not None,
+        review_type="duplicate" if duplicate_of_id is not None else None,
     )
     db.add(session)
 

@@ -22,7 +22,12 @@
     <label class="form-control w-full">
         <div class="label"><span class="label-text">Date *</span></div>
         <input type="date" name="session_date" value="{{ default_date }}" required
-               class="input input-bordered w-full">
+               class="input input-bordered w-full"
+               hx-post="/charging/sessions/check-duplicate"
+               hx-trigger="change delay:500ms"
+               hx-target="#duplicate-check-result"
+               hx-include="closest form"
+               hx-swap="innerHTML">
     </label>
 
     <!-- Energy kWh (required) -->
@@ -73,5 +78,8 @@
         <input type="number" name="duration_minutes" step="1" min="0" placeholder="0"
                class="input input-bordered w-full">
     </label>
+
+    <!-- Duplicate check result target -->
+    <div id="duplicate-check-result"></div>
 
 </form>
