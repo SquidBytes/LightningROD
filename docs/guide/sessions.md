@@ -27,11 +27,19 @@ The filter bar supports multiple simultaneous filters:
 | Filter | Options |
 |--------|---------|
 | Date range | Presets: 7d, 30d, 90d, YTD, 1y, All, or custom start/end dates |
-| Charge type | AC, DC |
-| Location type | Home, Work, Public, and other location types |
+| Charge type | AC, DC (multi-select) |
 | Network | Multi-select checkboxes with color badges |
 
 Active filters display as chips below the filter bar. The summary bar above the table updates to reflect filtered totals.
+
+## Group Edit
+
+Use **Group Edit** above the table to bulk update selected rows. You can apply shared values for:
+
+- Network
+- Charge type
+- Location
+- Cost
 
 ## Adding Sessions
 
@@ -65,6 +73,7 @@ Click any table row to open the slide-out drawer with full session details:
 - Energy and SOC (kWh delivered, SOC start/end, range added)
 - Cost breakdown card (actual cost, estimated cost, actual $/kWh, difference)
 - Network and location info with color badge
+- Mini charge-curve preview (when enough SOC/power data exists)
 - EVSE / Charger section (voltage, amperage, power, energy, max power, rated capacity, stall label)
 - Charging loss and utilization metrics when EVSE data is available
 

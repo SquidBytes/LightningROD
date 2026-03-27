@@ -1,30 +1,48 @@
 # Settings
 
-The settings page (`/settings`) is organized into tabs for managing networks, preferences, and data import. All settings take effect immediately.
+The settings page (`/settings`) is organized into focused tabs. Most updates apply immediately after saving.
 
 ![settings](../assets/images/lr_settings.gif)
 
-## Network Management
+## Tab Overview
 
-Networks are the primary organizational unit for charging locations and costs. Each network has:
+| Tab | What it manages |
+|-----|-----------------|
+| Vehicles | Vehicle profiles, battery presets, active vehicle selection |
+| General | Comparison display toggles, gas price history, gas-price HA sensors, unit and timezone preferences |
+| Networks | Networks, locations, charger stalls, subscription periods |
+| CSV Import | Template download and bulk session import flow |
+| Home Assistant | HA connection settings, status, reconnect/disconnect, history backfill |
+
+## Vehicles Tab
+
+Use this tab to manage EV profiles and select the active vehicle. The active vehicle is used for vehicle-scoped pages like Sessions, Costs, and Energy.
+
+Vehicle fields include display name, make/model/year, battery capacity, VIN/device ID, and ICE comparison fields.
+
+## Networks Tab
+
+Networks are the primary organizational unit for charging locations and rates. Each network has:
 
 | Field | Description |
 |-------|-------------|
 | Name | Network name (e.g., "Home", "Electrify America") |
-| Cost per kWh | Default electricity rate for this network |
+| Cost per kWh | Base electricity rate for this network |
 | Color | Hex color for badges and charts |
 | Free | Whether this network charges nothing |
 | Notes | Optional description |
 
-The network table shows each network with its color badge, location count, and session count. Networks are read-only in the table -- click **Edit** to open the network modal.
+The table shows each network with color badge, session count, and location count. Rows expand to show a read-only location summary.
 
 ### Network Edit Modal
 
-The network modal has two tabs:
+The network modal has three tabs:
 
-**Details** -- Edit name, cost per kWh, color, free toggle, and notes.
+- **Details** -- Edit name, rate, color, free toggle, and notes. Includes **Recalculate Session Costs** for network-driven recalculation.
+- **Locations** -- Manage locations under this network.
+- **Subscription** -- Manage historical/current member-rate periods for this network.
 
-**Locations** -- Manage locations belonging to this network. Each location has:
+### Locations
 
 | Field | Description |
 |-------|-------------|
@@ -35,13 +53,13 @@ The network modal has two tabs:
 | Cost per kWh | Optional override of network cost |
 | Notes | Optional description |
 
-Locations can override the network's cost_per_kwh. When a location has its own cost, that takes priority over the network default for sessions at that location.
+Location `cost_per_kwh` overrides network `cost_per_kwh` when computing estimated costs.
 
 ![settings network](../assets/images/lr_settings_networks.gif)
 
 ### Charger Stalls
 
-Each location can have multiple charger stalls with different specs. Stalls are managed via a tab in the location edit area:
+Each location can have multiple stalls with different hardware specs:
 
 | Field | Description |
 |-------|-------------|
@@ -52,20 +70,45 @@ Each location can have multiple charger stalls with different specs. Stalls are 
 | Connector type | CCS, CHAdeMO, J1772, NACS, Tesla |
 | Default | Auto-select this stall when the location is chosen |
 
-When editing a session, selecting a location populates a stall dropdown. Choosing a stall auto-fills EVSE fields (rated kW, voltage, amperage) on the session.
+When editing a session, selecting a stall can auto-fill EVSE fields (rated kW, voltage, amperage).
 
-Popular networks include pre-built charger templates. Click "Pre-fill from [Network]" when adding stalls to auto-populate known configurations.
+For supported networks, use **Pre-fill from [Network]** to load known stall templates quickly.
 
-## General Settings
+### Subscription Periods
 
-### Gas Comparison
+Subscriptions let you model member pricing over time.
 
-Parameters for the gas vehicle savings comparison on the costs page:
+| Field | Description |
+|-------|-------------|
+| Member rate | Member $/kWh used during the subscription window |
+| Monthly fee | Flat monthly subscription cost |
+| Start / End date | Active period (`end_date` blank means currently active) |
+| Notes | Optional plan metadata |
 
-| Setting | Description | Example |
-|---------|-------------|---------|
-| Gas price ($/gallon) | Current gas price in your area | 3.50 |
-| Vehicle MPG | The gas vehicle you're comparing against | 25 |
+Subscription data powers member-vs-non-member savings on the Costs page.
+
+## General Tab
+
+### Comparison Display Options
+
+Toggle which comparison sections appear on the Costs page:
+
+- Comparison section
+- Gasoline comparison
+- Network rate comparison
+
+### Gas Price History
+
+Maintain month-by-month gas price history with two tracks:
+
+- Station price (your usual station)
+- Average price (regional average)
+
+These values are used to compute savings ranges in gas comparison cards.
+
+### Gas Price Sensors (Home Assistant)
+
+Optional sensor entity IDs can be configured for station and average gas price feeds.
 
 ### Unit Preferences
 
@@ -80,16 +123,6 @@ Set your local timezone (e.g., `America/New_York`). All timestamps throughout th
 
 The timezone setting also serves as the default for CSV imports.
 
-### Comparison Toggles
-
-Control which comparison sections appear on the costs page:
-
-- **Comparison section** -- Master toggle for the entire savings section
-- **Gas comparison** -- Show/hide the gas vehicle comparison
-- **Network comparison** -- Show/hide the network cost comparison
-
-Disabling a comparison skips its database queries.
-
 ## Home Assistant Tab
 
 Configure the connection to Home Assistant for automatic charging session detection and vehicle telemetry ingestion. See the dedicated [Home Assistant Integration](home-assistant.md) guide for full details.
@@ -102,4 +135,6 @@ The tab includes:
 
 ## CSV Import Tab
 
-See the dedicated [CSV Import](csv-import.md) guide.
+Use this tab for bulk imports. It supports template download, timezone selection, auto-mapped columns, preview, inline fixes, duplicate handling, and final import summary.
+
+See the dedicated [CSV Import](csv-import.md) guide for the full flow.

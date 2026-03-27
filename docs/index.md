@@ -8,23 +8,36 @@ Track charging sessions, analyze costs, and monitor energy consumption with a we
 
 ---
 
+## Why So Many Data Fields?
+
+LightningROD stores a lot of fields on purpose. Charging analytics becomes much more useful when raw and derived data are both available.
+
+- **Different calculations need different inputs** -- costs, EVSE loss/utilization, comparisons, and trend charts each rely on different fields.
+- **Data quality varies by source** -- Home Assistant, CSV files, and manual entry all provide different levels of detail, so fields are optional and can be filled incrementally.
+- **Recalculation needs history** -- when rates, subscriptions, networks, or mappings change, stored detail allows recalculating without losing fidelity.
+- **Auditability matters** -- keeping source-oriented fields makes it easier to trace where numbers came from (manual, import, HASS, stall defaults, estimated).
+
+In short: more fields means better calculations, safer backfills, and fewer assumptions.
+
+---
+
 ## Features
 
-**Charging Sessions** -- Full session management with add, edit, delete, and CSV import. Paginated table with sort-by-column, multi-select network filtering, date range presets, and charge type/location type filters. Detail drawer with EVSE charger data and cost breakdown.
+**Charging Sessions** -- Full CRUD with sorting, date presets, charge-type and network filters, group edit, and a detail drawer with cost breakdown, EVSE metrics, stall context, and charge-curve preview.
 
-**Cost Analytics** -- Per-network and per-location cost rates with estimated cost calculation. Lifetime spending by network, gas vehicle savings comparison, and network cost comparison. Actual vs estimated cost tracking.
+**Cost Analytics** -- Cost hierarchy (manual/imported, location override, network, subscription member rate), actual vs estimated tracking, subscription savings, and gas/network comparison scenarios.
 
-**Energy Dashboard** -- Total energy consumed, efficiency trends, charge type breakdown, and aggregate charging efficiency metrics (loss %, utilization %).
+**Energy Dashboard** -- Total energy, regen recovery summary, efficiency trend with rolling average, and monthly energy by charge type.
 
-**Dashboard** -- Summary cards with total sessions, energy, cost, and miles. Monthly cost trend, energy by network, and efficiency trend charts. Charging efficiency card with average loss and utilization.
+**Home Dashboard** -- Multi-vehicle overview, global summary cards, EVSE charging-efficiency aggregates, monthly energy by network chart, and network energy breakdown.
 
-**Network Management** -- Charging networks with color badges, expandable location management, per-location cost overrides, and charger stall configuration with EVSE specs.
+**Network & Location Management** -- Color-coded networks, expandable location management, per-location cost overrides, charger stall definitions (with template pre-fill), and subscription period management.
 
-**CSV Import** -- Template-based import with auto-detection fallback, inline error/duplicate editing, timezone-aware parsing, and import summary.
+**CSV Import** -- Template download plus auto-detection fallback, timezone-aware parsing, inline row correction for errors/duplicates, and support for full session/EVSE field mapping.
 
 **Home Assistant Integration** -- Real-time connection to Home Assistant via WebSocket for automatic charging session detection from [ha-fordpass](https://github.com/marq24/ha_fordpass). Vehicle telemetry ingestion, VIN auto-detection, unit normalization, and 30-day history backfill.
 
-**Settings** -- Network management, gas comparison parameters, unit preferences (US/EU), timezone selection, Home Assistant connection, and comparison section toggles.
+**Settings** -- Vehicle profiles, comparison display options, gas price history/sensor integration, unit preferences (US/EU), timezone selection, and Home Assistant connection controls.
 
 ---
 

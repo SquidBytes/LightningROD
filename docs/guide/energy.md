@@ -1,6 +1,6 @@
 # Energy Dashboard
 
-The energy page (`/energy`) tracks total energy consumption and charging efficiency over time.
+The energy page (`/energy`) tracks energy use, efficiency trends, and regenerative braking signals for the active vehicle.
 
 ![energy](../assets/images/lr_energy.gif)
 
@@ -8,9 +8,9 @@ The energy page (`/energy`) tracks total energy consumption and charging efficie
 
 Three cards at the top:
 
-- **Total energy consumed** -- Lifetime kWh across all sessions
-- **Average efficiency** -- mi/kWh (US) or km/kWh (EU), based on your unit preference
-- **Charge type breakdown** -- Total kWh split by AC vs DC
+- **Total Energy** -- Lifetime kWh across sessions in scope
+- **Range Recovered (Regen)** -- Summed `range_regenerated` from trip metrics (if available)
+- **Avg Efficiency** -- mi/kWh (US) or km/kWh (EU), plus best/worst values
 
 ## Efficiency Trend Chart
 
@@ -18,30 +18,28 @@ An interactive Plotly scatter chart showing efficiency per session over time, wi
 
 - Individual session data points colored by charge type
 - A rolling 10-session average overlay line
-- Hover details showing date, efficiency, and energy for each session
+- Optional regen overlay on a secondary axis when trip regen data exists
 
 !!! note
     Efficiency is computed as `miles_added / energy_kwh` at query time. Sessions missing either value are excluded from the chart.
 
-## Charging Efficiency Card
+## Energy by Charge Type
 
-When EVSE data is available on sessions, an aggregate efficiency card shows:
+A section below the summary cards shows kWh and session counts split by AC vs DC.
 
-- **Average charging loss** -- Percentage of energy lost between EVSE delivery and vehicle receipt
-- **Total loss** -- Cumulative kWh lost across all sessions with EVSE data
-- **Average utilization** -- How much of the charger's rated capacity was used on average
+## Monthly Energy by Type
 
-Loss is calculated as `evse_energy_kwh - energy_kwh` for sessions where both values exist. Utilization is `max_power / charger_rated_kw`.
+The monthly chart shows stacked energy totals by charge type over time.
 
 ## Regenerative Braking
 
 If trip metrics data includes regeneration values, a regen section displays:
 
-- Total lifetime energy recovered
+- Total lifetime range recovered
 - Regen as a percentage of total energy consumed
 
 !!! info
-    Regen data comes from `ev_trip_metrics`. This section will show data once live ingestion from Home Assistant is implemented, or if trip metric CSVs are loaded.
+    Regen data comes from `ev_trip_metrics`. If no trip data is available, the card shows a no-data state.
 
 ## Units
 

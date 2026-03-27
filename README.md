@@ -19,6 +19,38 @@ If you would like to, please consider buying me a coffee.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/SquidBytes)
 
+## Features
+
+- Charging session CRUD with sorting/filtering, group edit, and rich drawer details
+- EVSE-aware analytics (loss/utilization), charger stall mapping, and session-level EVSE provenance
+  - Charging Network/location/stall management 
+- Cost analytics with network/location rate hierarchy, actual vs estimated tracking
+- Energy dashboard with efficiency trends, monthly energy by charge type, and regen summaries (when trip data exists)
+- Multi-vehicle support with active-vehicle scoping for vehicle-specific pages
+- CSV import flow with auto column mapping, timezone handling, duplicate controls, and preview edits
+- Home Assistant WebSocket integration with live status and backfill controls
+
+## Project Goals
+
+### Data Ingestion**
+- **HomeAssistant**
+  - [x] ha-fordpass
+  - [ ] EVSE
+    - Ford Charge Station Pro
+    - Open Charge Point Protocol EVSE's
+- **Manual Entry**
+- **Import**
+  - [x] CSV
+  - [ ] XLSX
+  - [ ] EVSE App exports
+- **OBD Reader**
+  - WiCAN Pro
+  - OBDLink MX+
+- **Comma.ai**
+  - BluePilot
+  - comma four
+  - comma 3X
+
 ## Documentation
 
 Full documentation is available at the [documentation site](https://SquidBytes.github.io/LightningROD/).

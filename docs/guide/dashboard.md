@@ -1,8 +1,12 @@
 # Dashboard
 
-The dashboard (`/`) provides an overview of your charging analytics.
+The dashboard (`/`) provides a high-level overview across all vehicles.
 
 ![dashboard](../assets/images/lr_dashboard.gif)
+
+## Vehicle Cards
+
+The top section shows your configured vehicles, session counts, and last-charge dates. One vehicle can be marked active for vehicle-scoped pages, but dashboard totals remain global.
 
 ## Summary Cards
 
@@ -28,8 +32,8 @@ The card shows how many sessions contributed EVSE data. Sessions without EVSE da
 
 Two charts in a side-by-side grid:
 
-- **Energy Over Time** -- Cumulative energy consumption over your charging history
-- **Energy by Network** -- Breakdown of energy delivered by each charging network, using network-assigned colors
+- **Monthly Energy by Network** -- Stacked monthly energy totals grouped by charging network
+- **Energy by Network** -- Donut breakdown of total delivered energy by charging network
 
 Charts are interactive (Plotly) with hover details and zoom controls.
 
