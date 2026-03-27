@@ -146,6 +146,7 @@
                     <form hx-post="/review/location/{{ loc.id }}/edit"
                           hx-target="#review-content"
                           hx-swap="innerHTML"
+                          hx-on::after-request="if(event.detail.successful) document.getElementById('edit-loc-{{ loc.id }}').close()"
                           class="mt-5 space-y-4">
 
                         <label class="form-control w-full">
@@ -212,8 +213,7 @@
                                         class="btn btn-ghost">
                                     Cancel
                                 </button>
-                                <button type="submit" class="btn btn-primary"
-                                        onclick="document.getElementById('edit-loc-{{ loc.id }}').close()">
+                                <button type="submit" class="btn btn-primary">
                                     Save
                                 </button>
                             </div>
