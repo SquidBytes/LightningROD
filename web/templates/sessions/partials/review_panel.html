@@ -1,0 +1,74 @@
+<td colspan="99" class="p-4">
+  <div class="flex flex-col gap-4">
+    <h4 class="text-sm font-semibold text-warning">Possible Duplicate Review</h4>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- This session -->
+      <div class="card bg-base-200 border border-warning/30">
+        <div class="card-body p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="badge badge-sm">This session</span>
+            <span class="text-xs text-base-content/40">{{ session.source_system or 'unknown' }}</span>
+          </div>
+          <div class="space-y-1 text-sm">
+            <p><span class="text-base-content/60">Date:</span> {{ session.session_start_utc.strftime('%Y-%m-%d %H:%M') if session.session_start_utc else '--' }}</p>
+            <p><span class="text-base-content/60">Energy:</span> {{ '%.2f'|format(session.energy_kwh|float) if session.energy_kwh else '--' }} kWh</p>
+            <p><span class="text-base-content/60">Location:</span> {{ session.location_name or '--' }}</p>
+            <p><span class="text-base-content/60">Cost:</span> {{ '$%.2f'|format(session.cost|float) if session.cost else '--' }}</p>
+            <p><span class="text-base-content/60">SOC:</span> {{ '%d'|format(session.start_soc|float) if session.start_soc else '?' }}% -> {{ '%d'|format(session.end_soc|float) if session.end_soc else '?' }}%</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Other session -->
+      {% if other %}
+      <div class="card bg-base-200 border border-base-300">
+        <div class="card-body p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="badge badge-sm badge-ghost">Matched session</span>
+            <span class="text-xs text-base-content/40">{{ other.source_system or 'unknown' }}</span>
+          </div>
+          <div class="space-y-1 text-sm">
+            <p><span class="text-base-content/60">Date:</span> {{ other.session_start_utc.strftime('%Y-%m-%d %H:%M') if other.session_start_utc else '--' }}</p>
+            <p><span class="text-base-content/60">Energy:</span> {{ '%.2f'|format(other.energy_kwh|float) if other.energy_kwh else '--' }} kWh</p>
+            <p><span class="text-base-content/60">Location:</span> {{ other.location_name or '--' }}</p>
+            <p><span class="text-base-content/60">Cost:</span> {{ '$%.2f'|format(other.cost|float) if other.cost else '--' }}</p>
+            <p><span class="text-base-content/60">SOC:</span> {{ '%d'|format(other.start_soc|float) if other.start_soc else '?' }}% -> {{ '%d'|format(other.end_soc|float) if other.end_soc else '?' }}%</p>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="card bg-base-200 border border-base-300">
+        <div class="card-body p-4 items-center justify-center">
+          <p class="text-sm text-base-content/40">Original session no longer exists</p>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Action buttons -->
+    <div class="flex gap-2 justify-end">
+      <button class="btn btn-sm btn-ghost"
+              hx-post="/charging/sessions/{{ session.id }}/resolve-duplicate"
+              hx-vals='{"action": "keep_both"}'
+              hx-swap="none">
+        Keep Both
+      </button>
+      {% if other %}
+      <button class="btn btn-sm btn-outline btn-error"
+              hx-post="/charging/sessions/{{ session.id }}/resolve-duplicate"
+              hx-vals='{"action": "keep_other"}'
+              hx-swap="none"
+              hx-confirm="Delete this session and keep the matched one?">
+        Keep Other
+      </button>
+      {% endif %}
+      <button class="btn btn-sm btn-primary"
+              hx-post="/charging/sessions/{{ session.id }}/resolve-duplicate"
+              hx-vals='{"action": "keep_this"}'
+              hx-swap="none">
+        Keep This
+      </button>
+    </div>
+  </div>
+</td>

@@ -4,10 +4,10 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Form, Header, Request
+from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
@@ -890,3 +890,101 @@ async def check_duplicate(
         "sessions/partials/duplicate_warning.html",
         {"matches": filtered},
     )
+
+
+@router.get("/sessions/review-count-badge", response_class=HTMLResponse)
+async def review_count_badge(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return badge HTML for session review count (for sidebar lazy load)."""
+    count = await get_review_count(db)
+    if count > 0:
+        return HTMLResponse(f'<span class="badge badge-warning badge-sm">{count}</span>')
+    return HTMLResponse("")
+
+
+@router.get("/sessions/{session_id}/review-panel", response_class=HTMLResponse)
+async def session_review_panel(
+    session_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return inline comparison panel for a session needing review."""
+    session = (
+        await db.execute(
+            select(EVChargingSession).where(EVChargingSession.id == session_id)
+        )
+    ).scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    other = None
+    if session.duplicate_of_id:
+        other = (
+            await db.execute(
+                select(EVChargingSession).where(EVChargingSession.id == session.duplicate_of_id)
+            )
+        ).scalar_one_or_none()
+
+    return templates.TemplateResponse(
+        request,
+        "sessions/partials/review_panel.html",
+        {"session": session, "other": other},
+    )
+
+
+@router.post("/sessions/{session_id}/resolve-duplicate", response_class=HTMLResponse)
+async def resolve_duplicate(
+    session_id: int,
+    request: Request,
+    action: Annotated[str, Form()],  # 'keep_this', 'keep_other', 'keep_both'
+    db: AsyncSession = Depends(get_db),
+):
+    """Resolve a duplicate session: keep one, delete the other, or keep both."""
+    session = (
+        await db.execute(
+            select(EVChargingSession).where(EVChargingSession.id == session_id)
+        )
+    ).scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if action == "keep_this":
+        # Delete the other session, clear flags on this one
+        if session.duplicate_of_id:
+            await db.execute(
+                delete(EVChargingSession).where(EVChargingSession.id == session.duplicate_of_id)
+            )
+        session.needs_review = False
+        session.review_type = None
+        session.duplicate_of_id = None
+
+    elif action == "keep_other":
+        # Delete this session
+        other_id = session.duplicate_of_id
+        await db.execute(
+            delete(EVChargingSession).where(EVChargingSession.id == session_id)
+        )
+        # Clear review flags on the other session if it was also flagged
+        if other_id:
+            other = (await db.execute(
+                select(EVChargingSession).where(EVChargingSession.id == other_id)
+            )).scalar_one_or_none()
+            if other and other.duplicate_of_id == session_id:
+                other.needs_review = False
+                other.review_type = None
+                other.duplicate_of_id = None
+
+    elif action == "keep_both":
+        # Keep both, clear review flags
+        session.needs_review = False
+        session.review_type = None
+        session.duplicate_of_id = None
+
+    await db.commit()
+
+    # Trigger table refresh
+    response = HTMLResponse("")
+    response.headers["HX-Trigger"] = "sessionReviewResolved"
+    return response

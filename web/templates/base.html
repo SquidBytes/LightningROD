@@ -100,7 +100,15 @@
                                 Charging
                             </summary>
                             <ul>
-                                <li><a href="/charging/sessions" class="{{ 'active' if active_page == 'sessions' }}">Sessions</a></li>
+                                <li>
+                                    <a href="/charging/sessions" class="{{ 'active' if active_page == 'sessions' }} flex justify-between">
+                                        Sessions
+                                        <span id="sessions-review-badge"
+                                              hx-get="/charging/sessions/review-count-badge"
+                                              hx-trigger="load, sessionReviewResolved from:body"
+                                              hx-swap="innerHTML"></span>
+                                    </a>
+                                </li>
                                 <li><a href="/charging/costs" class="{{ 'active' if active_page == 'costs' }}">Costs</a></li>
                                 <li><a href="/charging/energy" class="{{ 'active' if active_page == 'energy' }}">Energy</a></li>
                             </ul>
