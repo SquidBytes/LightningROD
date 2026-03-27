@@ -7,12 +7,13 @@ CSV import, and manual session creation.
 
 import math
 import re
+from difflib import SequenceMatcher
 from typing import Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.reference import AppSettings, EVLocationLookup
+from db.models.reference import AppSettings, EVLocationLookup, EVLocationGPSAlias
 from web.queries.settings import resolve_network
 
 # Maximum distance (meters) for geo-proximity matching
@@ -129,6 +130,57 @@ def _find_address_match(
     return None
 
 
+def _names_similar(name_a: str | None, name_b: str | None, threshold: float = 0.5) -> bool:
+    """Check if two location/network names are similar enough for auto-association.
+
+    Uses SequenceMatcher ratio. Returns True if either name is None/empty
+    (permissive when data is missing) or if similarity >= threshold.
+    """
+    if not name_a or not name_b:
+        return True  # Missing names are not evidence of difference
+    a = name_a.lower().strip()
+    b = name_b.lower().strip()
+    if a == b:
+        return True
+    return SequenceMatcher(None, a, b).ratio() >= threshold
+
+
+async def _find_gps_alias_match(
+    db: AsyncSession, latitude: float, longitude: float
+) -> Optional[EVLocationGPSAlias]:
+    """Find a GPS alias within LOCATION_MATCH_RADIUS_M of the given coordinates."""
+    result = await db.execute(select(EVLocationGPSAlias))
+    aliases = result.scalars().all()
+    for alias in aliases:
+        dist = haversine_meters(
+            float(alias.latitude), float(alias.longitude),
+            latitude, longitude,
+        )
+        if dist <= LOCATION_MATCH_RADIUS_M:
+            return alias
+    return None
+
+
+def _find_all_geo_matches(
+    locations: list, latitude: float, longitude: float
+) -> list[tuple[object, float]]:
+    """Find all locations within LOCATION_MATCH_RADIUS_M, sorted by distance (closest first).
+
+    Returns list of (location, distance_meters) tuples.
+    """
+    matches = []
+    for loc in locations:
+        if loc.latitude is not None and loc.longitude is not None:
+            dist = haversine_meters(
+                float(loc.latitude), float(loc.longitude),
+                latitude, longitude,
+            )
+            if dist <= LOCATION_MATCH_RADIUS_M:
+                matches.append((loc, dist))
+    matches.sort(key=lambda m: m[1])
+    return matches
+
+
 async def resolve_location(
     db: AsyncSession,
     latitude: Optional[float] = None,
@@ -172,9 +224,25 @@ async def resolve_location(
 
     matched = None
 
-    # 1. Geo-proximity match
+    # Step 0: Check GPS aliases first (location memory from prior merges)
     if latitude is not None and longitude is not None:
-        matched = _find_geo_match(all_locations, latitude, longitude)
+        alias_match = await _find_gps_alias_match(db, latitude, longitude)
+        if alias_match:
+            return alias_match.location_id
+
+    # 1. Geo-proximity match with verified preference
+    if latitude is not None and longitude is not None:
+        geo_matches = _find_all_geo_matches(all_locations, latitude, longitude)
+        for loc, dist in geo_matches:
+            if loc.is_verified:
+                if _names_similar(location_name, loc.location_name):
+                    matched = loc
+                    break
+                else:
+                    continue  # Verified but name differs significantly -- skip
+            else:
+                matched = loc  # Unverified -- accept any GPS match (existing behavior)
+                break
 
     # 2. Address fallback
     if matched is None and address:
