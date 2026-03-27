@@ -10,7 +10,9 @@ from db.models.charging_session import EVChargingSession
 from db.models.reference import (
     EVChargerStall,
     EVChargingNetwork,
+    EVLocationGPSAlias,
     EVLocationLookup,
+    EVNetworkNameAlias,
     EVNetworkSubscription,
 )
 from web.dependencies import get_db
@@ -516,6 +518,18 @@ async def merge_network(
         .values(network_id=target_id)
     )
 
+    # Create network name alias from source name for future auto-resolution
+    existing_alias = await db.execute(
+        select(EVNetworkNameAlias).where(
+            func.lower(EVNetworkNameAlias.alias_name) == source.network_name.lower()
+        )
+    )
+    if not existing_alias.scalar_one_or_none():
+        db.add(EVNetworkNameAlias(
+            network_id=target_id,
+            alias_name=source.network_name,
+        ))
+
     # Delete source
     await db.execute(delete(EVChargingNetwork).where(EVChargingNetwork.id == source_id))
     await db.commit()
@@ -616,6 +630,34 @@ async def merge_location(
         .where(EVChargerStall.location_id == source_id)
         .values(location_id=target_id)
     )
+
+    # Create GPS alias from source coordinates for future location memory
+    if source.latitude is not None and source.longitude is not None:
+        from web.queries.locations import haversine_meters, LOCATION_MATCH_RADIUS_M
+        # Check if an existing alias for the same target is already within 100m
+        existing_aliases_result = await db.execute(
+            select(EVLocationGPSAlias).where(
+                EVLocationGPSAlias.location_id == target_id
+            )
+        )
+        existing_aliases = list(existing_aliases_result.scalars().all())
+        already_covered = False
+        for alias in existing_aliases:
+            dist = haversine_meters(
+                float(alias.latitude), float(alias.longitude),
+                float(source.latitude), float(source.longitude),
+            )
+            if dist <= LOCATION_MATCH_RADIUS_M:
+                already_covered = True
+                break
+
+        if not already_covered:
+            db.add(EVLocationGPSAlias(
+                location_id=target_id,
+                latitude=float(source.latitude),
+                longitude=float(source.longitude),
+                source="merge",
+            ))
 
     # Delete source
     await db.execute(delete(EVLocationLookup).where(EVLocationLookup.id == source_id))

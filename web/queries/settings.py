@@ -1,11 +1,11 @@
 import json
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.reference import AppSettings, EVChargerStall, EVChargingNetwork, EVLocationLookup, EVNetworkSubscription
+from db.models.reference import AppSettings, EVChargerStall, EVChargingNetwork, EVLocationLookup, EVNetworkNameAlias, EVNetworkSubscription
 
 # Predefined EV charging networks with brand-accurate colors
 PREDEFINED_NETWORKS = [
@@ -58,7 +58,6 @@ async def resolve_network(
     name = network_name.strip()
 
     # Try case-insensitive match against existing networks
-    from sqlalchemy import func
     result = await db.execute(
         select(EVChargingNetwork).where(
             func.lower(EVChargingNetwork.network_name) == name.lower()
@@ -67,6 +66,16 @@ async def resolve_network(
     existing = result.scalar_one_or_none()
     if existing:
         return existing.id
+
+    # Check network name aliases (from prior merge operations)
+    alias_result = await db.execute(
+        select(EVNetworkNameAlias.network_id).where(
+            func.lower(EVNetworkNameAlias.alias_name) == name.lower()
+        )
+    )
+    alias_match = alias_result.scalar_one_or_none()
+    if alias_match:
+        return alias_match
 
     # Auto-create new network — use predefined data if it's a known network
     known = _PREDEFINED_BY_NAME.get(name.lower())
