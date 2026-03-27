@@ -79,6 +79,47 @@ class EVLocationLookup(Base):
     source_system: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
 
+class EVLocationGPSAlias(Base):
+    """GPS coordinate alias for a known location.
+
+    Created when locations are merged (source GPS becomes alias on target)
+    or when a user confirms a first-time auto-association.
+    Used by resolve_location() to match future sessions to known locations.
+    """
+
+    __tablename__ = "ev_location_gps_aliases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ev_location_lookup.id", ondelete="CASCADE"), nullable=False
+    )
+    latitude: Mapped[float] = mapped_column(Numeric, nullable=False)
+    longitude: Mapped[float] = mapped_column(Numeric, nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)  # 'merge', 'manual', 'auto_confirm'
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, server_default=text("NOW()"))
+
+
+class EVNetworkNameAlias(Base):
+    """Alternate name alias for a charging network.
+
+    Created when networks are merged (source name becomes alias on target).
+    Used by resolve_network() to match future sessions to canonical networks.
+    """
+
+    __tablename__ = "ev_network_name_aliases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    network_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ev_charging_networks.id", ondelete="CASCADE"), nullable=False
+    )
+    alias_name: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, server_default=text("NOW()"))
+
+    __table_args__ = (
+        UniqueConstraint("alias_name", name="uq_ev_network_name_aliases_alias_name"),
+    )
+
+
 class EVChargerStall(Base):
     """Charger stall configuration for a location.
 

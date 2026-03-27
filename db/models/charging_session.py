@@ -92,6 +92,15 @@ class EVChargingSession(Base):
         Integer, ForeignKey("ev_charger_stalls.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Duplicate detection and review
+    duplicate_of_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ev_charging_session.id", ondelete="SET NULL"), nullable=True
+    )
+    needs_review: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    review_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # 'duplicate', 'auto_association', NULL
+
     # Pipeline metadata
     source_system: Mapped[Optional[str]] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
