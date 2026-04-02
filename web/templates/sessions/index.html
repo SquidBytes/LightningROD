@@ -119,6 +119,20 @@
     </form>
 </dialog>
 
+<!-- Delete confirmation modal -->
+<dialog id="delete-session-modal" class="modal">
+    <div class="modal-box max-w-sm">
+        <h3 class="font-bold text-lg">Delete Session</h3>
+        <p class="py-4 text-base-content/70">This action cannot be undone.</p>
+        <div class="modal-action">
+            <form method="dialog"><button class="btn btn-ghost">Keep Session</button></form>
+            <button id="confirm-delete-session"
+                    class="btn btn-error">Delete</button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <!-- Toast container -->
 <div id="toast-container" class="fixed top-4 right-4 z-[70] space-y-2"></div>
 
@@ -178,11 +192,16 @@ function closeSessionModal() {
     document.getElementById('session-modal-content').innerHTML = '';
 }
 
+function openDeleteSessionModal(sessionId) {
+    var btn = document.getElementById('confirm-delete-session');
+    btn.setAttribute('hx-delete', '/charging/sessions/' + sessionId);
+    btn.setAttribute('hx-swap', 'none');
+    htmx.process(btn);
+    document.getElementById('delete-session-modal').showModal();
+}
+
 function confirmDeleteFromModal(sessionId) {
-    if (confirm('Are you sure you want to delete this session?')) {
-        htmx.ajax('DELETE', '/charging/sessions/' + sessionId, {target: '#drawer-body', swap: 'innerHTML'});
-        closeSessionModal();
-    }
+    openDeleteSessionModal(sessionId);
 }
 
 // Listen for closeModal event from HTMX responses
@@ -230,6 +249,8 @@ document.body.addEventListener('session-deleted', function() {
     showToast('Session deleted', 'success');
     closeDrawer();
     closeSessionModal();
+    var delModal = document.getElementById('delete-session-modal');
+    if (delModal) delModal.close();
 });
 document.body.addEventListener('session-created', function(evt) {
     showToast('Session added', 'success');
