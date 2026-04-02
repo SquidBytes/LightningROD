@@ -3,13 +3,13 @@
 {% endif %}
 
 <form hx-post="/settings/units" hx-target="#unit-settings" hx-swap="innerHTML"
-      class="space-y-3">
+      class="space-y-4">
     <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-base-300/50 transition-colors">
         <input type="radio" name="efficiency_unit" value="us"
                {% if not settings.efficiency_unit or settings.efficiency_unit == 'us' %}checked{% endif %}
                class="radio radio-primary radio-sm">
         <div>
-            <span class="text-sm font-medium">US Units</span>
+            <span class="text-sm font-semibold">US Units</span>
             <span class="text-base-content/40 text-sm ml-2">mi/kWh (miles per kilowatt-hour)</span>
         </div>
     </label>
@@ -18,7 +18,7 @@
                {% if settings.efficiency_unit == 'eu' %}checked{% endif %}
                class="radio radio-primary radio-sm">
         <div>
-            <span class="text-sm font-medium">EU Units</span>
+            <span class="text-sm font-semibold">EU Units</span>
             <span class="text-base-content/40 text-sm ml-2">km/kWh (kilometers per kilowatt-hour)</span>
         </div>
     </label>

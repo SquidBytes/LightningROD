@@ -3,9 +3,10 @@
 {% endif %}
 
 <!-- Display Toggle Options -->
-<h3 class="text-sm font-semibold mb-3">Display Options</h3>
+<div class="label"><span class="label-text font-semibold">Display Options</span></div>
+<p class="text-xs text-base-content/50 -mt-1 mb-2">Toggle which comparison sections appear on the costs page.</p>
 <form hx-post="/settings/toggles" hx-target="#gas-settings" hx-swap="innerHTML"
-      class="space-y-2">
+      class="space-y-4">
     <label class="flex items-center gap-2 cursor-pointer">
         <input type="checkbox" name="comparison_section_visible"
                {% if settings.comparison_section_visible == 'true' %}checked{% endif %}

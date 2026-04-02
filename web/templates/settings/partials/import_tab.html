@@ -1,17 +1,14 @@
 {# CSV Import tab — template download, file picker, timezone selector, and import flow container #}
 <div id="import-tab-wrapper">
-    <div class="mb-6">
-        <h2 class="text-xl font-semibold">Import Charging Sessions</h2>
-        <p class="text-base-content/60 text-sm mt-1">Upload a CSV file to import charging sessions in bulk.</p>
-    </div>
-
     {# Upload card #}
     <div class="card bg-base-200 max-w-2xl">
         <div class="card-body">
+            <h2 class="card-title text-base font-semibold">CSV Import</h2>
+            <p class="text-base-content/60 text-sm -mt-1">Upload a CSV file to import charging sessions in bulk.</p>
 
             {# Template section #}
-            <div class="mb-4">
-                <h3 class="card-title text-base">Use Template</h3>
+            <div class="mb-4 mt-2">
+                <h3 class="text-sm font-semibold">Use Template</h3>
                 <p class="text-base-content/60 text-sm mt-1">
                     Download the CSV template, populate with your data, then upload it.
                 </p>
@@ -88,7 +85,7 @@
             >
                 {# File input using DaisyUI file-input #}
                 <div>
-                    <label class="label"><span class="label-text">Select CSV File</span></label>
+                    <label class="label"><span class="label-text font-semibold">Select CSV File</span></label>
                     <div class="flex items-center gap-3">
                         <input
                             type="file"
@@ -103,7 +100,7 @@
 
                 {# Timezone selector #}
                 <div>
-                    <label class="label"><span class="label-text">Timestamps timezone</span></label>
+                    <label class="label"><span class="label-text font-semibold">Timestamps timezone</span></label>
                     <select name="import_timezone" class="select select-bordered select-sm w-full max-w-xs">
                         {% set tz = user_tz | default('UTC') %}
                         <optgroup label="US / Canada">

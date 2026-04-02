@@ -15,36 +15,37 @@
 
     <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="General" {{ 'checked' if active_tab == 'general' }} />
     <div role="tabpanel" class="tab-content pt-6">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Comparison Settings -->
+        <div class="space-y-6">
+            <!-- Gas Comparison -->
             <div class="card bg-base-200">
                 <div class="card-body">
-                    <h2 class="card-title">Comparison Settings</h2>
-                    <div id="gas-settings">
+                    <h2 class="card-title text-base font-semibold">Gas Comparison</h2>
+                    <p class="text-base-content/60 text-sm -mt-1">Configure ICE vehicle comparison and gas price tracking.</p>
+                    <div id="gas-settings" class="mt-2">
                         {% include "settings/partials/gas_settings.html" %}
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Unit Preferences -->
-        <div class="card bg-base-200 mt-6 max-w-lg">
-            <div class="card-body">
-                <h2 class="card-title">Unit Preferences</h2>
-                <p class="text-base-content/60 text-sm">Choose how efficiency values display on the energy dashboard.</p>
-                <div id="unit-settings">
-                    {% include "settings/partials/unit_settings.html" %}
+            <!-- Units -->
+            <div class="card bg-base-200 max-w-lg">
+                <div class="card-body">
+                    <h2 class="card-title text-base font-semibold">Units</h2>
+                    <p class="text-base-content/60 text-sm -mt-1">Configure display units for distance, temperature, and energy.</p>
+                    <div id="unit-settings" class="mt-2">
+                        {% include "settings/partials/unit_settings.html" %}
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Timezone -->
-        <div class="card bg-base-200 mt-6 max-w-lg">
-            <div class="card-body">
-                <h2 class="card-title">Timezone</h2>
-                <p class="text-base-content/60 text-sm">Set your local timezone for displaying session timestamps.</p>
-                <div id="timezone-settings">
-                    {% include "settings/partials/timezone_settings.html" %}
+            <!-- Timezone -->
+            <div class="card bg-base-200 max-w-lg">
+                <div class="card-body">
+                    <h2 class="card-title text-base font-semibold">Timezone</h2>
+                    <p class="text-base-content/60 text-sm -mt-1">Set your local timezone for date and time display.</p>
+                    <div id="timezone-settings" class="mt-2">
+                        {% include "settings/partials/timezone_settings.html" %}
+                    </div>
                 </div>
             </div>
         </div>

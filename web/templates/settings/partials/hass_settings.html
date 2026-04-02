@@ -4,15 +4,15 @@
 
 <div class="card bg-base-200 max-w-2xl">
     <div class="card-body">
-        <h2 class="card-title">Home Assistant Connection</h2>
-        <p class="text-base-content/60 text-sm mb-2">Configure connection to your Home Assistant instance for automatic FordPass data ingestion.</p>
+        <h2 class="card-title text-base font-semibold">Home Assistant</h2>
+        <p class="text-base-content/60 text-sm -mt-1">Configure the connection to your Home Assistant instance.</p>
 
         <form hx-post="/settings/hass" hx-target="#hass-settings-content" hx-swap="innerHTML"
               class="space-y-4">
 
             <!-- HA URL -->
             <label class="form-control w-full">
-                <div class="label"><span class="label-text">Home Assistant URL</span></div>
+                <div class="label"><span class="label-text font-semibold">Home Assistant URL</span></div>
                 <input type="url" name="ha_url"
                        value="{{ hass.get('ha_url', '') }}"
                        placeholder="http://homeassistant.local:8123"
@@ -24,7 +24,7 @@
 
             <!-- Access Token -->
             <label class="form-control w-full">
-                <div class="label"><span class="label-text">Long-Lived Access Token</span></div>
+                <div class="label"><span class="label-text font-semibold">Long-Lived Access Token</span></div>
                 <div class="join w-full">
                     <input type="password" name="ha_token" id="ha-token-input"
                            value="{{ masked_token }}"
@@ -50,7 +50,7 @@
 
             <!-- VIN Override -->
             <label class="form-control w-full">
-                <div class="label"><span class="label-text">VIN Override</span></div>
+                <div class="label"><span class="label-text font-semibold">VIN Override</span></div>
                 <input type="text" name="ha_vin_override"
                        value="{{ hass.get('ha_vin_override', '') }}"
                        placeholder="Auto-detected from entity IDs"
@@ -62,7 +62,7 @@
 
             <!-- Unit System -->
             <label class="form-control w-full max-w-xs">
-                <div class="label"><span class="label-text">Unit System</span></div>
+                <div class="label"><span class="label-text font-semibold">Unit System</span></div>
                 {% set current_unit = hass.get('ha_unit_system', 'auto') %}
                 <select name="ha_unit_system" class="select select-bordered w-full">
                     <option value="auto" {% if current_unit == 'auto' or not current_unit %}selected{% endif %}>Auto-detect</option>
@@ -80,7 +80,7 @@
                     <input type="checkbox" name="ha_auto_connect"
                            {% if hass.get('ha_auto_connect', 'true') == 'true' %}checked{% endif %}
                            class="toggle toggle-primary">
-                    <span class="label-text">Auto-connect on startup</span>
+                    <span class="label-text font-semibold">Auto-connect on startup</span>
                 </label>
             </div>
 
@@ -97,15 +97,15 @@
 <!-- Home Location Settings -->
 <div class="card bg-base-200 max-w-2xl mt-4">
     <div class="card-body">
-        <h2 class="card-title">Home Location</h2>
-        <p class="text-base-content/60 text-sm mb-2">Configure your home address for automatic home charging detection. When HA reports a home charging session, it will be linked to this location.</p>
+        <h2 class="card-title text-base font-semibold">Home Location</h2>
+        <p class="text-base-content/60 text-sm -mt-1">Set your home coordinates for location-based features.</p>
 
         <form hx-post="/settings/hass/home-location" hx-target="#hass-settings-content" hx-swap="innerHTML"
               class="space-y-4">
 
             <!-- Home Location Name -->
             <label class="form-control w-full">
-                <div class="label"><span class="label-text">Location Name</span></div>
+                <div class="label"><span class="label-text font-semibold">Location Name</span></div>
                 <input type="text" name="home_location_name"
                        value="{{ hass.get('home_location_name', '') }}"
                        placeholder="Home"
@@ -114,7 +114,7 @@
 
             <!-- Home Latitude -->
             <label class="form-control w-full">
-                <div class="label"><span class="label-text">Latitude</span></div>
+                <div class="label"><span class="label-text font-semibold">Latitude</span></div>
                 <input type="number" name="home_latitude" step="any"
                        value="{{ hass.get('home_latitude', '') }}"
                        placeholder="e.g. 40.7128"
@@ -123,7 +123,7 @@
 
             <!-- Home Longitude -->
             <label class="form-control w-full">
-                <div class="label"><span class="label-text">Longitude</span></div>
+                <div class="label"><span class="label-text font-semibold">Longitude</span></div>
                 <input type="number" name="home_longitude" step="any"
                        value="{{ hass.get('home_longitude', '') }}"
                        placeholder="e.g. -74.0060"
