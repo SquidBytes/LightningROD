@@ -765,6 +765,28 @@ async def location_stalls(
     )
 
 
+@router.get("/settings/stalls/{stall_id}/edit", response_class=HTMLResponse)
+async def stall_edit_modal(
+    stall_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    location_id: int = 0,
+):
+    """Return stall edit modal content."""
+    result = await db.execute(
+        select(EVChargerStall).where(EVChargerStall.id == stall_id)
+    )
+    stall = result.scalar_one_or_none()
+    if not stall:
+        return HTMLResponse("<p>Stall not found.</p>", status_code=404)
+    loc_id = location_id or stall.location_id
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/stall_edit_modal.html",
+        {"stall": stall, "location_id": loc_id},
+    )
+
+
 @router.post("/settings/locations/{location_id}/stalls", response_class=HTMLResponse)
 async def create_stall_route(
     location_id: int,

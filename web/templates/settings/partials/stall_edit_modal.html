@@ -1,0 +1,73 @@
+{# Stall edit modal content -- loaded via HTMX into stall-edit-modal dialog #}
+<h3 class="font-bold text-lg mb-4">Edit Stall</h3>
+<form hx-put="/settings/stalls/{{ stall.id }}"
+      hx-target="#stall-container-{{ location_id }}"
+      hx-swap="outerHTML"
+      hx-on::after-request="if(event.detail.successful) document.getElementById('stall-edit-modal').close()">
+    <input type="hidden" name="location_id" value="{{ location_id }}">
+    <div class="grid grid-cols-4 gap-4">
+        {# Row 1 #}
+        <label class="form-control">
+            <span class="label-text text-xs mb-1">Label</span>
+            <input type="text" name="stall_label" value="{{ stall.stall_label }}" required
+                   class="input input-sm input-bordered">
+        </label>
+        <label class="form-control">
+            <span class="label-text text-xs mb-1">Type</span>
+            <select name="charger_type" class="select select-sm select-bordered">
+                <option value="">--</option>
+                <option value="L1" {% if stall.charger_type == 'L1' %}selected{% endif %}>L1</option>
+                <option value="L2" {% if stall.charger_type == 'L2' %}selected{% endif %}>L2</option>
+                <option value="DCFC" {% if stall.charger_type == 'DCFC' %}selected{% endif %}>DCFC</option>
+            </select>
+        </label>
+        <label class="form-control">
+            <span class="label-text text-xs mb-1">Voltage</span>
+            <input type="number" name="voltage" id="edit-stall-volt-{{ stall.id }}" step="1" min="0"
+                   value="{{ stall.voltage|int if stall.voltage else '' }}"
+                   class="input input-sm input-bordered">
+        </label>
+        <label class="form-control">
+            <span class="label-text text-xs mb-1">Amperage</span>
+            <input type="number" name="amperage" id="edit-stall-amp-{{ stall.id }}" step="1" min="0"
+                   value="{{ stall.amperage|int if stall.amperage else '' }}"
+                   class="input input-sm input-bordered">
+        </label>
+        {# Row 2 #}
+        <label class="form-control">
+            <span class="label-text text-xs mb-1">kW</span>
+            <input type="number" name="rated_kw" id="edit-stall-kw-{{ stall.id }}" step="0.1" min="0"
+                   value="{{ stall.rated_kw if stall.rated_kw else '' }}"
+                   class="input input-sm input-bordered">
+        </label>
+        <label class="form-control">
+            <span class="label-text text-xs mb-1">Connector</span>
+            <select name="connector_type" class="select select-sm select-bordered">
+                <option value="">--</option>
+                <option value="CCS" {% if stall.connector_type == 'CCS' %}selected{% endif %}>CCS</option>
+                <option value="CHAdeMO" {% if stall.connector_type == 'CHAdeMO' %}selected{% endif %}>CHAdeMO</option>
+                <option value="J1772" {% if stall.connector_type == 'J1772' %}selected{% endif %}>J1772</option>
+                <option value="NACS" {% if stall.connector_type == 'NACS' %}selected{% endif %}>NACS</option>
+                <option value="Tesla" {% if stall.connector_type == 'Tesla' %}selected{% endif %}>Tesla</option>
+            </select>
+        </label>
+        <label class="flex items-center gap-1 cursor-pointer pt-6">
+            <input type="checkbox" name="is_default"
+                   {% if stall.is_default %}checked{% endif %}
+                   class="toggle toggle-sm toggle-success">
+            <span class="text-xs">Default</span>
+        </label>
+        <div></div>
+    </div>
+    <div class="modal-action">
+        <form method="dialog"><button class="btn btn-ghost btn-sm">Discard Changes</button></form>
+        <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+    </div>
+</form>
+
+{% include 'partials/evse_autocalc.html' %}
+<script>
+    if (typeof attachEvseAutoCalc === 'function') {
+        attachEvseAutoCalc('edit-stall-kw-{{ stall.id }}', 'edit-stall-volt-{{ stall.id }}', 'edit-stall-amp-{{ stall.id }}');
+    }
+</script>
