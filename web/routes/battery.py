@@ -22,6 +22,7 @@ from web.queries.battery import (
     query_recent_sessions_for_picker,
     query_soc_timeline,
 )
+from web.queries.settings import get_app_setting
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
 
 router = APIRouter()
@@ -76,6 +77,7 @@ async def battery(
 
     # Full page or HTMX filter change: compute only SOC timeline + summary cards
     all_vehicles = await get_all_vehicles(db)
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
 
     # Load reference charge curve name for display
     ref_curve_data = load_reference_charge_curve(active_vehicle)
@@ -176,6 +178,7 @@ async def battery(
         "page_title": "Battery Analytics",
         "active_vehicle": active_vehicle,
         "all_vehicles": all_vehicles,
+        "user_tz": user_tz,
     }
 
     if hx_request:

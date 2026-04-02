@@ -72,7 +72,7 @@
                                     hx-get="/settings/stalls/{{ stall.id }}/edit?location_id={{ location_id }}"
                                     hx-target="#stall-edit-modal-content"
                                     hx-swap="innerHTML"
-                                    onclick="document.getElementById('stall-edit-modal').showModal()"
+                                    hx-on::after-settle="document.getElementById('stall-edit-modal').showModal()"
                                     class="btn btn-ghost btn-xs text-info">Edit</button>
                             <button type="button"
                                     hx-delete="/settings/stalls/{{ stall.id }}?location_id={{ location_id }}"

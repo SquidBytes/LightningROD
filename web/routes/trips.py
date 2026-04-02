@@ -25,6 +25,7 @@ from web.queries.trips import (
     query_trip_vehicle_series,
     query_trips,
 )
+from web.queries.settings import get_app_setting
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
 
 router = APIRouter()
@@ -51,6 +52,7 @@ async def trips(
     active_device_id = await get_active_device_id(db)
     active_vehicle = await get_active_vehicle(db)
     all_vehicles = await get_all_vehicles(db)
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
 
     # Query trips and efficiency trend
     trip_list, total, summary = await query_trips(
@@ -88,6 +90,7 @@ async def trips(
         "page_title": "Trip History",
         "active_vehicle": active_vehicle,
         "all_vehicles": all_vehicles,
+        "user_tz": user_tz,
     }
 
     if hx_request:
@@ -139,6 +142,7 @@ async def trip_drawer(
         )
 
     radar_chart = build_driving_score_radar(trip)
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
 
     start_location, end_location = None, None
     if trip.start_time and trip.end_time:
@@ -151,6 +155,7 @@ async def trip_drawer(
         "radar_chart": radar_chart,
         "start_location": start_location,
         "end_location": end_location,
+        "user_tz": user_tz,
     }
     return templates.TemplateResponse(request, "trips/partials/drawer.html", context)
 
@@ -222,11 +227,13 @@ async def trip_expanded(
     if trip.start_time and trip.end_time:
         battery_df = await query_trip_battery_series(db, trip.device_id, trip.start_time, trip.end_time)
         vehicle_df = await query_trip_vehicle_series(db, trip.device_id, trip.start_time, trip.end_time)
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
     context = {
         "trip": trip,
         "battery_chart": build_expanded_battery_chart(battery_df),
         "environment_chart": build_expanded_environment_chart(vehicle_df),
         "driving_chart": build_expanded_driving_chart(vehicle_df),
+        "user_tz": user_tz,
     }
     return templates.TemplateResponse(request, "trips/partials/expanded_modal.html", context)
 
