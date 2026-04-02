@@ -1,0 +1,14 @@
+services:
+  lightningrod:
+    build:
+      context: .
+      dockerfile: Dockerfile.standalone
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:

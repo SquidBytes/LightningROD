@@ -1,13 +1,16 @@
 # Installation
 
-LightningROD runs as a Docker Compose stack with two services: the web application and PostgreSQL.
+LightningROD can be deployed two ways:
+
+- **Docker Compose** (recommended) -- two containers: the web app and PostgreSQL
+- **Standalone Docker** -- single container with embedded PostgreSQL
 
 !!! tip "Unraid?"
     Dedicated [Unraid Setup guide](unraid.md) for Docker Compose Manager-specific steps.
 
 ## Requirements
 
-- Docker and Docker Compose
+- Docker (and Docker Compose for the two-container setup)
 - A CSV export of your charging history (optional, for seeding data)
 
 ## Docker Compose
@@ -93,3 +96,88 @@ docker compose up --build -d
 ```
 
 Migrations run automatically on startup, so schema changes are applied when you update.
+
+## Standalone Docker
+
+Runs both the application and PostgreSQL in a single container.
+
+=== "docker run"
+
+    ```bash
+    git clone https://github.com/SquidBytes/LightningROD.git
+    cd LightningROD
+    cp .env.example .env
+    ```
+
+    Edit `.env` to set a real password, then build and run:
+
+    ```bash
+    docker build -f Dockerfile.standalone -t lightningrod:standalone .
+    docker run -d \
+      -p 8000:8000 \
+      -v lightningrod-data:/var/lib/postgresql/data \
+      --env-file .env \
+      --name lightningrod \
+      lightningrod:standalone
+    ```
+
+=== "docker compose (standalone)"
+
+    ```bash
+    git clone https://github.com/SquidBytes/LightningROD.git
+    cd LightningROD
+    cp .env.example .env
+    ```
+
+    Edit `.env` to set a real password, then start:
+
+    ```bash
+    docker compose -f docker-compose.standalone.yml up --build -d
+    ```
+
+The app will be available at `http://localhost:8000` (or your configured `APP_PORT`).
+
+### What Happens on Startup (Standalone)
+
+The standalone entrypoint handles everything in a single container:
+
+1. Initializes the PostgreSQL data directory if empty (first run)
+2. Starts PostgreSQL as a background service
+3. Creates the database role and database if they don't exist
+4. Runs Alembic migrations
+5. Starts the FastAPI application
+
+!!! note
+    Data is stored in a Docker volume mounted at `/var/lib/postgresql/data`. This persists across container restarts and rebuilds.
+
+### Stopping and Restarting (Standalone)
+
+```bash
+# docker run
+docker stop lightningrod && docker start lightningrod
+
+# docker compose
+docker compose -f docker-compose.standalone.yml down
+docker compose -f docker-compose.standalone.yml up -d
+```
+
+### Updating (Standalone)
+
+```bash
+git pull
+docker build -f Dockerfile.standalone -t lightningrod:standalone .
+docker stop lightningrod && docker rm lightningrod
+docker run -d \
+  -p 8000:8000 \
+  -v lightningrod-data:/var/lib/postgresql/data \
+  --env-file .env \
+  --name lightningrod \
+  lightningrod:standalone
+```
+
+Or with compose:
+
+```bash
+git pull
+docker compose -f docker-compose.standalone.yml up --build -d
+```

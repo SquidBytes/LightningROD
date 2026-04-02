@@ -101,7 +101,7 @@ Screenshots are from `v0.1.5` and may not be up to date
 ### Docker Compose (recommended)
 
 ```bash
-git clone https://github.com/yourusername/LightningROD.git
+git clone https://github.com/SquidBytes/LightningROD.git
 cd LightningROD
 cp .env.example .env
 # Edit .env -- at minimum, set a real POSTGRES_PASSWORD
@@ -109,5 +109,28 @@ docker compose up --build -d
 ```
 
 The app will be available at `http://localhost:8000`. Migrations run automatically on startup.
+
+### Standalone Docker (single container)
+
+Runs both the app and PostgreSQL in a single container -- no Compose required.
+
+```bash
+git clone https://github.com/SquidBytes/LightningROD.git
+cd LightningROD
+cp .env.example .env
+docker build -f Dockerfile.standalone -t lightningrod:standalone .
+docker run -d \
+  -p 8000:8000 \
+  -v lightningrod-data:/var/lib/postgresql/data \
+  --env-file .env \
+  --name lightningrod \
+  lightningrod:standalone
+```
+
+Or using the standalone compose file:
+
+```bash
+docker compose -f docker-compose.standalone.yml up --build -d
+```
 
 Reference the full [documentation site](https://SquidBytes.github.io/LightningROD/).
