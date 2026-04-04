@@ -160,8 +160,9 @@ def _make_mock_db(locations=None, settings=None):
                     break
             result.scalar_one_or_none.return_value = scalar_val
         else:
+            # Default: return empty results (e.g. GPS alias queries)
             scalars_mock = MagicMock()
-            scalars_mock.all.return_value = locations or []
+            scalars_mock.all.return_value = []
             result.scalars.return_value = scalars_mock
 
         return result
