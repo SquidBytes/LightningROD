@@ -57,7 +57,7 @@ UPDATABLE_COLUMNS = [
     "end_soc",
     "cost",
     "cost_without_overrides",
-    "miles_added",
+    "distance_added",
     "charging_voltage",
     "charging_amperage",
     "is_complete",
@@ -237,7 +237,8 @@ COLUMN_MAP = {
     "cost_total": ("cost", float_or_none),
     "cost": ("cost", float_or_none),
     "cost_without_overrides": ("cost_without_overrides", float_or_none),
-    "miles_added": ("miles_added", float_or_none),
+    "miles_added": ("distance_added", float_or_none),
+    "distance_added": ("distance_added", float_or_none),
     # --- Electrical ---
     "charging_voltage": ("charging_voltage", float_or_none),
     "charging_amperage": ("charging_amperage", float_or_none),

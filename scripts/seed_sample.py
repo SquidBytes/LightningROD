@@ -189,7 +189,12 @@ def transform_session_row(csv_row: dict, device_id: str) -> Optional[dict]:
         "longitude": float_or_none(csv_row.get("longitude", "")),
         "max_power": float_or_none(csv_row.get("max_power", "")),
         "min_power": float_or_none(csv_row.get("min_power", "")),
-        "miles_added": float_or_none(csv_row.get("miles_added", "")),
+        # CSV stores miles; convert to km for metric-canonical storage
+        "distance_added": (
+            float_or_none(csv_row.get("miles_added", "")) * 1.60934
+            if float_or_none(csv_row.get("miles_added", "")) is not None
+            else None
+        ),
         "evse_voltage": float_or_none(csv_row.get("evse_voltage", "")),
         "evse_amperage": float_or_none(csv_row.get("evse_amperage", "")),
         "evse_kw": float_or_none(csv_row.get("evse_kw", "")),
@@ -244,7 +249,7 @@ SESSION_UPDATABLE = [
     "device_id", "charge_type", "location_name", "location_type", "is_free",
     "session_start_utc", "session_end_utc", "charge_duration_seconds",
     "energy_kwh", "charging_kw", "max_power", "min_power", "start_soc", "end_soc",
-    "cost", "cost_without_overrides", "miles_added", "charging_voltage",
+    "cost", "cost_without_overrides", "distance_added", "charging_voltage",
     "charging_amperage", "is_complete", "recorded_at", "source_system",
     "location_id", "address", "latitude", "longitude",
     "evse_voltage", "evse_amperage", "evse_kw", "evse_energy_kwh",

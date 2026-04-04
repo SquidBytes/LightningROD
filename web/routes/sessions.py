@@ -16,8 +16,9 @@ from web.dependencies import get_db
 from web.queries.battery import build_mini_charge_curve, load_reference_charge_curve
 from web.queries.costs import compute_session_cost, get_locations_by_id, get_session_cost_context
 from web.queries.sessions import get_most_recent_location, query_sessions
-from web.queries.settings import get_all_networks, get_app_setting, get_stalls_for_location, get_subscriptions_for_network, resolve_network
+from web.queries.settings import get_all_networks, get_app_setting, get_stalls_for_location, get_subscriptions_for_network, get_unit_context, resolve_network
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
+from web.unit_system import to_metric_distance
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -128,8 +129,10 @@ async def sessions(
 
     all_vehicles = await get_all_vehicles(db)
     review_count = await get_review_count(db, active_device_id)
+    unit_ctx = await get_unit_context(db)
 
     context = {
+        **unit_ctx,
         "sessions": enriched_sessions,
         "total": total,
         "page": page,
@@ -253,7 +256,9 @@ async def new_session_modal(
     """Render advanced edit modal in add mode with smart defaults."""
     default_location = await get_most_recent_location(db)
     all_networks = await get_all_networks(db)
+    unit_ctx = await get_unit_context(db)
     context = {
+        **unit_ctx,
         "session": None,
         "cost_info": None,
         "modal_mode": "add",
@@ -285,7 +290,7 @@ async def create_session(
     charging_amperage: Annotated[Optional[float], Form()] = None,
     start_soc: Annotated[Optional[float], Form()] = None,
     end_soc: Annotated[Optional[float], Form()] = None,
-    miles_added: Annotated[Optional[float], Form()] = None,
+    distance_added: Annotated[Optional[float], Form()] = None,
     end_date: Annotated[Optional[str], Form()] = None,
     end_time: Annotated[Optional[str], Form()] = None,
     plugged_in_duration_minutes: Annotated[Optional[float], Form()] = None,
@@ -305,6 +310,10 @@ async def create_session(
     evse_source: Annotated[Optional[str], Form()] = None,
 ):
     errors: dict[str, str] = {}
+
+    # Convert user-entered distance to metric (km) for storage
+    unit_ctx = await get_unit_context(db)
+    distance_added_km = to_metric_distance(distance_added, unit_ctx["distance_unit"]) if distance_added else None
 
     # Validate required fields
     if not session_date:
@@ -378,7 +387,7 @@ async def create_session(
         charging_amperage=charging_amperage or None,
         start_soc=start_soc,
         end_soc=end_soc,
-        miles_added=miles_added or None,
+        distance_added=distance_added_km,
         plug_status=plug_status or None,
         charging_status=charging_status or None,
         is_complete=True,
@@ -459,6 +468,7 @@ async def create_session(
     ref_curve = ref_data["curve"] if ref_data else None
     mini_chart_html = build_mini_charge_curve(new_session, ref_curve=ref_curve)
     context = {
+        **unit_ctx,
         "session": new_session,
         "cost_info": cost_info,
         "prev_id": None,
@@ -496,7 +506,7 @@ async def update_session(
     charging_amperage: Annotated[Optional[float], Form()] = None,
     start_soc: Annotated[Optional[float], Form()] = None,
     end_soc: Annotated[Optional[float], Form()] = None,
-    miles_added: Annotated[Optional[float], Form()] = None,
+    distance_added: Annotated[Optional[float], Form()] = None,
     end_date: Annotated[Optional[str], Form()] = None,
     end_time: Annotated[Optional[str], Form()] = None,
     plugged_in_duration_minutes: Annotated[Optional[float], Form()] = None,
@@ -591,8 +601,11 @@ async def update_session(
         session.start_soc = start_soc
     if end_soc is not None:
         session.end_soc = end_soc
-    if miles_added is not None:
-        session.miles_added = miles_added or None
+    if distance_added is not None:
+        unit_ctx = await get_unit_context(db)
+        session.distance_added = (
+            to_metric_distance(distance_added, unit_ctx["distance_unit"]) or None
+        )
     if plugged_in_duration_minutes is not None:
         session.plugged_in_duration_seconds = plugged_in_duration_minutes * 60
     if location_id is not None:
@@ -698,7 +711,9 @@ async def update_session(
     _ref_curve = _ref_data["curve"] if _ref_data else None
     mini_chart_html = build_mini_charge_curve(session, ref_curve=_ref_curve)
 
+    unit_ctx = await get_unit_context(db)
     context = {
+        **unit_ctx,
         "session": session,
         "cost_info": cost_info,
         "prev_id": None,
@@ -781,7 +796,9 @@ async def session_detail(
     _ref_curve = _ref_data["curve"] if _ref_data else None
     mini_chart_html = build_mini_charge_curve(session, ref_curve=_ref_curve)
 
+    unit_ctx = await get_unit_context(db)
     context = {
+        **unit_ctx,
         "session": session,
         "cost_info": cost_info,
         "prev_id": prev_id,
@@ -823,8 +840,10 @@ async def session_modal(
         stalls = await get_stalls_for_location(db, session.location_id)
 
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
+    unit_ctx = await get_unit_context(db)
 
     context = {
+        **unit_ctx,
         "session": session,
         "cost_info": cost_info,
         "modal_mode": "edit",

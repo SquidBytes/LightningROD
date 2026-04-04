@@ -40,7 +40,7 @@
                             ${{ "%.2f"|format(gas_comparison.gas_total_low) }}
                         {% endif %}
                     </p>
-                    <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(gas_comparison.total_miles) }} miles</p>
+                    <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(gas_comparison.total_distance) }} {{ units.distance_long }}</p>
                 </div>
             </div>
             <div class="card bg-base-200">

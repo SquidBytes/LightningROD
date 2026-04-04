@@ -7,6 +7,7 @@ from db.models.charging_session import EVChargingSession
 from db.models.reference import GasPriceHistory
 from db.models.vehicle import EVVehicle
 from web.queries.costs import build_time_filter, compute_session_cost, get_networks_by_name
+from web.unit_system import GAL_PER_LITER, MI_PER_KM
 
 
 def _find_gas_price(
@@ -37,7 +38,7 @@ def _empty_gas_result() -> dict:
         "savings_pct_low": 0.0,
         "savings_pct_high": 0.0,
         "session_count": 0,
-        "total_miles": 0.0,
+        "total_distance": 0.0,  # km (metric base)
         "ice_label": None,
         "has_range": False,
     }
@@ -53,22 +54,31 @@ async def query_gas_comparison(
 
     Uses date-aware gas price lookup with two price tracks (station and average)
     to produce a savings range. Supports dual calculation paths:
-    - Primary (miles-based): when session.miles_added > 0 and vehicle.ice_mpg set
+    - Primary (distance-based): when session.distance_added > 0 and
+      vehicle.ice_fuel_efficiency set
     - Fallback (percentage-based): when session.energy_kwh > 0 and vehicle has
-      battery_capacity_kwh and ice_fuel_tank_gal
+      battery_capacity_kwh and ice_fuel_tank_capacity
+
+    All stored values are metric (km, L/100km, liters). Gas prices from external
+    US sources are in $/gallon, so we convert distance to miles and efficiency
+    to MPG internally for the cost math.
 
     Returns dict with:
     - ev_total, gas_total_low, gas_total_high
     - savings_low, savings_high, savings_pct_low, savings_pct_high
-    - session_count, total_miles, ice_label, has_range
+    - session_count, total_distance (km), ice_label, has_range
     """
     # If no vehicle or no ICE config, return empty result
-    if vehicle is None or not vehicle.ice_mpg:
+    if vehicle is None or not vehicle.ice_fuel_efficiency:
         return _empty_gas_result()
 
-    ice_mpg = float(vehicle.ice_mpg)
+    # L/100km stored in DB -> convert to MPG for gas math
+    ice_l_per_100km = float(vehicle.ice_fuel_efficiency)
+    ice_mpg = 235.215 / ice_l_per_100km if ice_l_per_100km > 0 else None
     battery_kwh = float(vehicle.battery_capacity_kwh) if vehicle.battery_capacity_kwh else None
-    fuel_tank = float(vehicle.ice_fuel_tank_gal) if vehicle.ice_fuel_tank_gal else None
+    # Tank capacity stored in liters -> convert to gallons for gas math
+    fuel_tank_liters = float(vehicle.ice_fuel_tank_capacity) if vehicle.ice_fuel_tank_capacity else None
+    fuel_tank_gal = fuel_tank_liters * GAL_PER_LITER if fuel_tank_liters else None
 
     # Load all gas price history into memory (small table)
     price_result = await db.execute(
@@ -97,7 +107,7 @@ async def query_gas_comparison(
     station_has_data = False
     average_has_data = False
     session_count = 0
-    total_miles = 0.0
+    total_distance_km = 0.0
 
     for s in sessions:
         cost_info = compute_session_cost(s, networks_by_name)
@@ -106,20 +116,21 @@ async def query_gas_comparison(
 
         # Determine gallons equivalent via dual calculation path
         gallons = None
-        miles = float(s.miles_added) if s.miles_added else 0.0
+        distance_km = float(s.distance_added) if s.distance_added else 0.0
+        distance_mi = distance_km * MI_PER_KM
 
-        if miles > 0 and ice_mpg:
-            # Primary: miles-based
-            gallons = miles / ice_mpg
+        if distance_mi > 0 and ice_mpg:
+            # Primary: distance-based (convert km->mi for MPG math)
+            gallons = distance_mi / ice_mpg
         elif (
             s.energy_kwh
             and float(s.energy_kwh) > 0
             and battery_kwh
-            and fuel_tank
+            and fuel_tank_gal
         ):
             # Fallback: percentage-based
             pct = float(s.energy_kwh) / battery_kwh
-            gallons = pct * fuel_tank
+            gallons = pct * fuel_tank_gal
 
         if gallons is None:
             continue
@@ -141,7 +152,7 @@ async def query_gas_comparison(
 
         ev_total += cost_info["display_cost"]
         session_count += 1
-        total_miles += miles
+        total_distance_km += distance_km
 
     # Determine low/high bounds from the two tracks
     if station_has_data and average_has_data:
@@ -172,7 +183,7 @@ async def query_gas_comparison(
         "savings_pct_low": savings_pct_low,
         "savings_pct_high": savings_pct_high,
         "session_count": session_count,
-        "total_miles": total_miles,
+        "total_distance": total_distance_km,  # km, metric base
         "ice_label": vehicle.ice_label,
         "has_range": has_range,
     }

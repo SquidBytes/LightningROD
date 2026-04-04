@@ -135,9 +135,9 @@ DB_FIELD_OPTIONS = [
         "important": False,
     },
     {
-        "field": "miles_added",
-        "label": "Miles Added",
-        "description": "Estimated range added during the session",
+        "field": "distance_added",
+        "label": "Distance Added",
+        "description": "Estimated range added during the session (miles or km per user units)",
         "required": False,
         "important": False,
     },
@@ -290,7 +290,8 @@ _SEED_COLUMN_MAP: dict[str, str] = {
     "end_soc_percent": "end_soc",
     "cost_total": "cost",
     "cost_without_overrides": "cost_without_overrides",
-    "miles_added": "miles_added",
+    "miles_added": "distance_added",
+    "distance_added": "distance_added",
     "charging_voltage": "charging_voltage",
     "charging_amperage": "charging_amperage",
     "is_complete": "is_complete",
@@ -362,7 +363,8 @@ _KEYWORD_HINTS: list[tuple[list[str], str]] = [
     (["soc", "start"], "start_soc"),
     (["soc", "end"], "end_soc"),
     (["cost", "total"], "cost"),
-    (["miles"], "miles_added"),
+    (["miles"], "distance_added"),
+    (["distance", "added"], "distance_added"),
     (["voltage"], "charging_voltage"),
     (["amperage"], "charging_amperage"),
     (["location", "name"], "location_name"),
@@ -677,7 +679,7 @@ _DB_FIELD_PARSERS: dict[str, object] = {
     "min_power": _float_or_none,
     "start_soc": _float_or_none,
     "end_soc": _float_or_none,
-    "miles_added": _float_or_none,
+    "distance_added": _float_or_none,
     "charging_voltage": _float_or_none,
     "charging_amperage": _float_or_none,
     "is_complete": _parse_bool,
@@ -928,11 +930,25 @@ async def import_rows(
     Returns:
         Dict with keys: added, skipped, updated, failed.
 
+    Distance values in CSV are assumed to be in the user's current display unit
+    system and converted to metric (km) before storage.
+
     Partial success: each row is wrapped in a savepoint (SAVEPOINT via begin_nested).
     A failed row is rolled back to the savepoint and counted as failed; successful
     rows remain in the transaction. A single commit at the end persists all successes.
     """
     from db.models.charging_session import EVChargingSession
+    from web.queries.settings import get_unit_context
+    from web.unit_system import to_metric_distance
+
+    # Determine the user's distance unit once for batch conversion.
+    # Fall back to "us" if settings can't be read (e.g. in mocked tests).
+    distance_unit = "us"
+    try:
+        unit_ctx = await get_unit_context(db_session)
+        distance_unit = unit_ctx["distance_unit"]
+    except (TypeError, AttributeError):
+        pass
 
     added = 0
     skipped = 0
@@ -987,6 +1003,12 @@ async def import_rows(
 
         # Strip any keys not in the valid column set (e.g. connector_type, stall_id)
         clean_row = {k: v for k, v in clean_row.items() if k in _VALID_SESSION_COLUMNS}
+
+        # Convert distance_added from user display unit to metric (km) for storage
+        if clean_row.get("distance_added") is not None:
+            clean_row["distance_added"] = to_metric_distance(
+                clean_row["distance_added"], distance_unit
+            )
 
         if action == "insert":
             try:

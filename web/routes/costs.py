@@ -14,8 +14,9 @@ from web.queries.costs import (
     query_monthly_costs,
     query_subscription_savings,
 )
-from web.queries.settings import get_all_networks, get_app_settings_dict
+from web.queries.settings import get_all_networks, get_app_settings_dict, get_unit_context
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
+from web.unit_system import MI_PER_KM
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -69,8 +70,15 @@ async def costs(
             network_comparison = await query_network_comparison(db, reference_rate, time_range=range or "all")
 
     all_vehicles = await get_all_vehicles(db)
+    unit_ctx = await get_unit_context(db)
+    distance_factor = MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
+
+    # Convert gas_comparison total_distance (km) to display units
+    if gas_comparison is not None and gas_comparison.get("total_distance") is not None:
+        gas_comparison["total_distance"] = gas_comparison["total_distance"] * distance_factor
 
     context = {
+        **unit_ctx,
         "summary": summary,
         "network_chart": network_chart,
         "monthly_chart": monthly_chart,

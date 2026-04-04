@@ -15,16 +15,12 @@ from web.queries.energy import (
     build_monthly_energy_chart,
     CHARGE_TYPE_LABELS,
 )
-from web.queries.settings import get_app_settings_dict
+from web.queries.settings import get_unit_context
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
+from web.unit_system import MI_PER_KM
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
-
-UNIT_CONFIG = {
-    "us": {"label": "mi/kWh", "factor": 1.0},
-    "eu": {"label": "km/kWh", "factor": 1.60934},
-}
 
 
 @router.get("/energy", response_class=HTMLResponse)
@@ -40,31 +36,38 @@ async def energy(
     active_device_id = await get_active_device_id(db)
     active_vehicle = await get_active_vehicle(db)
 
-    # Read unit preference from app_settings
-    unit_settings = await get_app_settings_dict(db, ["efficiency_unit"])
-    unit_pref = unit_settings.get("efficiency_unit") or "us"
-    unit = UNIT_CONFIG.get(unit_pref, UNIT_CONFIG["us"])
-    factor = unit["factor"]
+    # Unit context: metric DB -> display conversion
+    unit_ctx = await get_unit_context(db)
+    distance_unit = unit_ctx["distance_unit"]
+    # km/kWh (metric base) -> mi/kWh for "us", passthrough for "metric"
+    efficiency_factor = MI_PER_KM if distance_unit == "us" else 1.0
+    # km -> mi for "us"
+    range_factor = MI_PER_KM if distance_unit == "us" else 1.0
 
-    # Query energy data
+    # Query energy data (all metric base)
     summary = await query_energy_summary(db, time_range=time_range, device_id=active_device_id)
     regen = await query_regen_summary(db, time_range=time_range, device_id=active_device_id)
 
     # Apply unit conversion to efficiency values (convert ONCE here, not in template)
     if summary["avg_efficiency"] is not None:
-        summary["avg_efficiency"] = summary["avg_efficiency"] * factor
+        summary["avg_efficiency"] = summary["avg_efficiency"] * efficiency_factor
     if summary["best_efficiency"] is not None:
-        summary["best_efficiency"] = summary["best_efficiency"] * factor
+        summary["best_efficiency"] = summary["best_efficiency"] * efficiency_factor
     if summary["worst_efficiency"] is not None:
-        summary["worst_efficiency"] = summary["worst_efficiency"] * factor
+        summary["worst_efficiency"] = summary["worst_efficiency"] * efficiency_factor
 
-    # Build efficiency scatter chart (chart builder applies factor internally)
+    # Convert regen total from km to display range unit
+    if regen is not None and regen.get("regen_total") is not None:
+        regen["regen_total"] = regen["regen_total"] * range_factor
+
+    # Build efficiency scatter chart (chart builder applies factors internally)
     regen_chart_data = await query_regen_for_chart(db, time_range=time_range, device_id=active_device_id)
     chart_html = build_efficiency_chart(
         sessions=summary["sessions_for_chart"],
         regen_data=regen_chart_data,
-        unit_label=unit["label"],
-        unit_factor=factor,
+        unit_label=unit_ctx["units"]["efficiency_label"],
+        efficiency_factor=efficiency_factor,
+        range_factor=range_factor,
     )
 
     # Build monthly energy stacked area chart
@@ -74,6 +77,7 @@ async def energy(
     all_vehicles = await get_all_vehicles(db)
 
     context = {
+        **unit_ctx,
         "summary": summary,
         "regen": regen,
         "chart_html": chart_html,
@@ -81,7 +85,7 @@ async def energy(
         "active_range": time_range,
         "active_page": "energy",
         "page_title": "Energy",
-        "unit_label": unit["label"],
+        "unit_label": unit_ctx["units"]["efficiency_label"],
         "charge_type_labels": CHARGE_TYPE_LABELS,
         "active_vehicle": active_vehicle,
         "all_vehicles": all_vehicles,

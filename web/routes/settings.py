@@ -24,6 +24,7 @@ from web.queries.settings import (
     get_app_setting,
     get_app_settings_dict,
     get_charger_templates,
+    get_unit_context,
     get_locations_for_network,
     get_stalls_for_location,
     get_subscriptions_for_network,
@@ -46,6 +47,12 @@ from web.queries.vehicles import (
 )
 from web.queries.gas_prices import delete_gas_price, get_all_gas_prices, upsert_gas_price
 from web.services.csv_parser import get_db_field_options
+from web.unit_system import (
+    convert_fuel_efficiency,
+    convert_fuel_volume,
+    to_metric_fuel_efficiency,
+    to_metric_fuel_volume,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -85,7 +92,8 @@ SETTINGS_KEYS = [
     "comparison_gas_enabled",
     "comparison_network_enabled",
     "comparison_section_visible",
-    "efficiency_unit",
+    "distance_unit",
+    "temp_unit",
     "user_timezone",
     "gas_sensor_station_entity_id",
     "gas_sensor_average_entity_id",
@@ -119,11 +127,13 @@ async def settings_index(
         import_ctx = {"db_fields": get_db_field_options(), "user_tz": user_tz}
 
     all_vehicles = await get_all_vehicles(db)
+    unit_ctx = await get_unit_context(db)
 
     return templates.TemplateResponse(
         request,
         "settings/index.html",
         {
+            **unit_ctx,
             **net_ctx,
             **veh_ctx,
             **import_ctx,
@@ -161,10 +171,18 @@ async def new_vehicle_form(
     db: AsyncSession = Depends(get_db),
 ):
     """Return the vehicle add modal form."""
+    unit_ctx = await get_unit_context(db)
     return templates.TemplateResponse(
         request,
         "settings/partials/vehicle_edit_modal.html",
-        {"battery_presets": BATTERY_PRESETS, "vehicle": None, "vehicle_presets_json": json.dumps(VEHICLE_PRESETS)},
+        {
+            **unit_ctx,
+            "battery_presets": BATTERY_PRESETS,
+            "vehicle": None,
+            "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+            "ice_fuel_efficiency_display": None,
+            "ice_fuel_tank_capacity_display": None,
+        },
     )
 
 
@@ -180,8 +198,8 @@ async def create_vehicle_route(
     battery_capacity_kwh: Optional[float] = Form(None),
     vin: Optional[str] = Form(None),
     device_id: Optional[str] = Form(None),
-    ice_mpg: Optional[float] = Form(None),
-    ice_fuel_tank_gal: Optional[float] = Form(None),
+    ice_fuel_efficiency: Optional[float] = Form(None),
+    ice_fuel_tank_capacity: Optional[float] = Form(None),
     ice_label: Optional[str] = Form(None),
 ):
     if not display_name or not display_name.strip():
@@ -190,6 +208,14 @@ async def create_vehicle_route(
             status_code=422,
             content={"detail": "Display name is required"},
         )
+    # User-entered ICE values are in display units — convert to metric for storage
+    unit_ctx = await get_unit_context(db)
+    ice_fuel_efficiency_metric = to_metric_fuel_efficiency(
+        ice_fuel_efficiency, unit_ctx["distance_unit"]
+    )
+    ice_fuel_tank_capacity_metric = to_metric_fuel_volume(
+        ice_fuel_tank_capacity, unit_ctx["distance_unit"]
+    )
     await create_vehicle(
         db,
         display_name=display_name.strip(),
@@ -200,8 +226,8 @@ async def create_vehicle_route(
         battery_capacity_kwh=battery_capacity_kwh,
         vin=vin or None,
         device_id=device_id or None,
-        ice_mpg=ice_mpg,
-        ice_fuel_tank_gal=ice_fuel_tank_gal,
+        ice_fuel_efficiency=ice_fuel_efficiency_metric,
+        ice_fuel_tank_capacity=ice_fuel_tank_capacity_metric,
         ice_label=ice_label or None,
     )
     veh_ctx = await _vehicle_management_context(db)
@@ -218,14 +244,34 @@ async def edit_vehicle_form(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Return the vehicle edit modal form with vehicle data + presets."""
+    """Return the vehicle edit modal form with vehicle data + presets.
+
+    ICE values are stored metric (L/100km, liters). Convert to display units
+    for pre-filling the form.
+    """
     vehicle = await get_vehicle_by_id(db, vehicle_id)
     if vehicle is None:
         return HTMLResponse(status_code=404)
+    unit_ctx = await get_unit_context(db)
+    ice_fuel_efficiency_display = convert_fuel_efficiency(
+        float(vehicle.ice_fuel_efficiency) if vehicle.ice_fuel_efficiency else None,
+        unit_ctx["distance_unit"],
+    )
+    ice_fuel_tank_capacity_display = convert_fuel_volume(
+        float(vehicle.ice_fuel_tank_capacity) if vehicle.ice_fuel_tank_capacity else None,
+        unit_ctx["distance_unit"],
+    )
     return templates.TemplateResponse(
         request,
         "settings/partials/vehicle_edit_modal.html",
-        {"vehicle": vehicle, "battery_presets": BATTERY_PRESETS, "vehicle_presets_json": json.dumps(VEHICLE_PRESETS)},
+        {
+            **unit_ctx,
+            "vehicle": vehicle,
+            "ice_fuel_efficiency_display": ice_fuel_efficiency_display,
+            "ice_fuel_tank_capacity_display": ice_fuel_tank_capacity_display,
+            "battery_presets": BATTERY_PRESETS,
+            "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+        },
     )
 
 
@@ -242,8 +288,8 @@ async def update_vehicle_route(
     battery_capacity_kwh: Optional[float] = Form(None),
     vin: Optional[str] = Form(None),
     device_id: Optional[str] = Form(None),
-    ice_mpg: Optional[float] = Form(None),
-    ice_fuel_tank_gal: Optional[float] = Form(None),
+    ice_fuel_efficiency: Optional[float] = Form(None),
+    ice_fuel_tank_capacity: Optional[float] = Form(None),
     ice_label: Optional[str] = Form(None),
 ):
     if not display_name or not display_name.strip():
@@ -252,6 +298,14 @@ async def update_vehicle_route(
             status_code=422,
             content={"detail": "Display name is required"},
         )
+    # User-entered ICE values are in display units — convert to metric for storage
+    unit_ctx = await get_unit_context(db)
+    ice_fuel_efficiency_metric = to_metric_fuel_efficiency(
+        ice_fuel_efficiency, unit_ctx["distance_unit"]
+    )
+    ice_fuel_tank_capacity_metric = to_metric_fuel_volume(
+        ice_fuel_tank_capacity, unit_ctx["distance_unit"]
+    )
     await update_vehicle(
         db,
         vehicle_id,
@@ -263,8 +317,8 @@ async def update_vehicle_route(
         battery_capacity_kwh=battery_capacity_kwh,
         vin=vin or None,
         device_id=device_id or None,
-        ice_mpg=ice_mpg,
-        ice_fuel_tank_gal=ice_fuel_tank_gal,
+        ice_fuel_efficiency=ice_fuel_efficiency_metric,
+        ice_fuel_tank_capacity=ice_fuel_tank_capacity_metric,
         ice_label=ice_label or None,
     )
     veh_ctx = await _vehicle_management_context(db)
@@ -1353,12 +1407,16 @@ async def save_gas_sensors(
 async def update_unit_settings(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    efficiency_unit: str = Form("us"),
+    distance_unit: str = Form("us"),
+    temp_unit: str = Form("us"),
 ):
-    # Validate: only "us" or "eu" accepted
-    if efficiency_unit not in ("us", "eu"):
-        efficiency_unit = "us"
-    await set_app_setting(db, "efficiency_unit", efficiency_unit)
+    # Validate: only "us" or "metric" accepted for each axis
+    if distance_unit not in ("us", "metric"):
+        distance_unit = "us"
+    if temp_unit not in ("us", "metric"):
+        temp_unit = "us"
+    await set_app_setting(db, "distance_unit", distance_unit)
+    await set_app_setting(db, "temp_unit", temp_unit)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
     return templates.TemplateResponse(
         request,

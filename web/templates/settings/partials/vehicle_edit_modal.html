@@ -105,24 +105,24 @@
         <div role="tabpanel" class="tab-content pt-4">
             <p class="text-sm text-base-content/60 mb-4">Configure an ICE (gas) vehicle to compare costs against. These fields are used for gas savings calculations on the Costs page.</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {# Combined MPG #}
+                {# Fuel Economy (MPG or L/100km) #}
                 <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Combined MPG</span></div>
-                    <input type="number" name="ice_mpg" step="0.1" min="1"
-                           value="{{ vehicle.ice_mpg or '' }}"
-                           placeholder="e.g. 28"
+                    <div class="label"><span class="label-text text-xs">Combined {{ units.fuel_efficiency_label }}</span></div>
+                    <input type="number" name="ice_fuel_efficiency" step="0.1" min="0.1"
+                           value="{% if ice_fuel_efficiency_display is not none %}{{ '%.1f'|format(ice_fuel_efficiency_display) }}{% endif %}"
+                           placeholder="{% if distance_unit == 'us' %}e.g. 28{% else %}e.g. 8.4{% endif %}"
                            class="input input-sm input-bordered w-full">
                     <div class="label"><span class="label-text-alt text-xs text-base-content/40">EPA combined fuel economy of the comparison vehicle.</span></div>
                 </label>
 
-                {# Fuel Tank Size #}
+                {# Fuel Tank Capacity (gal or L) #}
                 <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Fuel Tank Size (gallons)</span></div>
-                    <input type="number" name="ice_fuel_tank_gal" step="0.1" min="1"
-                           value="{{ vehicle.ice_fuel_tank_gal or '' }}"
-                           placeholder="e.g. 14"
+                    <div class="label"><span class="label-text text-xs">Fuel Tank Size ({{ units.fuel_volume_label }})</span></div>
+                    <input type="number" name="ice_fuel_tank_capacity" step="0.1" min="1"
+                           value="{% if ice_fuel_tank_capacity_display is not none %}{{ '%.1f'|format(ice_fuel_tank_capacity_display) }}{% endif %}"
+                           placeholder="{% if distance_unit == 'us' %}e.g. 14{% else %}e.g. 53{% endif %}"
                            class="input input-sm input-bordered w-full">
-                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Used for percentage-based calculations when miles data is unavailable.</span></div>
+                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Used for percentage-based calculations when distance data is unavailable.</span></div>
                 </label>
 
                 {# ICE Vehicle Label #}

@@ -68,10 +68,32 @@ def create_app() -> FastAPI:
     app.include_router(review.router)
     app.include_router(trips.router)
 
-    # Register localtime filter on all Jinja2Templates instances used by routes
+    # Register Jinja filters on all Jinja2Templates instances used by routes
+    from web.unit_system import (
+        convert_distance,
+        convert_efficiency,
+        convert_fuel_efficiency,
+        convert_fuel_volume,
+        convert_speed,
+        convert_temp,
+    )
+
+    def _cvt(fn):
+        """Wrap a converter so it returns None for None and leaves labels alone."""
+        def inner(value, unit):
+            return fn(value, unit) if value is not None else None
+        return inner
+
     for route_module in [dashboard, sessions, costs, energy, settings, csv_import, charging, review, battery, trips]:
         if hasattr(route_module, "templates"):
-            route_module.templates.env.filters["localtime"] = localtime_filter
+            env = route_module.templates.env
+            env.filters["localtime"] = localtime_filter
+            env.filters["cvt_dist"] = _cvt(convert_distance)
+            env.filters["cvt_temp"] = _cvt(convert_temp)
+            env.filters["cvt_eff"] = _cvt(convert_efficiency)
+            env.filters["cvt_speed"] = _cvt(convert_speed)
+            env.filters["cvt_fuel_eff"] = _cvt(convert_fuel_efficiency)
+            env.filters["cvt_fuel_vol"] = _cvt(convert_fuel_volume)
 
     return app
 

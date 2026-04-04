@@ -442,10 +442,10 @@
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Miles Added</dt>
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Distance Added</dt>
                 <dd class="text-base-content text-base">
-                    {% if session.miles_added is not none %}
-                        {{ "%.1f"|format(session.miles_added) }} mi
+                    {% if session.distance_added is not none %}
+                        {{ "%.1f"|format(session.distance_added|cvt_dist(distance_unit)) }} {{ units.distance_label }}
                     {% else %}
                         <span class="text-base-content/40">—</span>
                     {% endif %}

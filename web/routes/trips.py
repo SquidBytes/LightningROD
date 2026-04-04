@@ -25,8 +25,9 @@ from web.queries.trips import (
     query_trip_vehicle_series,
     query_trips,
 )
-from web.queries.settings import get_app_setting
+from web.queries.settings import get_app_setting, get_unit_context
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
+from web.unit_system import MI_PER_KM, to_metric_distance
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -53,8 +54,10 @@ async def trips(
     active_vehicle = await get_active_vehicle(db)
     all_vehicles = await get_all_vehicles(db)
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
+    unit_ctx = await get_unit_context(db)
+    distance_factor = MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
 
-    # Query trips and efficiency trend
+    # Query trips and efficiency trend (metric base)
     trip_list, total, summary = await query_trips(
         db=db,
         page=page,
@@ -65,8 +68,18 @@ async def trips(
         device_id=active_device_id,
     )
 
+    # Convert summary totals to display units
+    if summary.get("total_distance") is not None:
+        summary["total_distance"] = summary["total_distance"] * distance_factor
+    if summary.get("avg_efficiency") is not None:
+        summary["avg_efficiency"] = summary["avg_efficiency"] * distance_factor
+
     trend_data = await query_efficiency_trend(db, time_range=time_range, device_id=active_device_id)
-    trend_chart = build_efficiency_trend_chart(trend_data)
+    trend_chart = build_efficiency_trend_chart(
+        trend_data,
+        efficiency_factor=distance_factor,
+        efficiency_label=unit_ctx["units"]["efficiency_label"],
+    )
 
     # Pagination
     total_pages = max(math.ceil(total / PER_PAGE), 1)
@@ -74,6 +87,7 @@ async def trips(
     has_next = page < total_pages
 
     context = {
+        **unit_ctx,
         "trips": trip_list,
         "total": total,
         "summary": summary,
@@ -116,8 +130,10 @@ async def trip_detail(
         )
 
     radar_chart = build_driving_score_radar(trip)
+    unit_ctx = await get_unit_context(db)
 
     context = {
+        **unit_ctx,
         "trip": trip,
         "radar_chart": radar_chart,
     }
@@ -143,6 +159,7 @@ async def trip_drawer(
 
     radar_chart = build_driving_score_radar(trip)
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
+    unit_ctx = await get_unit_context(db)
 
     start_location, end_location = None, None
     if trip.start_time and trip.end_time:
@@ -151,6 +168,7 @@ async def trip_drawer(
         )
 
     context = {
+        **unit_ctx,
         "trip": trip,
         "radar_chart": radar_chart,
         "start_location": start_location,
@@ -175,7 +193,12 @@ async def trip_environment_chart(
             '<p class="text-base-content/30 text-sm py-4 text-center">No temperature data available for this trip.</p>'
         )
     vehicle_df = await query_trip_vehicle_series(db, trip.device_id, trip.start_time, trip.end_time)
-    chart_html = build_environment_chart(vehicle_df)
+    unit_ctx = await get_unit_context(db)
+    chart_html = build_environment_chart(
+        vehicle_df,
+        temp_factor_f=(unit_ctx["temp_unit"] == "us"),
+        temp_label=unit_ctx["units"]["temp_label"],
+    )
     if not chart_html:
         return HTMLResponse(
             '<p class="text-base-content/30 text-sm py-4 text-center">No temperature data available for this trip.</p>'
@@ -199,7 +222,15 @@ async def trip_drive_chart(
         )
     battery_df = await query_trip_battery_series(db, trip.device_id, trip.start_time, trip.end_time)
     vehicle_df = await query_trip_vehicle_series(db, trip.device_id, trip.start_time, trip.end_time)
-    chart_html = build_drive_graph(battery_df, vehicle_df)
+    unit_ctx = await get_unit_context(db)
+    distance_factor = MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
+    chart_html = build_drive_graph(
+        battery_df,
+        vehicle_df,
+        distance_factor=distance_factor,
+        range_label=unit_ctx["units"]["range_label"],
+        speed_label=unit_ctx["units"]["speed_label"],
+    )
     if not chart_html:
         return HTMLResponse(
             '<p class="text-base-content/30 text-sm py-4 text-center">No drive data available for this trip.</p>'
@@ -228,11 +259,29 @@ async def trip_expanded(
         battery_df = await query_trip_battery_series(db, trip.device_id, trip.start_time, trip.end_time)
         vehicle_df = await query_trip_vehicle_series(db, trip.device_id, trip.start_time, trip.end_time)
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
+    unit_ctx = await get_unit_context(db)
+    distance_factor = MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
+    temp_factor_f = unit_ctx["temp_unit"] == "us"
     context = {
+        **unit_ctx,
         "trip": trip,
-        "battery_chart": build_expanded_battery_chart(battery_df),
-        "environment_chart": build_expanded_environment_chart(vehicle_df),
-        "driving_chart": build_expanded_driving_chart(vehicle_df),
+        "battery_chart": build_expanded_battery_chart(
+            battery_df,
+            distance_factor=distance_factor,
+            range_label=unit_ctx["units"]["range_label"],
+            temp_factor_f=temp_factor_f,
+            temp_label=unit_ctx["units"]["temp_label"],
+        ),
+        "environment_chart": build_expanded_environment_chart(
+            vehicle_df,
+            temp_factor_f=temp_factor_f,
+            temp_label=unit_ctx["units"]["temp_label"],
+        ),
+        "driving_chart": build_expanded_driving_chart(
+            vehicle_df,
+            distance_factor=distance_factor,
+            speed_label=unit_ctx["units"]["speed_label"],
+        ),
         "user_tz": user_tz,
     }
     return templates.TemplateResponse(request, "trips/partials/expanded_modal.html", context)
@@ -241,8 +290,11 @@ async def trip_expanded(
 @router.get("/trips/new", response_class=HTMLResponse)
 async def new_trip_form(
     request: Request,
+    db: AsyncSession = Depends(get_db),
 ):
+    unit_ctx = await get_unit_context(db)
     context = {
+        **unit_ctx,
         "default_date": date.today().isoformat(),
     }
     return templates.TemplateResponse(request, "trips/partials/add_form.html", context)
@@ -274,10 +326,17 @@ async def create_trip(
             status_code=422,
         )
 
-    # Auto-calculate efficiency if distance and energy provided
-    calc_efficiency = efficiency
-    if calc_efficiency is None and distance and energy_consumed and energy_consumed > 0:
-        calc_efficiency = distance / energy_consumed
+    # Convert user-entered distance + efficiency to metric (km, km/kWh) for storage
+    unit_ctx = await get_unit_context(db)
+    distance_km = to_metric_distance(distance, unit_ctx["distance_unit"]) if distance else None
+    efficiency_metric = (
+        to_metric_distance(efficiency, unit_ctx["distance_unit"]) if efficiency else None
+    )
+
+    # Auto-calculate efficiency if distance and energy provided (in metric)
+    calc_efficiency = efficiency_metric
+    if calc_efficiency is None and distance_km and energy_consumed and energy_consumed > 0:
+        calc_efficiency = distance_km / energy_consumed
 
     # Get active device
     active_vehicle = await get_active_vehicle(db)
@@ -287,7 +346,7 @@ async def create_trip(
         device_id=device_id,
         end_time=parsed_date,
         start_time=parsed_date,
-        distance=distance,
+        distance=distance_km,
         duration=duration_minutes,
         energy_consumed=energy_consumed,
         efficiency=calc_efficiency,

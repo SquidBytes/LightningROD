@@ -159,11 +159,11 @@ class EVStatistics(Base):
     total_sessions: Mapped[Optional[int]] = mapped_column(Integer)
     total_energy_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
     total_cost: Mapped[Optional[float]] = mapped_column(Numeric)
-    total_miles_added: Mapped[Optional[float]] = mapped_column(Numeric)
+    total_distance_added: Mapped[Optional[float]] = mapped_column(Numeric)  # km
     avg_session_duration_seconds: Mapped[Optional[float]] = mapped_column(Numeric)
     avg_energy_per_session_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
     avg_cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    avg_miles_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
+    avg_efficiency: Mapped[Optional[float]] = mapped_column(Numeric)  # km/kWh
     notes: Mapped[Optional[str]] = mapped_column(Text)
 
 

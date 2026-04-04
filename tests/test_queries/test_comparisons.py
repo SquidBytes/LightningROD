@@ -17,8 +17,14 @@ pytestmark = [pytest.mark.query, pytest.mark.db]
 
 
 async def _setup_comparison_data(db):
-    """Create vehicle, network, gas prices, and sessions with known values."""
-    # Vehicle with ICE comparison fields set
+    """Create vehicle, network, gas prices, and sessions with known values.
+
+    Storage is metric: distance in km, ice_fuel_efficiency in L/100km,
+    ice_fuel_tank_capacity in liters. Test values are chosen so the internal
+    imperial-equivalent math (25 MPG, 15 gal tank, 360 mi total) remains clean.
+    """
+    # 25 MPG -> L/100km: 235.215 / 25 = 9.4086
+    # 15 gal -> liters: 15 * 3.78541 = 56.78115
     vehicle = EVVehicle(
         device_id="COMP_VIN",
         display_name="Comparison Vehicle",
@@ -27,8 +33,8 @@ async def _setup_comparison_data(db):
         model="Mustang Mach-E",
         trim="Premium AWD",
         battery_capacity_kwh=91.0,
-        ice_mpg=25.0,
-        ice_fuel_tank_gal=15.0,
+        ice_fuel_efficiency=9.4086,     # L/100km (25 MPG equivalent)
+        ice_fuel_tank_capacity=56.78115,  # liters (15 gal equivalent)
         ice_label="2024 Ford Explorer 25 MPG",
     )
     db.add(vehicle)
@@ -54,13 +60,15 @@ async def _setup_comparison_data(db):
     db.add(gas_price)
     await db.flush()
 
-    # 3 sessions with known energy, miles, and costs
+    # 3 sessions with known energy and distance.
+    # Distance stored in km (metric). 120 mi * 1.60934 = 193.1208 km, etc.
     sessions = []
+    KM_PER_MI = 1.60934
     for i, (kwh, miles) in enumerate([(40.0, 120.0), (30.0, 90.0), (50.0, 150.0)]):
         s = EVChargingSession(
             device_id="COMP_VIN",
             energy_kwh=kwh,
-            miles_added=miles,
+            distance_added=miles * KM_PER_MI,
             network_id=net.id,
             location_name="Comparison Net",
             session_start_utc=datetime(2025, 6, 1, tzinfo=timezone.utc) + timedelta(days=i),
@@ -77,7 +85,7 @@ async def _setup_comparison_data(db):
         "network": net,
         "sessions": sessions,
         "total_kwh": 120.0,
-        "total_miles": 360.0,
+        "total_distance_km": 360.0 * KM_PER_MI,  # 579.36 km
     }
 
 
@@ -92,7 +100,8 @@ async def test_gas_comparison(db_session):
     # EV costs: each session = kwh * 0.35 -> 14.00 + 10.50 + 17.50 = 42.00
     assert result["ev_total"] == pytest.approx(42.00, abs=0.01)
     assert result["session_count"] == 3
-    assert result["total_miles"] == pytest.approx(data["total_miles"], abs=0.01)
+    # total_distance is in km (metric base)
+    assert result["total_distance"] == pytest.approx(data["total_distance_km"], abs=0.01)
 
     # Gas costs using miles-based path: 360 miles / 25 mpg = 14.4 gallons
     # Station track: 14.4 * $4.00 = $57.60
@@ -144,8 +153,8 @@ async def test_gas_comparison_empty(db_session):
         make="Ford",
         model="Mustang Mach-E",
         battery_capacity_kwh=91.0,
-        ice_mpg=25.0,
-        ice_fuel_tank_gal=15.0,
+        ice_fuel_efficiency=9.4086,
+        ice_fuel_tank_capacity=56.78115,
     )
     db_session.add(vehicle)
     await db_session.flush()

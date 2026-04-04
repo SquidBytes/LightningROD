@@ -17,7 +17,7 @@
     <div class="grid grid-cols-2 gap-3">
         <div class="form-control">
             <label class="label">
-                <span class="label-text">Distance (mi)</span>
+                <span class="label-text">Distance ({{ units.distance_label }})</span>
             </label>
             <input type="number" name="distance" step="0.1" min="0"
                    id="trip-distance"
@@ -49,7 +49,7 @@
         </div>
         <div class="form-control">
             <label class="label">
-                <span class="label-text">Efficiency (mi/kWh)</span>
+                <span class="label-text">Efficiency ({{ units.efficiency_label }})</span>
             </label>
             <input type="number" name="efficiency" step="0.1" min="0"
                    id="trip-efficiency"

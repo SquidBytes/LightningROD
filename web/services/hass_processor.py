@@ -39,8 +39,8 @@ def normalize_value(value, unit: str, ha_unit_system: dict) -> float:
     """Normalize a value to metric for storage.
 
     Uses FordPass preferred units (from elveh sensor) when available to decide
-    whether conversion is needed.  Falls back to assuming imperial if the
-    elveh sensor hasn't been seen yet.
+    whether conversion is needed.  Falls back to assuming metric (no conversion)
+    if the elveh sensor hasn't been seen yet.
     """
     if value is None:
         return None
@@ -193,8 +193,13 @@ def _get_attributes(new_state: dict) -> dict:
 
 
 def _get_unit_system(ha_config: dict) -> dict:
-    """Extract HA unit system from config."""
-    return ha_config.get("unit_system", {})
+    """Extract HA unit system from config, including FordPass detection keys."""
+    units = dict(ha_config.get("unit_system", {}))
+    # Carry forward FordPass-specific unit overrides set by hass_client
+    for key in ("_fordpass_distance_unit", "_fordpass_temp_unit"):
+        if key in ha_config:
+            units[key] = ha_config[key]
+    return units
 
 
 def _get_event_timestamp(new_state: dict) -> Optional[datetime]:
@@ -360,7 +365,9 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             "tripDistanceTraveled": ("distance", lambda v: normalize_value(v, "mi", unit_system)),
             "tripDuration": ("duration", _safe_float),
             "tripEnergyConsumed": ("energy_consumed", _safe_float),
-            "tripEfficiency": ("efficiency", _safe_float),
+            # tripEfficiency in FordPass-preferred distance unit (mi/kWh or km/kWh)
+            # normalize_value converts to km/kWh when FordPass reports miles.
+            "tripEfficiency": ("efficiency", lambda v: normalize_value(v, "mi", unit_system)),
             "tripDrivingScore": ("driving_score", _safe_float),
             "tripSpeed": ("speed_score", _safe_float),
             "tripAcceleration": ("acceleration_score", _safe_float),
@@ -670,9 +677,10 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # Plug details
     plug_data = attrs.get("plugDetails", {}) or {}
     plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
-    total_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
-    fordpass_dist_unit = ha_config.get("_fordpass_distance_unit", "km")
-    miles_added = total_distance_added / 1.60934 if (total_distance_added is not None and fordpass_dist_unit == "mi") else total_distance_added
+    raw_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
+    # Normalize to km for storage: normalize_value converts mi->km when
+    # FordPass is reporting in miles, or passes through when already in km.
+    distance_added = normalize_value(raw_distance_added, "mi", unit_system)
 
     # State of charge
     soc_data = attrs.get("stateOfCharge", {}) or {}
@@ -793,7 +801,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         address=address,
         latitude=latitude,
         longitude=longitude,
-        miles_added=miles_added,
+        distance_added=distance_added,
         original_timestamp=original_timestamp,
         is_complete=True,  # energytransferlogentry fires after session completes
         recorded_at=datetime.now(timezone.utc),

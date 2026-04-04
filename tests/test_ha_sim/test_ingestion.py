@@ -35,6 +35,7 @@ _HA_CONFIG = {
         "temperature": "\u00b0F",
         "volume": "gal",
     },
+    "_fordpass_distance_unit": "mi",
 }
 
 _TEST_DEVICE_ID = "TESTVIN001"

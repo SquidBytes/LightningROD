@@ -578,10 +578,14 @@ async def query_average_charge_curve(
 
 
 def build_soc_timeline_chart(
-    data: list[dict], charging_regions: list[tuple[int, int]]
+    data: list[dict],
+    charging_regions: list[tuple[int, int]],
+    distance_factor: float = 1.0,
+    range_label: str = "km",
 ) -> str:
     """Build SOC timeline Plotly chart with color-coded charging regions.
 
+    Range values are metric (km) in the DB; distance_factor converts to display.
     Returns HTML string. Empty string if no data.
     """
     if not data:
@@ -609,7 +613,7 @@ def build_soc_timeline_chart(
         if kw is not None:
             parts.append(f"Power: {kw:.1f} kW")
         if rng is not None:
-            parts.append(f"Range: {rng:.0f} mi")
+            parts.append(f"Range: {rng * distance_factor:.0f} {range_label}")
         hover_texts.append("<br>".join(parts))
 
     # Main SOC trace — connectgaps=False to show data gaps as breaks
@@ -916,10 +920,16 @@ def _build_degradation_chart_date_based(data: list[dict], rated_capacity_kwh: fl
     )
 
 
-def build_degradation_chart(data: list[dict], rated_capacity_kwh: float) -> str:
+def build_degradation_chart(
+    data: list[dict],
+    rated_capacity_kwh: float,
+    distance_factor: float = 1.0,
+    distance_label: str = "km",
+) -> str:
     """Build mileage-based battery degradation chart with trend line and date annotations.
 
-    X-axis: odometer (miles), Y-axis: battery capacity (kWh raw).
+    X-axis: odometer in display unit, Y-axis: battery capacity (kWh raw).
+    Odometer values from DB are metric (km); distance_factor converts to display.
     Falls back to date-based chart if no odometer data available.
     Returns HTML string. Empty string if no data.
     """
@@ -939,18 +949,18 @@ def build_degradation_chart(data: list[dict], rated_capacity_kwh: float) -> str:
     pio.templates.default = "plotly_dark"
     fig = go.Figure()
 
-    odometers = [float(row["odometer"]) for row in data]
+    odometers = [float(row["odometer"]) * distance_factor for row in data]
     capacities = [float(row["max_capacity"]) for row in data]
 
     # Build hover text with date info
     hover_texts = []
-    for row in data:
+    for i, row in enumerate(data):
         d = row.get("date")
         d_str = d.strftime("%b %d, %Y") if hasattr(d, "strftime") else str(d)
-        odo = float(row["odometer"])
+        odo = odometers[i]
         cap = float(row["max_capacity"])
         hover_texts.append(
-            f"<b>{odo:,.0f} mi</b><br>"
+            f"<b>{odo:,.0f} {distance_label}</b><br>"
             f"Capacity: {cap:.1f} kWh<br>"
             f"Date: {d_str}"
         )
@@ -998,9 +1008,10 @@ def build_degradation_chart(data: list[dict], rated_capacity_kwh: float) -> str:
             )
         )
 
-        # Project forward 5000 miles
+        # Project forward ~5000 mi (or ~8000 km metric equivalent) in display units.
         last_odo = odo_arr[-1]
-        proj_odo = np.linspace(last_odo, last_odo + 5000, 50)
+        projection_distance = 5000 if distance_factor < 1.0 else 8000  # US: mi, metric: km
+        proj_odo = np.linspace(last_odo, last_odo + projection_distance, 50)
         proj_y = slope * proj_odo + intercept
         fig.add_trace(
             go.Scatter(
@@ -1034,7 +1045,7 @@ def build_degradation_chart(data: list[dict], rated_capacity_kwh: float) -> str:
         plot_bgcolor="rgba(0,0,0,0)",
         font_color="#e5e7eb",
         margin=dict(l=20, r=20, t=20, b=30),
-        xaxis=dict(title="Odometer (miles)"),
+        xaxis=dict(title=f"Odometer ({distance_label})"),
         yaxis=dict(title="Battery Capacity (kWh)"),
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),

@@ -19,19 +19,19 @@
                 {% if trip.ambient_temp is not none %}
                 <div>
                     <span class="text-base-content/40">Ambient:</span>
-                    <span>{{ "%.1f"|format(trip.ambient_temp) }}&deg;F</span>
+                    <span>{{ "%.1f"|format(trip.ambient_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}</span>
                 </div>
                 {% endif %}
                 {% if trip.cabin_temp is not none %}
                 <div>
                     <span class="text-base-content/40">Cabin:</span>
-                    <span>{{ "%.1f"|format(trip.cabin_temp) }}&deg;F</span>
+                    <span>{{ "%.1f"|format(trip.cabin_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}</span>
                 </div>
                 {% endif %}
                 {% if trip.outside_air_temp is not none %}
                 <div>
                     <span class="text-base-content/40">Outside:</span>
-                    <span>{{ "%.1f"|format(trip.outside_air_temp) }}&deg;F</span>
+                    <span>{{ "%.1f"|format(trip.outside_air_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}</span>
                 </div>
                 {% endif %}
             </div>
@@ -43,7 +43,7 @@
             <h4 class="text-sm font-medium text-base-content/60 mb-1">Regeneration</h4>
             <p class="text-sm">
                 <span class="text-base-content/40">Range Regenerated:</span>
-                <span>{{ "%.1f"|format(trip.range_regenerated) }} mi</span>
+                <span>{{ "%.1f"|format(trip.range_regenerated|cvt_dist(distance_unit)) }} {{ units.range_label }}</span>
             </p>
         </div>
         {% endif %}

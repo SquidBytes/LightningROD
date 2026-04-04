@@ -199,8 +199,15 @@ async def query_efficiency_trend(
 # ---------------------------------------------------------------------------
 
 
-def build_efficiency_trend_chart(data: list[dict]) -> str:
+def build_efficiency_trend_chart(
+    data: list[dict],
+    efficiency_factor: float = 1.0,
+    efficiency_label: str = "km/kWh",
+) -> str:
     """Build efficiency trend Plotly chart with scatter points and 7-day rolling average.
+
+    Input efficiency values are metric (km/kWh). Apply `efficiency_factor` to
+    convert to display unit (MI_PER_KM for US, 1.0 for metric).
 
     Returns HTML string. Empty string if no data.
     """
@@ -212,6 +219,7 @@ def build_efficiency_trend_chart(data: list[dict]) -> str:
     df = pd.DataFrame(data)
     df = df.sort_values("date")
     df["date"] = pd.to_datetime(df["date"], utc=True)
+    df["efficiency"] = df["efficiency"] * efficiency_factor
 
     # Calculate 7-day rolling average
     rolling = (
@@ -231,7 +239,7 @@ def build_efficiency_trend_chart(data: list[dict]) -> str:
             mode="markers",
             name="Trip Efficiency",
             marker=dict(color="#47A8E5", size=6),
-            hovertemplate="<b>%{x|%b %d, %Y}</b><br>Efficiency: %{y:.2f} mi/kWh<extra></extra>",
+            hovertemplate="<b>%{x|%b %d, %Y}</b><br>Efficiency: %{y:.2f} " + efficiency_label + "<extra></extra>",
         )
     )
 
@@ -243,7 +251,7 @@ def build_efficiency_trend_chart(data: list[dict]) -> str:
             mode="lines",
             name="7-Day Avg",
             line=dict(color="#f97316", width=2),
-            hovertemplate="<b>%{x|%b %d, %Y}</b><br>7-Day Avg: %{y:.2f} mi/kWh<extra></extra>",
+            hovertemplate="<b>%{x|%b %d, %Y}</b><br>7-Day Avg: %{y:.2f} " + efficiency_label + "<extra></extra>",
         )
     )
 
@@ -254,7 +262,7 @@ def build_efficiency_trend_chart(data: list[dict]) -> str:
         font_color="#e5e7eb",
         margin=dict(l=20, r=20, t=20, b=20),
         xaxis=dict(title=""),
-        yaxis=dict(title="mi/kWh"),
+        yaxis=dict(title=efficiency_label),
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",
@@ -576,8 +584,17 @@ def _add_interpolated_traces(
     )
 
 
-def build_drive_graph(battery_df: pd.DataFrame, vehicle_df: pd.DataFrame) -> str:
+def build_drive_graph(
+    battery_df: pd.DataFrame,
+    vehicle_df: pd.DataFrame,
+    distance_factor: float = 1.0,
+    range_label: str = "km",
+    speed_label: str = "km/h",
+) -> str:
     """Build combined SOC + Speed + Range chart with dual Y-axes.
+
+    `range` column (km) and `speed` column (km/h) are converted by
+    distance_factor before plotting (1.0 for metric, MI_PER_KM for US).
 
     Returns HTML string. Empty string if both DataFrames are empty.
     """
@@ -592,8 +609,12 @@ def build_drive_graph(battery_df: pd.DataFrame, vehicle_df: pd.DataFrame) -> str
     # Interpolate
     if not battery_df.empty:
         battery_df = _interpolate_series(battery_df, ["soc", "range", "kw"])
+        if "range" in battery_df.columns:
+            battery_df["range"] = battery_df["range"] * distance_factor
     if not vehicle_df.empty:
         vehicle_df = _interpolate_series(vehicle_df, ["speed"])
+        if "speed" in vehicle_df.columns:
+            vehicle_df["speed"] = vehicle_df["speed"] * distance_factor
 
     fig = go.Figure()
 
@@ -634,8 +655,8 @@ def build_drive_graph(battery_df: pd.DataFrame, vehicle_df: pd.DataFrame) -> str
         height=300,
         **_DARK_LAYOUT,
         margin=dict(l=20, r=60, t=20, b=20),
-        yaxis=dict(title="SOC % / Range (mi)"),
-        yaxis2=dict(title="Speed (mph)", overlaying="y", side="right"),
+        yaxis=dict(title=f"SOC % / Range ({range_label})"),
+        yaxis2=dict(title=f"Speed ({speed_label})", overlaying="y", side="right"),
     )
 
     return _wrap_chart(
@@ -643,7 +664,11 @@ def build_drive_graph(battery_df: pd.DataFrame, vehicle_df: pd.DataFrame) -> str
     )
 
 
-def build_environment_chart(vehicle_df: pd.DataFrame) -> str:
+def build_environment_chart(
+    vehicle_df: pd.DataFrame,
+    temp_factor_f: bool = False,
+    temp_label: str = "\u00b0C",
+) -> str:
     """Build temperature chart (outside + cabin) for trip time window.
 
     Returns HTML string. Empty string if no temperature data.
@@ -660,6 +685,12 @@ def build_environment_chart(vehicle_df: pd.DataFrame) -> str:
     pio.templates.default = "plotly_dark"
 
     vehicle_df = _interpolate_series(vehicle_df, ["outside_temp", "cabin_temp"])
+
+    # Convert °C -> °F if requested
+    if temp_factor_f:
+        for col in ("outside_temp", "cabin_temp"):
+            if col in vehicle_df.columns:
+                vehicle_df[col] = vehicle_df[col] * 9 / 5 + 32
 
     fig = go.Figure()
 
@@ -687,7 +718,7 @@ def build_environment_chart(vehicle_df: pd.DataFrame) -> str:
         height=250,
         **_DARK_LAYOUT,
         margin=dict(l=20, r=20, t=20, b=20),
-        yaxis=dict(title="Temperature (F)"),
+        yaxis=dict(title=f"Temperature ({temp_label})"),
     )
 
     return _wrap_chart(
@@ -700,10 +731,17 @@ def build_environment_chart(vehicle_df: pd.DataFrame) -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_expanded_battery_chart(battery_df: pd.DataFrame) -> str:
+def build_expanded_battery_chart(
+    battery_df: pd.DataFrame,
+    distance_factor: float = 1.0,
+    range_label: str = "km",
+    temp_factor_f: bool = False,
+    temp_label: str = "\u00b0C",
+) -> str:
     """Full battery detail chart: SOC, Range, Battery Temp, Voltage, kW.
 
     Dual Y-axes: left for SOC%/Range, right for kW/Voltage.
+    Range (km) and battery_temp (°C) are converted to display units.
     """
     if battery_df.empty:
         return ""
@@ -723,6 +761,11 @@ def build_expanded_battery_chart(battery_df: pd.DataFrame) -> str:
         battery_df, ["soc", "range", "kw", "battery_temp", "voltage"]
     )
 
+    if "range" in battery_df.columns:
+        battery_df["range"] = battery_df["range"] * distance_factor
+    if temp_factor_f and "battery_temp" in battery_df.columns:
+        battery_df["battery_temp"] = battery_df["battery_temp"] * 9 / 5 + 32
+
     fig = go.Figure()
 
     # Left axis: SOC, Range
@@ -737,7 +780,7 @@ def build_expanded_battery_chart(battery_df: pd.DataFrame) -> str:
     if battery_df["range"].notna().any():
         fig.add_trace(go.Scatter(
             x=battery_df["time"], y=battery_df["range"],
-            name="Range (mi)", line=dict(color="#22c55e"),
+            name=f"Range ({range_label})", line=dict(color="#22c55e"),
             yaxis="y1", connectgaps=False,
         ))
         _add_interpolated_traces(fig, battery_df, "range", "#22c55e", "y1")
@@ -763,7 +806,7 @@ def build_expanded_battery_chart(battery_df: pd.DataFrame) -> str:
     if battery_df["battery_temp"].notna().any():
         fig.add_trace(go.Scatter(
             x=battery_df["time"], y=battery_df["battery_temp"],
-            name="Batt Temp (F)", line=dict(color="#ef4444"),
+            name=f"Batt Temp ({temp_label})", line=dict(color="#ef4444"),
             yaxis="y1", connectgaps=False,
             visible="legendonly",
         ))
@@ -773,7 +816,7 @@ def build_expanded_battery_chart(battery_df: pd.DataFrame) -> str:
         height=400,
         **_DARK_LAYOUT,
         margin=dict(l=30, r=70, t=20, b=30),
-        yaxis=dict(title="SOC % / Range (mi)"),
+        yaxis=dict(title=f"SOC % / Range ({range_label})"),
         yaxis2=dict(title="kW / Voltage", overlaying="y", side="right"),
     )
 
@@ -782,7 +825,11 @@ def build_expanded_battery_chart(battery_df: pd.DataFrame) -> str:
     )
 
 
-def build_expanded_environment_chart(vehicle_df: pd.DataFrame) -> str:
+def build_expanded_environment_chart(
+    vehicle_df: pd.DataFrame,
+    temp_factor_f: bool = False,
+    temp_label: str = "\u00b0C",
+) -> str:
     """Expanded environment chart -- same as drawer version but taller."""
     if vehicle_df.empty:
         return ""
@@ -796,6 +843,11 @@ def build_expanded_environment_chart(vehicle_df: pd.DataFrame) -> str:
     pio.templates.default = "plotly_dark"
 
     vehicle_df = _interpolate_series(vehicle_df, ["outside_temp", "cabin_temp"])
+
+    if temp_factor_f:
+        for col in ("outside_temp", "cabin_temp"):
+            if col in vehicle_df.columns:
+                vehicle_df[col] = vehicle_df[col] * 9 / 5 + 32
 
     fig = go.Figure()
 
@@ -819,7 +871,7 @@ def build_expanded_environment_chart(vehicle_df: pd.DataFrame) -> str:
         height=350,
         **_DARK_LAYOUT,
         margin=dict(l=30, r=30, t=20, b=30),
-        yaxis=dict(title="Temperature (F)"),
+        yaxis=dict(title=f"Temperature ({temp_label})"),
     )
 
     return _wrap_chart(
@@ -827,7 +879,11 @@ def build_expanded_environment_chart(vehicle_df: pd.DataFrame) -> str:
     )
 
 
-def build_expanded_driving_chart(vehicle_df: pd.DataFrame) -> str:
+def build_expanded_driving_chart(
+    vehicle_df: pd.DataFrame,
+    distance_factor: float = 1.0,
+    speed_label: str = "km/h",
+) -> str:
     """Speed and acceleration over time with dual Y-axes."""
     if vehicle_df.empty:
         return ""
@@ -841,6 +897,9 @@ def build_expanded_driving_chart(vehicle_df: pd.DataFrame) -> str:
     pio.templates.default = "plotly_dark"
 
     vehicle_df = _interpolate_series(vehicle_df, ["speed", "acceleration"])
+
+    if "speed" in vehicle_df.columns:
+        vehicle_df["speed"] = vehicle_df["speed"] * distance_factor
 
     fig = go.Figure()
 
@@ -864,7 +923,7 @@ def build_expanded_driving_chart(vehicle_df: pd.DataFrame) -> str:
         height=350,
         **_DARK_LAYOUT,
         margin=dict(l=30, r=70, t=20, b=30),
-        yaxis=dict(title="Speed (mph)"),
+        yaxis=dict(title=f"Speed ({speed_label})"),
         yaxis2=dict(title="Acceleration", overlaying="y", side="right"),
     )
 

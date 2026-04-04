@@ -305,12 +305,12 @@
                         >
                     </label>
                     <label class="form-control w-full">
-                        <div class="label"><span class="label-text">Miles Added</span></div>
+                        <div class="label"><span class="label-text">Distance Added ({{ units.distance_label }})</span></div>
                         <input
                             type="number"
-                            name="miles_added"
+                            name="distance_added"
                             step="0.1"
-                            value="{% if modal_mode == 'edit' and session and session.miles_added is not none %}{{ session.miles_added }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.distance_added is not none %}{{ "%.1f"|format(session.distance_added|cvt_dist(distance_unit)) }}{% endif %}"
                             placeholder="e.g., 120.5"
                             class="input input-bordered w-full"
                         >

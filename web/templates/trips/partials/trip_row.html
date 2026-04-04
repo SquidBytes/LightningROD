@@ -5,7 +5,7 @@
     class="cursor-pointer hover:bg-base-300/50">
     <td class="text-base-content/60 font-mono text-sm">#{{ total - ((page - 1) * per_page) - loop.index0 }}</td>
     <td>{% if trip.end_time %}{{ trip.end_time|localtime(user_tz|default('UTC'), "%b %-d, %Y") }}{% else %}--{% endif %}</td>
-    <td>{% if trip.distance is not none %}{{ "%.1f"|format(trip.distance) }} mi{% else %}--{% endif %}</td>
+    <td>{% if trip.distance is not none %}{{ "%.1f"|format(trip.distance|cvt_dist(distance_unit)) }} {{ units.distance_label }}{% else %}--{% endif %}</td>
     <td>
         {% if trip.duration is not none %}
             {{ (trip.duration | int) // 60 }}h {{ (trip.duration | int) % 60 }}m
@@ -15,21 +15,21 @@
     </td>
     <td>
         {% if trip.outside_air_temp is not none %}
-            <div class="text-sm">{{ "%.0f"|format(trip.outside_air_temp) }}&deg;F</div>
+            <div class="text-sm">{{ "%.0f"|format(trip.outside_air_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}</div>
             {% if trip.cabin_temp is not none %}
-            <div class="text-xs text-base-content/40">{{ "%.0f"|format(trip.cabin_temp) }}&deg;F cabin</div>
+            <div class="text-xs text-base-content/40">{{ "%.0f"|format(trip.cabin_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }} cabin</div>
             {% endif %}
         {% elif trip.ambient_temp is not none %}
-            <div class="text-sm">{{ "%.0f"|format(trip.ambient_temp) }}&deg;F</div>
+            <div class="text-sm">{{ "%.0f"|format(trip.ambient_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}</div>
         {% else %}
             <span class="text-base-content/30">--</span>
         {% endif %}
     </td>
     <td>{% if trip.energy_consumed is not none %}{{ "%.1f"|format(trip.energy_consumed) }} kWh{% else %}--{% endif %}</td>
-    <td>{% if trip.efficiency is not none %}<span class="text-primary font-medium">{{ "%.1f"|format(trip.efficiency) }} mi/kWh</span>{% else %}--{% endif %}</td>
+    <td>{% if trip.efficiency is not none %}<span class="text-primary font-medium">{{ "%.1f"|format(trip.efficiency|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}</span>{% else %}--{% endif %}</td>
     <td>
         {% if trip.distance is not none and trip.energy_consumed is not none and trip.energy_consumed > 0 %}
-            {{ "%.1f"|format(trip.distance / trip.energy_consumed) }} mi/kWh
+            {{ "%.1f"|format((trip.distance / trip.energy_consumed)|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}
         {% else %}
             --
         {% endif %}
@@ -48,7 +48,7 @@
     </td>
     <td>
         {% if trip.range_regenerated is not none %}
-            <div class="text-sm">{{ "%.1f"|format(trip.range_regenerated) }} mi</div>
+            <div class="text-sm">{{ "%.1f"|format(trip.range_regenerated|cvt_dist(distance_unit)) }} {{ units.range_label }}</div>
             {% if trip.efficiency is not none and trip.efficiency > 0 %}
             <div class="text-xs text-base-content/40">{{ "%.1f"|format(trip.range_regenerated / trip.efficiency) }} kWh (est)</div>
             {% endif %}

@@ -22,8 +22,9 @@ from web.queries.battery import (
     query_recent_sessions_for_picker,
     query_soc_timeline,
 )
-from web.queries.settings import get_app_setting
+from web.queries.settings import get_app_setting, get_unit_context
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
+from web.unit_system import MI_PER_KM
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -44,6 +45,9 @@ async def battery(
     active_device_id = await get_active_device_id(db)
     active_vehicle = await get_active_vehicle(db)
 
+    unit_ctx = await get_unit_context(db)
+    distance_factor = MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
+
     # Rated capacity from vehicle, fallback 75.0 kWh
     rated_capacity = 75.0
     if active_vehicle and active_vehicle.battery_capacity_kwh:
@@ -52,7 +56,12 @@ async def battery(
     # Section-specific partial rendering for lazy loading
     if section == "degradation":
         degradation_data = await query_degradation_by_mileage(db, time_range=time_range, device_id=active_device_id)
-        chart = build_degradation_chart(degradation_data, rated_capacity)
+        chart = build_degradation_chart(
+            degradation_data,
+            rated_capacity,
+            distance_factor=distance_factor,
+            distance_label=unit_ctx["units"]["distance_label"],
+        )
         if chart:
             return HTMLResponse(chart)
         return HTMLResponse('<p class="text-base-content/40 text-sm py-8 text-center">No capacity or odometer data available.</p>')
@@ -85,7 +94,12 @@ async def battery(
     # 1. SOC timeline
     soc_data = await query_soc_timeline(db, time_range=time_range, device_id=active_device_id)
     charging_regions = detect_charging_regions(soc_data)
-    soc_chart = build_soc_timeline_chart(soc_data, charging_regions)
+    soc_chart = build_soc_timeline_chart(
+        soc_data,
+        charging_regions,
+        distance_factor=distance_factor,
+        range_label=unit_ctx["units"]["range_label"],
+    )
 
     # Build session time windows for click-to-drill JS
     session_time_windows = []
@@ -135,9 +149,9 @@ async def battery(
         summary["health_pct"] = (cap / rated_capacity) * 100
         summary["capacity_delta"] = cap - rated_capacity
         if latest.hv_battery_range is not None:
-            summary["latest_range"] = float(latest.hv_battery_range)
+            summary["latest_range"] = float(latest.hv_battery_range) * distance_factor
         if latest.hv_battery_max_range is not None:
-            summary["rated_range"] = float(latest.hv_battery_max_range)
+            summary["rated_range"] = float(latest.hv_battery_max_range) * distance_factor
         if summary["latest_range"] is not None and summary["rated_range"] is not None:
             summary["range_delta"] = summary["latest_range"] - summary["rated_range"]
         if latest.lv_battery_voltage is not None:
@@ -164,6 +178,7 @@ async def battery(
     # Degradation, charge curve, and 12v charts are NOT computed here --
     # they are lazy-loaded via HTMX hx-trigger="revealed"
     context = {
+        **unit_ctx,
         "soc_chart": soc_chart,
         "degradation_chart": None,
         "charge_curve_chart": None,

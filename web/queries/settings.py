@@ -466,6 +466,26 @@ async def get_app_settings_dict(
     return {k: found.get(k, "") for k in keys}
 
 
+async def get_unit_context(db: AsyncSession) -> dict:
+    """Load unit-system settings for template context.
+
+    Reads `distance_unit` and `temp_unit` from app_settings (defaults to "us")
+    and returns a dict ready to splat into Jinja2 template context:
+
+        {"distance_unit": ..., "temp_unit": ..., "units": {...labels...}}
+    """
+    from web.unit_system import get_units
+
+    settings = await get_app_settings_dict(db, ["distance_unit", "temp_unit"])
+    distance_unit = settings.get("distance_unit") or "us"
+    temp_unit = settings.get("temp_unit") or "us"
+    return {
+        "distance_unit": distance_unit,
+        "temp_unit": temp_unit,
+        "units": get_units(distance_unit, temp_unit),
+    }
+
+
 async def set_app_setting(db: AsyncSession, key: str, value: str) -> None:
     """Upsert a single key-value pair in app_settings."""
     stmt = pg_insert(AppSettings).values(key=key, value=value)

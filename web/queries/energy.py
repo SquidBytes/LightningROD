@@ -67,17 +67,17 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
     Returns dict with:
     - total_kwh: float
     - total_sessions: int
-    - avg_efficiency: float | None  (mi/kWh, base unit)
-    - best_efficiency: float | None  (mi/kWh, base unit)
-    - worst_efficiency: float | None  (mi/kWh, base unit)
+    - avg_efficiency: float | None  (km/kWh, metric base unit)
+    - best_efficiency: float | None  (km/kWh, metric base unit)
+    - worst_efficiency: float | None  (km/kWh, metric base unit)
     - by_charge_type: list of dicts [{charge_type, kwh, session_count}, ...]
-    - sessions_for_chart: list of dicts [{date, efficiency_mi_kwh, charge_type}, ...]
+    - sessions_for_chart: list of dicts [{date, efficiency, charge_type}, ...]
 
-    All efficiency values returned in mi/kWh (base unit).
-    Route handler applies unit conversion factor before passing to template/chart.
+    All efficiency values returned in km/kWh (metric base). The route handler
+    applies unit conversion before passing to template/chart.
 
-    NOTE: Efficiency computed as miles_added / energy_kwh (NOT stored efficiency column).
-    This gives 190/203 coverage vs 117/203 from the stored column.
+    NOTE: Efficiency computed as distance_added / energy_kwh (NOT the stored
+    efficiency column from FordPass).
     """
     # Reuse build_time_filter from costs (targets EVChargingSession.session_start_utc)
     stmt = select(EVChargingSession).where(EVChargingSession.energy_kwh.isnot(None))
@@ -108,17 +108,17 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
         by_charge_type[ct]["kwh"] += kwh
         by_charge_type[ct]["session_count"] += 1
 
-        # Compute efficiency — requires BOTH miles_added > 0 and energy_kwh > 0
+        # Compute efficiency — requires BOTH distance_added > 0 and energy_kwh > 0
         if (
-            s.miles_added is not None
-            and float(s.miles_added) > 0
+            s.distance_added is not None
+            and float(s.distance_added) > 0
             and kwh > 0
         ):
-            eff = float(s.miles_added) / kwh
+            eff = float(s.distance_added) / kwh  # km/kWh
             efficiencies.append(eff)
             sessions_for_chart.append({
                 "date": s.session_start_utc,
-                "efficiency_mi_kwh": eff,
+                "efficiency": eff,
                 "charge_type": ct,
             })
 
@@ -134,7 +134,7 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
         df["date"] = pd.to_datetime(df["date"], utc=True)
         sessions_for_chart = (
             df.groupby([df["date"].dt.date, "charge_type"])
-            .agg(efficiency_mi_kwh=("efficiency_mi_kwh", "mean"))
+            .agg(efficiency=("efficiency", "mean"))
             .reset_index()
         )
         # Convert date back to datetime for chart compatibility
@@ -328,17 +328,20 @@ def build_monthly_energy_chart(monthly_data: list[dict]) -> str:
 def build_efficiency_chart(
     sessions: list[dict],
     regen_data: list[dict] | None,
-    unit_label: str = "mi/kWh",
-    unit_factor: float = 1.0,
+    unit_label: str = "km/kWh",
+    efficiency_factor: float = 1.0,
+    range_factor: float = 1.0,
 ) -> str:
     """Build Plotly efficiency trend scatter chart with rolling average overlay.
 
     Args:
-        sessions: List of {date, efficiency_mi_kwh, charge_type} dicts from query_energy_summary.
+        sessions: List of {date, efficiency, charge_type} dicts from query_energy_summary.
+                  Efficiency is in km/kWh (metric base).
         regen_data: Optional list of {date, range_regenerated} dicts for secondary y-axis.
-                    Pass None when no regen data available (expected for seeded dataset).
+                    range_regenerated is in km (metric base). Pass None when no regen data.
         unit_label: Axis label (e.g. 'mi/kWh' or 'km/kWh').
-        unit_factor: Conversion multiplier (1.0 for US, 1.60934 for EU).
+        efficiency_factor: Conversion multiplier applied to efficiency (1.0 metric, MI_PER_KM for US).
+        range_factor: Conversion multiplier applied to range_regenerated (1.0 metric, MI_PER_KM for US).
 
     Returns:
         HTML string with embedded Plotly div (include_plotlyjs=False — Plotly CDN in base.html).
@@ -353,10 +356,10 @@ def build_efficiency_chart(
     pio.templates.default = "plotly_dark"
 
     df = pd.DataFrame(sessions)
-    df = df.sort_values("date").dropna(subset=["efficiency_mi_kwh"])
+    df = df.sort_values("date").dropna(subset=["efficiency"])
 
-    # Apply unit conversion factor
-    df["efficiency"] = df["efficiency_mi_kwh"] * unit_factor
+    # Apply unit conversion factor (metric base -> display unit)
+    df["efficiency"] = df["efficiency"] * efficiency_factor
 
     # Compute rolling average across all sessions (not per charge type)
     window = min(MOVING_AVG_WINDOW, len(df))
@@ -402,12 +405,13 @@ def build_efficiency_chart(
             secondary_y=False,
         )
 
-        # Regen on secondary y-axis
+        # Regen on secondary y-axis (convert km -> display range unit)
         regen_df = pd.DataFrame(regen_data).sort_values("date")
+        regen_df["range_display"] = regen_df["range_regenerated"] * range_factor
         fig.add_trace(
             go.Scatter(
                 x=regen_df["date"],
-                y=regen_df["range_regenerated"],
+                y=regen_df["range_display"],
                 mode="lines+markers",
                 name="Range Recovered",
                 line=dict(color="#4ade80", dash="dot", width=1.5),

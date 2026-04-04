@@ -296,27 +296,28 @@ async def energy_scenario(db_session):
     sessions = []
     ac_energy = [15.0, 20.0, 12.0, 18.0, 25.0]  # total = 90.0
     dc_energy = [45.0, 55.0, 40.0, 50.0, 60.0]   # total = 250.0
-    ac_miles = [45.0, 60.0, 36.0, 54.0, 75.0]     # efficiency: 3.0 mi/kWh each
-    dc_miles = [112.5, 137.5, 100.0, 125.0, 150.0] # efficiency: 2.5 mi/kWh each
+    # Distance values are km (metric canonical). Efficiency: 3.0 km/kWh for AC, 2.5 km/kWh for DC.
+    ac_distance = [45.0, 60.0, 36.0, 54.0, 75.0]
+    dc_distance = [112.5, 137.5, 100.0, 125.0, 150.0]
 
-    for i, (kwh, miles) in enumerate(zip(ac_energy, ac_miles)):
+    for i, (kwh, dist) in enumerate(zip(ac_energy, ac_distance)):
         s = EVChargingSession(
             device_id=DEVICE_ID,
             energy_kwh=kwh,
             charge_type="AC",
-            miles_added=miles,
+            distance_added=dist,
             session_start_utc=BASE_DATE - timedelta(days=20 - i),
             is_complete=True,
             source_system="test_fixture",
         )
         sessions.append(s)
 
-    for i, (kwh, miles) in enumerate(zip(dc_energy, dc_miles)):
+    for i, (kwh, dist) in enumerate(zip(dc_energy, dc_distance)):
         s = EVChargingSession(
             device_id=DEVICE_ID,
             energy_kwh=kwh,
             charge_type="DC",
-            miles_added=miles,
+            distance_added=dist,
             session_start_utc=BASE_DATE - timedelta(days=15 - i),
             is_complete=True,
             source_system="test_fixture",

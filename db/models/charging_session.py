@@ -78,7 +78,7 @@ class EVChargingSession(Base):
     longitude: Mapped[Optional[float]] = mapped_column(Numeric)
     max_power: Mapped[Optional[float]] = mapped_column(Numeric)
     min_power: Mapped[Optional[float]] = mapped_column(Numeric)
-    miles_added: Mapped[Optional[float]] = mapped_column(Numeric)
+    distance_added: Mapped[Optional[float]] = mapped_column(Numeric)  # km
 
     # EVSE data (charger-side measurements)
     evse_voltage: Mapped[Optional[float]] = mapped_column(Numeric)

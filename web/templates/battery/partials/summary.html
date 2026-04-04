@@ -43,12 +43,12 @@
         <div class="card-body">
             <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Range</p>
             {% if summary.latest_range is not none %}
-                <p class="text-2xl font-bold">{{ "%.0f"|format(summary.latest_range) }} <span class="text-base font-normal text-base-content/60">mi</span></p>
+                <p class="text-2xl font-bold">{{ "%.0f"|format(summary.latest_range) }} <span class="text-base font-normal text-base-content/60">{{ units.range_label }}</span></p>
                 {% if summary.rated_range is not none %}
                     <p class="text-sm text-base-content/60 mt-1">
-                        vs {{ "%.0f"|format(summary.rated_range) }} mi new
+                        vs {{ "%.0f"|format(summary.rated_range) }} {{ units.range_label }} new
                         {% if summary.range_delta is not none %}
-                            <span class="text-error">({{ "%.0f"|format(summary.range_delta) }} mi)</span>
+                            <span class="text-error">({{ "%.0f"|format(summary.range_delta) }} {{ units.range_label }})</span>
                         {% endif %}
                     </p>
                 {% else %}

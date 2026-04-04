@@ -20,12 +20,12 @@
     <div>
         <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Overview</h4>
         <div class="grid grid-cols-2 gap-3 text-sm">
-            <div><span class="text-base-content/40">Distance</span><p class="font-medium">{% if trip.distance is not none %}{{ "%.1f"|format(trip.distance) }} mi{% else %}--{% endif %}</p></div>
+            <div><span class="text-base-content/40">Distance</span><p class="font-medium">{% if trip.distance is not none %}{{ "%.1f"|format(trip.distance|cvt_dist(distance_unit)) }} {{ units.distance_label }}{% else %}--{% endif %}</p></div>
             <div><span class="text-base-content/40">Duration</span><p class="font-medium">{% if trip.duration is not none %}{{ (trip.duration|int) // 60 }}h {{ (trip.duration|int) % 60 }}m{% else %}--{% endif %}</p></div>
             <div><span class="text-base-content/40">Energy</span><p class="font-medium">{% if trip.energy_consumed is not none %}{{ "%.1f"|format(trip.energy_consumed) }} kWh{% else %}--{% endif %}</p></div>
-            <div><span class="text-base-content/40">Reported Eff.</span><p class="font-medium">{% if trip.efficiency is not none %}{{ "%.1f"|format(trip.efficiency) }} mi/kWh{% else %}--{% endif %}</p></div>
-            <div><span class="text-base-content/40">Calculated Eff.</span><p class="font-medium">{% if trip.distance is not none and trip.energy_consumed is not none and trip.energy_consumed > 0 %}{{ "%.1f"|format(trip.distance / trip.energy_consumed) }} mi/kWh{% else %}--{% endif %}</p></div>
-            <div><span class="text-base-content/40">Regen</span><p class="font-medium">{% if trip.range_regenerated is not none %}{{ "%.1f"|format(trip.range_regenerated) }} mi{% else %}--{% endif %}</p></div>
+            <div><span class="text-base-content/40">Reported Eff.</span><p class="font-medium">{% if trip.efficiency is not none %}{{ "%.1f"|format(trip.efficiency|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}{% else %}--{% endif %}</p></div>
+            <div><span class="text-base-content/40">Calculated Eff.</span><p class="font-medium">{% if trip.distance is not none and trip.energy_consumed is not none and trip.energy_consumed > 0 %}{{ "%.1f"|format((trip.distance / trip.energy_consumed)|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}{% else %}--{% endif %}</p></div>
+            <div><span class="text-base-content/40">Regen</span><p class="font-medium">{% if trip.range_regenerated is not none %}{{ "%.1f"|format(trip.range_regenerated|cvt_dist(distance_unit)) }} {{ units.range_label }}{% else %}--{% endif %}</p></div>
         </div>
     </div>
 
