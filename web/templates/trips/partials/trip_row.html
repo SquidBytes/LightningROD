@@ -3,7 +3,7 @@
     hx-target="#trip-drawer-body"
     hx-swap="innerHTML"
     class="cursor-pointer hover:bg-base-300/50">
-    <td class="text-base-content/60 font-mono text-sm">#{{ total - ((page - 1) * per_page) - loop.index0 }}</td>
+    <td class="text-base-content/60 font-mono text-sm">#{{ total - ((page - 1) * per_page) - row_index }}</td>
     <td>{% if trip.end_time %}{{ trip.end_time|localtime(user_tz|default('UTC'), "%b %-d, %Y") }}{% else %}--{% endif %}</td>
     <td>{% if trip.distance is not none %}{{ "%.1f"|format(trip.distance|cvt_dist(distance_unit)) }} {{ units.distance_label }}{% else %}--{% endif %}</td>
     <td>
