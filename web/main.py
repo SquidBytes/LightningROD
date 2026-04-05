@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from db.engine import AsyncSessionLocal, engine
 from web.queries.settings import seed_charger_templates
-from web.routes import battery, charging, csv_import, dashboard, sessions, costs, energy, review, settings, trips
+from web.routes import battery, charging, csv_import, dashboard, sessions, costs, performance, review, settings, trips
 
 
 def localtime_filter(dt, tz_str: str = "UTC", fmt: str | None = None):
@@ -60,7 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(dashboard.router)
     app.include_router(sessions.router, prefix="/charging")
     app.include_router(costs.router, prefix="/charging")
-    app.include_router(energy.router, prefix="/charging")
+    app.include_router(performance.router, prefix="/charging")
     app.include_router(settings.router)
     app.include_router(csv_import.router)
     app.include_router(battery.router)
@@ -84,7 +84,7 @@ def create_app() -> FastAPI:
             return fn(value, unit) if value is not None else None
         return inner
 
-    for route_module in [dashboard, sessions, costs, energy, settings, csv_import, charging, review, battery, trips]:
+    for route_module in [dashboard, sessions, costs, performance, settings, csv_import, charging, review, battery, trips]:
         if hasattr(route_module, "templates"):
             env = route_module.templates.env
             env.filters["localtime"] = localtime_filter

@@ -19,7 +19,7 @@ async def client(db_session):
     from fastapi.staticfiles import StaticFiles
     from web.routes import (
         battery, charging, costs, csv_import, dashboard,
-        energy, review, sessions, settings, trips,
+        performance, review, sessions, settings, trips,
     )
     from web.main import localtime_filter
 
@@ -28,7 +28,7 @@ async def client(db_session):
     app.include_router(dashboard.router)
     app.include_router(sessions.router, prefix="/charging")
     app.include_router(costs.router, prefix="/charging")
-    app.include_router(energy.router, prefix="/charging")
+    app.include_router(performance.router, prefix="/charging")
     app.include_router(settings.router)
     app.include_router(csv_import.router)
     app.include_router(battery.router)
@@ -37,7 +37,7 @@ async def client(db_session):
     app.include_router(trips.router)
 
     # Register localtime filter on Jinja2 templates
-    for route_module in [dashboard, sessions, costs, energy, settings,
+    for route_module in [dashboard, sessions, costs, performance, settings,
                          csv_import, charging, review, battery, trips]:
         if hasattr(route_module, "templates"):
             route_module.templates.env.filters["localtime"] = localtime_filter

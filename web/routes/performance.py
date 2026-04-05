@@ -23,8 +23,8 @@ router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
 
 
-@router.get("/energy", response_class=HTMLResponse)
-async def energy(
+@router.get("/performance", response_class=HTMLResponse)
+async def performance(
     request: Request,
     db: AsyncSession = Depends(get_db),
     range: Optional[str] = "all",
@@ -83,8 +83,8 @@ async def energy(
         "chart_html": chart_html,
         "monthly_energy_chart": monthly_energy_chart,
         "active_range": time_range,
-        "active_page": "energy",
-        "page_title": "Energy",
+        "active_page": "performance",
+        "page_title": "Performance",
         "unit_label": unit_ctx["units"]["efficiency_label"],
         "charge_type_labels": CHARGE_TYPE_LABELS,
         "active_vehicle": active_vehicle,
@@ -92,5 +92,5 @@ async def energy(
     }
 
     if hx_request:
-        return templates.TemplateResponse(request, "energy/partials/summary.html", context)
-    return templates.TemplateResponse(request, "energy/index.html", context)
+        return templates.TemplateResponse(request, "performance/partials/summary.html", context)
+    return templates.TemplateResponse(request, "performance/index.html", context)
