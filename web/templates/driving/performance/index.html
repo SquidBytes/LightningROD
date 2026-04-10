@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-6xl">
+    <h1 class="text-3xl font-bold text-base-content mb-2">Driving Analytics</h1>
+    <p class="text-base-content/60 mb-6">Efficiency, temperature correlation, and regen recovery.</p>
+
+    {% with filter_url="/driving/performance", filter_target="#driving-performance-content", active_preset=active_range, date_param_name="range" %}
+      {% include "partials/filter_bar.html" %}
+    {% endwith %}
+
+    <!-- HTMX swap target -->
+    <div id="driving-performance-content">
+        {% include "driving/performance/partials/summary.html" %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,96 @@
+<!-- Headline Summary Cards -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+    <!-- Card 1: Total Distance -->
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Distance</p>
+            {% if summary.total_distance is not none %}
+                <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_distance) }} <span class="text-xl font-normal text-base-content/60">{{ units.distance_label }}</span></p>
+                <p class="text-sm text-base-content/60 mt-1">{{ summary.trip_count }} trips</p>
+            {% else %}
+                <p class="text-2xl font-semibold text-base-content/30">No data</p>
+                <p class="text-xs text-base-content/30 mt-1">Populates when trip data is ingested</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Card 2: Avg Driving Efficiency -->
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Avg Driving Efficiency</p>
+            {% if summary.avg_driving_efficiency is not none %}
+                <p class="text-3xl font-bold">{{ "%.2f"|format(summary.avg_driving_efficiency) }} <span class="text-xl font-normal text-base-content/60">{{ unit_label }}</span></p>
+                <p class="text-sm text-base-content/60 mt-1">Across {{ summary.trip_count }} trips</p>
+            {% else %}
+                <p class="text-2xl font-semibold text-base-content/30">No data</p>
+                <p class="text-xs text-base-content/30 mt-1">Requires trips with distance + energy</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Card 3: Total Regen -->
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Regen</p>
+            {% if summary.total_regen is not none %}
+                <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_regen) }} <span class="text-xl font-normal text-base-content/60">range units</span></p>
+                <p class="text-sm text-base-content/60 mt-1">from {{ summary.trip_count }} trips</p>
+            {% else %}
+                <p class="text-2xl font-semibold text-base-content/30">No data available</p>
+                <p class="text-xs text-base-content/30 mt-1">Populates when trip data is ingested</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Card 4: Range Recovered (moved from charging) -->
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Range Recovered</p>
+            {% if summary.range_recovered is not none %}
+                <p class="text-3xl font-bold text-green-400">{{ "%.1f"|format(summary.range_recovered) }} <span class="text-xl font-normal text-base-content/60">{{ units.range_label }}</span></p>
+                <p class="text-sm text-base-content/60 mt-1">via regenerative braking</p>
+            {% else %}
+                <p class="text-2xl font-semibold text-base-content/30">No data available</p>
+                <p class="text-xs text-base-content/30 mt-1">Populates when trip data is ingested</p>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+
+<!-- Driving Efficiency Chart (moved from /trips) -->
+<div class="card bg-base-200 mb-4">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Driving Efficiency</h3>
+        {% if driving_efficiency_chart %}
+            <div class="plotly-chart-wrap">{{ driving_efficiency_chart | safe }}</div>
+        {% else %}
+            <p class="text-base-content/40 text-sm py-8 text-center">No efficiency data available for this time range.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Temperature Correlation (Wave 2 placeholder) -->
+<div class="card bg-base-200 mb-4" id="driving-temperature-scatter-card">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Efficiency vs Temperature</h3>
+        {% if temperature_scatter_chart %}
+            <div class="plotly-chart-wrap">{{ temperature_scatter_chart | safe }}</div>
+        {% else %}
+            <p class="text-base-content/40 text-sm py-8 text-center">Not enough data yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Regen Recovery (Wave 2 placeholder) -->
+<div class="card bg-base-200" id="driving-regen-bar-card">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Regen Recovery</h3>
+        {% if regen_bar_chart %}
+            <div class="plotly-chart-wrap">{{ regen_bar_chart | safe }}</div>
+        {% else %}
+            <p class="text-base-content/40 text-sm py-8 text-center">No regen data for this time range.</p>
+        {% endif %}
+    </div>
+</div>
