@@ -16,7 +16,11 @@ from web.queries.costs import build_time_filter
 MOVING_AVG_WINDOW = 10
 
 # DB values -> display labels
-CHARGE_TYPE_LABELS = {"AC": "AC (L1/L2)", "DC": "DC Fast"}
+CHARGE_TYPE_LABELS = {
+    "AC": "AC (L1/L2)",
+    "DC": "DC Fast",
+    "Unknown": "Unknown",
+}
 
 # Shared Plotly modebar config — show minimal controls, hide logo
 _PLOTLY_CONFIG = {
@@ -101,12 +105,20 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
         kwh = float(s.energy_kwh)
         total_kwh += kwh
 
-        # Group by charge type
-        ct = s.charge_type if s.charge_type else "Unknown"
+        # Group by charge type — AC, DC, or Unknown (anything else/NULL)
+        raw_ct = s.charge_type
+        ct = raw_ct if raw_ct in ("AC", "DC") else "Unknown"
         if ct not in by_charge_type:
-            by_charge_type[ct] = {"charge_type": ct, "kwh": 0.0, "session_count": 0}
+            by_charge_type[ct] = {
+                "charge_type": ct,
+                "kwh": 0.0,
+                "session_count": 0,
+                "total_cost": 0.0,
+            }
         by_charge_type[ct]["kwh"] += kwh
         by_charge_type[ct]["session_count"] += 1
+        if s.cost is not None:
+            by_charge_type[ct]["total_cost"] += float(s.cost)
 
         # Compute efficiency — requires BOTH distance_added > 0 and energy_kwh > 0
         if (
@@ -281,6 +293,84 @@ async def query_monthly_energy(db: AsyncSession, time_range: str = "all", device
         {"month": month, "charge_type": ct, "kwh": kwh}
         for (month, ct), kwh in sorted(monthly.items())
     ]
+
+
+def build_charge_type_donut_chart(
+    by_charge_type: list[dict],
+    metric: str = "kwh",  # "kwh" | "count" | "cost"
+) -> str:
+    """AC/DC/Unknown donut with three metric modes.
+
+    Args:
+        by_charge_type: rows from query_energy_summary, each
+            {charge_type, kwh, session_count, total_cost}
+        metric: which field to visualize ("kwh", "count", "cost").
+
+    Returns "" when there's nothing to render. Rows with charge_type="Unknown"
+    and the chosen metric value == 0 are filtered out, as are any rows whose
+    metric value is zero (no slice to draw).
+    """
+    if not by_charge_type:
+        return ""
+
+    def _value(row: dict) -> float:
+        if metric == "count":
+            return float(row.get("session_count", 0) or 0)
+        if metric == "cost":
+            return float(row.get("total_cost", 0) or 0)
+        return float(row.get("kwh", 0) or 0)
+
+    filtered = [
+        r for r in by_charge_type
+        if not (r.get("charge_type") == "Unknown" and _value(r) == 0)
+    ]
+    filtered = [r for r in filtered if _value(r) > 0]
+    if not filtered:
+        return ""
+
+    labels = [CHARGE_TYPE_LABELS.get(r["charge_type"], r["charge_type"]) for r in filtered]
+    values = [_value(r) for r in filtered]
+
+    if metric == "count":
+        hover_unit = "sessions"
+        value_fmt = "%{value:.0f}"
+    elif metric == "cost":
+        hover_unit = ""  # leading $ in format
+        value_fmt = "$%{value:,.2f}"
+    else:
+        hover_unit = "kWh"
+        value_fmt = "%{value:.1f}"
+
+    color_map = {
+        "AC (L1/L2)": "#60a5fa",
+        "DC Fast": "#f97316",
+        "Unknown": "#9ca3af",
+    }
+    colors = [color_map.get(lbl, "#6B7280") for lbl in labels]
+
+    pio.templates.default = "plotly_dark"
+    fig = go.Figure(data=[go.Pie(
+        labels=labels,
+        values=values,
+        hole=0.5,
+        marker=dict(colors=colors),
+        textinfo="percent",
+        hovertemplate=(
+            "<b>%{label}</b><br>"
+            + value_fmt + (" " + hover_unit if hover_unit else "")
+            + " (%{percent})<extra></extra>"
+        ),
+    )])
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+        margin=dict(l=10, r=10, t=10, b=30),
+        hoverlabel=_HOVER_LABEL,
+    )
+    return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))
 
 
 def build_monthly_energy_chart(monthly_data: list[dict]) -> str:

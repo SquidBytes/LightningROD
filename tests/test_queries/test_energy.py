@@ -82,3 +82,58 @@ async def test_energy_summary_empty(db_session):
     assert result["best_efficiency"] is None
     assert result["worst_efficiency"] is None
     assert result["by_charge_type"] == []
+
+
+async def test_phase_25_by_charge_type_includes_cost(db_session):
+    """Phase 25: by_charge_type entries include a total_cost field summed from session.cost."""
+    from datetime import datetime, timezone
+    from db.models.charging_session import EVChargingSession
+    from db.models.vehicle import EVVehicle
+
+    device_id = "TEST_VIN_P25_COST"
+    db_session.add(
+        EVVehicle(
+            device_id=device_id,
+            display_name="Phase 25 Cost Vehicle",
+            year=2024,
+            make="Ford",
+            model="F-150 Lightning",
+            battery_capacity_kwh=131.0,
+            vin=device_id,
+            source_system="test_fixture",
+        )
+    )
+    await db_session.flush()
+
+    base = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+    db_session.add_all(
+        [
+            EVChargingSession(
+                device_id=device_id,
+                energy_kwh=20.0,
+                charge_type="AC",
+                cost=15.50,
+                session_start_utc=base,
+                is_complete=True,
+                source_system="test_fixture",
+            ),
+            EVChargingSession(
+                device_id=device_id,
+                energy_kwh=40.0,
+                charge_type="DC",
+                cost=60.00,
+                session_start_utc=base,
+                is_complete=True,
+                source_system="test_fixture",
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    result = await query_energy_summary(db_session, time_range="all", device_id=device_id)
+    by_type = {item["charge_type"]: item for item in result["by_charge_type"]}
+
+    assert "AC" in by_type and "DC" in by_type
+    assert "total_cost" in by_type["AC"]
+    assert by_type["AC"]["total_cost"] == pytest.approx(15.50, abs=0.01)
+    assert by_type["DC"]["total_cost"] == pytest.approx(60.00, abs=0.01)
