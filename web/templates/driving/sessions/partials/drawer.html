@@ -49,7 +49,7 @@
     <div>
         <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Environment</h4>
         <div id="trip-env-chart"
-             hx-get="/trips/{{ trip.id }}/charts/environment"
+             hx-get="/driving/sessions/{{ trip.id }}/charts/environment"
              hx-trigger="load"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8"><span class="loading loading-spinner loading-md"></span></div>
@@ -60,13 +60,13 @@
     <div>
         <h4 class="text-sm font-medium text-base-content/60 mb-3 uppercase tracking-wide">Drive Graphs</h4>
         <div id="trip-drive-chart"
-             hx-get="/trips/{{ trip.id }}/charts/drive"
+             hx-get="/driving/sessions/{{ trip.id }}/charts/drive"
              hx-trigger="load"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8"><span class="loading loading-spinner loading-md"></span></div>
         </div>
         <button type="button"
-                hx-get="/trips/{{ trip.id }}/expanded"
+                hx-get="/driving/sessions/{{ trip.id }}/expanded"
                 hx-target="#trip-expanded-content"
                 hx-swap="innerHTML"
                 onclick="document.getElementById('trip-expanded-modal').showModal()"

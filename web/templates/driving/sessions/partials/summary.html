@@ -1,17 +1,3 @@
-<!-- Efficiency Trend Chart -->
-<div class="card bg-base-200 mb-4">
-    <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Efficiency Trend</h3>
-        {% if trend_chart %}
-            <div id="efficiency-trend-chart">
-                {{ trend_chart | safe }}
-            </div>
-        {% else %}
-            <p class="text-base-content/40 text-sm py-8 text-center">No trip data available for this period.</p>
-        {% endif %}
-    </div>
-</div>
-
 <!-- Summary Stats -->
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
     <div class="card bg-base-200">
@@ -67,7 +53,7 @@
             <tbody>
                 {% for trip in trips %}
                 {% with row_index=loop.index0 %}
-                {% include "trips/partials/trip_row.html" %}
+                {% include "driving/sessions/partials/trip_row.html" %}
                 {% endwith %}
                 {% endfor %}
             </tbody>
@@ -78,7 +64,7 @@
     <div class="lg:hidden space-y-3">
         {% for trip in trips %}
         <div class="card bg-base-200 cursor-pointer hover:bg-base-300/50"
-             hx-get="/trips/{{ trip.id }}/drawer"
+             hx-get="/driving/sessions/{{ trip.id }}/drawer"
              hx-target="#trip-drawer-body"
              hx-swap="innerHTML">
             <div class="card-body p-4">

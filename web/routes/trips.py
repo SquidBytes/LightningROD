@@ -14,13 +14,11 @@ from web.dependencies import get_db
 from web.queries.trips import (
     build_drive_graph,
     build_driving_score_radar,
-    build_efficiency_trend_chart,
     build_environment_chart,
     build_expanded_battery_chart,
     build_expanded_driving_chart,
     build_expanded_environment_chart,
     detect_trip_locations,
-    query_efficiency_trend,
     query_trip_battery_series,
     query_trip_vehicle_series,
     query_trips,
@@ -35,7 +33,7 @@ templates = Jinja2Templates(directory="web/templates")
 PER_PAGE = 25
 
 
-@router.get("/trips", response_class=HTMLResponse)
+@router.get("/sessions", response_class=HTMLResponse)
 async def trips(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -74,13 +72,6 @@ async def trips(
     if summary.get("avg_efficiency") is not None:
         summary["avg_efficiency"] = summary["avg_efficiency"] * distance_factor
 
-    trend_data = await query_efficiency_trend(db, time_range=time_range, device_id=active_device_id)
-    trend_chart = build_efficiency_trend_chart(
-        trend_data,
-        efficiency_factor=distance_factor,
-        efficiency_label=unit_ctx["units"]["efficiency_label"],
-    )
-
     # Pagination
     total_pages = max(math.ceil(total / PER_PAGE), 1)
     has_prev = page > 1
@@ -91,7 +82,6 @@ async def trips(
         "trips": trip_list,
         "total": total,
         "summary": summary,
-        "trend_chart": trend_chart,
         "active_range": time_range,
         "sort_by": sort_by,
         "sort_dir": sort_dir,
@@ -100,19 +90,19 @@ async def trips(
         "has_prev": has_prev,
         "has_next": has_next,
         "per_page": PER_PAGE,
-        "active_page": "trips",
-        "page_title": "Trip History",
+        "active_page": "trip_sessions",
+        "page_title": "Trip Sessions",
         "active_vehicle": active_vehicle,
         "all_vehicles": all_vehicles,
         "user_tz": user_tz,
     }
 
     if hx_request:
-        return templates.TemplateResponse(request, "trips/partials/summary.html", context)
-    return templates.TemplateResponse(request, "trips/index.html", context)
+        return templates.TemplateResponse(request, "driving/sessions/partials/summary.html", context)
+    return templates.TemplateResponse(request, "driving/sessions/index.html", context)
 
 
-@router.get("/trips/{trip_id}/detail", response_class=HTMLResponse)
+@router.get("/sessions/{trip_id}/detail", response_class=HTMLResponse)
 async def trip_detail(
     request: Request,
     trip_id: int,
@@ -137,10 +127,10 @@ async def trip_detail(
         "trip": trip,
         "radar_chart": radar_chart,
     }
-    return templates.TemplateResponse(request, "trips/partials/trip_detail.html", context)
+    return templates.TemplateResponse(request, "driving/sessions/partials/trip_detail.html", context)
 
 
-@router.get("/trips/{trip_id}/drawer", response_class=HTMLResponse)
+@router.get("/sessions/{trip_id}/drawer", response_class=HTMLResponse)
 async def trip_drawer(
     request: Request,
     trip_id: int,
@@ -175,10 +165,10 @@ async def trip_drawer(
         "end_location": end_location,
         "user_tz": user_tz,
     }
-    return templates.TemplateResponse(request, "trips/partials/drawer.html", context)
+    return templates.TemplateResponse(request, "driving/sessions/partials/drawer.html", context)
 
 
-@router.get("/trips/{trip_id}/charts/environment", response_class=HTMLResponse)
+@router.get("/sessions/{trip_id}/charts/environment", response_class=HTMLResponse)
 async def trip_environment_chart(
     request: Request,
     trip_id: int,
@@ -206,7 +196,7 @@ async def trip_environment_chart(
     return HTMLResponse(chart_html)
 
 
-@router.get("/trips/{trip_id}/charts/drive", response_class=HTMLResponse)
+@router.get("/sessions/{trip_id}/charts/drive", response_class=HTMLResponse)
 async def trip_drive_chart(
     request: Request,
     trip_id: int,
@@ -238,7 +228,7 @@ async def trip_drive_chart(
     return HTMLResponse(chart_html)
 
 
-@router.get("/trips/{trip_id}/expanded", response_class=HTMLResponse)
+@router.get("/sessions/{trip_id}/expanded", response_class=HTMLResponse)
 async def trip_expanded(
     request: Request,
     trip_id: int,
@@ -284,10 +274,10 @@ async def trip_expanded(
         ),
         "user_tz": user_tz,
     }
-    return templates.TemplateResponse(request, "trips/partials/expanded_modal.html", context)
+    return templates.TemplateResponse(request, "driving/sessions/partials/expanded_modal.html", context)
 
 
-@router.get("/trips/new", response_class=HTMLResponse)
+@router.get("/sessions/new", response_class=HTMLResponse)
 async def new_trip_form(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -297,10 +287,10 @@ async def new_trip_form(
         **unit_ctx,
         "default_date": date.today().isoformat(),
     }
-    return templates.TemplateResponse(request, "trips/partials/add_form.html", context)
+    return templates.TemplateResponse(request, "driving/sessions/partials/add_form.html", context)
 
 
-@router.post("/trips", response_class=HTMLResponse)
+@router.post("/sessions", response_class=HTMLResponse)
 async def create_trip(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -369,4 +359,4 @@ async def create_trip(
         return response
 
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/trips", status_code=303)
+    return RedirectResponse(url="/driving/sessions", status_code=303)

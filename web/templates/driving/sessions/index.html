@@ -8,7 +8,7 @@
         </div>
         <button
             type="button"
-            onclick="document.getElementById('trip-modal').showModal(); htmx.ajax('GET', '/trips/new', {target: '#trip-modal-content', swap: 'innerHTML'})"
+            onclick="document.getElementById('trip-modal').showModal(); htmx.ajax('GET', '/driving/sessions/new', {target: '#trip-modal-content', swap: 'innerHTML'})"
             class="btn btn-primary btn-sm gap-2"
         >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -18,7 +18,7 @@
         </button>
     </div>
 
-    {% with filter_url="/trips", filter_target="#trips-content", active_preset=active_range, date_param_name="range" %}
+    {% with filter_url="/driving/sessions", filter_target="#driving-sessions-content", active_preset=active_range, date_param_name="range" %}
       {% include "partials/filter_bar.html" %}
     {% endwith %}
 
@@ -54,14 +54,14 @@
         <input id="trip-drawer" type="checkbox" class="drawer-toggle" />
         <div class="drawer-content">
             <!-- HTMX swap target -->
-            <div id="trips-content"
-                 hx-get="/trips"
+            <div id="driving-sessions-content"
+                 hx-get="/driving/sessions"
                  hx-trigger="trip-created from:body"
-                 hx-target="#trips-content"
+                 hx-target="#driving-sessions-content"
                  hx-swap="innerHTML"
                  hx-include="#filter-form"
             >
-                {% include "trips/partials/summary.html" %}
+                {% include "driving/sessions/partials/summary.html" %}
             </div>
         </div>
         <div class="drawer-side z-40">
