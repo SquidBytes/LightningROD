@@ -1,3 +1,4 @@
+import statistics
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -8,6 +9,7 @@ import plotly.io as pio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
 from web.queries.costs import build_time_filter
@@ -21,6 +23,11 @@ CHARGE_TYPE_LABELS = {
     "DC": "DC Fast",
     "Unknown": "Unknown",
 }
+
+# Phase 25 synthetic charge curve — taper model constants
+SYNTHETIC_CURVE_PLATEAU_SOC = 80.0
+SYNTHETIC_CURVE_TAIL_FRACTION = 0.20  # kW at 100% SOC = max_kw * 0.20
+SYNTHETIC_CURVE_SAMPLE_STEP = 2       # SOC step (%) — yields 51 points
 
 # Shared Plotly modebar config — show minimal controls, hide logo
 _PLOTLY_CONFIG = {
@@ -553,3 +560,168 @@ def build_efficiency_chart(
     )
 
     return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))
+
+
+# ---------------------------------------------------------------------------
+# Phase 25: Synthetic DC charge curve fallback
+# ---------------------------------------------------------------------------
+
+
+def synthesize_curve(
+    max_kw: float,
+    plateau_soc: float = SYNTHETIC_CURVE_PLATEAU_SOC,
+    tail_fraction: float = SYNTHETIC_CURVE_TAIL_FRACTION,
+) -> list[dict]:
+    """Piecewise synthetic DC-fast charge curve.
+
+    Flat at abs(max_kw) from 0..plateau_soc, then linear interpolation down to
+    abs(max_kw) * tail_fraction at SOC=100. No calibration to specific vehicles.
+
+    Returns list of {"soc": int, "kw": float} sampled every
+    SYNTHETIC_CURVE_SAMPLE_STEP percent (default: 51 points 0..100).
+    """
+    max_kw = abs(float(max_kw or 0))
+    plateau_soc = float(plateau_soc)
+    tail_fraction = float(tail_fraction)
+    end_kw = max_kw * tail_fraction
+    points: list[dict] = []
+    for soc in range(0, 101, SYNTHETIC_CURVE_SAMPLE_STEP):
+        if soc <= plateau_soc:
+            kw = max_kw
+        else:
+            # Linear interpolate from max_kw at plateau_soc to end_kw at 100
+            t = (soc - plateau_soc) / (100.0 - plateau_soc)
+            kw = max_kw - (max_kw - end_kw) * t
+        points.append({"soc": soc, "kw": kw})
+    return points
+
+
+def build_synthetic_charge_curve_chart(
+    max_kw: float,
+    dc_session_count: int,
+    plateau_soc: float = SYNTHETIC_CURVE_PLATEAU_SOC,
+    tail_fraction: float = SYNTHETIC_CURVE_TAIL_FRACTION,
+) -> str:
+    """Aggregate synthetic DC charge curve chart.
+
+    Returns "" when dc_session_count == 0 or max_kw <= 0 (no data to synthesize).
+    X axis = State of Charge (%), Y axis = Power (kW).
+    """
+    if not dc_session_count or not max_kw or max_kw <= 0:
+        return ""
+    points = synthesize_curve(max_kw, plateau_soc, tail_fraction)
+    pio.templates.default = "plotly_dark"
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=[p["soc"] for p in points],
+        y=[p["kw"] for p in points],
+        mode="lines",
+        name="Synthetic DC curve",
+        line=dict(color="#f97316", width=3),
+        hovertemplate="<b>%{x:.0f}%% SOC</b><br>%{y:.1f} kW<extra></extra>",
+        fill="tozeroy",
+        fillcolor="rgba(249, 115, 22, 0.12)",
+    ))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
+        margin=dict(l=40, r=20, t=20, b=40),
+        xaxis=dict(title="State of Charge (%)", range=[0, 100]),
+        yaxis=dict(title="Power (kW)", rangemode="tozero"),
+        showlegend=False,
+        hoverlabel=_HOVER_LABEL,
+    )
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+async def query_synthetic_curve_inputs(
+    db: AsyncSession,
+    time_range: str = "all",
+    device_id: Optional[str] = None,
+) -> dict:
+    """Collect DC-session peak kW values for synthetic curve aggregation.
+
+    Returns {"median_peak_kw": float|None, "dc_session_count": int}.
+    Peak per session uses max_power, falling back to evse_max_power_kw,
+    then charger_rated_kw. Sessions with no usable peak are skipped.
+
+    Aggregation: MEDIAN across DC sessions (robust to outliers).
+    Excludes AC sessions entirely.
+    """
+    stmt = select(
+        EVChargingSession.max_power,
+        EVChargingSession.evse_max_power_kw,
+        EVChargingSession.charger_rated_kw,
+    ).where(EVChargingSession.charge_type == "DC")
+
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id is not None:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+
+    result = await db.execute(stmt)
+    peaks: list[float] = []
+    for row in result.all():
+        mp, evse, rated = row
+        for candidate in (mp, evse, rated):
+            if candidate is not None:
+                peaks.append(abs(float(candidate)))
+                break
+
+    if not peaks:
+        return {"median_peak_kw": None, "dc_session_count": 0}
+    return {
+        "median_peak_kw": float(statistics.median(peaks)),
+        "dc_session_count": len(peaks),
+    }
+
+
+async def has_real_charge_curve_data(
+    db: AsyncSession,
+    time_range: str = "all",
+    device_id: Optional[str] = None,
+) -> bool:
+    """True iff any DC session in window has >= 3 EVBatteryStatus rows within its
+    [session_start_utc, session_end_utc] span.
+
+    Reuses Phase 17.1's "< 3 detailed points" threshold for fallback trigger:
+    when True the synthetic curve is hidden and the real Phase 17.1 charge curve
+    chart is rendered instead.
+    """
+    sess_stmt = select(
+        EVChargingSession.id,
+        EVChargingSession.session_start_utc,
+        EVChargingSession.session_end_utc,
+        EVChargingSession.device_id,
+    ).where(EVChargingSession.charge_type == "DC")
+
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        sess_stmt = sess_stmt.where(time_filter)
+    if device_id is not None:
+        sess_stmt = sess_stmt.where(EVChargingSession.device_id == device_id)
+
+    sess_rows = (await db.execute(sess_stmt)).all()
+    if not sess_rows:
+        return False
+
+    for _sid, start, end, dev in sess_rows:
+        if start is None or end is None:
+            continue
+        count_stmt = (
+            select(func.count())
+            .select_from(EVBatteryStatus)
+            .where(
+                EVBatteryStatus.recorded_at >= start,
+                EVBatteryStatus.recorded_at <= end,
+                EVBatteryStatus.device_id == dev,
+            )
+        )
+        count = (await db.execute(count_stmt)).scalar_one()
+        if count is not None and count >= 3:
+            return True
+    return False

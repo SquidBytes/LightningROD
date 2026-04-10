@@ -414,30 +414,210 @@ async def trip_scenario(db_session):
 
 @pytest_asyncio.fixture
 async def sessions_with_battery_status(db_session):
-    """DC session with >=3 battery_status points (real-data path)."""
-    # Minimal placeholder — Wave 2 synthetic curve task will populate
-    pytest.skip("phase_25 Wave 0 fixture stub")
+    """Phase 25 (Plan 25-02): DC session with >=3 battery_status points.
+
+    Creates:
+    - 1 vehicle (device_id 'charge_p25_real_vin')
+    - 1 DC session spanning 1 hour
+    - 5 EVBatteryStatus rows with recorded_at inside the session window
+
+    has_real_charge_curve_data should return True against this.
+    """
+    device_id = "charge_p25_real_vin"
+    vehicle = await _create_vehicle(db_session, device_id=device_id)
+
+    start = BASE_DATE - timedelta(days=2)
+    end = start + timedelta(hours=1)
+    session = EVChargingSession(
+        device_id=device_id,
+        charge_type="DC",
+        energy_kwh=45.0,
+        max_power=120.0,
+        evse_max_power_kw=150.0,
+        session_start_utc=start,
+        session_end_utc=end,
+        is_complete=True,
+        source_system="test_fixture",
+    )
+    db_session.add(session)
+    await db_session.flush()
+
+    # 5 battery_status points spread across the session window
+    for i in range(5):
+        rec = EVBatteryStatus(
+            device_id=device_id,
+            recorded_at=start + timedelta(minutes=10 * i + 5),
+            hv_battery_soc=20.0 + i * 15.0,
+            hv_battery_kw=-100.0 + i * 10.0,
+            source_system="test_fixture",
+        )
+        db_session.add(rec)
+    await db_session.flush()
+
+    return {
+        "vehicle": vehicle,
+        "session": session,
+        "device_id": device_id,
+        "db": db_session,
+    }
 
 
 @pytest_asyncio.fixture
 async def sessions_without_battery_status(db_session):
-    """DC sessions only, no battery_status rows (synthetic-fallback path)."""
-    pytest.skip("phase_25 Wave 0 fixture stub")
+    """Phase 25 (Plan 25-02): DC-only sessions with no battery_status rows.
+
+    Creates:
+    - 1 vehicle (device_id 'charge_p25_synth_vin')
+    - 3 DC sessions with peak kW [100.0, 150.0, 200.0] → median 150.0
+    - 0 battery_status rows (synthetic fallback path)
+
+    Returned dict includes expected.median_peak_kw / dc_session_count for
+    deterministic assertions.
+    """
+    device_id = "charge_p25_synth_vin"
+    vehicle = await _create_vehicle(db_session, device_id=device_id)
+
+    peaks = [100.0, 150.0, 200.0]
+    sessions = []
+    for i, peak in enumerate(peaks):
+        start = BASE_DATE - timedelta(days=2 + i)
+        session = EVChargingSession(
+            device_id=device_id,
+            charge_type="DC",
+            energy_kwh=40.0 + i,
+            max_power=peak,
+            evse_max_power_kw=250.0,
+            session_start_utc=start,
+            session_end_utc=start + timedelta(minutes=30),
+            is_complete=True,
+            source_system="test_fixture",
+        )
+        sessions.append(session)
+    db_session.add_all(sessions)
+    await db_session.flush()
+
+    return {
+        "vehicle": vehicle,
+        "sessions": sessions,
+        "device_id": device_id,
+        "db": db_session,
+        "expected": {
+            "dc_session_count": len(peaks),
+            "median_peak_kw": 150.0,
+            "peaks": peaks,
+        },
+    }
 
 
 @pytest_asyncio.fixture
 async def trips_with_ambient_temp(db_session):
-    """Trips with populated ambient_temp + distance + energy_consumed (temperature scatter path)."""
-    pytest.skip("phase_25 Wave 0 fixture stub")
+    """Trips with populated ambient_temp + distance + energy_consumed (temperature scatter path).
+
+    Creates 10 trips with ambient_temp spanning -10 °C → +30 °C (in 5 °C steps),
+    varied distance and energy_consumed so the scatter has spread. All end_times
+    are within the last 30 days so both "7d" and "all" range filters return
+    non-empty results (but "7d" returns a strict subset of "all").
+    """
+    db = db_session
+    await _create_vehicle(db)
+
+    now = datetime.now(timezone.utc)
+    temps = [-10.0, -5.0, 0.0, 5.0, 10.0, 15.0, 20.0, 22.0, 25.0, 30.0]
+    trips = []
+    for i, ambient_c in enumerate(temps):
+        # Spread end_times from ~35d ago to ~1d ago so 7d window filters to
+        # the last 2-3 trips. distance and energy_consumed vary so efficiency
+        # (distance/energy) isn't constant across the scatter.
+        end_time = now - timedelta(days=(35 - i * 4))
+        distance = 40.0 + i * 8.0  # 40..112 km
+        energy = 10.0 + i * 2.0  # 10..28 kWh
+        t = EVTripMetrics(
+            device_id=DEVICE_ID,
+            distance=distance,
+            duration=45.0,
+            energy_consumed=energy,
+            efficiency=distance / energy,
+            ambient_temp=ambient_c,
+            start_time=end_time - timedelta(minutes=45),
+            end_time=end_time,
+            is_complete=True,
+            source_system="test_fixture",
+        )
+        trips.append(t)
+
+    db.add_all(trips)
+    await db.flush()
+    return trips
 
 
 @pytest_asyncio.fixture
 async def trips_minimal_count(db_session):
-    """Fewer than 5 trips with ambient_temp — exercises empty-state branch."""
-    pytest.skip("phase_25 Wave 0 fixture stub")
+    """Fewer than 5 trips with ambient_temp — exercises empty-state branch.
+
+    Creates exactly 3 trips with ambient_temp set. All below the 7d/30d
+    min_points=5 threshold so chart builder should return "".
+    """
+    db = db_session
+    await _create_vehicle(db)
+
+    now = datetime.now(timezone.utc)
+    trips = []
+    for i in range(3):
+        end_time = now - timedelta(days=(3 - i))
+        t = EVTripMetrics(
+            device_id=DEVICE_ID,
+            distance=50.0 + i * 10.0,
+            duration=40.0,
+            energy_consumed=12.0 + i * 2.0,
+            efficiency=(50.0 + i * 10.0) / (12.0 + i * 2.0),
+            ambient_temp=15.0 + i * 2.0,
+            start_time=end_time - timedelta(minutes=30),
+            end_time=end_time,
+            is_complete=True,
+            source_system="test_fixture",
+        )
+        trips.append(t)
+
+    db.add_all(trips)
+    await db.flush()
+    return trips
 
 
 @pytest_asyncio.fixture
 async def trips_with_regen(db_session):
-    """Trips with populated range_regenerated + distance + energy_consumed."""
-    pytest.skip("phase_25 Wave 0 fixture stub")
+    """Trips with populated range_regenerated + distance + energy_consumed.
+
+    Three trips with deterministic derivation for regen_kwh and regen_pct:
+      - Trip A: distance=100, energy=20, range_regenerated=10 → regen_kwh=2.0, pct=10.0
+      - Trip B: distance=50,  energy=10, range_regenerated=5  → regen_kwh=1.0, pct=10.0
+      - Trip C: distance=200, energy=40, range_regenerated=20 → regen_kwh=4.0, pct=10.0
+    """
+    db = db_session
+    await _create_vehicle(db)
+
+    now = datetime.now(timezone.utc)
+    specs = [
+        {"distance": 100.0, "energy": 20.0, "regen": 10.0},
+        {"distance": 50.0, "energy": 10.0, "regen": 5.0},
+        {"distance": 200.0, "energy": 40.0, "regen": 20.0},
+    ]
+    trips = []
+    for i, spec in enumerate(specs):
+        end_time = now - timedelta(days=(3 - i))
+        t = EVTripMetrics(
+            device_id=DEVICE_ID,
+            distance=spec["distance"],
+            duration=60.0,
+            energy_consumed=spec["energy"],
+            efficiency=spec["distance"] / spec["energy"],
+            range_regenerated=spec["regen"],
+            start_time=end_time - timedelta(hours=1),
+            end_time=end_time,
+            is_complete=True,
+            source_system="test_fixture",
+        )
+        trips.append(t)
+
+    db.add_all(trips)
+    await db.flush()
+    return trips
