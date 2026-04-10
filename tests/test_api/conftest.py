@@ -18,7 +18,7 @@ async def client(db_session):
     from fastapi import FastAPI
     from fastapi.staticfiles import StaticFiles
     from web.routes import (
-        battery, charging, costs, csv_import, dashboard,
+        battery, charging, costs, csv_import, dashboard, driving_performance,
         performance, review, sessions, settings, trips,
     )
     from web.main import localtime_filter
@@ -34,18 +34,13 @@ async def client(db_session):
     app.include_router(battery.router)
     app.include_router(charging.router)
     app.include_router(review.router)
-    app.include_router(trips.router)
-
-    # Phase 25 Wave 1 router — optional so Wave 0 scaffolding passes standalone
-    try:
-        from web.routes import driving_performance  # noqa: WPS433
-        app.include_router(driving_performance.router, prefix="/driving")
-    except ImportError:
-        pass  # Wave 1 not yet landed
+    app.include_router(trips.router, prefix="/driving")
+    app.include_router(driving_performance.router, prefix="/driving")
 
     # Register localtime filter on Jinja2 templates
     for route_module in [dashboard, sessions, costs, performance, settings,
-                         csv_import, charging, review, battery, trips]:
+                         csv_import, charging, review, battery, trips,
+                         driving_performance]:
         if hasattr(route_module, "templates"):
             route_module.templates.env.filters["localtime"] = localtime_filter
 
