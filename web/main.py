@@ -1,9 +1,31 @@
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version as pkg_version
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+
+
+def _resolve_version() -> str:
+    """Report the running version.
+
+    Preference order:
+    1. LIGHTNINGROD_VERSION env (baked in by Docker build arg)
+    2. pyproject-installed package metadata
+    3. "dev" fallback for uninstalled source runs
+    """
+    env_val = os.environ.get("LIGHTNINGROD_VERSION", "").strip()
+    if env_val:
+        return env_val
+    try:
+        return pkg_version("lightningrod")
+    except PackageNotFoundError:
+        return "dev"
+
+
+APP_VERSION = _resolve_version()
 
 from db.engine import AsyncSessionLocal, engine
 from web.queries.settings import seed_charger_templates
@@ -67,8 +89,14 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="LightningROD", lifespan=lifespan)
+    app = FastAPI(title="LightningROD", version=APP_VERSION, lifespan=lifespan)
     app.mount("/static", StaticFiles(directory="web/static"), name="static")
+
+    # Lightweight version endpoint — useful for healthchecks, deploy scripts,
+    # and quickly confirming which build is running behind a reverse proxy.
+    @app.get("/version", include_in_schema=False)
+    async def _version_endpoint() -> dict:
+        return {"name": "LightningROD", "version": APP_VERSION}
     app.include_router(dashboard.router)
     app.include_router(sessions.router, prefix="/charging")
     app.include_router(costs.router, prefix="/charging")

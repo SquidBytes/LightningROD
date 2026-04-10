@@ -1,6 +1,9 @@
 [project]
 name = "lightningrod"
-version = "0.1.0"
+# Versioning: v{major}.{milestone}.{phase_count} (see parent CLAUDE.md).
+# This is the single source of truth — scripts/bump-version.sh mirrors it to
+# package.json and .env so Docker image tags stay in lockstep.
+version = "0.3.0"
 description = "Self-hosted charging analytics for Ford electric vehicles"
 readme = "README.md"
 requires-python = ">=3.11"

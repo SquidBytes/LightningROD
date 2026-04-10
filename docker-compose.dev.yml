@@ -1,4 +1,8 @@
+# Dev overlay — exposes postgres on the host and parks the web service behind
+# a "prod" profile so `docker compose up db` starts only postgres.
 # Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up db
+name: lightningrod
+
 services:
   web:
     profiles: ["prod"]

@@ -1,11 +1,23 @@
+# Standalone compose — builds the all-in-one image with embedded PostgreSQL.
+# Usage: docker compose -f docker-compose.standalone.yml up --build
+name: lightningrod-standalone
+
 services:
   lightningrod:
     build:
       context: .
       dockerfile: Dockerfile.standalone
+      args:
+        LIGHTNINGROD_VERSION: ${LIGHTNINGROD_VERSION:-dev}
+    # Tag as lightningrod:<version>-standalone so it's clearly distinct from
+    # the two-container lightningrod-web:<version> build.
+    image: lightningrod:${LIGHTNINGROD_VERSION:-dev}-standalone
+    container_name: lightningrod-standalone
     ports:
       - "${APP_PORT:-8000}:8000"
     env_file: .env
+    environment:
+      - LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION:-dev}
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped

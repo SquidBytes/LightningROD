@@ -12,6 +12,17 @@ RUN npx @tailwindcss/cli -i input.css -o web/static/css/output.css --minify
 ## Stage 2: Python application
 FROM python:3.11-slim
 
+# Version passed in from docker-compose (or `docker build --build-arg`).
+# Defaults to "dev" for ad-hoc builds. Mirror into ENV so the running app
+# can read it at runtime via os.environ["LIGHTNINGROD_VERSION"].
+ARG LIGHTNINGROD_VERSION=dev
+ENV LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION}
+
+LABEL org.opencontainers.image.title="LightningROD" \
+      org.opencontainers.image.description="Self-hosted charging analytics for Ford electric vehicles" \
+      org.opencontainers.image.version="${LIGHTNINGROD_VERSION}" \
+      org.opencontainers.image.source="https://github.com/aminorjourney/LightningROD"
+
 WORKDIR /app
 
 # Install uv for fast dependency resolution

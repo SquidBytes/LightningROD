@@ -1,4 +1,7 @@
 {
+  "name": "lightningrod",
+  "version": "0.3.0",
+  "description": "Self-hosted charging analytics for Ford electric vehicles",
   "private": true,
   "devDependencies": {
     "@tailwindcss/cli": "^4",

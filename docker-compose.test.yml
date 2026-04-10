@@ -1,6 +1,12 @@
+# Dedicated test postgres on 5433 (tmpfs, no persistence).
+# Project name is separate from the main "lightningrod" project so test
+# containers don't clash with dev/prod containers if both are up.
+name: lightningrod-test
+
 services:
   test-db:
     image: postgres:16
+    container_name: lightningrod-test-db
     ports:
       - "5433:5432"
     environment:
