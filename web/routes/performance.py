@@ -7,13 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
 from web.queries.energy import (
-    query_energy_summary,
-    query_monthly_energy,
-    query_regen_summary,
-    query_regen_for_chart,
+    CHARGE_TYPE_LABELS,
+    build_charge_type_donut_chart,
     build_efficiency_chart,
     build_monthly_energy_chart,
-    CHARGE_TYPE_LABELS,
+    build_synthetic_charge_curve_chart,
+    has_real_charge_curve_data,
+    query_energy_summary,
+    query_monthly_energy,
+    query_regen_for_chart,
+    query_synthetic_curve_inputs,
 )
 from web.queries.settings import get_unit_context
 from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
@@ -46,7 +49,6 @@ async def performance(
 
     # Query energy data (all metric base)
     summary = await query_energy_summary(db, time_range=time_range, device_id=active_device_id)
-    regen = await query_regen_summary(db, time_range=time_range, device_id=active_device_id)
 
     # Apply unit conversion to efficiency values (convert ONCE here, not in template)
     if summary["avg_efficiency"] is not None:
@@ -56,9 +58,24 @@ async def performance(
     if summary["worst_efficiency"] is not None:
         summary["worst_efficiency"] = summary["worst_efficiency"] * efficiency_factor
 
-    # Convert regen total from km to display range unit
-    if regen is not None and regen.get("regen_total") is not None:
-        regen["regen_total"] = regen["regen_total"] * range_factor
+    # Phase 25: AC/DC distribution donut (three metric variants — kWh/Sessions/Cost)
+    donut_kwh = build_charge_type_donut_chart(summary["by_charge_type"], metric="kwh")
+    donut_count = build_charge_type_donut_chart(summary["by_charge_type"], metric="count")
+    donut_cost = build_charge_type_donut_chart(summary["by_charge_type"], metric="cost")
+
+    # Phase 25: Synthetic DC charge curve fallback (only when no real detail data)
+    synthetic_curve_chart = ""
+    synthetic_meta = {"dc_session_count": 0, "median_peak_kw": None}
+    if not await has_real_charge_curve_data(
+        db, time_range=time_range, device_id=active_device_id
+    ):
+        synthetic_meta = await query_synthetic_curve_inputs(
+            db, time_range=time_range, device_id=active_device_id
+        )
+        synthetic_curve_chart = build_synthetic_charge_curve_chart(
+            max_kw=synthetic_meta["median_peak_kw"] or 0,
+            dc_session_count=synthetic_meta["dc_session_count"],
+        )
 
     # Build efficiency scatter chart (chart builder applies factors internally)
     regen_chart_data = await query_regen_for_chart(db, time_range=time_range, device_id=active_device_id)
@@ -79,9 +96,13 @@ async def performance(
     context = {
         **unit_ctx,
         "summary": summary,
-        "regen": regen,
         "chart_html": chart_html,
         "monthly_energy_chart": monthly_energy_chart,
+        "donut_kwh": donut_kwh,
+        "donut_count": donut_count,
+        "donut_cost": donut_cost,
+        "synthetic_curve_chart": synthetic_curve_chart,
+        "synthetic_meta": synthetic_meta,
         "active_range": time_range,
         "active_page": "performance",
         "page_title": "Performance",
