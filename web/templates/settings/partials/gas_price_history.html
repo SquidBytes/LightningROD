@@ -94,30 +94,10 @@
 <p class="text-sm text-base-content/40 mb-4">No gas price entries yet. Add your first entry above.</p>
 {% endif %}
 
-{# HA Integration subsection #}
-<div class="mt-6 pt-4 border-t border-base-content/10">
-    <h4 class="text-sm font-semibold mb-2">Home Assistant Integration</h4>
-    <p class="text-xs text-base-content/60 mb-3">
-        Configure GasBuddy or other fuel price sensors from Home Assistant to automatically track gas prices.
-    </p>
-    <form hx-post="/settings/gas-sensors" hx-target="#gas-price-history-section" hx-swap="innerHTML"
-          class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <label class="form-control">
-            <div class="label"><span class="label-text text-xs">Station Price Sensor</span></div>
-            <input type="text" name="gas_sensor_station_entity_id"
-                   value="{{ sensor_settings.gas_sensor_station_entity_id or '' }}"
-                   placeholder="sensor.gasbuddy_station_price"
-                   class="input input-sm input-bordered w-full">
-        </label>
-        <label class="form-control">
-            <div class="label"><span class="label-text text-xs">Average Price Sensor</span></div>
-            <input type="text" name="gas_sensor_average_entity_id"
-                   value="{{ sensor_settings.gas_sensor_average_entity_id or '' }}"
-                   placeholder="sensor.gasbuddy_average_price"
-                   class="input input-sm input-bordered w-full">
-        </label>
-        <div class="md:col-span-2 flex justify-end">
-            <button type="submit" class="btn btn-primary btn-sm">Save Sensors</button>
-        </div>
-    </form>
+{# HA sensor config lives on the HASS settings tab now — this table just
+   shows the manually-editable monthly history. Link over for the sensor wiring. #}
+<div class="mt-6 pt-4 border-t border-base-content/10 text-xs text-base-content/60">
+    Home Assistant gas sensors are configured and tested on the
+    <a href="/settings?tab=hass" class="link link-hover">Home Assistant tab</a>.
+    Historical readings from those sensors appear in the monthly table above.
 </div>

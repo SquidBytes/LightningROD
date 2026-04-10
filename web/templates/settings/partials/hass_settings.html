@@ -98,7 +98,23 @@
 <div class="card bg-base-200 max-w-2xl mt-4">
     <div class="card-body">
         <h2 class="card-title text-base font-semibold">Home Location</h2>
-        <p class="text-base-content/60 text-sm -mt-1">Set your home coordinates for location-based features.</p>
+        <p class="text-base-content/60 text-sm -mt-1">
+            Your home coordinates. On every successful HA connection these are
+            auto-populated from <code>homeassistant.config</code> if not already set;
+            use <em>Sync from HA</em> to force-refresh, or edit manually below.
+        </p>
+
+        {% if home_sync_applied %}
+        <div class="alert alert-success text-sm py-2">
+            Home location synced from HA:
+            {% for k, v in home_sync_applied.items() %}
+                <code>{{ k }}={{ v }}</code>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if home_sync_error %}
+        <div class="alert alert-warning text-sm py-2">{{ home_sync_error }}</div>
+        {% endif %}
 
         <form hx-post="/settings/hass/home-location" hx-target="#hass-settings-content" hx-swap="innerHTML"
               class="space-y-4">
@@ -130,10 +146,15 @@
                        class="input input-bordered w-full">
             </label>
 
-            <!-- Save Button -->
-            <div class="pt-2">
-                <button type="submit" class="btn btn-primary">
-                    Save Home Location
+            <!-- Buttons -->
+            <div class="pt-2 flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-primary">Save Home Location</button>
+                <button type="button" class="btn btn-secondary"
+                        hx-post="/settings/hass/home-location/sync"
+                        hx-target="#hass-settings-content"
+                        hx-swap="innerHTML"
+                        hx-confirm="Overwrite your saved home location with the current HA coordinates?">
+                    Sync from HA
                 </button>
             </div>
         </form>
@@ -146,6 +167,18 @@
      hx-trigger="load"
      hx-target="#hass-connection-status"
      hx-swap="innerHTML">
+</div>
+
+<!-- Gas price sensors (configured against HA entity_ids) -->
+<div hx-get="/settings/hass/gas-sensors"
+     hx-trigger="load"
+     hx-swap="outerHTML">
+    <div class="card bg-base-200 max-w-2xl mt-4">
+        <div class="card-body">
+            <span class="loading loading-spinner loading-sm"></span>
+            <span class="text-sm text-base-content/50">Loading gas sensor config…</span>
+        </div>
+    </div>
 </div>
 
 <script>

@@ -1,0 +1,104 @@
+{#
+  Gas sensor configuration on the HASS settings page.
+  Lets you configure which HA entities feed the gas price tracker, test
+  whether they're returning data, and trigger a history backfill. Ingested
+  readings still land in the gas_prices / gas_price_readings tables viewable
+  from the Fuel tab.
+#}
+<div class="card bg-base-200 max-w-2xl mt-4" id="hass-gas-sensors-card">
+    <div class="card-body">
+        <h2 class="card-title text-base font-semibold">Gas Price Sensors</h2>
+        <p class="text-base-content/60 text-sm -mt-1">
+            Pull GasBuddy (or any other numeric-price sensor) from Home Assistant
+            into the gas price history. Ingestion writes to the gas price table
+            on the Fuel tab; backfill and live-check live here.
+        </p>
+
+        {% if gas_saved %}
+        <div class="alert alert-success text-sm py-2">Gas sensor settings saved.</div>
+        {% endif %}
+
+        <form hx-post="/settings/hass/gas-sensors"
+              hx-target="#hass-gas-sensors-card"
+              hx-swap="outerHTML"
+              class="space-y-3">
+            <label class="form-control w-full">
+                <div class="label">
+                    <span class="label-text font-semibold">Station Price Sensor</span>
+                </div>
+                <input type="text" name="gas_sensor_station_entity_id"
+                       value="{{ sensor_settings.gas_sensor_station_entity_id or '' }}"
+                       placeholder="sensor.gasbuddy_station_price"
+                       class="input input-bordered input-sm w-full">
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">
+                        Your regular station (e.g. Costco). Latest value:
+                        {% if sensor_states.station %}
+                            <span class="text-success font-mono">{{ sensor_states.station.value }}</span>
+                            <span class="text-base-content/50">({{ sensor_states.station.last_changed }})</span>
+                        {% elif sensor_settings.gas_sensor_station_entity_id %}
+                            <span class="text-warning">not reporting</span>
+                        {% else %}
+                            <span class="text-base-content/40">—</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </label>
+
+            <label class="form-control w-full">
+                <div class="label">
+                    <span class="label-text font-semibold">Average Price Sensor</span>
+                </div>
+                <input type="text" name="gas_sensor_average_entity_id"
+                       value="{{ sensor_settings.gas_sensor_average_entity_id or '' }}"
+                       placeholder="sensor.gasbuddy_average_price"
+                       class="input input-bordered input-sm w-full">
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">
+                        Regional average reference. Latest value:
+                        {% if sensor_states.average %}
+                            <span class="text-success font-mono">{{ sensor_states.average.value }}</span>
+                            <span class="text-base-content/50">({{ sensor_states.average.last_changed }})</span>
+                        {% elif sensor_settings.gas_sensor_average_entity_id %}
+                            <span class="text-warning">not reporting</span>
+                        {% else %}
+                            <span class="text-base-content/40">—</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </label>
+
+            <div class="flex flex-wrap gap-2 pt-1">
+                <button type="submit" class="btn btn-primary btn-sm">Save Sensors</button>
+                <button type="button" class="btn btn-ghost btn-sm"
+                        hx-get="/settings/hass/gas-sensors"
+                        hx-target="#hass-gas-sensors-card"
+                        hx-swap="outerHTML">
+                    Check Sensor Data
+                </button>
+            </div>
+        </form>
+
+        {# DB stats snapshot — reminds the user where the data lives #}
+        <div class="bg-base-300 rounded p-3 mt-4 text-xs space-y-1">
+            <div class="font-semibold text-sm">Ingested to database</div>
+            <div>
+                Raw readings:
+                <span class="font-mono">{{ db_stats.reading_count }}</span>
+                {% if db_stats.latest_reading %}
+                    <span class="text-base-content/50">
+                        (latest {{ db_stats.latest_reading }})
+                    </span>
+                {% endif %}
+            </div>
+            <div>
+                Monthly rows in gas_price_history:
+                <span class="font-mono">{{ db_stats.monthly_count }}</span>
+            </div>
+            <div class="text-base-content/50">
+                View and edit monthly values on the
+                <a href="/settings?tab=fuel" class="link link-hover">Fuel tab</a>.
+            </div>
+        </div>
+    </div>
+</div>
