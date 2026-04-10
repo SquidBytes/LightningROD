@@ -599,23 +599,46 @@ async def handle_tire_pressure(slug, new_state, ha_config, device_id, db):
 # energytransferlogentry handler (charging session creation)
 # ---------------------------------------------------------------------------
 
-# Charger type normalization mapping
+# Charger type normalization mapping — collapse all variants to AC/DC codes
+# matching csv_parser._normalize_charge_type. Level 1/2 granularity is
+# intentionally discarded: callers that need it can derive it from the EVSE
+# power/voltage columns.
 _CHARGER_TYPE_MAP = {
-    "AC_BASIC": "AC Level 2",
-    "AC_LEVEL_2": "AC Level 2",
-    "DC_FAST": "DC Fast",
-    "DC_DCFAST": "DC Fast",
-    "DC_COMBO": "DC Fast",
-    "LEVEL_1": "AC Level 1",
-    "AC_LEVEL_1": "AC Level 1",
+    "AC": "AC",
+    "AC_BASIC": "AC",
+    "AC_LEVEL_1": "AC",
+    "AC_LEVEL_2": "AC",
+    "AC LEVEL 1": "AC",
+    "AC LEVEL 2": "AC",
+    "LEVEL_1": "AC",
+    "LEVEL_2": "AC",
+    "LEVEL 1": "AC",
+    "LEVEL 2": "AC",
+    "L1": "AC",
+    "L2": "AC",
+    "DC": "DC",
+    "DC_FAST": "DC",
+    "DC_DCFAST": "DC",
+    "DC_COMBO": "DC",
+    "DC FAST": "DC",
+    "DCFC": "DC",
+    "L3": "DC",
+    "LEVEL 3": "DC",
 }
 
 
 def _normalize_charge_type(raw: Optional[str]) -> Optional[str]:
-    """Normalize charger type string to standard display format."""
+    """Normalize charger type string to 'AC' or 'DC'.
+
+    Returns None for empty input. Unrecognized values fall back to the raw
+    string (uppercased) so debugging still surfaces the unknown code.
+    """
     if not raw:
         return None
-    return _CHARGER_TYPE_MAP.get(raw.upper(), raw)
+    key = raw.strip().upper()
+    if not key:
+        return None
+    return _CHARGER_TYPE_MAP.get(key, key)
 
 
 def _format_address(addr: Optional[dict]) -> Optional[str]:
