@@ -14,9 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
 from web.queries.driving_performance import (
+    _min_points_for_range,
+    build_regen_recovery_chart,
+    build_temperature_correlation_chart,
     query_driving_performance_summary,
-    query_regen_per_trip,  # noqa: F401 — Wave 2 will wire this into context
-    query_temperature_correlation,  # noqa: F401 — Wave 2 will wire this into context
+    query_regen_per_trip,
+    query_temperature_correlation,
 )
 from web.queries.settings import get_unit_context
 from web.queries.trips import build_efficiency_trend_chart
@@ -75,9 +78,21 @@ async def driving_performance(
         efficiency_label=unit_ctx["units"]["efficiency_label"],
     )
 
-    # Wave 2 slots — empty strings until Plan 25-03 fills them in.
-    temperature_scatter_chart = ""
-    regen_bar_chart = ""
+    # Temperature vs efficiency scatter (Phase 25 Plan 25-03).
+    temp_data = await query_temperature_correlation(
+        db, time_range=time_range, device_id=active_device_id
+    )
+    temperature_scatter_chart = build_temperature_correlation_chart(
+        temp_data,
+        distance_unit=distance_unit,
+        min_points=_min_points_for_range(time_range),
+    )
+
+    # Regen recovery dual-axis bar chart (Phase 25 Plan 25-03).
+    regen_trips = await query_regen_per_trip(
+        db, time_range=time_range, device_id=active_device_id
+    )
+    regen_bar_chart = build_regen_recovery_chart(regen_trips)
 
     context = {
         **unit_ctx,

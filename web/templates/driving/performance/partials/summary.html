@@ -71,26 +71,46 @@
     </div>
 </div>
 
-<!-- Temperature Correlation (Wave 2 placeholder) -->
+<!-- Temperature Correlation (Phase 25 Plan 25-03) -->
 <div class="card bg-base-200 mb-4" id="driving-temperature-scatter-card">
     <div class="card-body">
         <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Efficiency vs Temperature</h3>
         {% if temperature_scatter_chart %}
             <div class="plotly-chart-wrap">{{ temperature_scatter_chart | safe }}</div>
+            <p class="text-xs text-base-content/40 mt-2">
+                Efficiency derived from trip distance &divide; energy consumed.
+                Trendline via linear regression (np.polyfit).
+            </p>
         {% else %}
-            <p class="text-base-content/40 text-sm py-8 text-center">Not enough data yet.</p>
+            <div class="text-center py-8">
+                <svg class="h-10 w-10 mx-auto text-base-content/30 mb-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M3 3v18h18" />
+                    <circle cx="8" cy="15" r="1.5" />
+                    <circle cx="13" cy="10" r="1.5" />
+                    <circle cx="18" cy="6" r="1.5" />
+                </svg>
+                <p class="text-base-content/60 text-sm">Not enough trips with temperature data for this range.</p>
+                <p class="text-base-content/40 text-xs mt-1">Widen the date range or add more trip data to see the correlation.</p>
+            </div>
         {% endif %}
     </div>
 </div>
 
-<!-- Regen Recovery (Wave 2 placeholder) -->
+<!-- Regen Recovery (Phase 25 Plan 25-03) -->
 <div class="card bg-base-200" id="driving-regen-bar-card">
     <div class="card-body">
         <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Regen Recovery</h3>
         {% if regen_bar_chart %}
             <div class="plotly-chart-wrap">{{ regen_bar_chart | safe }}</div>
+            <p class="text-xs text-base-content/40 mt-2">
+                Regen kWh derived from range recovered &divide; trip efficiency.
+                Regen % is regen kWh as a share of trip energy consumed.
+            </p>
         {% else %}
-            <p class="text-base-content/40 text-sm py-8 text-center">No regen data for this time range.</p>
+            <div class="text-center py-8">
+                <p class="text-base-content/60 text-sm">No regen data for this range.</p>
+                <p class="text-base-content/40 text-xs mt-1">Populates when trips with range_regenerated are ingested.</p>
+            </div>
         {% endif %}
     </div>
 </div>
