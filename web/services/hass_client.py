@@ -181,6 +181,10 @@ class HASSClient:
                 unit_system.get("length", "unknown"),
                 self._ha_config.get("location_name", "unknown"),
             )
+            # Auto-populate the Home location from HA config (latitude/longitude
+            # live on get_config). Non-destructive: only fills in values that
+            # haven't been manually set in app_settings.
+            await self._autopopulate_home_location_from_config()
 
         # Step 5: get_states
         states_id = self._next_msg_id()
@@ -330,25 +334,68 @@ class HASSClient:
         return json.loads(raw)
 
 
-    async def backfill_history(self, days: int = 30) -> dict:
-        """Fetch historical energytransferlogentry states from HA REST API.
+    async def _autopopulate_home_location_from_config(self) -> None:
+        """Fill home_latitude/home_longitude/home_location_name from HA config.
 
-        Uses GET /api/history/period to pull past state changes for the
-        energytransferlogentry entity, then processes each through the
-        event handler to create session records (with duplicate detection).
-
-        Returns dict with counts: {"processed": N, "errors": N}
+        Runs on every successful connect. Non-destructive: only writes an
+        app_settings key when the current value is empty. Users who manually
+        override these via the settings form are not stomped on.
         """
-        import httpx
+        await self._apply_home_location_from_config(force=False)
 
+    async def sync_home_location_from_config(self) -> dict:
+        """Force-overwrite the home location from HA config.
+
+        Returns a dict with the values written (or empty dict if HA config
+        didn't carry coordinates). Used by the 'Use HA location' button on
+        the settings page.
+        """
+        return await self._apply_home_location_from_config(force=True)
+
+    async def _apply_home_location_from_config(self, *, force: bool) -> dict:
         if not self._ha_config:
-            return {"processed": 0, "errors": 0, "error": "Not connected to HA"}
+            return {}
 
-        # Build the entity_id for energytransferlogentry
-        vin = self.detected_vin or "unknown"
-        entity_id = f"sensor.fordpass_{vin}_energytransferlogentry"
+        lat = self._ha_config.get("latitude")
+        lon = self._ha_config.get("longitude")
+        name = self._ha_config.get("location_name")
+        if lat is None or lon is None:
+            return {}
 
-        # Need ha_url and ha_token from settings
+        from db.engine import AsyncSessionLocal
+        from web.queries.settings import get_app_settings_dict, set_app_setting
+
+        applied: dict = {}
+        async with AsyncSessionLocal() as db:
+            existing = await get_app_settings_dict(
+                db,
+                ["home_latitude", "home_longitude", "home_location_name"],
+            )
+
+            pairs = [
+                ("home_latitude", str(lat)),
+                ("home_longitude", str(lon)),
+                ("home_location_name", name or "Home"),
+            ]
+            for key, value in pairs:
+                current = (existing.get(key) or "").strip()
+                if force or not current:
+                    await set_app_setting(db, key, value)
+                    applied[key] = value
+
+        if applied:
+            logger.info(
+                "Home location %s from HA config: %s",
+                "overwritten" if force else "auto-populated",
+                applied,
+            )
+        return applied
+
+    async def _ha_rest_headers(self) -> Optional[dict]:
+        """Load ha_url and ha_token from settings and return request headers+base.
+
+        Returns (ha_url, headers) tuple or None when credentials are missing.
+        """
         from db.engine import AsyncSessionLocal
         from web.queries.settings import get_app_settings_dict
 
@@ -358,47 +405,259 @@ class HASSClient:
         ha_url = cfg.get("ha_url", "").rstrip("/")
         ha_token = cfg.get("ha_token", "")
         if not ha_url or not ha_token:
-            return {"processed": 0, "errors": 0, "error": "Missing ha_url or ha_token"}
+            return None
+        return (ha_url, {"Authorization": f"Bearer {ha_token}"})
 
-        # Fetch history from HA REST API
-        start_time = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    async def fetch_entity_state(self, entity_id: str) -> Optional[dict]:
+        """Fetch the current state object for a single HA entity via REST.
 
-        logger.info("Backfill: fetching history for %s (last %d days)", entity_id, days)
+        Returns the state dict as HA would return from /api/states/<entity_id>,
+        or None on connection/credential failure or 404. Used by the gas sensor
+        "check data" button on the HASS settings page to verify that a sensor
+        is wired up correctly before ingesting.
+        """
+        import httpx
+
+        auth = await self._ha_rest_headers()
+        if auth is None:
+            return None
+        ha_url, headers = auth
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
-                    f"{ha_url}/api/history/period",
-                    params={"filter_entity_id": entity_id, "start_time": start_time},
-                    headers={"Authorization": f"Bearer {ha_token}"},
+                    f"{ha_url}/api/states/{entity_id}", headers=headers
+                )
+                if resp.status_code == 404:
+                    return None
+                resp.raise_for_status()
+                return resp.json()
+        except Exception as exc:
+            logger.warning("fetch_entity_state(%s) failed: %s", entity_id, exc)
+            return None
+
+    async def _fetch_entity_history(
+        self,
+        entity_id: str,
+        start_time_iso: Optional[str] = None,
+    ) -> list[dict]:
+        """Fetch HA history for a single entity_id.
+
+        When start_time_iso is None, queries from 10 years ago (effectively
+        "everything HA will return"). HA's recorder retention is typically
+        10 days by default but users with long-term storage can have years.
+
+        Returns the list of state dicts, or [] on failure / empty history.
+        """
+        import httpx
+
+        auth = await self._ha_rest_headers()
+        if auth is None:
+            logger.warning("Backfill: missing ha_url or ha_token")
+            return []
+        ha_url, headers = auth
+
+        if start_time_iso is None:
+            # Default to ~10 years ago — HA will cap at its own recorder retention.
+            start_time_iso = (
+                datetime.now(timezone.utc) - timedelta(days=365 * 10)
+            ).isoformat()
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.get(
+                    f"{ha_url}/api/history/period/{start_time_iso}",
+                    params={"filter_entity_id": entity_id, "minimal_response": "false"},
+                    headers=headers,
                 )
                 resp.raise_for_status()
                 history_data = resp.json()
         except Exception as exc:
-            logger.error("Backfill: failed to fetch history: %s", exc)
-            return {"processed": 0, "errors": 0, "error": str(exc)}
+            logger.error("Backfill: failed to fetch history for %s: %s", entity_id, exc)
+            return []
 
         if not history_data or not history_data[0]:
-            logger.info("Backfill: no history found for %s", entity_id)
-            return {"processed": 0, "errors": 0}
+            return []
 
-        # history_data is a list of lists; first element is the entity's state history
-        states = history_data[0]
-        processed = 0
-        errors = 0
+        # history_data is [[state, state, ...]] — one list per filter_entity_id
+        return history_data[0]
 
-        for state_obj in states:
+    async def backfill_history(self, days: Optional[int] = None) -> dict:
+        """Backfill historical data from HA REST for both charging and gas sensors.
+
+        Pulls past state changes for:
+          * the energytransferlogentry entity (charging sessions)
+          * any gas sensors configured in app_settings (station / average)
+
+        When `days` is None the start time is set to 10 years ago, letting HA
+        return as much history as its recorder retains. Pass an int to cap.
+
+        Duplicate prevention:
+          * Charging sessions: reuses the existing +/-30 min +/- 10% energy fuzzy
+            match inside handle_energy_transfer (no changes needed here).
+          * Gas readings: uses store_gas_price_reading_if_new which checks
+            (entity_id, recorded_at) before inserting.
+
+        Returns:
+            {
+              "sessions": {"processed": N, "errors": N},
+              "gas": {entity_id: {"inserted": N, "skipped": N, "errors": N}},
+            }
+        """
+        if not self._ha_config:
+            return {
+                "error": "Not connected to HA",
+                "sessions": {"processed": 0, "errors": 0},
+                "gas": {},
+            }
+
+        start_time_iso: Optional[str] = None
+        if days is not None:
+            start_time_iso = (
+                datetime.now(timezone.utc) - timedelta(days=days)
+            ).isoformat()
+
+        result: dict = {
+            "sessions": {"processed": 0, "errors": 0},
+            "gas": {},
+        }
+
+        # --- 1. Charging sessions ---
+        vin = self.detected_vin or "unknown"
+        energy_entity = f"sensor.fordpass_{vin}_energytransferlogentry"
+        logger.info(
+            "Backfill: fetching charging session history for %s (start=%s)",
+            energy_entity, start_time_iso or "all",
+        )
+        session_states = await self._fetch_entity_history(energy_entity, start_time_iso)
+        for state_obj in session_states:
             if not state_obj.get("attributes"):
                 continue
             try:
-                await self._event_handler(entity_id, {}, state_obj, self._ha_config or {})
-                processed += 1
+                await self._event_handler(
+                    energy_entity, {}, state_obj, self._ha_config or {}
+                )
+                result["sessions"]["processed"] += 1
             except Exception as exc:
-                logger.error("Backfill: error processing state: %s", exc)
-                errors += 1
+                logger.error("Backfill: session state error: %s", exc)
+                result["sessions"]["errors"] += 1
 
-        logger.info("Backfill complete: %d processed, %d errors", processed, errors)
-        return {"processed": processed, "errors": errors}
+        # --- 2. Gas sensors ---
+        gas_entities = await self._load_gas_sensor_entity_ids()
+        for entity_id in gas_entities:
+            counts = {"inserted": 0, "skipped": 0, "errors": 0}
+            result["gas"][entity_id] = counts
+            logger.info(
+                "Backfill: fetching gas sensor history for %s (start=%s)",
+                entity_id, start_time_iso or "all",
+            )
+            gas_states = await self._fetch_entity_history(entity_id, start_time_iso)
+            for state_obj in gas_states:
+                try:
+                    inserted = await self._ingest_gas_history_state(entity_id, state_obj)
+                    if inserted:
+                        counts["inserted"] += 1
+                    else:
+                        counts["skipped"] += 1
+                except Exception as exc:
+                    logger.error(
+                        "Backfill: gas reading error for %s: %s", entity_id, exc
+                    )
+                    counts["errors"] += 1
+
+            # After inserting readings, refresh monthly averages in history table.
+            if counts["inserted"] > 0:
+                await self._refresh_gas_monthly_history(entity_id)
+
+        logger.info(
+            "Backfill complete: sessions=%s, gas=%s",
+            result["sessions"], result["gas"],
+        )
+        return result
+
+    async def _load_gas_sensor_entity_ids(self) -> list[str]:
+        """Return the list of configured gas sensor entity IDs (station + average)."""
+        from db.engine import AsyncSessionLocal
+        from web.queries.settings import get_app_settings_dict
+
+        async with AsyncSessionLocal() as db:
+            cfg = await get_app_settings_dict(
+                db,
+                ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"],
+            )
+
+        entities = []
+        for key in ("gas_sensor_station_entity_id", "gas_sensor_average_entity_id"):
+            val = (cfg.get(key) or "").strip()
+            if val:
+                entities.append(val)
+        return entities
+
+    async def _ingest_gas_history_state(self, entity_id: str, state_obj: dict) -> bool:
+        """Insert a single historical gas sensor state as a GasPriceReading.
+
+        Returns True if a new row was inserted, False if skipped (duplicate,
+        invalid value, or unavailable state).
+        """
+        state_val = state_obj.get("state")
+        if state_val is None or state_val in ("unknown", "unavailable", ""):
+            return False
+        try:
+            price = float(state_val)
+        except (TypeError, ValueError):
+            return False
+        if price <= 0:
+            return False
+
+        # HA history states carry last_changed / last_updated as ISO strings.
+        ts_raw = state_obj.get("last_changed") or state_obj.get("last_updated")
+        if not ts_raw:
+            return False
+        try:
+            if isinstance(ts_raw, str):
+                if ts_raw.endswith("Z"):
+                    ts_raw = ts_raw[:-1] + "+00:00"
+                recorded_at = datetime.fromisoformat(ts_raw)
+            else:
+                recorded_at = ts_raw
+        except (TypeError, ValueError):
+            return False
+
+        from db.engine import AsyncSessionLocal
+        from web.queries.gas_prices import store_gas_price_reading_if_new
+
+        async with AsyncSessionLocal() as db:
+            return await store_gas_price_reading_if_new(
+                db, entity_id, price, recorded_at
+            )
+
+    async def _refresh_gas_monthly_history(self, entity_id: str) -> None:
+        """Recompute monthly averages for a gas sensor and upsert into history."""
+        from db.engine import AsyncSessionLocal
+        from web.queries.gas_prices import (
+            compute_monthly_averages,
+            upsert_gas_price,
+        )
+        from web.queries.settings import get_app_settings_dict
+
+        async with AsyncSessionLocal() as db:
+            settings = await get_app_settings_dict(
+                db,
+                ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"],
+            )
+            station_entity = settings.get("gas_sensor_station_entity_id") or ""
+            average_entity = settings.get("gas_sensor_average_entity_id") or ""
+
+            months = await compute_monthly_averages(db, entity_id)
+            for (year, month), avg in months.items():
+                if entity_id == station_entity:
+                    await upsert_gas_price(
+                        db, year, month, station_price=avg, source="ha_sensor"
+                    )
+                elif entity_id == average_entity:
+                    await upsert_gas_price(
+                        db, year, month, average_price=avg, source="ha_sensor"
+                    )
 
 
 class _AuthInvalid(Exception):

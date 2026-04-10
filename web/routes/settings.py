@@ -1231,6 +1231,50 @@ async def save_home_location_settings(
     )
 
 
+@router.post("/settings/hass/home-location/sync", response_class=HTMLResponse)
+async def sync_home_location_from_ha(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Force-overwrite the home location from HA config (latitude/longitude/location_name)."""
+    from web.services.hass_client import hass_service
+
+    if not hass_service.health.get("connected"):
+        # Re-render the form with an error banner
+        settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
+        token = settings.get("ha_token", "")
+        masked_token = (
+            ("*" * (len(token) - 8) + token[-8:]) if len(token) > 8 else token
+        ) if token else ""
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/hass_settings.html",
+            {
+                "hass": settings,
+                "masked_token": masked_token,
+                "home_sync_error": "Must be connected to HA to sync home location.",
+            },
+        )
+
+    applied = await hass_service.sync_home_location_from_config()
+
+    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
+    token = settings.get("ha_token", "")
+    masked_token = (
+        ("*" * (len(token) - 8) + token[-8:]) if len(token) > 8 else token
+    ) if token else ""
+
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_settings.html",
+        {
+            "hass": settings,
+            "masked_token": masked_token,
+            "home_sync_applied": applied,
+        },
+    )
+
+
 @router.get("/settings/hass/status", response_class=HTMLResponse)
 async def hass_status(request: Request):
     """Return HASS connection status partial for polling."""
@@ -1279,7 +1323,11 @@ async def hass_reconnect(request: Request):
 
 @router.post("/settings/hass/backfill", response_class=HTMLResponse)
 async def hass_backfill(request: Request):
-    """Trigger history backfill from HA REST API for past charging sessions."""
+    """Trigger history backfill from HA REST API.
+
+    Pulls as much charging session and gas sensor history as HA will return
+    (no artificial time cap). Duplicates are automatically skipped.
+    """
     from web.services.hass_client import hass_service
 
     if not hass_service.health.get("connected"):
@@ -1287,19 +1335,40 @@ async def hass_backfill(request: Request):
             '<div class="alert alert-error text-sm">Must be connected to HA to backfill.</div>'
         )
 
-    result = await hass_service.backfill_history(days=30)
+    result = await hass_service.backfill_history(days=None)
 
     if result.get("error"):
         return HTMLResponse(
             f'<div class="alert alert-error text-sm">{result["error"]}</div>'
         )
 
+    sessions = result.get("sessions", {})
+    gas = result.get("gas", {})
+
+    parts: list[str] = [
+        f"<strong>Sessions:</strong> {sessions.get('processed', 0)} processed"
+    ]
+    if sessions.get("errors"):
+        parts[-1] += f", {sessions['errors']} errors"
+
+    if gas:
+        for entity_id, counts in gas.items():
+            line = (
+                f"<strong>{entity_id}:</strong> "
+                f"{counts.get('inserted', 0)} new, "
+                f"{counts.get('skipped', 0)} skipped"
+            )
+            if counts.get("errors"):
+                line += f", {counts['errors']} errors"
+            parts.append(line)
+    else:
+        parts.append("<em class='text-base-content/50'>No gas sensors configured</em>")
+
+    body = "<br>".join(parts)
     return HTMLResponse(
-        f'<div class="alert alert-success text-sm">'
-        f'Backfill complete: {result["processed"]} sessions processed'
-        f'{", " + str(result["errors"]) + " errors" if result["errors"] else ""}. '
-        f'Duplicates are automatically skipped.'
-        f'</div>'
+        f'<div class="alert alert-success text-sm"><div>{body}<br>'
+        f'<span class="text-xs text-base-content/60">Duplicates are automatically skipped.</span>'
+        f'</div></div>'
     )
 
 
@@ -1383,6 +1452,110 @@ async def delete_gas_price_route(
     )
 
 
+async def _hass_gas_sensors_context(
+    db: AsyncSession, *, check_live: bool = False, gas_saved: bool = False
+) -> dict:
+    """Build context for the HASS-page gas sensor partial.
+
+    When check_live is True, queries HA for the current state of each
+    configured sensor via the REST client so the UI can show "not reporting"
+    vs the live value. Otherwise returns None for sensor_states so the
+    template just reflects the stored config and DB stats.
+    """
+    from sqlalchemy import func as sa_func
+    from db.models.reference import GasPriceHistory, GasPriceReading
+    from web.services.hass_client import hass_service
+
+    sensor_keys = ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"]
+    sensor_settings = await get_app_settings_dict(db, sensor_keys)
+
+    sensor_states: dict = {"station": None, "average": None}
+    if check_live:
+        for role, key in (
+            ("station", "gas_sensor_station_entity_id"),
+            ("average", "gas_sensor_average_entity_id"),
+        ):
+            entity_id = (sensor_settings.get(key) or "").strip()
+            if not entity_id:
+                continue
+            state_obj = await hass_service.fetch_entity_state(entity_id)
+            if not state_obj:
+                continue
+            raw_val = state_obj.get("state")
+            try:
+                price = float(raw_val) if raw_val not in (None, "unknown", "unavailable", "") else None
+            except (TypeError, ValueError):
+                price = None
+            if price is None:
+                continue
+            last_changed = state_obj.get("last_changed") or state_obj.get("last_updated") or ""
+            sensor_states[role] = {
+                "value": f"${price:.3f}",
+                "last_changed": last_changed[:19].replace("T", " ") if last_changed else "",
+            }
+
+    # DB stats: total readings + latest timestamp + monthly row count
+    reading_count_stmt = select(sa_func.count()).select_from(GasPriceReading)
+    latest_reading_stmt = select(sa_func.max(GasPriceReading.recorded_at))
+    monthly_count_stmt = select(sa_func.count()).select_from(GasPriceHistory)
+
+    reading_count = (await db.execute(reading_count_stmt)).scalar_one() or 0
+    latest_reading_ts = (await db.execute(latest_reading_stmt)).scalar_one()
+    monthly_count = (await db.execute(monthly_count_stmt)).scalar_one() or 0
+
+    latest_reading = ""
+    if latest_reading_ts:
+        latest_reading = latest_reading_ts.strftime("%Y-%m-%d %H:%M")
+
+    return {
+        "sensor_settings": sensor_settings,
+        "sensor_states": sensor_states,
+        "db_stats": {
+            "reading_count": reading_count,
+            "latest_reading": latest_reading,
+            "monthly_count": monthly_count,
+        },
+        "gas_saved": gas_saved,
+    }
+
+
+@router.get("/settings/hass/gas-sensors", response_class=HTMLResponse)
+async def hass_gas_sensors_partial(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the gas-sensor card for the HASS page, with a live HA check."""
+    ctx = await _hass_gas_sensors_context(db, check_live=True)
+    return templates.TemplateResponse(
+        request, "settings/partials/hass_gas_sensors.html", ctx
+    )
+
+
+@router.post("/settings/hass/gas-sensors", response_class=HTMLResponse)
+async def save_hass_gas_sensors(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    gas_sensor_station_entity_id: Optional[str] = Form(None),
+    gas_sensor_average_entity_id: Optional[str] = Form(None),
+):
+    """Save gas sensor config + trigger an immediate live check in the render."""
+    await set_app_setting(
+        db, "gas_sensor_station_entity_id", gas_sensor_station_entity_id or ""
+    )
+    await set_app_setting(
+        db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or ""
+    )
+    from web.services.hass_processor import invalidate_gas_sensor_cache
+    invalidate_gas_sensor_cache()
+    ctx = await _hass_gas_sensors_context(db, check_live=True, gas_saved=True)
+    return templates.TemplateResponse(
+        request, "settings/partials/hass_gas_sensors.html", ctx
+    )
+
+
+# Legacy route kept for compatibility with any pre-existing HTMX calls from
+# the fuel tab. The new form lives on the HASS page; this still works for
+# anything that posted to the old URL.
 @router.post("/settings/gas-sensors", response_class=HTMLResponse)
 async def save_gas_sensors(
     request: Request,

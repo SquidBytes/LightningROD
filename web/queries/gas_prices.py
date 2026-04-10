@@ -143,3 +143,33 @@ async def store_gas_price_reading(
     db.add(reading)
     await db.flush()
     await db.commit()
+
+
+async def store_gas_price_reading_if_new(
+    db: AsyncSession, entity_id: str, price: float, recorded_at
+) -> bool:
+    """Insert a GasPriceReading only if (entity_id, recorded_at) is not already present.
+
+    Used by the historical backfill path where re-running should be idempotent.
+    Returns True if a new row was inserted, False if the reading already exists.
+    The table has no unique constraint, so we guard with an explicit existence
+    check instead of relying on ON CONFLICT.
+    """
+    existing = await db.execute(
+        select(GasPriceReading.id).where(
+            GasPriceReading.entity_id == entity_id,
+            GasPriceReading.recorded_at == recorded_at,
+        ).limit(1)
+    )
+    if existing.scalar_one_or_none() is not None:
+        return False
+
+    reading = GasPriceReading(
+        entity_id=entity_id,
+        price=price,
+        recorded_at=recorded_at,
+    )
+    db.add(reading)
+    await db.flush()
+    await db.commit()
+    return True
