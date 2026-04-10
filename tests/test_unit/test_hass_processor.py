@@ -177,10 +177,22 @@ def test_safe_float():
 
 
 def test_normalize_charge_type():
-    assert _normalize_charge_type("DC_FAST") == "DC Fast"
-    assert _normalize_charge_type("AC_LEVEL_2") == "AC Level 2"
-    assert _normalize_charge_type("AC_BASIC") == "AC Level 2"
+    # DC variants collapse to "DC"
+    assert _normalize_charge_type("DC_FAST") == "DC"
+    assert _normalize_charge_type("DC_COMBO") == "DC"
+    assert _normalize_charge_type("DCFC") == "DC"
+    assert _normalize_charge_type("DC") == "DC"
+    # AC variants (all levels) collapse to "AC"
+    assert _normalize_charge_type("AC_LEVEL_2") == "AC"
+    assert _normalize_charge_type("AC_BASIC") == "AC"
+    assert _normalize_charge_type("AC_LEVEL_1") == "AC"
+    assert _normalize_charge_type("Level 2") == "AC"
+    assert _normalize_charge_type("AC") == "AC"
+    # Empty / None
     assert _normalize_charge_type(None) is None
+    assert _normalize_charge_type("") is None
+    assert _normalize_charge_type("   ") is None
+    # Unknown values fall through uppercased
     assert _normalize_charge_type("CUSTOM_TYPE") == "CUSTOM_TYPE"
 
 
