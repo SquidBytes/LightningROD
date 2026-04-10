@@ -36,6 +36,13 @@ async def client(db_session):
     app.include_router(review.router)
     app.include_router(trips.router)
 
+    # Phase 25 Wave 1 router — optional so Wave 0 scaffolding passes standalone
+    try:
+        from web.routes import driving_performance  # noqa: WPS433
+        app.include_router(driving_performance.router, prefix="/driving")
+    except ImportError:
+        pass  # Wave 1 not yet landed
+
     # Register localtime filter on Jinja2 templates
     for route_module in [dashboard, sessions, costs, performance, settings,
                          csv_import, charging, review, battery, trips]:

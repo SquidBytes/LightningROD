@@ -6,6 +6,7 @@ All fixtures return a dict with created objects and pre-computed expected values
 
 from datetime import datetime, date, timedelta, timezone
 
+import pytest
 import pytest_asyncio
 
 from db.models.charging_session import EVChargingSession
@@ -404,3 +405,39 @@ async def trip_scenario(db_session):
             "avg_efficiency": sum(efficiencies) / len(efficiencies),  # 3.0125
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Phase 25 fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def sessions_with_battery_status(db_session):
+    """DC session with >=3 battery_status points (real-data path)."""
+    # Minimal placeholder — Wave 2 synthetic curve task will populate
+    pytest.skip("phase_25 Wave 0 fixture stub")
+
+
+@pytest_asyncio.fixture
+async def sessions_without_battery_status(db_session):
+    """DC sessions only, no battery_status rows (synthetic-fallback path)."""
+    pytest.skip("phase_25 Wave 0 fixture stub")
+
+
+@pytest_asyncio.fixture
+async def trips_with_ambient_temp(db_session):
+    """Trips with populated ambient_temp + distance + energy_consumed (temperature scatter path)."""
+    pytest.skip("phase_25 Wave 0 fixture stub")
+
+
+@pytest_asyncio.fixture
+async def trips_minimal_count(db_session):
+    """Fewer than 5 trips with ambient_temp — exercises empty-state branch."""
+    pytest.skip("phase_25 Wave 0 fixture stub")
+
+
+@pytest_asyncio.fixture
+async def trips_with_regen(db_session):
+    """Trips with populated range_regenerated + distance + energy_consumed."""
+    pytest.skip("phase_25 Wave 0 fixture stub")
