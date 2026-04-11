@@ -942,13 +942,9 @@ async def import_rows(
     from web.unit_system import to_metric_distance
 
     # Determine the user's distance unit once for batch conversion.
-    # Fall back to "us" if settings can't be read (e.g. in mocked tests).
-    distance_unit = "us"
-    try:
-        unit_ctx = await get_unit_context(db_session)
-        distance_unit = unit_ctx["distance_unit"]
-    except (TypeError, AttributeError):
-        pass
+    # get_unit_context already falls back to "us" when settings aren't set.
+    unit_ctx = await get_unit_context(db_session)
+    distance_unit = unit_ctx["distance_unit"]
 
     added = 0
     skipped = 0
