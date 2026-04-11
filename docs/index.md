@@ -23,21 +23,25 @@ In short: more fields means better calculations, safer backfills, and fewer assu
 
 ## Features
 
+**Home Dashboard** -- Multi-vehicle overview, global summary cards, EVSE charging-efficiency aggregates, monthly energy by network chart, and network energy breakdown.
+
 **Charging Sessions** -- Full CRUD with sorting, date presets, charge-type and network filters, group edit, and a detail drawer with cost breakdown, EVSE metrics, stall context, and charge-curve preview.
+
+**Charging Performance** -- AC vs DC energy donut, charging efficiency trend with rolling average, monthly energy by charge type, and a synthetic DC charge curve for when real telemetry is missing. (Renamed from "Energy" in v0.3.)
 
 **Cost Analytics** -- Cost hierarchy (manual/imported, location override, network, subscription member rate), actual vs estimated tracking, subscription savings, and gas/network comparison scenarios.
 
-**Energy Dashboard** -- Total energy, regen recovery summary, efficiency trend with rolling average, and monthly energy by charge type.
+**Battery Analytics** -- SOC timeline with color-coded charging regions, industry-standard flipped charge curves (SOC% X, kW Y) with reference/average/session overlay, mileage-based degradation scatter, and a 12V low-voltage battery trend.
 
-**Home Dashboard** -- Multi-vehicle overview, global summary cards, EVSE charging-efficiency aggregates, monthly energy by network chart, and network energy breakdown.
+**Driving** -- Trip Sessions table with 10-column detail view + slide-out drive graphs, plus a Driving Performance analytics page covering mi/kWh vs ambient temperature correlation, regen recovery per trip, and driving efficiency trend. (New in v0.3.)
 
-**Network & Location Management** -- Color-coded networks, expandable location management, per-location cost overrides, charger stall definitions (with template pre-fill), and subscription period management.
+**Network & Location Management** -- Color-coded networks, expandable location management, per-location cost overrides, charger stall definitions (with template pre-fill), subscription period management, and a review queue for auto-detected entries.
 
 **CSV Import** -- Template download plus auto-detection fallback, timezone-aware parsing, inline row correction for errors/duplicates, and support for full session/EVSE field mapping.
 
-**Home Assistant Integration** -- Real-time connection to Home Assistant via WebSocket for automatic charging session detection from [ha-fordpass](https://github.com/marq24/ha_fordpass). Vehicle telemetry ingestion, VIN auto-detection, unit normalization, and 30-day history backfill.
+**Home Assistant Integration** -- Real-time WebSocket connection for automatic charging session detection from [ha-fordpass](https://github.com/marq24/ha_fordpass). Vehicle telemetry ingestion, VIN auto-detection, home-zone location auto-populate, unit normalization, and full-history backfill (no 30-day cap).
 
-**Settings** -- Vehicle profiles, comparison display options, gas price history/sensor integration, unit preferences (US/EU), timezone selection, and Home Assistant connection controls.
+**Settings** -- Vehicle profiles with cascading Make/Model/Trim presets, comparison display options, gas price history and HA gas-sensor integration, split distance/temperature unit preferences, timezone selection, and Home Assistant connection controls.
 
 ---
 

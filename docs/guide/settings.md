@@ -16,9 +16,16 @@ The settings page (`/settings`) is organized into focused tabs. Most updates app
 
 ## Vehicles Tab
 
-Use this tab to manage EV profiles and select the active vehicle. The active vehicle is used for vehicle-scoped pages like Sessions, Costs, and Energy.
+Use this tab to manage EV profiles and select the active vehicle. The active vehicle is used for vehicle-scoped pages like Charging Sessions, Costs, Charging Performance, Battery Analytics, and Driving.
 
 Vehicle fields include display name, make/model/year, battery capacity, VIN/device ID, and ICE comparison fields.
+
+### Vehicle Presets
+
+The Edit Vehicle modal offers cascading combo-box fields for **Make → Model → Trim → Battery Capacity**. Typing or selecting a Make narrows the Model options, selecting a Model narrows the Trim options, and picking a Trim auto-fills the battery capacity from the preset table. Ford is auto-selected since it's the only preset make today, and you can free-type any value for non-preset vehicles.
+
+!!! info "Lariat / trim packages"
+    The preset table currently treats "trim" as a battery variant (SR / ER / Flash). Marketing trim packages (Pro / XLT / Lariat / Platinum) are planned for a future release — for now, leave the trim blank or type your package name manually.
 
 ## Networks Tab
 
@@ -112,10 +119,14 @@ Optional sensor entity IDs can be configured for station and average gas price f
 
 ### Unit Preferences
 
-| Preference | Efficiency unit | Used on |
-|-----------|----------------|---------|
-| US | mi/kWh | Energy dashboard |
-| EU | km/kWh | Energy dashboard |
+LightningROD stores all distances, temperatures, efficiencies, and volumes in **metric** as the canonical database form (km, °C, km/kWh, L/100km, liters), and converts once at the display/input boundary. Unit preferences are split into two independent axes so you can mix them:
+
+| Axis | Options | What it changes |
+|------|---------|-----------------|
+| **Distance** | US (mi, mi/kWh, MPG, gal, mph) / Metric (km, km/kWh, L/100km, L, km/h) | Distance, range, efficiency, fuel economy, speed labels |
+| **Temperature** | US (°F) / Metric (°C) | Temperature displays and charts |
+
+You can, for example, pick `mi/kWh` with `°C` if that's how you think about your vehicle.
 
 ### Timezone
 

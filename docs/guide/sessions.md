@@ -1,6 +1,6 @@
 # Charging Sessions
 
-The sessions page (`/sessions`) is the primary interface for viewing and managing your charging history.
+The charging sessions page (`/charging/sessions`) is the primary interface for viewing and managing your charging history.
 
 ![sessions](../assets/images/lr_sessions.gif)
 

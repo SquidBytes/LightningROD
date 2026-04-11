@@ -613,7 +613,7 @@ def build_soc_timeline_chart(
         if kw is not None:
             parts.append(f"Power: {kw:.1f} kW")
         if rng is not None:
-            parts.append(f"Range: {rng * distance_factor:.0f} {range_label}")
+            parts.append(f"Range: {float(rng) * distance_factor:.0f} {range_label}")
         hover_texts.append("<br>".join(parts))
 
     # Main SOC trace — connectgaps=False to show data gaps as breaks
