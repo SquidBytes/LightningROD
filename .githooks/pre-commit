@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#
+# LightningROD pre-commit hook — runs ruff on staged Python files.
+#
+# Activate once per clone:
+#     git config core.hooksPath .githooks
+#
+# Bypass (use sparingly):
+#     git commit --no-verify
+#
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Find staged .py files (Added / Copied / Modified / Renamed, excluding deletions)
+mapfile -t staged_py < <(git diff --cached --name-only --diff-filter=ACMR -- '*.py')
+
+if [ "${#staged_py[@]}" -eq 0 ]; then
+    # No Python changes to lint — let the commit through unchanged.
+    exit 0
+fi
+
+# Locate ruff — prefer the repo venv so the hook matches CI exactly.
+if [ -x "$REPO_ROOT/.venv/bin/ruff" ]; then
+    RUFF="$REPO_ROOT/.venv/bin/ruff"
+elif command -v ruff >/dev/null 2>&1; then
+    RUFF="ruff"
+else
+    echo "pre-commit: ruff not found on PATH and no .venv/bin/ruff."
+    echo "            Install dev deps with: uv sync --locked"
+    echo "            Skipping lint; CI will still check."
+    exit 0
+fi
+
+echo "pre-commit: running ruff on ${#staged_py[@]} staged Python file(s)..."
+if ! "$RUFF" check "${staged_py[@]}"; then
+    echo
+    echo "pre-commit: ruff reported issues. Fix with:"
+    echo "    $RUFF check --fix ${staged_py[*]}"
+    echo
+    echo "Or bypass (not recommended): git commit --no-verify"
+    exit 1
+fi
+
+exit 0

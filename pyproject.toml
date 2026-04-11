@@ -44,3 +44,29 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning:pytest_asyncio",
 ]
+
+[tool.ruff]
+# Match the Python version declared in [project].requires-python.
+target-version = "py311"
+# Skip generated/vendored directories.
+extend-exclude = [
+    "alembic/versions",
+    "node_modules",
+    "site",
+    ".venv",
+]
+
+[tool.ruff.lint]
+# Ruff's default rule set: pycodestyle import/statement/runtime errors + pyflakes.
+# Intentionally excludes E501 (line-too-long) and other style rules — we want
+# dead-code and obvious-bug detection, not style enforcement. Add "I" (isort)
+# or "B" (bugbear) later if the simple set proves valuable.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# Seed scripts manipulate sys.path before importing project modules, which is
+# the canonical reason to allow late module imports.
+"scripts/seed.py" = ["E402"]
+"scripts/seed_sample.py" = ["E402"]
+# web/main.py resolves APP_VERSION before importing routers. Structural, not a bug.
+"web/main.py" = ["E402"]
