@@ -93,7 +93,9 @@ async def test_charging_session_ingestion(db_session):
 
     assert session is not None, "Charging session not created"
     assert session.energy_kwh == 32.5
-    assert session.charge_type == "DC Fast"  # Normalized from DC_FAST
+    # _normalize_charge_type in hass_processor collapses DC_FAST → "DC"
+    # (Level 1/2/3 granularity is intentionally discarded; see _CHARGER_TYPE_MAP).
+    assert session.charge_type == "DC"
     assert session.start_soc == 15.0
     assert session.end_soc == 80.0
     assert session.source_system == "home_assistant"
