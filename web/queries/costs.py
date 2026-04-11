@@ -135,19 +135,16 @@ def compute_session_cost(
 
     # --- Compute estimated_cost from hierarchy (location -> network -> none) ---
     estimated_cost = None
-    estimated_source = None
 
     if location and location.cost_per_kwh:
         cost_val = float(location.cost_per_kwh)
         estimated_cost = energy_kwh * cost_val
-        estimated_source = "location"
     elif network and not network.is_free and network.cost_per_kwh:
         if active_sub:
             cost_val = float(active_sub.member_rate)
         else:
             cost_val = float(network.cost_per_kwh)
         estimated_cost = energy_kwh * cost_val
-        estimated_source = "network"
 
     if estimated_cost is not None:
         result["estimated_cost"] = round(estimated_cost, 4)

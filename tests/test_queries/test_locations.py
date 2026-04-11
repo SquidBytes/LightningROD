@@ -6,8 +6,6 @@ Tests location resolution, geo-matching, and address normalization.
 import pytest
 
 from web.queries.locations import (
-    haversine_meters,
-    normalize_address,
     resolve_location,
 )
 from web.queries.settings import get_locations_for_network

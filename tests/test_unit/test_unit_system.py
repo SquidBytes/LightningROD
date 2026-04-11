@@ -3,10 +3,6 @@
 import pytest
 
 from web.unit_system import (
-    DISTANCE_UNITS,
-    KM_PER_MI,
-    MI_PER_KM,
-    TEMP_UNITS,
     convert_distance,
     convert_efficiency,
     convert_fuel_efficiency,

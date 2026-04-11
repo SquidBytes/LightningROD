@@ -6,14 +6,12 @@ All fixtures return a dict with created objects and pre-computed expected values
 
 from datetime import datetime, date, timedelta, timezone
 
-import pytest
 import pytest_asyncio
 
 from db.models.charging_session import EVChargingSession
 from db.models.battery_status import EVBatteryStatus
 from db.models.trip_metrics import EVTripMetrics
 from db.models.reference import (
-    AppSettings,
     EVChargingNetwork,
     EVLocationLookup,
     EVNetworkSubscription,

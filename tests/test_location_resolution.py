@@ -1,8 +1,7 @@
 """Tests for location resolution service (web/queries/locations.py)."""
 
-import math
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +212,7 @@ async def test_resolve_location_auto_creates_when_no_match():
 
     mock_db = _make_mock_db(locations=[])
 
-    result = await resolve_location(
+    await resolve_location(
         mock_db,
         latitude=35.0, longitude=-80.0,
         address="456 Oak Drive",
@@ -276,7 +275,7 @@ async def test_resolve_location_ignores_unknown_network():
 
     mock_db = _make_mock_db(locations=[])
 
-    result = await resolve_location(
+    await resolve_location(
         mock_db,
         latitude=35.0, longitude=-80.0,
         network_name="UNKNOWN",
@@ -298,7 +297,7 @@ async def test_resolve_location_auto_creates_network():
     with patch("web.queries.locations.resolve_network", new_callable=AsyncMock) as mock_rn:
         mock_rn.return_value = 99
 
-        result = await resolve_location(
+        await resolve_location(
             mock_db,
             latitude=35.0, longitude=-80.0,
             network_name="ChargePoint",
@@ -324,7 +323,7 @@ async def test_resolve_location_home_detection_with_settings():
     )
 
     # Simulate home signals
-    result = await resolve_location(
+    await resolve_location(
         mock_db,
         latitude=40.00001, longitude=-74.00001,
         location_name="SAVED",

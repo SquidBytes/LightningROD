@@ -8,7 +8,6 @@ import pytest
 from web.queries.vehicles import (
     get_active_vehicle,
     get_all_vehicles,
-    get_vehicle_by_id,
 )
 from web.queries.settings import set_app_setting
 

@@ -15,7 +15,6 @@ from db.models.charging_session import EVChargingSession
 from web.queries.costs import (
     compute_session_cost,
     get_networks_by_name,
-    query_cost_summary,
 )
 
 # Shared Plotly modebar config — show minimal controls, hide logo

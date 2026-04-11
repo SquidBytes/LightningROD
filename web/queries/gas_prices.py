@@ -6,8 +6,7 @@ Provides operations for managing monthly gas prices with two tracks
 
 from typing import Optional
 
-from sqlalchemy import delete, func, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import GasPriceHistory, GasPriceReading

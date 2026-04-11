@@ -10,7 +10,6 @@ Usage:
 
 import csv
 import random
-import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -319,7 +318,7 @@ def main():
     # Stats
     distances = [t["distance"] for t in trips]
     efficiencies = [t["efficiency"] for t in trips]
-    print(f"\nStats:")
+    print("\nStats:")
     print(f"  Total trips: {len(trips)}")
     print(f"  Date range: {trips[0]['start_time'][:10]} to {trips[-1]['end_time'][:10]}")
     print(f"  Total distance: {sum(distances):.1f} mi")

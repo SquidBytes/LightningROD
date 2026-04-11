@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from db.models.reference import GasPriceHistory, GasPriceReading
+from db.models.reference import GasPriceReading
 from web.queries.gas_prices import (
     compute_monthly_averages,
     delete_gas_price,

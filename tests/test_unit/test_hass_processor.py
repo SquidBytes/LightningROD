@@ -212,7 +212,6 @@ def test_format_address_none():
 
 
 def test_parse_iso_datetime():
-    from datetime import datetime, timezone
 
     result = _parse_iso_datetime("2025-06-15T12:00:00Z")
     assert result is not None

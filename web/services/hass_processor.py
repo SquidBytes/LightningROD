@@ -7,7 +7,6 @@ Also handles gas price sensor events from arbitrary entity_ids configured
 in app_settings. Normalizes units to metric before storage.
 """
 
-import asyncio
 import logging
 import time
 from datetime import datetime, timezone
@@ -241,7 +240,6 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
     or after a timeout to produce one EVVehicleStatus row per batch.
     """
     state_val = _get_state_value(new_state)
-    attrs = _get_attributes(new_state)
     unit_system = _get_unit_system(ha_config)
 
     # Initialize pending dict for this device if needed
@@ -277,7 +275,6 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
     if slug == "lastrefresh":
         # lastrefresh triggers a flush of accumulated vehicle status
         now = time.time()
-        prev_ts = _pending_vehicle_status_ts.get(device_id, 0)
         _pending_vehicle_status_ts[device_id] = now
 
         # Also flush battery status on lastrefresh

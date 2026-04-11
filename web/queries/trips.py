@@ -20,7 +20,7 @@ from db.models.reference import EVLocationLookup
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle_status import EVVehicleStatus
 from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
-from web.queries.locations import LOCATION_MATCH_RADIUS_M, _find_geo_match
+from web.queries.locations import _find_geo_match
 
 PAGE_SIZE = 25
 VALID_PER_PAGE = {25, 50, 100}

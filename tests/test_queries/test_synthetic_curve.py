@@ -1,5 +1,5 @@
 """Query-layer tests for synthetic charge curve aggregation. phase_25 Wave 2."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 

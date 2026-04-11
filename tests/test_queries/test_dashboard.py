@@ -19,7 +19,7 @@ async def test_dashboard_stats(db_session):
     """
     from db.models.charging_session import EVChargingSession
     from db.models.reference import EVChargingNetwork
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timezone
 
     db = db_session
 

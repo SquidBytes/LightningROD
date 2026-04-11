@@ -2,7 +2,6 @@
 
 import pytest
 
-from tests.factories.vehicles import VehicleFactory
 
 
 @pytest.mark.db

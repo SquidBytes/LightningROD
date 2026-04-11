@@ -9,7 +9,6 @@ import pytest
 
 from web.queries.costs import (
     compute_session_cost,
-    find_active_subscription,
     query_cost_summary,
     query_monthly_costs,
 )
@@ -78,7 +77,6 @@ async def test_subscription_savings(cost_scenario):
 
 async def test_cost_cascade_location_override(cost_scenario):
     """Location cost_per_kwh overrides network rate in cascade."""
-    db = cost_scenario["db"]
     s5 = cost_scenario["sessions"][4]  # 25 kWh at Location X ($0.30/kWh)
     net_a = cost_scenario["net_a"]
     loc_x = cost_scenario["loc_x"]

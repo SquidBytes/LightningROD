@@ -26,7 +26,6 @@ from tests.test_ha_sim.simulator import (
     make_battery_event,
     make_charging_session_event,
     make_gps_event,
-    make_lastrefresh_event,
     make_temperature_event,
     make_trip_event,
 )

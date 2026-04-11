@@ -1,7 +1,7 @@
 """Tests for csv_parser transform_rows and detect_duplicates."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +92,6 @@ def test_transform_rows_error_status_when_missing_core_fields():
 def test_transform_rows_generates_session_id():
     """transform_rows generates deterministic session_id via make_session_id."""
     from web.services.csv_parser import transform_rows, make_session_id
-    from datetime import datetime, timezone
 
     raw_rows = [
         {
@@ -244,7 +243,6 @@ async def test_detect_duplicates_new_row_stays_new():
 async def test_detect_duplicates_error_rows_unchanged():
     """detect_duplicates does not alter 'error' status rows."""
     from web.services.csv_parser import detect_duplicates
-    import uuid
 
     rows = [
         {
@@ -336,7 +334,6 @@ async def test_import_rows_unselected_row_is_skipped():
 async def test_import_rows_error_row_counted_as_failed():
     """import_rows counts rows with _status='error' as failed."""
     from web.services.csv_parser import import_rows
-    import uuid
 
     rows = [
         {

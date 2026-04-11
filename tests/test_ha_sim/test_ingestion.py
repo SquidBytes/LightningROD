@@ -68,7 +68,7 @@ async def test_charging_session_ingestion(db_session):
     from db.models.charging_session import EVChargingSession
 
     # Create vehicle so processor can find it
-    vehicle = await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
     # Generate and dispatch charging event
     entity_id, new_state = make_charging_session_event(
@@ -106,7 +106,7 @@ async def test_trip_ingestion(db_session):
     """Inject elveh trip event, verify EVTripMetrics record created."""
     from db.models.trip_metrics import EVTripMetrics
 
-    vehicle = await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
     # Generate and dispatch trip event
     entity_id, new_state = make_trip_event(
@@ -141,7 +141,7 @@ async def test_battery_status_ingestion(db_session):
     """Inject battery events + lastrefresh, verify EVBatteryStatus record created."""
     from db.models.battery_status import EVBatteryStatus
 
-    vehicle = await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
     # SOC event to populate pending battery status
     soc_entity = f"sensor.fordpass_{_TEST_DEVICE_ID}_soc"
@@ -183,7 +183,7 @@ async def test_gps_location_ingestion(db_session):
     """Inject device_tracker GPS event, verify EVLocation record created."""
     from db.models.location import EVLocation
 
-    vehicle = await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
     entity_id, new_state = make_gps_event(
         device_id=_TEST_DEVICE_ID,

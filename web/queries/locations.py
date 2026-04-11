@@ -10,7 +10,7 @@ import re
 from difflib import SequenceMatcher
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import AppSettings, EVLocationLookup, EVLocationGPSAlias

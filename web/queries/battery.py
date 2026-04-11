@@ -596,8 +596,6 @@ def build_soc_timeline_chart(
 
     timestamps = [row["recorded_at"] for row in data]
     soc_values = [row.get("soc") for row in data]
-    kw_values = [row.get("kw") for row in data]
-    range_values = [row.get("range") for row in data]
 
     # Build rich tooltip text
     hover_texts = []

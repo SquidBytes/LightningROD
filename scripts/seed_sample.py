@@ -303,7 +303,7 @@ SESSION_UPDATABLE = [
 async def seed_vehicle(device_id: str, dry_run: bool) -> None:
     """Create or update the sample vehicle record."""
     print(f"\n{'='*60}")
-    print(f"  SAMPLE VEHICLE")
+    print("  SAMPLE VEHICLE")
     print(f"{'='*60}")
 
     vehicle_data = {**SAMPLE_VEHICLE, "device_id": device_id}
@@ -313,7 +313,7 @@ async def seed_vehicle(device_id: str, dry_run: bool) -> None:
     print(f"  Battery: {vehicle_data['battery_capacity_kwh']} kWh")
 
     if dry_run:
-        print(f"  [DRY RUN] Would create/update vehicle")
+        print("  [DRY RUN] Would create/update vehicle")
         return
 
     async with AsyncSessionLocal() as session:
@@ -343,7 +343,7 @@ async def seed_vehicle(device_id: str, dry_run: bool) -> None:
             else:
                 vehicle = EVVehicle(**vehicle_data)
                 session.add(vehicle)
-                print(f"  Created new vehicle")
+                print("  Created new vehicle")
 
         try:
             await session.commit()
@@ -365,7 +365,7 @@ async def seed_vehicle(device_id: str, dry_run: bool) -> None:
 
 async def seed_battery(device_id: str, csv_path: str, dry_run: bool) -> int:
     print(f"\n{'='*60}")
-    print(f"  BATTERY STATUS")
+    print("  BATTERY STATUS")
     print(f"{'='*60}")
     print(f"  CSV: {csv_path}")
 
@@ -404,7 +404,7 @@ async def seed_battery(device_id: str, csv_path: str, dry_run: bool) -> int:
 
 async def seed_sessions(device_id: str, csv_path: str, dry_run: bool) -> int:
     print(f"\n{'='*60}")
-    print(f"  CHARGING SESSIONS")
+    print("  CHARGING SESSIONS")
     print(f"{'='*60}")
     print(f"  CSV: {csv_path}")
 
@@ -446,7 +446,7 @@ async def seed_sessions(device_id: str, csv_path: str, dry_run: bool) -> int:
 
 async def seed_trips(device_id: str, csv_path: str, dry_run: bool) -> int:
     print(f"\n{'='*60}")
-    print(f"  TRIP METRICS")
+    print("  TRIP METRICS")
     print(f"{'='*60}")
     print(f"  CSV: {csv_path}")
 
@@ -485,7 +485,7 @@ async def seed_trips(device_id: str, csv_path: str, dry_run: bool) -> int:
 
 async def verify(device_id: str):
     print(f"\n{'='*60}")
-    print(f"  VERIFICATION")
+    print("  VERIFICATION")
     print(f"{'='*60}")
 
     async with AsyncSessionLocal() as session:
@@ -538,20 +538,20 @@ async def verify(device_id: str):
         )
         t = result.fetchone()
 
-    print(f"\n  Battery Status:")
+    print("\n  Battery Status:")
     print(f"    Total rows:   {b.total}")
     print(f"    Date range:   {str(b.earliest)[:10]} to {str(b.latest)[:10]}")
     print(f"    Avg SOC:      {b.avg_soc}%")
     print(f"    Charging:     {b.charging} snapshots")
     print(f"    Driving:      {b.driving} snapshots")
 
-    print(f"\n  Charging Sessions:")
+    print("\n  Charging Sessions:")
     print(f"    Total:        {s.total}")
     print(f"    AC: {s.ac} | DC: {s.dc}")
     print(f"    Home: {s.home} | Work: {s.work} | Other: {s.total - s.home - s.work}")
     print(f"    Total energy: {s.total_kwh} kWh")
 
-    print(f"\n  Trip Metrics:")
+    print("\n  Trip Metrics:")
     print(f"    Total trips:  {t.total}")
     if t.total > 0:
         print(f"    Date range:   {str(t.earliest)[:10]} to {str(t.latest)[:10]}")
@@ -595,7 +595,7 @@ async def seed(args: argparse.Namespace):
     if not dry_run:
         await verify(device_id)
 
-    print(f"\n  Done.")
+    print("\n  Done.")
 
 
 def main():
