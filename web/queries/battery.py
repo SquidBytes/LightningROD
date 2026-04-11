@@ -628,16 +628,29 @@ def build_soc_timeline_chart(
         )
     )
 
-    # Color-coded charging regions as vertical rectangles (brighter fill, no per-region text)
-    for start_idx, end_idx in charging_regions:
-        if start_idx < len(timestamps) and end_idx < len(timestamps):
-            fig.add_vrect(
-                x0=timestamps[start_idx],
-                x1=timestamps[end_idx],
-                fillcolor="rgba(74, 222, 128, 0.25)",
-                layer="below",
-                line_width=0,
-            )
+    # Color-coded charging regions as vertical rectangles. Batched into a single
+    # update_layout(shapes=...) call -- fig.add_vrect() re-validates the entire
+    # shapes list on every call, making a loop O(n^2). With ~500 regions, the
+    # loop form costs ~34s vs ~60ms for the batched form (see Phase 26 CONTEXT).
+    n = len(timestamps)
+    region_shapes = [
+        dict(
+            type="rect",
+            xref="x",
+            yref="paper",
+            x0=timestamps[start_idx],
+            x1=timestamps[end_idx],
+            y0=0,
+            y1=1,
+            fillcolor="rgba(74, 222, 128, 0.25)",
+            layer="below",
+            line=dict(width=0),
+        )
+        for start_idx, end_idx in charging_regions
+        if start_idx < n and end_idx < n
+    ]
+    if region_shapes:
+        fig.update_layout(shapes=region_shapes)
 
     # Single legend entry for charging regions
     if charging_regions:
@@ -1023,19 +1036,26 @@ def build_degradation_chart(
             )
         )
 
-    # Date annotations for every ~5th data point
+    # Date annotations for every ~5th data point. Batched into a single
+    # update_layout(annotations=...) call -- fig.add_annotation() is O(n^2)
+    # like add_vrect(), and while the current step keeps this under ~5 items,
+    # batching prevents a silent regression if step is ever widened.
     min_cap = min(capacities) if capacities else 0
     step = max(1, len(data) // 5)
-    for i in range(0, len(data), step):
-        d = data[i].get("date")
-        if d and hasattr(d, "strftime"):
-            fig.add_annotation(
-                x=odometers[i],
-                y=min_cap - (rated_capacity_kwh * 0.02),
-                text=d.strftime("%b %d"),
-                showarrow=False,
-                font=dict(size=9, color="#6b7280"),
-            )
+    annotation_y = min_cap - (rated_capacity_kwh * 0.02)
+    date_annotations = [
+        dict(
+            x=odometers[i],
+            y=annotation_y,
+            text=data[i]["date"].strftime("%b %d"),
+            showarrow=False,
+            font=dict(size=9, color="#6b7280"),
+        )
+        for i in range(0, len(data), step)
+        if data[i].get("date") and hasattr(data[i]["date"], "strftime")
+    ]
+    if date_annotations:
+        fig.update_layout(annotations=date_annotations)
 
     fig.update_layout(
         height=350,
