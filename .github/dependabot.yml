@@ -1,0 +1,75 @@
+# Dependabot — automated dependency updates across every ecosystem used
+# by LightningROD. Opens PRs against the default branch; test.yml runs
+# against each PR automatically.
+#
+# Groups are used to batch minor/patch updates into a single PR per
+# ecosystem per week, so the review queue doesn't get flooded.
+# Major updates still come as individual PRs so breaking changes are
+# easy to spot.
+
+version: 2
+updates:
+  # ----- Python (pyproject.toml / uv.lock) -----
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - dependencies
+      - python
+    groups:
+      python-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # ----- npm (package.json / package-lock.json — Tailwind + DaisyUI) -----
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # ----- Docker base images (Dockerfile / Dockerfile.standalone) -----
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - dependencies
+      - docker
+
+  # ----- GitHub Actions themselves -----
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(ci)"
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      actions-all:
+        patterns:
+          - "*"
