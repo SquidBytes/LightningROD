@@ -2,42 +2,56 @@
 
 All notable changes to LightningROD are documented here.
 
-## v0.2 -- In Progress
+For feature documentation, see the docs site at
+<https://squidbytes.github.io/LightningROD/>.
 
-Session management, CSV import, UI overhaul, Home Assistant integration, and data model expansion.
+## [Unreleased]
 
 ### Added
-
-- **Home Assistant Integration** -- Real-time WebSocket connection to Home Assistant for automatic FordPass data ingestion via [ha-fordpass](https://github.com/marq24/ha_fordpass). Authenticates with long-lived access token. Processes 29 FordPass sensors with unit normalization. Creates charging sessions from energytransferlogentry events with full field extraction. Batched vehicle and battery telemetry writes. VIN auto-detection. Exponential backoff reconnection. 30-day history backfill. Live connection status with 10-second polling.
-- **HASS Settings** -- Home Assistant configuration tab in Settings with URL, access token, VIN override, unit system, and auto-connect toggle. Connection status display with health metrics and reconnect/disconnect/backfill controls.
-- **Session CRUD** -- Add, edit, and delete charging sessions from the web UI. Edit modal with three tabs (Basics/Details/Notes). Data source badges track origin (Manual Entry, Imported, HASS, Edited).
-- **CSV Import** -- Template-based CSV import with auto-detection fallback. Inline error/duplicate editing with blur-triggered re-verify. Timezone-aware parsing. Three-step flow: Upload, Preview, Import.
-- **Dashboard** -- Summary cards (total sessions, energy, cost, miles) plus three charts: monthly cost trend, energy by network, and efficiency trend. Charging efficiency card with aggregate loss and utilization metrics.
-- **Network Management** -- Networks as first-class entities with color badges. Expandable location management per network. Per-location cost override. Charger stall configuration with rated kW, connector type, and default stall auto-selection.
-- **Cost Hierarchy** -- Location cost_per_kwh overrides network cost_per_kwh. Estimated cost stored on sessions. Cost breakdown card in drawer showing actual vs estimated with difference.
-- **EVSE Data** -- Charger-side fields on sessions: voltage, amperage, kW, energy, max power, rated capacity, source provenance. Charging loss (kWh and %) and utilization (%) calculated when data available.
-- **Charger Stalls** -- Per-location stall definitions with charger type, rated kW, voltage, amperage, connector. Network-level charger templates for popular networks. Auto-fill EVSE fields on stall selection.
-- **Timezone Support** -- User timezone setting. All timestamps displayed in local timezone. Import-time timezone selection for naive CSV timestamps.
-- **Sort and Filter** -- Click-to-sort column headers with three-state cycle. Multi-select network filter with color badges. Filter chips showing active filters. Per-page size selector (25/50/100).
 
 ### Changed
 
-- **UI Component Library** -- Migrated from hand-rolled Tailwind components to DaisyUI v5. All modals, drawers, tables, tabs, badges, cards, and form controls now use DaisyUI classes.
-- **CSS Build** -- Multi-stage Docker build with Node 22 for Tailwind v4 + DaisyUI compilation. HTMX and Plotly vendored as static assets (no CDN).
-- **Filter Bar** -- Shared compact date-range filter bar across sessions, costs, and energy pages. Pill-style preset buttons with active state.
-- **Session Drawer** -- Reorganized with cost breakdown card, EVSE/Charger section, and network color badges.
-- **Database Schema** -- Added `ev_charger_stalls` table. Added EVSE columns, `estimated_cost`, `stall_id` to sessions. Added `cost_per_kwh` to locations. Added `color` to networks.
+### Fixed
 
-## v0.1.5 -- 2026-02-28
+### Removed
 
-Initial release. Core charging analytics platform.
+## [0.2.13] - 2026-03-07
+
+Session management, CSV import, UI overhaul, and Home Assistant integration.
 
 ### Added
 
-- **Infrastructure** -- Docker Compose stack with PostgreSQL 16, FastAPI, Alembic auto-migrations, and a dark-mode web UI (Jinja2 + HTMX + Tailwind).
-- **Data Seed** -- CSV-to-PostgreSQL import script with idempotent upsert, automatic AC/DC classification, and location type assignment. 203 historical sessions loaded.
-- **Charging Sessions** -- Paginated session list with filters for date range (presets and custom), charge type, and location. Slide-out detail drawer with all 30 session fields and prev/next navigation.
-- **Cost Analytics** -- Configurable per-location electricity rates. Lifetime cost summary with free vs. paid breakdown. Gas vehicle comparison and network rate comparison with toggleable sections.
-- **Energy Dashboard** -- Total lifetime energy consumed, efficiency trend chart with rolling average, regenerative braking totals (when data is available), and configurable US/EU unit display.
-- **Settings** -- Rate management, gas comparison parameters (MPG, $/gallon), unit preferences, and comparison section visibility toggles.
-- **Database Schema** -- 8-table schema designed for the full ha-fordpass data model (vehicle status, battery, trips, location) even though v1 only populates charging tables.
+- Home Assistant WebSocket ingestion via `ha-fordpass` — 29 sensors, auto-reconnect, 30-day backfill.
+- Session CRUD (add, edit, delete) from the web UI with data-source badges.
+- CSV import with auto-detection, inline error editing, and timezone-aware parsing.
+- Dashboard with summary cards and monthly-cost / network / efficiency charts.
+- Network management as first-class entities with color badges and per-location cost overrides.
+- Cost cascade: session → location → network → subscription rate.
+- EVSE telemetry on sessions (voltage, amperage, kW, charging loss %).
+- Charger stall definitions per location, with network-level templates.
+- User timezone setting applied to all displayed timestamps.
+- Click-to-sort columns, multi-select network filter, per-page size selector.
+
+### Changed
+
+- Migrated UI from hand-rolled Tailwind to DaisyUI v5 throughout.
+- Multi-stage Docker build with Node 22 for Tailwind v4 + DaisyUI compilation.
+- HTMX and Plotly vendored as static assets (no CDN).
+- Session drawer reorganised with cost breakdown card and EVSE section.
+- Database schema extended: `ev_charger_stalls`, EVSE columns on sessions, `cost_per_kwh` on locations, network colours.
+
+## [0.1.5] - 2026-02-28
+
+Initial release.
+
+### Added
+
+- Docker Compose stack: PostgreSQL 16, FastAPI, Alembic, Jinja2 + HTMX + Tailwind UI.
+- CSV-to-PostgreSQL import with idempotent upsert and AC/DC classification.
+- Paginated session list with date-range, charge-type, and location filters.
+- Slide-out session drawer with prev/next navigation.
+- Configurable per-location electricity rates.
+- Gas vehicle and network rate comparisons on the cost dashboard.
+- Energy dashboard: lifetime kWh, efficiency trend, regen totals.
+- Settings: rates, gas comparison params, unit preferences.
+- 8-table schema designed for the full ha-fordpass data model.
