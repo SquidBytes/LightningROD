@@ -5289,6 +5289,17 @@ html[data-theme="dark"] {
 .drawer-side .menu > li.menu-title::before {
   content: none !important;
 }
+:where(.drawer-side .menu a, .btn, .card-title) {
+  transition-property: background-color, color, border-color, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+.filter-preset-btn:focus-visible {
+  outline: 2px solid #47A8E5;
+  outline-offset: 2px;
+  z-index: 1;
+  position: relative;
+}
 .js-plotly-plot *, .js-plotly-plot *::before, .js-plotly-plot *::after {
   border-style: initial;
   margin: initial;

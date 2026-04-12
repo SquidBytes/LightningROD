@@ -60,6 +60,26 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
   content: none !important;
 }
 
+/* ── Interaction polish (Phase 26) ───────────────────────────────────
+   Standardize hover transitions to 150ms across sidebar, buttons, and
+   card headers. Add focus-visible ring to filter-preset buttons so
+   keyboard users can see the focused chip.
+   ──────────────────────────────────────────────────────────────────── */
+:where(.drawer-side .menu a, .btn, .card-title) {
+  transition-property: background-color, color, border-color, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* Focus-visible ring on filter preset buttons — keyboard nav only,
+   not triggered by mouse click. Uses existing brand-accent token. */
+.filter-preset-btn:focus-visible {
+  outline: 2px solid #47A8E5;
+  outline-offset: 2px;
+  z-index: 1;
+  position: relative;
+}
+
 /* ── Plotly CSS isolation ──────────────────────────────────────────────
    Tailwind v4 resets (*, ::before, ::after { border: 0 solid; margin: 0; padding: 0 })
    break Plotly's internal SVG elements. These rules restore defaults inside Plotly containers.
