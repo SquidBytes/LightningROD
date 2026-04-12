@@ -10,12 +10,20 @@ Pick `7d`, `30d`, `90d`, `YTD`, or `All` via the filter bar. The range is carrie
 
 Four health-focused tiles at the top:
 
-- **Battery Health** — current usable capacity as a percentage of the vehicle's rated capacity (gauge-style)
-- **Capacity** — current kWh vs rated kWh, with the delta
+- **Est. Degradation** — current pack capacity as a percentage of the vehicle's rated gross capacity (gauge-style)
+- **Pack Capacity** — current gross kWh vs rated gross kWh, with the delta
 - **Range** — latest reported range vs the rated max range, with the delta
 - **12V Battery** — latest low-voltage (starter) battery voltage and charge level
 
 Cards read from the most recent `ev_battery_status` record. If your Home Assistant feed doesn't provide capacity data, the tiles show "no data" states.
+
+!!! info "Usable vs gross capacity"
+    LightningROD tracks two capacity numbers per vehicle:
+
+    - **Usable** capacity is the driver-facing value (e.g. 98 kWh on a Lightning SR) — the kWh you actually have available to drive.
+    - **Gross** capacity is the total installed cell capacity (e.g. 108 kWh on a Lightning SR) — this is what FordPass reports via its `maximumBatteryCapacity` attribute.
+
+    The health card compares gross-to-gross so a fresh pack reads ~100%. If you mix the two (e.g. store usable in the gross field), you'll see nonsense percentages above 100% or below reality. Both values live on the vehicle record in **Settings → Vehicles** and can be auto-filled from the preset table.
 
 ## SOC Timeline
 
