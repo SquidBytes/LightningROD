@@ -1,6 +1,7 @@
 {
     "name": "F-150 Lightning Extended Range",
-    "battery_capacity_kwh": 131,
+    "battery_usable_kwh": 131,
+    "battery_gross_kwh": 143,
     "max_dc_kw": 155,
     "curve": [
         {"soc": 0, "kw": 80},

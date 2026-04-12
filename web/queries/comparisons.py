@@ -75,6 +75,10 @@ async def query_gas_comparison(
     # L/100km stored in DB -> convert to MPG for gas math
     ice_l_per_100km = float(vehicle.ice_fuel_efficiency)
     ice_mpg = 235.215 / ice_l_per_100km if ice_l_per_100km > 0 else None
+    # The fallback gas-equivalent path below divides `session.energy_kwh` by
+    # pack capacity to get a "percent of tank" figure. That only makes sense
+    # against USABLE capacity — energy_kwh is what the charger actually put
+    # into the pack, not the gross cell headroom.
     battery_kwh = float(vehicle.battery_capacity_kwh) if vehicle.battery_capacity_kwh else None
     # Tank capacity stored in liters -> convert to gallons for gas math
     fuel_tank_liters = float(vehicle.ice_fuel_tank_capacity) if vehicle.ice_fuel_tank_capacity else None

@@ -70,14 +70,26 @@
                            class="input input-sm input-bordered w-full">
                 </label>
 
-                {# Battery Capacity kWh #}
+                {# Usable Battery Capacity kWh #}
                 <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Battery Capacity (kWh)</span></div>
+                    <div class="label"><span class="label-text text-xs">Usable Capacity (kWh)</span></div>
                     <input type="number" name="battery_capacity_kwh" id="vehicle-battery-kwh"
                            step="0.1" min="0"
                            value="{{ vehicle.battery_capacity_kwh or '' }}"
-                           placeholder="kWh"
+                           placeholder="e.g. 98"
                            class="input input-sm input-bordered w-full">
+                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Driver-facing capacity used for efficiency math.</span></div>
+                </label>
+
+                {# Gross Battery Capacity kWh #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Gross Pack Capacity (kWh)</span></div>
+                    <input type="number" name="battery_gross_capacity_kwh" id="vehicle-battery-gross-kwh"
+                           step="0.1" min="0"
+                           value="{{ vehicle.battery_gross_capacity_kwh or '' }}"
+                           placeholder="e.g. 108"
+                           class="input input-sm input-bordered w-full">
+                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Total pack kWh. Matches FordPass <code>maximumBatteryCapacity</code>; used for battery health math.</span></div>
                 </label>
 
                 {# VIN #}
@@ -154,6 +166,7 @@
     var modelInput = document.getElementById('vehicle-model');
     var trimInput = document.getElementById('vehicle-trim');
     var kwhInput = document.getElementById('vehicle-battery-kwh');
+    var grossInput = document.getElementById('vehicle-battery-gross-kwh');
 
     var makeList = document.getElementById('make-options');
     var modelList = document.getElementById('model-options');
@@ -212,10 +225,14 @@
             var trim = trimInput.value.trim();
             return !trim || p.trim.toLowerCase() === trim.toLowerCase();
         });
-        // If exactly one kWh match, auto-fill
-        var kwhs = unique(filtered.map(function(p) { return p.battery_kwh; }));
-        if (kwhs.length === 1) {
-            kwhInput.value = kwhs[0];
+        // If exactly one preset matches, auto-fill BOTH usable and gross
+        var usableVals = unique(filtered.map(function(p) { return p.battery_usable_kwh; }));
+        var grossVals  = unique(filtered.map(function(p) { return p.battery_gross_kwh; }));
+        if (usableVals.length === 1) {
+            kwhInput.value = usableVals[0];
+        }
+        if (grossVals.length === 1) {
+            grossInput.value = grossVals[0];
         }
     }
 
@@ -223,17 +240,20 @@
         modelInput.value = '';
         trimInput.value = '';
         kwhInput.value = '';
+        grossInput.value = '';
         refreshModels();
     });
 
     modelInput.addEventListener('input', function() {
         trimInput.value = '';
         kwhInput.value = '';
+        grossInput.value = '';
         refreshTrims();
     });
 
     trimInput.addEventListener('input', function() {
         kwhInput.value = '';
+        grossInput.value = '';
         fillKwh();
     });
 

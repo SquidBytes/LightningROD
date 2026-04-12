@@ -18,8 +18,9 @@ class VehicleFactory(BaseFactory):
             "year": 2024,
             "make": "Ford",
             "model": "Mustang Mach-E",
-            "trim": "Premium AWD",
-            "battery_capacity_kwh": 91.0,
+            "trim": "Premium ER AWD",
+            "battery_capacity_kwh": 91.0,          # usable
+            "battery_gross_capacity_kwh": 98.8,    # gross
             "vin": f"TEST_VIN_{n:03d}",
             "source_system": "test_factory",
         }

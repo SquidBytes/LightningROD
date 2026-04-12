@@ -46,8 +46,9 @@ SAMPLE_VEHICLE = {
     "make": "Ford",
     "model": "F-150 Lightning",
     "year": 2024,
-    "trim": "XLT",
-    "battery_capacity_kwh": 98.0,
+    "trim": "Standard Range",
+    "battery_capacity_kwh": 98.0,        # usable
+    "battery_gross_capacity_kwh": 108.0, # gross (matches FordPass reporting)
     "vin": "1FT8W3ED5LFB0D19",
     "source_system": SOURCE_SYSTEM,
 }

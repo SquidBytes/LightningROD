@@ -35,7 +35,6 @@ from web.queries.settings import (
     update_subscription,
 )
 from web.queries.vehicles import (
-    BATTERY_PRESETS,
     VEHICLE_PRESETS,
     create_vehicle,
     delete_vehicle,
@@ -82,7 +81,6 @@ async def _vehicle_management_context(db: AsyncSession) -> dict:
     return {
         "vehicles": vehicles,
         "active_vehicle": active_vehicle,
-        "battery_presets": BATTERY_PRESETS,
         "vehicle_presets": VEHICLE_PRESETS,
         "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
     }
@@ -177,7 +175,6 @@ async def new_vehicle_form(
         "settings/partials/vehicle_edit_modal.html",
         {
             **unit_ctx,
-            "battery_presets": BATTERY_PRESETS,
             "vehicle": None,
             "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
             "ice_fuel_efficiency_display": None,
@@ -196,6 +193,7 @@ async def create_vehicle_route(
     year: Optional[int] = Form(None),
     trim: Optional[str] = Form(None),
     battery_capacity_kwh: Optional[float] = Form(None),
+    battery_gross_capacity_kwh: Optional[float] = Form(None),
     vin: Optional[str] = Form(None),
     device_id: Optional[str] = Form(None),
     ice_fuel_efficiency: Optional[float] = Form(None),
@@ -224,6 +222,7 @@ async def create_vehicle_route(
         year=year,
         trim=trim or None,
         battery_capacity_kwh=battery_capacity_kwh,
+        battery_gross_capacity_kwh=battery_gross_capacity_kwh,
         vin=vin or None,
         device_id=device_id or None,
         ice_fuel_efficiency=ice_fuel_efficiency_metric,
@@ -269,7 +268,6 @@ async def edit_vehicle_form(
             "vehicle": vehicle,
             "ice_fuel_efficiency_display": ice_fuel_efficiency_display,
             "ice_fuel_tank_capacity_display": ice_fuel_tank_capacity_display,
-            "battery_presets": BATTERY_PRESETS,
             "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
         },
     )
@@ -286,6 +284,7 @@ async def update_vehicle_route(
     year: Optional[int] = Form(None),
     trim: Optional[str] = Form(None),
     battery_capacity_kwh: Optional[float] = Form(None),
+    battery_gross_capacity_kwh: Optional[float] = Form(None),
     vin: Optional[str] = Form(None),
     device_id: Optional[str] = Form(None),
     ice_fuel_efficiency: Optional[float] = Form(None),
@@ -315,6 +314,7 @@ async def update_vehicle_route(
         year=year,
         trim=trim or None,
         battery_capacity_kwh=battery_capacity_kwh,
+        battery_gross_capacity_kwh=battery_gross_capacity_kwh,
         vin=vin or None,
         device_id=device_id or None,
         ice_fuel_efficiency=ice_fuel_efficiency_metric,

@@ -48,10 +48,16 @@ async def battery(
     unit_ctx = await get_unit_context(db)
     distance_factor = MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
 
-    # Rated capacity from vehicle, fallback 75.0 kWh
+    # Rated capacity for health/degradation math. FordPass reports the GROSS
+    # pack capacity via `maximumBatteryCapacity` (stored in hv_battery_capacity),
+    # so we must compare against the gross rating, not usable. Falls back to
+    # the usable value if gross is unset, then to a 75 kWh default.
     rated_capacity = 75.0
-    if active_vehicle and active_vehicle.battery_capacity_kwh:
-        rated_capacity = float(active_vehicle.battery_capacity_kwh)
+    if active_vehicle:
+        if active_vehicle.battery_gross_capacity_kwh:
+            rated_capacity = float(active_vehicle.battery_gross_capacity_kwh)
+        elif active_vehicle.battery_capacity_kwh:
+            rated_capacity = float(active_vehicle.battery_capacity_kwh)
 
     # Section-specific partial rendering for lazy loading
     if section == "degradation":

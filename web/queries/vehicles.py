@@ -7,36 +7,40 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.vehicle import EVVehicle
 from web.queries.settings import get_app_setting, set_app_setting
 
-# Structured vehicle presets for cascading combo-box auto-fill
-# Each entry: make, model, trim, battery_kwh, year_min, year_max
+# Structured vehicle presets for cascading combo-box auto-fill.
+#
+# Each entry carries BOTH the usable and gross pack capacity because the two
+# values serve different calculations:
+#
+#   - battery_usable_kwh -> what energy_kwh can be compared against (drive
+#     efficiency, gas-equivalent fallback in comparisons.py). This is the
+#     "driver-facing" number you see on marketing material.
+#   - battery_gross_kwh  -> total installed cell capacity. FordPass reports
+#     this via the `maximumBatteryCapacity` attribute, and battery health /
+#     degradation math on /battery must compare against it (otherwise a fresh
+#     pack reads >100% health).
+#
+# If a user reports that their FordPass sensor shows a different value, adjust
+# the gross entry here and ship a migration to refresh their vehicle record.
 VEHICLE_PRESETS = [
     # F-150 Lightning
-    {"make": "Ford", "model": "F-150 Lightning", "trim": "Standard Range", "battery_kwh": 98.0, "year_min": 2022, "year_max": 2025},
-    {"make": "Ford", "model": "F-150 Lightning", "trim": "Extended Range", "battery_kwh": 131.0, "year_min": 2022, "year_max": 2025},
-    {"make": "Ford", "model": "F-150 Lightning", "trim": "Flash", "battery_kwh": 100.0, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "F-150 Lightning", "trim": "Flash", "battery_kwh": 123.0, "year_min": 2025, "year_max": 2025},
+    {"make": "Ford", "model": "F-150 Lightning", "trim": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2022, "year_max": 2025},
+    {"make": "Ford", "model": "F-150 Lightning", "trim": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2022, "year_max": 2025},
+    {"make": "Ford", "model": "F-150 Lightning", "trim": "Flash",          "battery_usable_kwh": 100.0, "battery_gross_kwh": 110.0, "year_min": 2024, "year_max": 2024},
+    {"make": "Ford", "model": "F-150 Lightning", "trim": "Flash",          "battery_usable_kwh": 123.0, "battery_gross_kwh": 135.0, "year_min": 2025, "year_max": 2025},
 
-    # Mustang Mach-E
-    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Select SR RWD", "battery_kwh": 72.0, "year_min": 2023, "year_max": 2025},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Premium SR RWD", "battery_kwh": 72.0, "year_min": 2023, "year_max": 2025},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Premium ER RWD", "battery_kwh": 91.0, "year_min": 2023, "year_max": 2025},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Premium ER AWD", "battery_kwh": 91.0, "year_min": 2023, "year_max": 2025},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim": "GT", "battery_kwh": 91.0, "year_min": 2023, "year_max": 2025},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Rally", "battery_kwh": 91.0, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Standard Range", "battery_kwh": 68.0, "year_min": 2021, "year_max": 2022},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Extended Range", "battery_kwh": 88.0, "year_min": 2021, "year_max": 2022},
+    # Mustang Mach-E (2023+)
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Select SR RWD",   "battery_usable_kwh": 72.0, "battery_gross_kwh": 76.0,  "year_min": 2023, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Premium SR RWD",  "battery_usable_kwh": 72.0, "battery_gross_kwh": 76.0,  "year_min": 2023, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Premium ER RWD",  "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8,  "year_min": 2023, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Premium ER AWD",  "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8,  "year_min": 2023, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "GT",              "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8,  "year_min": 2023, "year_max": 2025},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Rally",           "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8,  "year_min": 2025, "year_max": 2025},
 
-    # E-Transit
-    {"make": "Ford", "model": "E-Transit", "trim": "Standard Range", "battery_kwh": 68.0, "year_min": 2022, "year_max": 2024},
-    {"make": "Ford", "model": "E-Transit", "trim": "Extended Range", "battery_kwh": 89.0, "year_min": 2024, "year_max": 2025},
+    # Mustang Mach-E (2021-2022)
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Standard Range",  "battery_usable_kwh": 68.0, "battery_gross_kwh": 75.7,  "year_min": 2021, "year_max": 2022},
+    {"make": "Ford", "model": "Mustang Mach-E", "trim": "Extended Range",  "battery_usable_kwh": 88.0, "battery_gross_kwh": 98.8,  "year_min": 2021, "year_max": 2022},
 ]
-
-# Backward-compat alias -- old code imports BATTERY_PRESETS
-# Convert to old format for any remaining references
-BATTERY_PRESETS = [
-    {"label": f"{p['model']} {p['trim']} ({p['year_min']}-{p['year_max']})", "kwh": p["battery_kwh"]}
-    for p in VEHICLE_PRESETS
-] + [{"label": "Custom", "kwh": None}]
 
 
 async def get_all_vehicles(db: AsyncSession) -> list[EVVehicle]:
@@ -65,6 +69,7 @@ async def create_vehicle(
     year: Optional[int] = None,
     trim: Optional[str] = None,
     battery_capacity_kwh: Optional[float] = None,
+    battery_gross_capacity_kwh: Optional[float] = None,
     vin: Optional[str] = None,
     device_id: Optional[str] = None,
     source_system: Optional[str] = None,
@@ -87,6 +92,7 @@ async def create_vehicle(
         year=year,
         trim=trim,
         battery_capacity_kwh=battery_capacity_kwh,
+        battery_gross_capacity_kwh=battery_gross_capacity_kwh,
         vin=vin if vin else None,  # Avoid empty string violating unique
         device_id=device_id,
         source_system=source_system,
@@ -120,7 +126,8 @@ async def update_vehicle(
 
     allowed_fields = {
         "display_name", "make", "model", "year", "trim",
-        "battery_capacity_kwh", "vin", "device_id", "source_system",
+        "battery_capacity_kwh", "battery_gross_capacity_kwh",
+        "vin", "device_id", "source_system",
         "ice_fuel_efficiency", "ice_fuel_tank_capacity", "ice_label",
     }
     for key, value in kwargs.items():
