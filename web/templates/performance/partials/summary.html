@@ -55,11 +55,11 @@
     }
     </script>
 
-    <!-- Card 3: Avg Efficiency — with best/worst supporting detail -->
+    <!-- Card 3: Driving Efficiency — distance-per-kWh, with best/worst supporting detail -->
     <div class="card bg-base-200">
         <div class="card-body p-4">
             <div class="tooltip tooltip-bottom" data-tip="Average of per-session distance-per-kWh ratios, for sessions where range was added.">
-                <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 cursor-help border-b border-dotted border-base-content/30 inline-block">Avg Efficiency ⓘ</p>
+                <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 cursor-help border-b border-dotted border-base-content/30 inline-block">Driving Efficiency ⓘ</p>
             </div>
             {% if summary.avg_efficiency is not none %}
                 <p class="text-3xl font-bold">{{ "%.2f"|format(summary.avg_efficiency) }} <span class="text-xl font-normal text-base-content/60">{{ unit_label }}</span></p>
