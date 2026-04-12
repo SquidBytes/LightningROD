@@ -67,7 +67,8 @@ async def create_vehicle(
     make: Optional[str] = None,
     model: Optional[str] = None,
     year: Optional[int] = None,
-    trim: Optional[str] = None,
+    trim_level: Optional[str] = None,
+    battery_option: Optional[str] = None,
     battery_capacity_kwh: Optional[float] = None,
     battery_gross_capacity_kwh: Optional[float] = None,
     vin: Optional[str] = None,
@@ -90,7 +91,8 @@ async def create_vehicle(
         make=make,
         model=model,
         year=year,
-        trim=trim,
+        trim_level=trim_level,
+        battery_option=battery_option,
         battery_capacity_kwh=battery_capacity_kwh,
         battery_gross_capacity_kwh=battery_gross_capacity_kwh,
         vin=vin if vin else None,  # Avoid empty string violating unique
@@ -125,7 +127,7 @@ async def update_vehicle(
         return None
 
     allowed_fields = {
-        "display_name", "make", "model", "year", "trim",
+        "display_name", "make", "model", "year", "trim_level", "battery_option",
         "battery_capacity_kwh", "battery_gross_capacity_kwh",
         "vin", "device_id", "source_system",
         "ice_fuel_efficiency", "ice_fuel_tank_capacity", "ice_label",

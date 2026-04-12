@@ -25,7 +25,8 @@ class EVVehicle(Base):
     make: Mapped[Optional[str]] = mapped_column(String)
     model: Mapped[Optional[str]] = mapped_column(String)
     year: Mapped[Optional[int]] = mapped_column(Integer)
-    trim: Mapped[Optional[str]] = mapped_column(String)
+    trim_level: Mapped[Optional[str]] = mapped_column(String)
+    battery_option: Mapped[Optional[str]] = mapped_column(String)
     # Usable pack capacity (kWh) — what energy_kwh can be meaningfully divided
     # by. This is the "driver-facing" number (e.g. 98 kWh on a Lightning SR).
     battery_capacity_kwh: Mapped[Optional[float]] = mapped_column(Numeric)

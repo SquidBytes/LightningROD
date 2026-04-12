@@ -343,18 +343,18 @@ def load_reference_charge_curve(vehicle) -> dict | None:
     if make.lower() != "ford" or "lightning" not in model.lower():
         return None
 
-    # Determine variant from trim first, then fall back to capacity. Prefer
-    # gross if set (108 SR / 143 ER) but accept usable (98 / 131) for records
-    # that pre-date the gross column.
-    trim = (getattr(vehicle, "trim", None) or "").lower()
+    # Determine variant from battery_option first, then fall back to capacity.
+    # Prefer gross if set (108 SR / 143 ER) but accept usable (98 / 131) for
+    # records that pre-date the gross column.
+    battery_option = (getattr(vehicle, "battery_option", None) or "").lower()
     cap = (
         getattr(vehicle, "battery_gross_capacity_kwh", None)
         or getattr(vehicle, "battery_capacity_kwh", None)
     )
 
-    if "extended" in trim or "er" == trim:
+    if "extended" in battery_option:
         filename = "f150_lightning_er.json"
-    elif "standard" in trim or "sr" == trim:
+    elif "standard" in battery_option:
         filename = "f150_lightning_sr.json"
     elif cap is not None and float(cap) >= 125:
         # 125 splits cleanly: SR gross 108 / SR usable 98 -> SR bucket,

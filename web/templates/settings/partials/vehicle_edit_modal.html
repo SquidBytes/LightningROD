@@ -49,16 +49,28 @@
                     <datalist id="model-options"></datalist>
                 </label>
 
-                {# Trim — combo-box with datalist #}
+                {# Trim Level — combo-box with datalist (e.g. Lariat, XLT, Premium) #}
                 <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Trim</span></div>
-                    <input type="text" name="trim" id="vehicle-trim"
-                           list="trim-options"
-                           value="{{ vehicle.trim or '' }}"
+                    <div class="label"><span class="label-text text-xs">Trim Level</span></div>
+                    <input type="text" name="trim_level" id="vehicle-trim-level"
+                           list="trim-level-options"
+                           value="{{ vehicle.trim_level or '' }}"
+                           placeholder="e.g. Lariat"
+                           class="input input-sm input-bordered w-full"
+                           autocomplete="off">
+                    <datalist id="trim-level-options"></datalist>
+                </label>
+
+                {# Battery Option — combo-box with datalist (e.g. Standard Range, Extended Range) #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Battery Option</span></div>
+                    <input type="text" name="battery_option" id="vehicle-battery-option"
+                           list="battery-option-options"
+                           value="{{ vehicle.battery_option or '' }}"
                            placeholder="e.g. Extended Range"
                            class="input input-sm input-bordered w-full"
                            autocomplete="off">
-                    <datalist id="trim-options"></datalist>
+                    <datalist id="battery-option-options"></datalist>
                 </label>
 
                 {# Year #}
@@ -164,13 +176,15 @@
     var presets = {{ vehicle_presets_json | safe }};
     var makeInput = document.getElementById('vehicle-make');
     var modelInput = document.getElementById('vehicle-model');
-    var trimInput = document.getElementById('vehicle-trim');
+    var trimLevelInput = document.getElementById('vehicle-trim-level');
+    var batteryOptionInput = document.getElementById('vehicle-battery-option');
     var kwhInput = document.getElementById('vehicle-battery-kwh');
     var grossInput = document.getElementById('vehicle-battery-gross-kwh');
 
     var makeList = document.getElementById('make-options');
     var modelList = document.getElementById('model-options');
-    var trimList = document.getElementById('trim-options');
+    var trimLevelList = document.getElementById('trim-level-options');
+    var batteryOptionList = document.getElementById('battery-option-options');
 
     function unique(arr) {
         return [...new Set(arr)];
@@ -209,23 +223,37 @@
         }
     }
 
-    function refreshTrims() {
+    function refreshTrimLevels() {
         var filtered = getFilteredPresets();
-        var trims = unique(filtered.map(function(p) { return p.trim; }));
-        updateOptions(trimList, trims);
-        // If only one trim, auto-populate
-        if (trims.length === 1 && !trimInput.value) {
-            trimInput.value = trims[0];
+        var trimLevels = unique(filtered.map(function(p) { return p.trim_level; }).filter(Boolean));
+        updateOptions(trimLevelList, trimLevels);
+        if (trimLevels.length === 1 && !trimLevelInput.value) {
+            trimLevelInput.value = trimLevels[0];
+            refreshBatteryOptions();
+        }
+    }
+
+    function refreshBatteryOptions() {
+        var trimLevel = trimLevelInput.value.trim();
+        var filtered = getFilteredPresets().filter(function(p) {
+            return !trimLevel || (p.trim_level || '').toLowerCase() === trimLevel.toLowerCase();
+        });
+        var batteryOptions = unique(filtered.map(function(p) { return p.battery_option; }).filter(Boolean));
+        updateOptions(batteryOptionList, batteryOptions);
+        if (batteryOptions.length === 1 && !batteryOptionInput.value) {
+            batteryOptionInput.value = batteryOptions[0];
             fillKwh();
         }
     }
 
     function fillKwh() {
+        var trimLevel = trimLevelInput.value.trim();
+        var batteryOption = batteryOptionInput.value.trim();
         var filtered = getFilteredPresets().filter(function(p) {
-            var trim = trimInput.value.trim();
-            return !trim || p.trim.toLowerCase() === trim.toLowerCase();
+            if (trimLevel && (p.trim_level || '').toLowerCase() !== trimLevel.toLowerCase()) return false;
+            if (batteryOption && (p.battery_option || '').toLowerCase() !== batteryOption.toLowerCase()) return false;
+            return true;
         });
-        // If exactly one preset matches, auto-fill BOTH usable and gross
         var usableVals = unique(filtered.map(function(p) { return p.battery_usable_kwh; }));
         var grossVals  = unique(filtered.map(function(p) { return p.battery_gross_kwh; }));
         if (usableVals.length === 1) {
@@ -238,20 +266,29 @@
 
     makeInput.addEventListener('input', function() {
         modelInput.value = '';
-        trimInput.value = '';
+        trimLevelInput.value = '';
+        batteryOptionInput.value = '';
         kwhInput.value = '';
         grossInput.value = '';
         refreshModels();
     });
 
     modelInput.addEventListener('input', function() {
-        trimInput.value = '';
+        trimLevelInput.value = '';
+        batteryOptionInput.value = '';
         kwhInput.value = '';
         grossInput.value = '';
-        refreshTrims();
+        refreshTrimLevels();
     });
 
-    trimInput.addEventListener('input', function() {
+    trimLevelInput.addEventListener('input', function() {
+        batteryOptionInput.value = '';
+        kwhInput.value = '';
+        grossInput.value = '';
+        refreshBatteryOptions();
+    });
+
+    batteryOptionInput.addEventListener('input', function() {
         kwhInput.value = '';
         grossInput.value = '';
         fillKwh();
@@ -269,7 +306,10 @@
         // Editing existing vehicle -- populate downstream datalists
         refreshModels();
         if (modelInput.value) {
-            refreshTrims();
+            refreshTrimLevels();
+            if (trimLevelInput.value) {
+                refreshBatteryOptions();
+            }
         }
     }
 })();

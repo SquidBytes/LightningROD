@@ -30,7 +30,8 @@ async def _setup_comparison_data(db):
         year=2024,
         make="Ford",
         model="Mustang Mach-E",
-        trim="Premium AWD",
+        trim_level="Premium",
+        battery_option="Extended Range",
         battery_capacity_kwh=91.0,
         ice_fuel_efficiency=9.4086,     # L/100km (25 MPG equivalent)
         ice_fuel_tank_capacity=56.78115,  # liters (15 gal equivalent)
