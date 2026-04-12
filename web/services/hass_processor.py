@@ -331,6 +331,13 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         hv_voltage = _safe_float(attrs.get("batteryVoltage"))
         hv_amperage = _safe_float(attrs.get("batteryAmperage"))
         hv_kw = _safe_float(attrs.get("batterykW"))
+        # FordPass `maximumBatteryCapacity` is the GROSS pack capacity
+        # (total installed cell kWh). This is what battery health/degradation
+        # math on /battery compares against ev_vehicles.battery_gross_capacity_kwh.
+        # TODO: when a real HA state dump is inspected, check whether the
+        # elveh entity exposes a separate "usable" attribute (e.g.
+        # usableBatteryCapacity, batteryEnergyAvailable, etc) and ingest it
+        # into a new column if so. Until then, usable is preset-only.
         hv_capacity = _safe_float(attrs.get("maximumBatteryCapacity"))
         hv_actual_soc = _safe_float(attrs.get("batteryActualCharge"))
         motor_voltage = _safe_float(attrs.get("motorVoltage"))

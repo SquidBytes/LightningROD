@@ -26,7 +26,13 @@ class EVVehicle(Base):
     model: Mapped[Optional[str]] = mapped_column(String)
     year: Mapped[Optional[int]] = mapped_column(Integer)
     trim: Mapped[Optional[str]] = mapped_column(String)
+    # Usable pack capacity (kWh) — what energy_kwh can be meaningfully divided
+    # by. This is the "driver-facing" number (e.g. 98 kWh on a Lightning SR).
     battery_capacity_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
+    # Gross pack capacity (kWh) — total installed cells. This is what FordPass
+    # reports via `maximumBatteryCapacity` and what battery-health/degradation
+    # math must compare against (e.g. 108 kWh on a Lightning SR).
+    battery_gross_capacity_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
     vin: Mapped[Optional[str]] = mapped_column(String, unique=True)
     device_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     source_system: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
