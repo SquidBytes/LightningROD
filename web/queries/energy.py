@@ -292,7 +292,16 @@ async def query_monthly_energy(db: AsyncSession, time_range: str = "all", device
         if s.session_start_utc is None:
             continue
         month = s.session_start_utc.strftime("%Y-%m")
-        ct = s.charge_type or "Unknown"
+        raw_ct = (s.charge_type or "").strip()
+        # Fold any AC Level 1/2 variant into a single "AC" bucket so the
+        # monthly chart renders two series (AC, DC) rather than three.
+        lowered = raw_ct.lower()
+        if raw_ct == "DC":
+            ct = "DC"
+        elif raw_ct == "AC" or "level 2" in lowered or "level_2" in lowered or "level 1" in lowered or "level_1" in lowered or lowered.startswith("ac"):
+            ct = "AC"
+        else:
+            ct = raw_ct or "Unknown"
         key = (month, ct)
         monthly[key] = monthly.get(key, 0.0) + float(s.energy_kwh or 0)
 
