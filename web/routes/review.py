@@ -200,32 +200,117 @@ async def _locations_context(
 # ---------------------------------------------------------------------------
 
 
+async def _approved_tree_context(db: AsyncSession) -> dict:
+    """Build the tree context for the Approved tab: approved networks with
+    their approved locations nested, plus a list of standalone approved
+    locations (network_id IS NULL)."""
+    # Approved networks
+    nets_result = await db.execute(
+        select(EVChargingNetwork)
+        .where(EVChargingNetwork.is_verified == True)  # noqa: E712
+        .order_by(EVChargingNetwork.network_name)
+    )
+    approved_networks = list(nets_result.scalars().all())
+
+    # Approved locations (all)
+    locs_result = await db.execute(
+        select(EVLocationLookup)
+        .where(EVLocationLookup.is_verified == True)  # noqa: E712
+        .order_by(EVLocationLookup.location_name)
+    )
+    approved_locations = list(locs_result.scalars().all())
+
+    # Group by network_id
+    locations_by_network: dict[int, list] = {}
+    standalone_locations: list = []
+    for loc in approved_locations:
+        if loc.network_id is None:
+            standalone_locations.append(loc)
+        else:
+            locations_by_network.setdefault(loc.network_id, []).append(loc)
+
+    # Session counts per network
+    net_session_rows = await db.execute(
+        select(EVChargingSession.network_id, func.count())
+        .where(EVChargingSession.network_id.is_not(None))
+        .group_by(EVChargingSession.network_id)
+    )
+    net_session_counts = {nid: cnt for nid, cnt in net_session_rows.all()}
+
+    # Session counts per location
+    loc_session_rows = await db.execute(
+        select(EVChargingSession.location_id, func.count())
+        .where(EVChargingSession.location_id.is_not(None))
+        .group_by(EVChargingSession.location_id)
+    )
+    loc_session_counts = {lid: cnt for lid, cnt in loc_session_rows.all()}
+
+    return {
+        "approved_networks": approved_networks,
+        "locations_by_network": locations_by_network,
+        "standalone_locations": standalone_locations,
+        "net_session_counts": net_session_counts,
+        "loc_session_counts": loc_session_counts,
+    }
+
+
 @router.get("", response_class=HTMLResponse)
 async def review_queue(
     request: Request,
-    tab: str = "networks",
+    tab: str = "pending",
+    sub: str = "networks",
     q: Optional[str] = None,
-    filter: str = "all",
     sort: str = "name",
     db: AsyncSession = Depends(get_db),
 ):
-    """Review queue page with Networks/Locations tabs."""
-    # Validate tab
-    if tab not in ("networks", "locations"):
-        tab = "networks"
+    """Review queue page with Pending/Approved top-level tabs."""
+    # Validate tabs
+    if tab not in ("pending", "approved"):
+        tab = "pending"
+    if sub not in ("networks", "locations"):
+        sub = "networks"
 
     # Build context for the active tab
-    if tab == "networks":
-        tab_ctx = await _networks_context(db, q=q, filter=filter, sort=sort)
+    tab_ctx: dict = {}
+    if tab == "pending":
+        if sub == "networks":
+            tab_ctx = await _networks_context(db, q=q, filter="unverified", sort=sort)
+        else:
+            tab_ctx = await _locations_context(db, q=q, filter="unverified", sort=sort)
     else:
-        tab_ctx = await _locations_context(db, q=q, filter=filter, sort=sort)
+        tab_ctx = await _approved_tree_context(db)
 
-    # Total counts for tab badges (always unfiltered)
-    net_count_result = await db.execute(select(func.count()).select_from(EVChargingNetwork))
-    network_count = net_count_result.scalar() or 0
+    # Pending counts for the top-level Pending tab badge
+    pending_net_result = await db.execute(
+        select(func.count())
+        .select_from(EVChargingNetwork)
+        .where(EVChargingNetwork.is_verified == False)  # noqa: E712
+    )
+    pending_networks = pending_net_result.scalar() or 0
 
-    loc_count_result = await db.execute(select(func.count()).select_from(EVLocationLookup))
-    location_count = loc_count_result.scalar() or 0
+    pending_loc_result = await db.execute(
+        select(func.count())
+        .select_from(EVLocationLookup)
+        .where(EVLocationLookup.is_verified == False)  # noqa: E712
+    )
+    pending_locations = pending_loc_result.scalar() or 0
+
+    approved_net_result = await db.execute(
+        select(func.count())
+        .select_from(EVChargingNetwork)
+        .where(EVChargingNetwork.is_verified == True)  # noqa: E712
+    )
+    approved_networks_count = approved_net_result.scalar() or 0
+
+    approved_loc_result = await db.execute(
+        select(func.count())
+        .select_from(EVLocationLookup)
+        .where(EVLocationLookup.is_verified == True)  # noqa: E712
+    )
+    approved_locations_count = approved_loc_result.scalar() or 0
+
+    pending_count = pending_networks + pending_locations
+    approved_count = approved_networks_count + approved_locations_count
 
     active_vehicle = await get_active_vehicle(db)
     all_vehicles = await get_all_vehicles(db)
@@ -236,8 +321,11 @@ async def review_queue(
         {
             **tab_ctx,
             "active_tab": tab,
-            "network_count": network_count,
-            "location_count": location_count,
+            "active_sub": sub,
+            "pending_count": pending_count,
+            "approved_count": approved_count,
+            "pending_networks_count": pending_networks,
+            "pending_locations_count": pending_locations,
             "active_page": "review_queue",
             "page_title": "Review Queue",
             "active_vehicle": active_vehicle,
@@ -250,12 +338,11 @@ async def review_queue(
 async def review_networks(
     request: Request,
     q: Optional[str] = None,
-    filter: str = "all",
     sort: str = "name",
     db: AsyncSession = Depends(get_db),
 ):
-    """Networks tab partial -- used by HTMX tab clicks and search/filter/sort."""
-    ctx = await _networks_context(db, q=q, filter=filter, sort=sort)
+    """Pending networks sub-tab partial -- forced unverified filter."""
+    ctx = await _networks_context(db, q=q, filter="unverified", sort=sort)
     return templates.TemplateResponse(
         request,
         "review/partials/review_networks_table.html",
@@ -267,15 +354,28 @@ async def review_networks(
 async def review_locations(
     request: Request,
     q: Optional[str] = None,
-    filter: str = "all",
     sort: str = "name",
     db: AsyncSession = Depends(get_db),
 ):
-    """Locations tab partial -- used by HTMX tab clicks and search/filter/sort."""
-    ctx = await _locations_context(db, q=q, filter=filter, sort=sort)
+    """Pending locations sub-tab partial -- forced unverified filter."""
+    ctx = await _locations_context(db, q=q, filter="unverified", sort=sort)
     return templates.TemplateResponse(
         request,
         "review/partials/review_locations_table.html",
+        ctx,
+    )
+
+
+@router.get("/approved", response_class=HTMLResponse)
+async def review_approved(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Approved tab partial -- tree view of approved networks + locations."""
+    ctx = await _approved_tree_context(db)
+    return templates.TemplateResponse(
+        request,
+        "review/partials/review_approved_tree.html",
         ctx,
     )
 
@@ -300,7 +400,7 @@ async def verify_location(
         loc.is_verified = True
         loc.source_system = "manual"
         await db.commit()
-    ctx = await _locations_context(db)
+    ctx = await _locations_context(db, filter="unverified")
     return templates.TemplateResponse(
         request,
         "review/partials/review_locations_table.html",
@@ -323,7 +423,7 @@ async def verify_network(
         net.is_verified = True
         net.source_system = "manual"
         await db.commit()
-    ctx = await _networks_context(db)
+    ctx = await _networks_context(db, filter="unverified")
     return templates.TemplateResponse(
         request,
         "review/partials/review_networks_table.html",
@@ -360,7 +460,7 @@ async def edit_location(
         loc.longitude = float(longitude) if longitude.strip() else None
         loc.cost_per_kwh = float(cost_per_kwh) if cost_per_kwh.strip() else None
         await db.commit()
-    ctx = await _locations_context(db)
+    ctx = await _locations_context(db, filter="unverified")
     return templates.TemplateResponse(
         request,
         "review/partials/review_locations_table.html",
@@ -385,7 +485,7 @@ async def delete_location(
     if loc:
         await db.delete(loc)
         await db.commit()
-    ctx = await _locations_context(db)
+    ctx = await _locations_context(db, filter="unverified")
     return templates.TemplateResponse(
         request,
         "review/partials/review_locations_table.html",
@@ -410,7 +510,7 @@ async def delete_network(
     if net:
         await db.delete(net)
         await db.commit()
-    ctx = await _networks_context(db)
+    ctx = await _networks_context(db, filter="unverified")
     return templates.TemplateResponse(
         request,
         "review/partials/review_networks_table.html",

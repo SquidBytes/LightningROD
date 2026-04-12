@@ -7,32 +7,52 @@
         Manage all networks and locations. Verify auto-created entries, edit details, merge duplicates, or delete entries created in error.
     </p>
 
-    {# Top-level entity tabs #}
+    {# Top-level status tabs: Pending | Approved #}
     <div role="tablist" class="tabs tabs-bordered mb-4">
         <a role="tab"
-           class="tab {{ 'tab-active' if active_tab == 'networks' }} gap-2"
-           hx-get="/review/networks"
-           hx-target="#review-content"
-           hx-swap="innerHTML">
-            Networks
-            <span class="badge badge-sm">{{ network_count }}</span>
+           class="tab {{ 'tab-active' if active_tab == 'pending' }} gap-2"
+           href="/review?tab=pending">
+            Pending
+            <span class="badge badge-sm badge-warning">{{ pending_count }}</span>
         </a>
         <a role="tab"
-           class="tab {{ 'tab-active' if active_tab == 'locations' }} gap-2"
-           hx-get="/review/locations"
-           hx-target="#review-content"
-           hx-swap="innerHTML">
-            Locations
-            <span class="badge badge-sm">{{ location_count }}</span>
+           class="tab {{ 'tab-active' if active_tab == 'approved' }} gap-2"
+           href="/review?tab=approved">
+            Approved
+            <span class="badge badge-sm badge-success">{{ approved_count }}</span>
         </a>
     </div>
 
     {# Tab content area #}
     <div id="review-content">
-        {% if active_tab == 'locations' %}
-            {% include "review/partials/review_locations_table.html" %}
+        {% if active_tab == 'approved' %}
+            {% include "review/partials/review_approved_tree.html" %}
         {% else %}
-            {% include "review/partials/review_networks_table.html" %}
+            {# Pending tab: inner Networks | Locations sub-tabs #}
+            <div role="tablist" class="tabs tabs-boxed mb-4 w-fit">
+                <a role="tab"
+                   class="tab {{ 'tab-active' if active_sub == 'networks' }} gap-2"
+                   hx-get="/review/networks"
+                   hx-target="#review-content"
+                   hx-swap="innerHTML">
+                    Networks
+                    <span class="badge badge-sm">{{ pending_networks_count }}</span>
+                </a>
+                <a role="tab"
+                   class="tab {{ 'tab-active' if active_sub == 'locations' }} gap-2"
+                   hx-get="/review/locations"
+                   hx-target="#review-content"
+                   hx-swap="innerHTML">
+                    Locations
+                    <span class="badge badge-sm">{{ pending_locations_count }}</span>
+                </a>
+            </div>
+
+            {% if active_sub == 'locations' %}
+                {% include "review/partials/review_locations_table.html" %}
+            {% else %}
+                {% include "review/partials/review_networks_table.html" %}
+            {% endif %}
         {% endif %}
     </div>
 </div>
@@ -52,7 +72,7 @@
     </form>
 </dialog>
 
-{# Merge modal (plan 03 will wire the endpoints) #}
+{# Merge modal #}
 <dialog id="merge-modal" class="modal">
     <div class="modal-box max-w-lg">
         <button type="button"
@@ -93,18 +113,36 @@ function closeMergeModal() {
     document.getElementById('merge-modal-content').innerHTML = '';
 }
 
-// When network modal closes (after save/convert), refresh the active tab
+// When network modal closes (after save/convert), refresh the active content area
 document.body.addEventListener('closeNetworkModal', function() {
     closeNetworkModal();
-    htmx.ajax('GET', '/review/networks', {target: '#review-content', swap: 'innerHTML'});
+    var url = window.__reviewActiveTab === 'approved' ? '/review/approved' : '/review/networks';
+    htmx.ajax('GET', url, {target: '#review-content', swap: 'innerHTML'});
 });
+
+// Track active top-level tab for refresh routing
+window.__reviewActiveTab = '{{ active_tab }}';
 
 // When merge completes, close the modal (table already refreshed by HTMX swap)
 document.body.addEventListener('closeMergeModal', function() {
     closeMergeModal();
 });
 
-// Tab switching -- manage active class
+// Collapsible tree toggle (approved tab)
+function toggleApprovedNetwork(networkId) {
+    var row = document.getElementById('approved-net-children-' + networkId);
+    var chevron = document.getElementById('approved-chevron-' + networkId);
+    if (!row) return;
+    if (row.classList.contains('hidden')) {
+        row.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-90');
+    } else {
+        row.classList.add('hidden');
+        if (chevron) chevron.classList.remove('rotate-90');
+    }
+}
+
+// Tab switching -- manage active class visually for sub-tabs
 document.querySelectorAll('[role="tablist"] [role="tab"]').forEach(function(tab) {
     tab.addEventListener('click', function() {
         this.closest('[role="tablist"]').querySelectorAll('[role="tab"]').forEach(function(t) {

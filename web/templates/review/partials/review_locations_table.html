@@ -1,26 +1,4 @@
-{# Locations tab content partial -- search, sort, filter, table #}
-
-{# Sub-filter buttons #}
-<div class="flex flex-wrap items-center gap-2 mb-4">
-    <button class="btn btn-sm {{ 'btn-active' if active_filter == 'all' }}"
-            hx-get="/review/locations?filter=all&q={{ current_q | urlencode }}&sort={{ current_sort }}"
-            hx-target="#review-content"
-            hx-swap="innerHTML">
-        All <span class="badge badge-sm ml-1">{{ filter_counts.all }}</span>
-    </button>
-    <button class="btn btn-sm {{ 'btn-active' if active_filter == 'unverified' }}"
-            hx-get="/review/locations?filter=unverified&q={{ current_q | urlencode }}&sort={{ current_sort }}"
-            hx-target="#review-content"
-            hx-swap="innerHTML">
-        Unverified <span class="badge badge-sm badge-warning ml-1">{{ filter_counts.unverified }}</span>
-    </button>
-    <button class="btn btn-sm {{ 'btn-active' if active_filter == 'verified' }}"
-            hx-get="/review/locations?filter=verified&q={{ current_q | urlencode }}&sort={{ current_sort }}"
-            hx-target="#review-content"
-            hx-swap="innerHTML">
-        Verified <span class="badge badge-sm badge-success ml-1">{{ filter_counts.verified }}</span>
-    </button>
-</div>
+{# Locations tab content partial -- search, sort, table (pending only) #}
 
 {# Search + sort row #}
 <div class="flex flex-wrap items-center gap-3 mb-4">
@@ -31,20 +9,18 @@
            hx-trigger="input changed delay:300ms, search"
            hx-target="#review-content"
            hx-swap="innerHTML"
-           hx-include="[name='filter'], [name='sort']" />
+           hx-include="[name='sort']" />
 
     <select name="sort" class="select select-bordered select-sm"
             hx-get="/review/locations"
             hx-trigger="change"
             hx-target="#review-content"
             hx-swap="innerHTML"
-            hx-include="[name='filter'], [name='q']">
+            hx-include="[name='q']">
         <option value="name" {{ 'selected' if current_sort == 'name' }}>Sort: Name</option>
         <option value="sessions" {{ 'selected' if current_sort == 'sessions' }}>Sort: Sessions</option>
         <option value="status" {{ 'selected' if current_sort == 'status' }}>Sort: Status</option>
     </select>
-
-    <input type="hidden" name="filter" value="{{ active_filter }}">
 </div>
 
 {# Locations table #}
@@ -232,12 +208,8 @@
     <span>
         {% if current_q %}
         No locations matching "{{ current_q }}"
-        {% elif active_filter == 'unverified' %}
-        No unverified locations -- all locations are verified.
-        {% elif active_filter == 'verified' %}
-        No verified locations.
         {% else %}
-        No locations found.
+        No locations pending review.
         {% endif %}
     </span>
 </div>
