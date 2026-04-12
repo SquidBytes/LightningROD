@@ -7,14 +7,14 @@
            class="input input-bordered input-sm w-64"
            hx-get="/review/networks"
            hx-trigger="input changed delay:300ms, search"
-           hx-target="#review-content"
+           hx-target="#review-inner"
            hx-swap="innerHTML"
            hx-include="[name='sort']" />
 
     <select name="sort" class="select select-bordered select-sm"
             hx-get="/review/networks"
             hx-trigger="change"
-            hx-target="#review-content"
+            hx-target="#review-inner"
             hx-swap="innerHTML"
             hx-include="[name='q']">
         <option value="name" {{ 'selected' if current_sort == 'name' }}>Sort: Name</option>
@@ -72,7 +72,7 @@
                     {% if not net.is_verified %}
                     <button class="btn btn-xs btn-success"
                             hx-post="/review/network/{{ net.id }}/verify"
-                            hx-target="#review-content"
+                            hx-target="#review-inner"
                             hx-swap="innerHTML">
                         Verify
                     </button>
@@ -88,7 +88,7 @@
                     {% if not net.is_verified %}
                     <button class="btn btn-xs btn-error"
                             hx-post="/review/network/{{ net.id }}/delete"
-                            hx-target="#review-content"
+                            hx-target="#review-inner"
                             hx-swap="innerHTML"
                             hx-confirm="Delete this network? Sessions will be unlinked.">
                         Delete

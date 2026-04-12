@@ -32,27 +32,25 @@
             <div role="tablist" class="tabs tabs-boxed mb-4 w-fit">
                 <a role="tab"
                    class="tab {{ 'tab-active' if active_sub == 'networks' }} gap-2"
-                   hx-get="/review/networks"
-                   hx-target="#review-content"
-                   hx-swap="innerHTML">
+                   href="/review?tab=pending&sub=networks">
                     Networks
                     <span class="badge badge-sm">{{ pending_networks_count }}</span>
                 </a>
                 <a role="tab"
                    class="tab {{ 'tab-active' if active_sub == 'locations' }} gap-2"
-                   hx-get="/review/locations"
-                   hx-target="#review-content"
-                   hx-swap="innerHTML">
+                   href="/review?tab=pending&sub=locations">
                     Locations
                     <span class="badge badge-sm">{{ pending_locations_count }}</span>
                 </a>
             </div>
 
-            {% if active_sub == 'locations' %}
-                {% include "review/partials/review_locations_table.html" %}
-            {% else %}
-                {% include "review/partials/review_networks_table.html" %}
-            {% endif %}
+            <div id="review-inner">
+                {% if active_sub == 'locations' %}
+                    {% include "review/partials/review_locations_table.html" %}
+                {% else %}
+                    {% include "review/partials/review_networks_table.html" %}
+                {% endif %}
+            </div>
         {% endif %}
     </div>
 </div>
@@ -116,8 +114,11 @@ function closeMergeModal() {
 // When network modal closes (after save/convert), refresh the active content area
 document.body.addEventListener('closeNetworkModal', function() {
     closeNetworkModal();
-    var url = window.__reviewActiveTab === 'approved' ? '/review/approved' : '/review/networks';
-    htmx.ajax('GET', url, {target: '#review-content', swap: 'innerHTML'});
+    if (window.__reviewActiveTab === 'approved') {
+        htmx.ajax('GET', '/review/approved', {target: '#review-content', swap: 'innerHTML'});
+    } else {
+        htmx.ajax('GET', '/review/networks', {target: '#review-inner', swap: 'innerHTML'});
+    }
 });
 
 // Track active top-level tab for refresh routing
