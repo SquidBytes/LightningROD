@@ -145,6 +145,15 @@ function closeDrawer() {
     document.getElementById('session-drawer').checked = false;
 }
 
+// Phase 26: Escape key closes the Sessions drawer when it is open
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    var drawer = document.getElementById('session-drawer');
+    if (drawer && drawer.checked) {
+        drawer.checked = false;
+    }
+});
+
 // Auto-open drawer when HTMX loads content into it
 document.body.addEventListener('htmx:afterSettle', function(evt) {
     if (evt.target.id === 'drawer-body') {
