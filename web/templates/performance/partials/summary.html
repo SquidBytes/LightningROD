@@ -44,6 +44,12 @@
                 b.classList.toggle('btn-ghost', m !== metric);
             }
         });
+        // Re-measure now that the target container is visible
+        var active = document.getElementById('donut-' + metric);
+        if (active) {
+            var plotDiv = active.querySelector('.js-plotly-plot');
+            if (plotDiv) Plotly.Plots.resize(plotDiv);
+        }
     }
     </script>
 
@@ -65,22 +71,6 @@
     </div>
 
 </div>
-
-<!-- Section 2: Charge Type Breakdown -->
-{% if summary.by_charge_type %}
-<h2 class="text-sm font-medium text-base-content/60 uppercase tracking-wide mb-3">Energy by Charge Type</h2>
-<div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-    {% for ct in summary.by_charge_type %}
-    <div class="card bg-base-200/50">
-        <div class="card-body p-4">
-            <p class="text-sm font-medium text-base-content mb-2">{{ charge_type_labels.get(ct.charge_type, ct.charge_type) }}</p>
-            <p class="text-xl font-bold">{{ "%.1f"|format(ct.kwh) }} <span class="text-sm font-normal text-base-content/60">kWh</span></p>
-            <p class="text-xs text-base-content/40 mt-1">{{ ct.session_count }} sessions</p>
-        </div>
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
 
 <!-- Section 3: Efficiency Scatter Chart -->
 <div class="card bg-base-200 mb-4">
