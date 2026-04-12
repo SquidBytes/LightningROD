@@ -137,9 +137,10 @@
             {# Edit modal for this location #}
             <dialog id="edit-loc-{{ loc.id }}" class="modal">
                 <div class="modal-box max-w-lg">
-                    <form method="dialog">
-                        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
-                    </form>
+                    <button type="button"
+                            class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                            onclick="document.getElementById('edit-loc-{{ loc.id }}').close()"
+                            aria-label="Close">&#x2715;</button>
                     <p class="text-sm text-base-content/50 uppercase tracking-wide font-medium">Edit Location</p>
                     <h3 class="text-xl font-semibold text-base-content">{{ loc.location_name }}</h3>
 

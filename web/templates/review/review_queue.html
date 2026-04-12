@@ -40,9 +40,10 @@
 {# Shared modal for network edit / convert-to-location (reuses settings modals) #}
 <dialog id="network-modal" class="modal">
     <div class="modal-box w-11/12 max-w-4xl">
-        <form method="dialog">
-            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
-        </form>
+        <button type="button"
+                class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                onclick="closeNetworkModal()"
+                aria-label="Close">&#x2715;</button>
         <div id="network-modal-content">
         </div>
     </div>
@@ -54,9 +55,10 @@
 {# Merge modal (plan 03 will wire the endpoints) #}
 <dialog id="merge-modal" class="modal">
     <div class="modal-box max-w-lg">
-        <form method="dialog">
-            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
-        </form>
+        <button type="button"
+                class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                onclick="closeMergeModal()"
+                aria-label="Close">&#x2715;</button>
         <div id="merge-modal-content"></div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>

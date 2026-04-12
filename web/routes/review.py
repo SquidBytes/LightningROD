@@ -337,26 +337,28 @@ async def edit_location(
     request: Request,
     db: AsyncSession = Depends(get_db),
     location_name: str = Form(...),
-    address: Optional[str] = Form(None),
-    location_type: Optional[str] = Form(None),
-    network_id: Optional[int] = Form(None),
-    latitude: Optional[float] = Form(None),
-    longitude: Optional[float] = Form(None),
-    cost_per_kwh: Optional[float] = Form(None),
+    address: str = Form(""),
+    location_type: str = Form(""),
+    network_id: str = Form(""),
+    latitude: str = Form(""),
+    longitude: str = Form(""),
+    cost_per_kwh: str = Form(""),
 ):
-    """Edit a location."""
+    """Edit a location. Accepts optional numeric fields as strings so empty
+    form values coerce cleanly to None instead of tripping FastAPI's 422
+    validation on `Optional[int/float]`."""
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
     )
     loc = result.scalar_one_or_none()
     if loc:
         loc.location_name = location_name
-        loc.address = address or None
-        loc.location_type = location_type or None
-        loc.network_id = network_id or None
-        loc.latitude = latitude
-        loc.longitude = longitude
-        loc.cost_per_kwh = cost_per_kwh
+        loc.address = address.strip() or None
+        loc.location_type = location_type.strip() or None
+        loc.network_id = int(network_id) if network_id.strip() else None
+        loc.latitude = float(latitude) if latitude.strip() else None
+        loc.longitude = float(longitude) if longitude.strip() else None
+        loc.cost_per_kwh = float(cost_per_kwh) if cost_per_kwh.strip() else None
         await db.commit()
     ctx = await _locations_context(db)
     return templates.TemplateResponse(
