@@ -29,6 +29,37 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
 #energy-content.htmx-request { opacity: 0.4; }
 #energy-content { transition: opacity 0.15s ease; }
 
+/* ── Sidebar active-state refinement (Phase 26) ─────────────────────
+   The grouped nav (Phase 24) added more rows. DaisyUI's default active
+   background is too quiet — add a brand-accent left-edge so the current
+   page is unambiguous. No new tokens; uses existing --color-brand-accent.
+   ──────────────────────────────────────────────────────────────────── */
+.drawer-side .menu > li > a.active,
+.drawer-side .menu > li > a.active:hover,
+.drawer-side .menu > li > a.active:focus {
+  position: relative;
+  background-color: color-mix(in oklab, #47A8E5 12%, transparent);
+  color: var(--color-brand-accent);
+  font-weight: 600;
+}
+.drawer-side .menu > li > a.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background-color: #47A8E5;
+}
+/* Ensure menu-title headers (group labels) never pick up the active style */
+.drawer-side .menu > li.menu-title {
+  background-color: transparent !important;
+}
+.drawer-side .menu > li.menu-title::before {
+  content: none !important;
+}
+
 /* ── Plotly CSS isolation ──────────────────────────────────────────────
    Tailwind v4 resets (*, ::before, ::after { border: 0 solid; margin: 0; padding: 0 })
    break Plotly's internal SVG elements. These rules restore defaults inside Plotly containers.
