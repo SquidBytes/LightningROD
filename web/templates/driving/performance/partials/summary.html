@@ -3,11 +3,12 @@
 
     <!-- Card 1: Total Distance -->
     <div class="card bg-base-200">
-        <div class="card-body">
+        <div class="card-body p-4">
             <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Distance</p>
             {% if summary.total_distance is not none %}
                 <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_distance) }} <span class="text-xl font-normal text-base-content/60">{{ units.distance_label }}</span></p>
                 <p class="text-sm text-base-content/60 mt-1">{{ summary.trip_count }} trips</p>
+                <p class="text-[11px] text-base-content/40 leading-tight mt-1">Sum of trip distances in the selected range.</p>
             {% else %}
                 <p class="text-2xl font-semibold text-base-content/30">No data</p>
                 <p class="text-xs text-base-content/30 mt-1">Populates when trip data is ingested</p>
@@ -17,11 +18,12 @@
 
     <!-- Card 2: Avg Driving Efficiency -->
     <div class="card bg-base-200">
-        <div class="card-body">
+        <div class="card-body p-4">
             <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Avg Driving Efficiency</p>
             {% if summary.avg_driving_efficiency is not none %}
                 <p class="text-3xl font-bold">{{ "%.2f"|format(summary.avg_driving_efficiency) }} <span class="text-xl font-normal text-base-content/60">{{ unit_label }}</span></p>
                 <p class="text-sm text-base-content/60 mt-1">Across {{ summary.trip_count }} trips</p>
+                <p class="text-[11px] text-base-content/40 leading-tight mt-1">Average of per-trip distance-per-kWh ratios, for trips with both distance and energy recorded.</p>
             {% else %}
                 <p class="text-2xl font-semibold text-base-content/30">No data</p>
                 <p class="text-xs text-base-content/30 mt-1">Requires trips with distance + energy</p>
@@ -31,11 +33,12 @@
 
     <!-- Card 3: Total Regen -->
     <div class="card bg-base-200">
-        <div class="card-body">
+        <div class="card-body p-4">
             <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Regen</p>
             {% if summary.total_regen is not none %}
                 <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_regen) }} <span class="text-xl font-normal text-base-content/60">range units</span></p>
                 <p class="text-sm text-base-content/60 mt-1">from {{ summary.trip_count }} trips</p>
+                <p class="text-[11px] text-base-content/40 leading-tight mt-1">Sum of range recovered via regenerative braking across all trips.</p>
             {% else %}
                 <p class="text-2xl font-semibold text-base-content/30">No data available</p>
                 <p class="text-xs text-base-content/30 mt-1">Populates when trip data is ingested</p>
@@ -45,11 +48,12 @@
 
     <!-- Card 4: Range Recovered (moved from charging) -->
     <div class="card bg-base-200">
-        <div class="card-body">
+        <div class="card-body p-4">
             <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Range Recovered</p>
             {% if summary.range_recovered is not none %}
                 <p class="text-3xl font-bold text-green-400">{{ "%.1f"|format(summary.range_recovered) }} <span class="text-xl font-normal text-base-content/60">{{ units.range_label }}</span></p>
                 <p class="text-sm text-base-content/60 mt-1">via regenerative braking</p>
+                <p class="text-[11px] text-base-content/40 leading-tight mt-1">Distance recouped from regen — how far that recovered energy can drive you.</p>
             {% else %}
                 <p class="text-2xl font-semibold text-base-content/30">No data available</p>
                 <p class="text-xs text-base-content/30 mt-1">Populates when trip data is ingested</p>
