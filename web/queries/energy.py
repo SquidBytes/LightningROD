@@ -637,7 +637,7 @@ def build_synthetic_charge_curve_chart(
         font_color="#e5e7eb",
         margin=dict(l=40, r=20, t=20, b=40),
         xaxis=dict(title="State of Charge (%)", range=[0, 100]),
-        yaxis=dict(title="Power (kW)", rangemode="tozero"),
+        yaxis=dict(title="Power (kW)", range=[0, 200]),
         showlegend=False,
         hoverlabel=_HOVER_LABEL,
     )
