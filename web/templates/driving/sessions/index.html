@@ -140,6 +140,15 @@ document.body.addEventListener('htmx:afterSettle', function(evt) {
     }
 });
 
+// Phase 26: Escape key closes the Trips drawer when it is open
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    var drawer = document.getElementById('trip-drawer');
+    if (drawer && drawer.checked) {
+        drawer.checked = false;
+    }
+});
+
 function setTripSort(value) {
     document.getElementById('trip_sort_input').value = value;
     // Reset to page 1
