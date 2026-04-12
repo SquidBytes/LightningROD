@@ -29,6 +29,7 @@ APP_VERSION = _resolve_version()
 
 from db.engine import AsyncSessionLocal, engine
 from web.queries.settings import seed_charger_templates
+from web.tooltips import TOOLTIPS
 from web.routes import (
     battery,
     charging,
@@ -128,6 +129,7 @@ def create_app() -> FastAPI:
     for route_module in [dashboard, sessions, costs, performance, settings, csv_import, charging, review, battery, trips, driving_performance]:
         if hasattr(route_module, "templates"):
             env = route_module.templates.env
+            env.globals["tooltips"] = TOOLTIPS
             env.filters["localtime"] = localtime_filter
             env.filters["cvt_dist"] = _cvt(convert_distance)
             env.filters["cvt_temp"] = _cvt(convert_temp)
