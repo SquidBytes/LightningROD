@@ -1,13 +1,19 @@
 <!-- Headline Summary Cards -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
-    <!-- Card 1: Total Energy -->
+    <!-- Card 1: Total Energy (Phase 27-05: shrunken + sparkline beneath, D5/D8) -->
     <div class="card bg-base-200">
         <div class="card-body p-4">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Energy</p>
+            <div class="flex items-center gap-1 mb-1">
+                <p class="text-xs uppercase tracking-wide text-base-content/40">Total Energy</p>
+                <span class="cursor-help tooltip tooltip-bottom" data-tip="{{ tooltips.performance_total_energy }}" aria-label="{{ tooltips.performance_total_energy }}">ⓘ</span>
+            </div>
             <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
             <p class="text-sm text-base-content/60 mt-1">{{ summary.total_sessions }} sessions</p>
-            <p class="text-[11px] text-base-content/40 leading-tight mt-1">Sum of energy delivered for all sessions in the selected range.</p>
+            <div class="mt-2 plotly-chart-wrap" style="height: 72px;">
+                {{ monthly_energy_sparkline_html | safe }}
+            </div>
+            <p class="text-[11px] text-base-content/40 leading-tight mt-1">Monthly energy</p>
         </div>
     </div>
 
@@ -55,11 +61,12 @@
     }
     </script>
 
-    <!-- Card 3: Range per kWh — observed range added per kWh delivered, per charge session -->
+    <!-- Card 3: Range per kWh (Avg Efficiency) (Phase 27-05: shrunken + sparkline beneath, D5/D8) -->
     <div class="card bg-base-200">
         <div class="card-body p-4">
-            <div class="tooltip tooltip-bottom" data-tip="Average range added per kWh delivered, across sessions where range was added.">
-                <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 cursor-help border-b border-dotted border-base-content/30 inline-block">Range per kWh ⓘ</p>
+            <div class="flex items-center gap-1 mb-1">
+                <p class="text-xs uppercase tracking-wide text-base-content/40">Range per kWh</p>
+                <span class="cursor-help tooltip tooltip-bottom" data-tip="{{ tooltips.performance_avg_efficiency }}" aria-label="{{ tooltips.performance_avg_efficiency }}">ⓘ</span>
             </div>
             {% if summary.avg_efficiency is not none %}
                 <p class="text-3xl font-bold">{{ "%.2f"|format(summary.avg_efficiency) }} <span class="text-xl font-normal text-base-content/60">{{ unit_label }}</span></p>
@@ -71,6 +78,10 @@
                 <p class="text-2xl font-semibold text-base-content/30">No data</p>
                 <p class="text-xs text-base-content/30 mt-1">Requires sessions with miles added</p>
             {% endif %}
+            <div class="mt-2 plotly-chart-wrap" style="height: 72px;">
+                {{ efficiency_sparkline_html | safe }}
+            </div>
+            <p class="text-[11px] text-base-content/40 leading-tight mt-1">Efficiency over time</p>
         </div>
     </div>
 

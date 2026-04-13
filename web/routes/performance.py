@@ -1,5 +1,7 @@
 from typing import Annotated, Optional
 
+import plotly.graph_objects as go
+import plotly.io as pio
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -12,7 +14,9 @@ from web.queries.energy import (
     build_efficiency_chart,
     build_monthly_energy_chart,
     build_synthetic_charge_curve_chart,
+    efficiency_over_time_series,
     has_real_charge_curve_data,
+    monthly_energy_series,
     query_energy_summary,
     query_monthly_energy,
     query_regen_for_chart,
@@ -24,6 +28,54 @@ from web.unit_system import MI_PER_KM
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
+
+# Phase 27-05: Sparkline defaults (D5, D8) — axes stripped, 72px tall, no modebar.
+_SPARKLINE_HEIGHT = 72
+_SPARKLINE_CONFIG = {"displayModeBar": False, "responsive": True}
+_SPARKLINE_EMPTY_HTML = (
+    '<p class="text-xs text-base-content/40">No trend data</p>'
+)
+
+
+def _build_sparkline(xs, ys, line_color: str = "#47A8E5") -> str:
+    """Return a minimal Plotly HTML fragment for a 72px sparkline.
+
+    Empty series collapses to a text placeholder rather than an empty Plotly
+    container — keeps the card layout stable when the filter returns no rows.
+    Uses `lines+markers` only when points are sparse (≤12) so short ranges
+    retain visible data points.
+    """
+    if not xs or not ys:
+        return _SPARKLINE_EMPTY_HTML
+
+    pio.templates.default = "plotly_dark"
+    mode = "lines+markers" if len(xs) <= 12 else "lines"
+    fig = go.Figure(
+        data=[
+            go.Scatter(
+                x=list(xs),
+                y=list(ys),
+                mode=mode,
+                line=dict(color=line_color, width=2),
+                marker=dict(color=line_color, size=4),
+                hoverinfo="skip",
+            )
+        ]
+    )
+    fig.update_layout(
+        height=_SPARKLINE_HEIGHT,
+        margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        showlegend=False,
+    )
+    return fig.to_html(
+        full_html=False,
+        include_plotlyjs=False,
+        config=_SPARKLINE_CONFIG,
+    )
 
 
 @router.get("/performance", response_class=HTMLResponse)
@@ -91,6 +143,24 @@ async def performance(
     monthly_energy_data = await query_monthly_energy(db, time_range=time_range, device_id=active_device_id)
     monthly_energy_chart = build_monthly_energy_chart(monthly_energy_data)
 
+    # Phase 27-05: sparklines beneath Total Energy + Efficiency cards (Thread 1, D5/D8)
+    monthly_series = await monthly_energy_series(
+        db, time_range=time_range, device_id=active_device_id
+    )
+    efficiency_series = await efficiency_over_time_series(
+        db, time_range=time_range, device_id=active_device_id
+    )
+    monthly_energy_sparkline_html = _build_sparkline(
+        xs=[m for m, _ in monthly_series],
+        ys=[v for _, v in monthly_series],
+    )
+    # Apply unit conversion to the efficiency sparkline so its scale matches
+    # the big number above it (both display km/kWh or mi/kWh per user setting).
+    efficiency_sparkline_html = _build_sparkline(
+        xs=[d for d, _ in efficiency_series],
+        ys=[v * efficiency_factor for _, v in efficiency_series],
+    )
+
     all_vehicles = await get_all_vehicles(db)
 
     context = {
@@ -98,6 +168,8 @@ async def performance(
         "summary": summary,
         "chart_html": chart_html,
         "monthly_energy_chart": monthly_energy_chart,
+        "monthly_energy_sparkline_html": monthly_energy_sparkline_html,
+        "efficiency_sparkline_html": efficiency_sparkline_html,
         "donut_kwh": donut_kwh,
         "donut_count": donut_count,
         "donut_cost": donut_cost,
