@@ -21,7 +21,12 @@
     <div class="card bg-base-200">
         <div class="card-body p-4">
             <div class="flex items-center justify-between mb-2">
-                <p class="text-xs uppercase tracking-wide text-base-content/40">AC vs DC</p>
+                <p class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                    <span>AC vs DC</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="{{ tooltips.performance_ac_vs_dc }}"
+                          aria-label="{{ tooltips.performance_ac_vs_dc }}">ⓘ</span>
+                </p>
                 <div class="join" role="tablist" aria-label="Distribution metric">
                     <button type="button" onclick="setDonutMetric('kwh', this)"
                         class="join-item btn btn-xs btn-primary" data-donut-btn="kwh">kWh</button>
@@ -103,7 +108,12 @@
 {% if monthly_energy_chart %}
 <div class="card bg-base-200">
     <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Monthly Energy by Type</h3>
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+            <span>Monthly Energy by Type</span>
+            <span class="cursor-help tooltip tooltip-bottom"
+                  data-tip="{{ tooltips.performance_monthly_energy }}"
+                  aria-label="{{ tooltips.performance_monthly_energy }}">ⓘ</span>
+        </h3>
         {{ monthly_energy_chart | safe }}
     </div>
 </div>

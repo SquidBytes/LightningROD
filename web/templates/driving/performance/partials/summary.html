@@ -78,7 +78,12 @@
 <!-- Temperature Correlation (Phase 25 Plan 25-03) -->
 <div class="card bg-base-200 mb-4" id="driving-temperature-scatter-card">
     <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Efficiency vs Temperature</h3>
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+            <span>Efficiency vs Temperature</span>
+            <span class="cursor-help tooltip tooltip-bottom"
+                  data-tip="{{ tooltips.driving_performance_temp_scatter }}"
+                  aria-label="{{ tooltips.driving_performance_temp_scatter }}">ⓘ</span>
+        </h3>
         {% if temperature_scatter_chart %}
             <div class="plotly-chart-wrap">{{ temperature_scatter_chart | safe }}</div>
             <p class="text-xs text-base-content/40 mt-2">
@@ -103,7 +108,12 @@
 <!-- Regen Recovery (Phase 25 Plan 25-03) -->
 <div class="card bg-base-200" id="driving-regen-bar-card">
     <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Regen Recovery</h3>
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+            <span>Regen Recovery</span>
+            <span class="cursor-help tooltip tooltip-bottom"
+                  data-tip="{{ tooltips.driving_performance_regen }}"
+                  aria-label="{{ tooltips.driving_performance_regen }}">ⓘ</span>
+        </h3>
         {% if regen_bar_chart %}
             <div class="plotly-chart-wrap">{{ regen_bar_chart | safe }}</div>
             <p class="text-xs text-base-content/40 mt-2">

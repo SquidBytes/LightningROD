@@ -56,7 +56,12 @@
         {# Total Sessions #}
         <div class="card bg-base-200">
             <div class="card-body">
-                <p class="text-sm text-base-content/60">Total Sessions</p>
+                <p class="text-sm text-base-content/60 flex items-center gap-1">
+                    <span>Total Sessions</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="{{ tooltips.home_total_sessions }}"
+                          aria-label="{{ tooltips.home_total_sessions }}">ⓘ</span>
+                </p>
                 <p class="text-2xl font-bold mt-1">{{ summary.total_sessions }}</p>
                 {% if summary.avg_cost_per_session is not none %}
                 <p class="text-xs text-base-content/40 mt-1">avg ${{ "%.2f"|format(summary.avg_cost_per_session) }} / session</p>
@@ -67,7 +72,12 @@
         {# Total Energy — auto-scale to MWh when >= 1000 kWh #}
         <div class="card bg-base-200">
             <div class="card-body">
-                <p class="text-sm text-base-content/60">Total Energy</p>
+                <p class="text-sm text-base-content/60 flex items-center gap-1">
+                    <span>Total Energy</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="{{ tooltips.home_total_energy }}"
+                          aria-label="{{ tooltips.home_total_energy }}">ⓘ</span>
+                </p>
                 {% if summary.total_kwh >= 1000 %}
                 <p class="text-2xl font-bold mt-1">{{ "%.2f"|format(summary.total_kwh / 1000) }} MWh</p>
                 <p class="text-xs text-base-content/40 mt-1">{{ "%.1f"|format(summary.total_kwh) }} kWh total</p>
@@ -83,7 +93,12 @@
         {# Total Cost #}
         <div class="card bg-base-200">
             <div class="card-body">
-                <p class="text-sm text-base-content/60">Total Cost</p>
+                <p class="text-sm text-base-content/60 flex items-center gap-1">
+                    <span>Total Cost</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="{{ tooltips.home_total_cost }}"
+                          aria-label="{{ tooltips.home_total_cost }}">ⓘ</span>
+                </p>
                 <p class="text-2xl font-bold mt-1">${{ "%.2f"|format(summary.total_cost) }}</p>
                 {% if summary.avg_kwh_per_session is not none and summary.total_kwh > 0 %}
                 <p class="text-xs text-base-content/40 mt-1">avg ${{ "%.3f"|format(summary.total_cost / summary.total_kwh) }} / kWh</p>

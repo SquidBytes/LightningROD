@@ -4,7 +4,12 @@
     <!-- Est. Degradation (radial gauge) -->
     <div class="card bg-base-200">
         <div class="card-body items-center text-center">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Est. Degradation</p>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2 flex items-center gap-1 justify-center">
+                <span>Est. Degradation</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.battery_degradation }}"
+                      aria-label="{{ tooltips.battery_degradation }}">ⓘ</span>
+            </p>
             {% if summary.health_pct is not none %}
                 <div class="radial-progress text-success"
                      style="--value:{{ summary.health_pct|round(0)|int }}; --size:5rem; --thickness:4px;"
@@ -22,7 +27,12 @@
     <!-- Pack Capacity (gross - matches FordPass maximumBatteryCapacity) -->
     <div class="card bg-base-200">
         <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Pack Capacity</p>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Pack Capacity</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.battery_pack_capacity }}"
+                      aria-label="{{ tooltips.battery_pack_capacity }}">ⓘ</span>
+            </p>
             {% if summary.current_capacity is not none %}
                 <p class="text-2xl font-bold">{{ "%.1f"|format(summary.current_capacity) }} <span class="text-base font-normal text-base-content/60">kWh</span></p>
                 <p class="text-sm text-base-content/60 mt-1">
@@ -46,7 +56,12 @@
     <!-- Range -->
     <div class="card bg-base-200">
         <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Range</p>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Range</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.battery_range }}"
+                      aria-label="{{ tooltips.battery_range }}">ⓘ</span>
+            </p>
             {% if summary.latest_range is not none %}
                 <p class="text-2xl font-bold">{{ "%.0f"|format(summary.latest_range) }} <span class="text-base font-normal text-base-content/60">{{ units.range_label }}</span></p>
                 {% if summary.rated_range is not none %}
@@ -69,7 +84,12 @@
     <!-- 12V Battery -->
     <div class="card bg-base-200">
         <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">12V Battery</p>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>12V Battery</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.battery_12v }}"
+                      aria-label="{{ tooltips.battery_12v }}">ⓘ</span>
+            </p>
             {% if summary.lv_voltage is not none %}
                 <p class="text-2xl font-bold">{{ "%.1f"|format(summary.lv_voltage) }} <span class="text-base font-normal text-base-content/60">V</span></p>
                 {% if summary.lv_level is not none %}
@@ -87,7 +107,12 @@
 <!-- SOC Timeline -->
 <div class="card bg-base-200 mb-4">
     <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">State of Charge</h3>
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+            <span>State of Charge</span>
+            <span class="cursor-help tooltip tooltip-bottom"
+                  data-tip="{{ tooltips.battery_soc }}"
+                  aria-label="{{ tooltips.battery_soc }}">ⓘ</span>
+        </h3>
         {% if soc_chart %}
             <div id="soc-timeline-chart">
                 {{ soc_chart | safe }}
@@ -103,7 +128,12 @@
 <div class="card bg-base-200 mb-4">
     <div class="card-body">
         <div class="flex items-center justify-between mb-3">
-            <h3 class="card-title text-sm font-medium text-base-content/60">Charge Curve</h3>
+            <h3 class="card-title text-sm font-medium text-base-content/60 flex items-center gap-1">
+                <span>Charge Curve</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.battery_charge_curve }}"
+                      aria-label="{{ tooltips.battery_charge_curve }}">ⓘ</span>
+            </h3>
             <select id="session-picker"
                     class="select select-sm select-bordered w-auto max-w-xs"
                     hx-get="/battery"
@@ -147,7 +177,12 @@
 <!-- Degradation Trend (mileage-based) -->
 <div class="card bg-base-200 mb-4">
     <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Battery Capacity by Mileage</h3>
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+            <span>Battery Capacity by Mileage</span>
+            <span class="cursor-help tooltip tooltip-bottom"
+                  data-tip="{{ tooltips.battery_degradation_trend }}"
+                  aria-label="{{ tooltips.battery_degradation_trend }}">ⓘ</span>
+        </h3>
         <div hx-get="/battery?section=degradation&range={{ active_range }}"
              hx-trigger="revealed"
              hx-swap="innerHTML">

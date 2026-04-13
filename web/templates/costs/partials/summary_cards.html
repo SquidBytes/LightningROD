@@ -22,7 +22,12 @@
     <!-- Card B: Total Energy (preserved) -->
     <div class="card bg-base-200">
         <div class="card-body p-4">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Energy</p>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Total Energy</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.costs_total_energy }}"
+                      aria-label="{{ tooltips.costs_total_energy }}">ⓘ</span>
+            </p>
             <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
             <p class="text-sm text-base-content/60 mt-1">across {{ summary.total_sessions }} sessions</p>
         </div>

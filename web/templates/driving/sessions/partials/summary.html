@@ -2,19 +2,34 @@
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
     <div class="card bg-base-200">
         <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Trips</p>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Total Trips</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.driving_sessions_total_trips }}"
+                      aria-label="{{ tooltips.driving_sessions_total_trips }}">ⓘ</span>
+            </p>
             <p class="text-3xl font-bold">{{ summary.count }}</p>
         </div>
     </div>
     <div class="card bg-base-200">
         <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Distance</p>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Total Distance</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.driving_sessions_total_distance }}"
+                      aria-label="{{ tooltips.driving_sessions_total_distance }}">ⓘ</span>
+            </p>
             <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_distance) }} <span class="text-xl font-normal text-base-content/60">{{ units.distance_label }}</span></p>
         </div>
     </div>
     <div class="card bg-base-200">
         <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Avg Efficiency</p>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Avg Efficiency</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.driving_sessions_avg_efficiency }}"
+                      aria-label="{{ tooltips.driving_sessions_avg_efficiency }}">ⓘ</span>
+            </p>
             {% if summary.avg_efficiency is not none %}
             <p class="text-3xl font-bold">{{ "%.1f"|format(summary.avg_efficiency) }} <span class="text-xl font-normal text-base-content/60">{{ units.efficiency_label }}</span></p>
             {% else %}
@@ -24,7 +39,12 @@
     </div>
     <div class="card bg-base-200">
         <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Energy</p>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Total Energy</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.driving_sessions_total_energy }}"
+                      aria-label="{{ tooltips.driving_sessions_total_energy }}">ⓘ</span>
+            </p>
             <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_energy) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
         </div>
     </div>
