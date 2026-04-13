@@ -311,51 +311,62 @@ def make_charging_session_event(
     city: Optional[str] = "Washington",
     state: Optional[str] = "DC",
     max_power_w: float = 150000.0,
+    battery_temp_f: Optional[float] = None,
+    outside_temp_f: Optional[float] = None,
 ) -> tuple[str, dict]:
     """Generate an energytransferlogentry event.
 
     Returns (entity_id, new_state) tuple matching what hass_processor expects.
+
+    ``battery_temp_f`` / ``outside_temp_f`` inject the Phase 27-01 thermal
+    context fields (°F) at the top of the attrs dict. Omit them to test the
+    "payload without temp keys" path.
     """
     entity_id = f"sensor.fordpass_{device_id}_energytransferlogentry"
     now = _now_iso()
+    attrs: dict = {
+        "energyConsumed": energy_kwh,
+        "chargerType": charge_type,
+        "energyTransferDuration": {
+            "begin": now,
+            "end": now,
+            "totalTime": duration_seconds,
+        },
+        "plugDetails": {
+            "totalPluggedInTime": duration_seconds + 120,
+            "totalDistanceAdded": 80.0,
+        },
+        "stateOfCharge": {
+            "firstSOC": start_soc,
+            "lastSOC": end_soc,
+        },
+        "power": {
+            "max": max_power_w,
+            "min": 5000.0,
+            "weightedAverage": max_power_w * 0.7,
+        },
+        "location": {
+            "name": network_name,
+            "network": network_name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "address": {
+                "address1": address,
+                "city": city,
+                "state": state,
+            },
+        },
+        "timeStamp": now,
+    }
+    if battery_temp_f is not None:
+        attrs["batteryTemperature"] = battery_temp_f
+    if outside_temp_f is not None:
+        attrs["outsidetemp"] = outside_temp_f
     new_state = {
         "state": "complete",
         "last_changed": now,
         "last_updated": now,
-        "attributes": {
-            "energyConsumed": energy_kwh,
-            "chargerType": charge_type,
-            "energyTransferDuration": {
-                "begin": now,
-                "end": now,
-                "totalTime": duration_seconds,
-            },
-            "plugDetails": {
-                "totalPluggedInTime": duration_seconds + 120,
-                "totalDistanceAdded": 80.0,
-            },
-            "stateOfCharge": {
-                "firstSOC": start_soc,
-                "lastSOC": end_soc,
-            },
-            "power": {
-                "max": max_power_w,
-                "min": 5000.0,
-                "weightedAverage": max_power_w * 0.7,
-            },
-            "location": {
-                "name": network_name,
-                "network": network_name,
-                "latitude": latitude,
-                "longitude": longitude,
-                "address": {
-                    "address1": address,
-                    "city": city,
-                    "state": state,
-                },
-            },
-            "timeStamp": now,
-        },
+        "attributes": attrs,
     }
     return entity_id, new_state
 

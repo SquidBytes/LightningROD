@@ -737,6 +737,19 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # Timestamp
     original_timestamp = _parse_iso_datetime(attrs.get("timeStamp"))
 
+    # Thermal context (Phase 27-01). The ha-fordpass payload exposes
+    # `batteryTemperature` on the `elvehcharging` live entity and `outsidetemp`
+    # on its own sensor. When either value is surfaced on the
+    # energytransferlogentry payload (directly or via future integration work),
+    # capture it here. Normalize °F→°C via the shared unit system.
+    # Payload exposes single values; start/end mirror until HA emits discrete snapshots.
+    battery_temp = normalize_value(attrs.get("batteryTemperature"), "degF", unit_system)
+    ambient_temp = normalize_value(attrs.get("outsidetemp"), "degF", unit_system)
+    battery_temp_start = battery_temp
+    battery_temp_end = battery_temp
+    ambient_temp_start = ambient_temp
+    ambient_temp_end = ambient_temp
+
     # -----------------------------------------------------------------------
     # Duplicate detection: fuzzy match +-30min + +-10% energy
     # -----------------------------------------------------------------------
@@ -829,6 +842,10 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         latitude=latitude,
         longitude=longitude,
         distance_added=distance_added,
+        battery_temp_start=battery_temp_start,
+        battery_temp_end=battery_temp_end,
+        ambient_temp_start=ambient_temp_start,
+        ambient_temp_end=ambient_temp_end,
         original_timestamp=original_timestamp,
         is_complete=True,  # energytransferlogentry fires after session completes
         recorded_at=datetime.now(timezone.utc),

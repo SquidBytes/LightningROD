@@ -36,6 +36,7 @@ _HA_CONFIG = {
         "volume": "gal",
     },
     "_fordpass_distance_unit": "mi",
+    "_fordpass_temp_unit": "degF",
 }
 
 _TEST_DEVICE_ID = "TESTVIN001"
@@ -99,6 +100,40 @@ async def test_charging_session_ingestion(db_session):
     assert session.start_soc == 15.0
     assert session.end_soc == 80.0
     assert session.source_system == "home_assistant"
+
+
+@pytest.mark.asyncio
+async def test_ingestion_captures_charging_temps(db_session):
+    """Phase 27-01: batteryTemperature + outsidetemp on the energytransferlogentry
+    payload populate EVChargingSession.{battery,ambient}_temp_{start,end} in °C."""
+    from db.models.charging_session import EVChargingSession
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+
+    entity_id, new_state = make_charging_session_event(
+        device_id=_TEST_DEVICE_ID,
+        energy_kwh=23.5,
+        charge_type="AC_BASIC",
+        network_name="Home",
+        start_soc=56.0,
+        end_soc=80.0,
+        battery_temp_f=77.0,    # -> 25.0 °C
+        outside_temp_f=72.05,   # -> ~22.25 °C
+    )
+
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    result = await db_session.execute(
+        select(EVChargingSession).where(EVChargingSession.device_id == _TEST_DEVICE_ID)
+    )
+    session = result.scalar_one_or_none()
+
+    assert session is not None, "Charging session not created"
+    assert float(session.battery_temp_start) == pytest.approx(25.0, abs=0.01)
+    assert float(session.battery_temp_end) == pytest.approx(25.0, abs=0.01)
+    assert float(session.ambient_temp_start) == pytest.approx(22.25, abs=0.01)
+    assert float(session.ambient_temp_end) == pytest.approx(22.25, abs=0.01)
 
 
 @pytest.mark.asyncio

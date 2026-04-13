@@ -4,6 +4,8 @@ Tests unit conversions, slug extraction, value parsing, and other pure functions
 that do NOT require a database connection.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from web.services.hass_processor import (
@@ -223,3 +225,93 @@ def test_parse_iso_datetime():
 def test_parse_iso_datetime_none():
     assert _parse_iso_datetime(None) is None
     assert _parse_iso_datetime("") is None
+
+
+# ---------------------------------------------------------------------------
+# Phase 27-01: Charging-session thermal context tests
+#
+# These exercise the energytransferlogentry handler with a mocked db. We skip
+# the duplicate-detection branch by omitting session_start_utc, and stub
+# resolve_location / resolve_network so the handler path reduces to
+# "parse attrs -> db.add(EVChargingSession)". The asserts run against the
+# single EVChargingSession instance captured from `db.add`.
+# ---------------------------------------------------------------------------
+
+
+def _make_fake_db():
+    """Return an AsyncMock db whose `add` captures the session instance."""
+    db = AsyncMock()
+    db.add = MagicMock()  # sync method on real session
+    # db.execute is only reachable on paths we intentionally skip, but stub it anyway
+    exec_result = MagicMock()
+    exec_result.all.return_value = []
+    exec_result.scalar_one_or_none.return_value = None
+    db.execute.return_value = exec_result
+    return db
+
+
+def _charging_payload(**overrides):
+    """Build an energytransferlogentry-shaped payload for handler tests.
+
+    Omits `energyTransferDuration` so duplicate detection is skipped.
+    """
+    attrs = {
+        "energyConsumed": 23.5,
+        "chargerType": "AC_BASIC",
+        "stateOfCharge": {"firstSOC": 56.0, "lastSOC": 80.0},
+        "power": {"max": 7446.4, "min": 0.0, "weightedAverage": 6628.9},
+        "plugDetails": {"totalPluggedInTime": 11538, "totalDistanceAdded": 80.0},
+        # location deliberately omitted -> resolve_location returns None path
+    }
+    attrs.update(overrides)
+    return {"state": "complete", "attributes": attrs}
+
+
+@pytest.mark.asyncio
+async def test_charging_session_persists_temp_fields():
+    """batteryTemperature + outsidetemp (°F) -> mirrored °C on start/end columns."""
+    from web.services.hass_processor import handle_energy_transfer
+
+    payload = _charging_payload(batteryTemperature=77.0, outsidetemp=72.05)
+    db = _make_fake_db()
+    ha_config = {"_fordpass_temp_unit": "degF"}
+
+    with patch(
+        "web.queries.locations.resolve_location", new=AsyncMock(return_value=None)
+    ):
+        await handle_energy_transfer(
+            "energytransferlogentry", payload, ha_config, "TESTVIN001", db
+        )
+
+    assert db.add.call_count == 1, "Expected exactly one db.add(session)"
+    session = db.add.call_args[0][0]
+
+    # 77°F = 25°C, 72.05°F ≈ 22.25°C
+    assert session.battery_temp_start == pytest.approx(25.0, abs=0.01)
+    assert session.battery_temp_end == pytest.approx(25.0, abs=0.01)
+    assert session.ambient_temp_start == pytest.approx(22.25, abs=0.01)
+    assert session.ambient_temp_end == pytest.approx(22.25, abs=0.01)
+
+
+@pytest.mark.asyncio
+async def test_charging_session_missing_temp_fields_is_ok():
+    """No batteryTemperature/outsidetemp keys -> columns stay None, no raise."""
+    from web.services.hass_processor import handle_energy_transfer
+
+    payload = _charging_payload()  # no temp keys
+    db = _make_fake_db()
+    ha_config = {"_fordpass_temp_unit": "degF"}
+
+    with patch(
+        "web.queries.locations.resolve_location", new=AsyncMock(return_value=None)
+    ):
+        await handle_energy_transfer(
+            "energytransferlogentry", payload, ha_config, "TESTVIN001", db
+        )
+
+    assert db.add.call_count == 1
+    session = db.add.call_args[0][0]
+    assert session.battery_temp_start is None
+    assert session.battery_temp_end is None
+    assert session.ambient_temp_start is None
+    assert session.ambient_temp_end is None
