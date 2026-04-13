@@ -101,6 +101,15 @@ class EVChargingSession(Base):
     )
     review_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # 'duplicate', 'auto_association', NULL
 
+    # Charging-session thermal context (Phase 27-01)
+    # °C, NULL when the HA payload doesn't carry a temp reading. Start/end mirror
+    # the same value today because HA exposes single-value snapshots — see
+    # hass_processor.handle_energy_transfer for the mirroring comment.
+    battery_temp_start: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+    battery_temp_end: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+    ambient_temp_start: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+    ambient_temp_end: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+
     # Pipeline metadata
     source_system: Mapped[Optional[str]] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
