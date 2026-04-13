@@ -171,6 +171,78 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
     }
 
 
+async def monthly_energy_series(
+    db: AsyncSession,
+    time_range: str = "all",
+    device_id: Optional[str] = None,
+) -> list[tuple[datetime, float]]:
+    """Return (month_start, total_energy_kwh) per month in the filter range.
+
+    Buckets sessions by calendar month of `session_start_utc`. Ordered ascending
+    by month_start. Used for the Total Energy sparkline on /charging/performance.
+
+    Returns an empty list when no sessions match — the route collapses this to
+    a "No trend data" placeholder rather than a Plotly chart.
+    """
+    stmt = (
+        select(
+            func.date_trunc("month", EVChargingSession.session_start_utc).label("m"),
+            func.coalesce(func.sum(EVChargingSession.energy_kwh), 0.0).label("kwh"),
+        )
+        .where(EVChargingSession.energy_kwh.isnot(None))
+        .group_by("m")
+        .order_by("m")
+    )
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id is not None:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+
+    result = await db.execute(stmt)
+    return [(row.m, float(row.kwh)) for row in result.all() if row.m is not None]
+
+
+async def efficiency_over_time_series(
+    db: AsyncSession,
+    time_range: str = "all",
+    device_id: Optional[str] = None,
+) -> list[tuple[datetime, float]]:
+    """Return (session_start, km_per_kwh) per session with usable energy+distance.
+
+    Efficiency returned in km/kWh (metric base unit), matching the convention
+    established by `query_energy_summary` — route handlers apply MI_PER_KM when
+    rendering for US distance units.
+
+    Sessions with NULL or non-positive energy_kwh / distance_added are excluded.
+    Ordered ascending by session_start_utc. Empty list when nothing qualifies.
+    """
+    stmt = (
+        select(
+            EVChargingSession.session_start_utc,
+            EVChargingSession.distance_added,
+            EVChargingSession.energy_kwh,
+        )
+        .where(EVChargingSession.energy_kwh.isnot(None))
+        .where(EVChargingSession.energy_kwh > 0)
+        .where(EVChargingSession.distance_added.isnot(None))
+        .where(EVChargingSession.distance_added > 0)
+        .where(EVChargingSession.session_start_utc.isnot(None))
+        .order_by(EVChargingSession.session_start_utc)
+    )
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id is not None:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+
+    result = await db.execute(stmt)
+    return [
+        (start, float(dist) / float(kwh))
+        for start, dist, kwh in result.all()
+    ]
+
+
 async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict | None:
     """Compute regen braking summary from EVTripMetrics.
 
