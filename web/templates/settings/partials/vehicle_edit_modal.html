@@ -176,6 +176,7 @@
     var presets = {{ vehicle_presets_json | safe }};
     var makeInput = document.getElementById('vehicle-make');
     var modelInput = document.getElementById('vehicle-model');
+    var yearInput = document.querySelector('input[name="year"]');
     var trimLevelInput = document.getElementById('vehicle-trim-level');
     var batteryOptionInput = document.getElementById('vehicle-battery-option');
     var kwhInput = document.getElementById('vehicle-battery-kwh');
@@ -202,9 +203,14 @@
     function getFilteredPresets() {
         var make = makeInput.value.trim();
         var model = modelInput.value.trim();
+        var yearStr = yearInput ? yearInput.value.trim() : '';
+        var year = yearStr ? parseInt(yearStr, 10) : null;
         return presets.filter(function(p) {
             if (make && p.make.toLowerCase() !== make.toLowerCase()) return false;
             if (model && p.model.toLowerCase() !== model.toLowerCase()) return false;
+            if (year !== null && !isNaN(year)) {
+                if (year < p.year_min || year > p.year_max) return false;
+            }
             return true;
         });
     }
@@ -280,6 +286,17 @@
         grossInput.value = '';
         refreshTrimLevels();
     });
+
+    if (yearInput) {
+        yearInput.addEventListener('input', function() {
+            // Year narrows the preset pool; re-run downstream resolution so a
+            // user changing MY2024 Lariat -> MY2025 Lariat picks up the right
+            // pack capacity without page refresh.
+            refreshTrimLevels();
+            refreshBatteryOptions();
+            fillKwh();
+        });
+    }
 
     trimLevelInput.addEventListener('input', function() {
         batteryOptionInput.value = '';
