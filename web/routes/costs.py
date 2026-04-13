@@ -8,8 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from web.dependencies import get_db
 from web.queries.comparisons import query_gas_comparison, query_network_comparison
 from web.queries.costs import (
+    avg_cost_per_session,
     build_monthly_cost_chart,
     build_network_cost_chart,
+    cost_per_kwh,
+    cost_per_mile,
+    free_charging_savings,
     query_cost_summary,
     query_monthly_costs,
     query_subscription_savings,
@@ -36,6 +40,29 @@ async def costs(
     summary = await query_cost_summary(db, time_range=range or "all", device_id=active_device_id)
     monthly = await query_monthly_costs(db, time_range=range or "all", device_id=active_device_id)
     subscription_savings = await query_subscription_savings(db, time_range=range or "all", device_id=active_device_id)
+
+    # Phase 27-06: summary-row ratios + free-charging sub-line.
+    # Helpers return None when denominator is 0 — pre-format to "—" here so
+    # the template never sees NaN/$0.00 for empty ranges.
+    avg_per_session_val = await avg_cost_per_session(
+        db, device_id=active_device_id, time_range=range or "all"
+    )
+    cost_per_mile_val = await cost_per_mile(
+        db, device_id=active_device_id, time_range=range or "all"
+    )
+    cost_per_kwh_val = await cost_per_kwh(
+        db, device_id=active_device_id, time_range=range or "all"
+    )
+    free_charging_savings_val = await free_charging_savings(
+        db, device_id=active_device_id, time_range=range or "all"
+    )
+
+    def _fmt_dollars(v):
+        return "—" if v is None else f"${v:,.2f}"
+
+    avg_per_session_formatted = _fmt_dollars(avg_per_session_val)
+    cost_per_mile_formatted = _fmt_dollars(cost_per_mile_val)
+    cost_per_kwh_formatted = _fmt_dollars(cost_per_kwh_val)
 
     # Build network colors map for consistent chart coloring
     all_networks = await get_all_networks(db)
@@ -94,6 +121,14 @@ async def costs(
         "active_vehicle": active_vehicle,
         "all_vehicles": all_vehicles,
         "subscription_savings": subscription_savings,
+        # Phase 27-06 summary-row ratios
+        "avg_per_session_val": avg_per_session_val,
+        "cost_per_mile_val": cost_per_mile_val,
+        "cost_per_kwh_val": cost_per_kwh_val,
+        "free_charging_savings_val": free_charging_savings_val,
+        "avg_per_session_formatted": avg_per_session_formatted,
+        "cost_per_mile_formatted": cost_per_mile_formatted,
+        "cost_per_kwh_formatted": cost_per_kwh_formatted,
     }
 
     if hx_request:
