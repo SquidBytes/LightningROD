@@ -19,7 +19,7 @@ async def client(db_session):
     from fastapi.staticfiles import StaticFiles
     from web.routes import (
         battery, charging, costs, csv_import, dashboard, driving_performance,
-        performance, review, sessions, settings, trips,
+        locations, performance, review, sessions, settings, trips,
     )
     from web.main import localtime_filter
 
@@ -34,6 +34,7 @@ async def client(db_session):
     app.include_router(battery.router)
     app.include_router(charging.router)
     app.include_router(review.router)
+    app.include_router(locations.router)
     app.include_router(trips.router, prefix="/driving")
     app.include_router(driving_performance.router, prefix="/driving")
 

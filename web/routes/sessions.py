@@ -194,6 +194,7 @@ async def bulk_update_sessions(
     bulk_network_id = form.get("bulk_network_id")
     bulk_network_name = form.get("bulk_network_name")
     bulk_charge_type = form.get("bulk_charge_type")
+    bulk_location_id = form.get("bulk_location_id")
     bulk_location_name = form.get("bulk_location_name")
     bulk_cost_str = form.get("bulk_cost")
 
@@ -211,6 +212,9 @@ async def bulk_update_sessions(
             changed = True
         if bulk_charge_type is not None and bulk_charge_type != "":
             s.charge_type = bulk_charge_type if bulk_charge_type != "clear" else None
+            changed = True
+        if bulk_location_id is not None and bulk_location_id != "":
+            s.location_id = int(bulk_location_id) if bulk_location_id != "clear" else None
             changed = True
         if bulk_location_name is not None and bulk_location_name != "":
             s.location_name = bulk_location_name if bulk_location_name != "clear" else None

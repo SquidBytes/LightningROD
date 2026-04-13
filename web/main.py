@@ -37,6 +37,7 @@ from web.routes import (
     csv_import,
     dashboard,
     driving_performance,
+    locations,
     performance,
     review,
     sessions,
@@ -107,6 +108,7 @@ def create_app() -> FastAPI:
     app.include_router(battery.router)
     app.include_router(charging.router)
     app.include_router(review.router)
+    app.include_router(locations.router)
     app.include_router(trips.router, prefix="/driving")
     app.include_router(driving_performance.router, prefix="/driving")
 

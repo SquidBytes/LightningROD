@@ -46,13 +46,19 @@
                            placeholder="Network..."
                            class="input input-bordered input-sm w-40"
                            autocomplete="off"
-                           oninput="resolveNetworkCombobox(this)">
+                           oninput="resolveNetworkCombobox(this); refreshBulkLocations();">
                     <datalist id="bulk-network-list">
                         {% for net in networks %}
                         <option value="{{ net.network_name }}" data-id="{{ net.id }}"></option>
                         {% endfor %}
                     </datalist>
                 </div>
+
+                <select id="bulk-location-id" name="bulk_location_id"
+                        class="select select-bordered select-sm w-40"
+                        disabled>
+                    <option value="">Location (select network first)</option>
+                </select>
 
                 <select id="bulk-charge-type" class="select select-bordered select-sm">
                     <option value="">Charge Type...</option>
@@ -274,6 +280,27 @@ document.body.addEventListener('session-created', function(evt) {
 // --- Group Edit ---
 var _groupEditActive = false;
 
+function refreshBulkLocations() {
+    var netId = document.getElementById('bulk-network-id').value;
+    var select = document.getElementById('bulk-location-id');
+    if (!select) return;
+    if (!netId) {
+        select.innerHTML = '<option value="">Location (select network first)</option>';
+        select.disabled = true;
+        return;
+    }
+    fetch('/locations/by-network?network_id=' + encodeURIComponent(netId), {
+        headers: { 'HX-Request': 'true' }
+    }).then(function(resp) {
+        if (!resp.ok) return;
+        return resp.text();
+    }).then(function(html) {
+        if (html == null) return;
+        select.innerHTML = html;
+        select.disabled = false;
+    });
+}
+
 function toggleGroupEdit() {
     _groupEditActive = !_groupEditActive;
     var cols = document.querySelectorAll('.group-edit-col');
@@ -299,6 +326,11 @@ function toggleGroupEdit() {
         document.getElementById('bulk-charge-type').value = '';
         document.getElementById('bulk-location').value = '';
         document.getElementById('bulk-cost').value = '';
+        var locSel = document.getElementById('bulk-location-id');
+        if (locSel) {
+            locSel.innerHTML = '<option value="">Location (select network first)</option>';
+            locSel.disabled = true;
+        }
     }
 }
 
@@ -335,11 +367,16 @@ function applyGroupEdit() {
     var networkIdInput = document.getElementById('bulk-network-id');
     var chargeSel = document.getElementById('bulk-charge-type');
     var locInput = document.getElementById('bulk-location');
+    var locIdSel = document.getElementById('bulk-location-id');
     var costInput = document.getElementById('bulk-cost');
 
     if (networkInput.value) changes.push('Network -> ' + networkInput.value);
     if (chargeSel.value) changes.push('Charge Type -> ' + chargeSel.value);
-    if (locInput.value) changes.push('Location -> ' + locInput.value);
+    if (locIdSel && locIdSel.value) {
+        var locLabel = locIdSel.options[locIdSel.selectedIndex].textContent;
+        changes.push('Location -> ' + locLabel);
+    }
+    if (locInput.value) changes.push('Location Name -> ' + locInput.value);
     if (costInput.value) changes.push('Cost -> $' + costInput.value);
 
     if (changes.length === 0) {
@@ -356,6 +393,7 @@ function applyGroupEdit() {
     if (networkIdInput.value) formData.append('bulk_network_id', networkIdInput.value);
     else if (networkInput.value) formData.append('bulk_network_name', networkInput.value);
     if (chargeSel.value) formData.append('bulk_charge_type', chargeSel.value);
+    if (locIdSel && locIdSel.value) formData.append('bulk_location_id', locIdSel.value);
     if (locInput.value) formData.append('bulk_location_name', locInput.value);
     if (costInput.value) formData.append('bulk_cost', costInput.value);
 
