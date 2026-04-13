@@ -4,12 +4,17 @@ from typing import Optional
 import pandas as pd
 import plotly.express as px
 import plotly.io as pio
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargingNetwork, EVLocationLookup, EVNetworkSubscription
+
+# km -> miles conversion factor for cost-per-mile display.
+# distance_added is stored in km; we divide cost by (distance_km * _KM_TO_MI)
+# to get $/mi. Decision D2 in phase 27 CONTEXT.md.
+_KM_TO_MI = 0.621371
 
 # Shared Plotly modebar config — show minimal controls, hide logo
 _PLOTLY_CONFIG = {
@@ -609,6 +614,137 @@ async def query_subscription_savings(
         "net_savings": round(total_saved - total_fees, 2),
         "by_network": by_network_result,
     }
+
+
+# ---------------------------------------------------------------------------
+# Phase 27-06: summary-row ratio helpers (avg/session, $/mi, $/kWh, free savings)
+# ---------------------------------------------------------------------------
+#
+# Each helper accepts (db, device_id, time_range) and returns Optional[float].
+# Ratios return None when the denominator is zero OR no usable rows exist —
+# the template renders `—` in that case rather than `$0.00`/NaN.
+#
+# Critical rule (Decision D2): cost_per_mile excludes rows with
+# `distance_added IS NULL` from BOTH numerator and denominator. Enforced at
+# the SQL WHERE clause so aggregation sees only complete rows.
+
+
+async def avg_cost_per_session(
+    db: AsyncSession,
+    device_id: Optional[str] = None,
+    time_range: str = "all",
+) -> Optional[float]:
+    """Mean `total_cost` over sessions that have a recorded cost in the range.
+
+    Returns None when there are no cost-bearing sessions.
+    """
+    stmt = select(
+        func.sum(EVChargingSession.cost).label("num"),
+        func.count(EVChargingSession.id).label("n"),
+    ).where(EVChargingSession.cost.isnot(None))
+
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+
+    row = (await db.execute(stmt)).one()
+    if row.n is None or int(row.n) == 0 or row.num is None:
+        return None
+    return float(row.num) / float(row.n)
+
+
+async def cost_per_mile(
+    db: AsyncSession,
+    device_id: Optional[str] = None,
+    time_range: str = "all",
+) -> Optional[float]:
+    """Sum(cost) / Sum(distance_added_km * 0.621371) over the range.
+
+    Sessions with `distance_added IS NULL` are excluded from BOTH the
+    numerator and the denominator (D2). Returns None when denominator is 0.
+    """
+    stmt = (
+        select(
+            func.sum(EVChargingSession.cost).label("num"),
+            func.sum(EVChargingSession.distance_added * _KM_TO_MI).label("denom"),
+        )
+        .where(EVChargingSession.cost.isnot(None))
+        .where(EVChargingSession.distance_added.isnot(None))
+        .where(EVChargingSession.distance_added > 0)
+    )
+
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+
+    row = (await db.execute(stmt)).one()
+    if row.denom is None or float(row.denom) == 0.0 or row.num is None:
+        return None
+    return float(row.num) / float(row.denom)
+
+
+async def cost_per_kwh(
+    db: AsyncSession,
+    device_id: Optional[str] = None,
+    time_range: str = "all",
+) -> Optional[float]:
+    """Sum(cost) / Sum(energy_kwh) over the range.
+
+    Rows where either side is NULL or energy is zero are excluded from both
+    the numerator and denominator. Returns None when denominator is 0.
+    """
+    stmt = (
+        select(
+            func.sum(EVChargingSession.cost).label("num"),
+            func.sum(EVChargingSession.energy_kwh).label("denom"),
+        )
+        .where(EVChargingSession.cost.isnot(None))
+        .where(EVChargingSession.energy_kwh.isnot(None))
+        .where(EVChargingSession.energy_kwh > 0)
+    )
+
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+
+    row = (await db.execute(stmt)).one()
+    if row.denom is None or float(row.denom) == 0.0 or row.num is None:
+        return None
+    return float(row.num) / float(row.denom)
+
+
+async def free_charging_savings(
+    db: AsyncSession,
+    device_id: Optional[str] = None,
+    time_range: str = "all",
+) -> float:
+    """Total dollars saved via `is_free=True` sessions in the range.
+
+    Computed as Sum(estimated_cost) over is_free sessions — estimated_cost is
+    the pre-cascade "would-have-cost" value populated by compute_session_cost
+    (see query_cost_summary). Returns 0.0 when no free sessions exist.
+    """
+    stmt = (
+        select(func.sum(EVChargingSession.estimated_cost))
+        .where(EVChargingSession.is_free.is_(True))
+        .where(EVChargingSession.estimated_cost.isnot(None))
+    )
+
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+
+    row = (await db.execute(stmt)).one()
+    total = row[0]
+    return float(total) if total is not None else 0.0
 
 
 def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, str] = None) -> str:
