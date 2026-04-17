@@ -80,6 +80,10 @@
                     {% set current_network_id = session.network_id if modal_mode == 'edit' and session else None %}
                     {% set input_class = 'input input-bordered w-full' %}
                     {% set datalist_id = 'modal-network-list' %}
+                    {# D-D7: cascade wiring — network change refills #modal-location-id via
+                       hx-get="/locations/by-network" hx-target="#modal-location-id" on the
+                       combobox text input (see partials/network_combobox.html). #}
+                    {% set cascade_target_id = 'modal-location-id' %}
                     {% include "partials/network_combobox.html" %}
                 </label>
                 <div class="grid grid-cols-2 gap-3">
@@ -147,12 +151,27 @@
                     </div>
                 {% endif %}
                 <label class="form-control w-full">
-                    <div class="label"><span class="label-text">Location Name</span></div>
+                    <div class="label"><span class="label-text">Location</span></div>
+                    {# D-D7 cascade target: refilled via /locations/by-network when network changes.
+                       Initial options server-rendered for the session's current network so the
+                       dropdown is populated on first open (route handler provides network_locations). #}
+                    <select name="location_id"
+                            id="modal-location-id"
+                            class="select select-bordered w-full mb-2">
+                        {% if modal_mode == 'edit' and session and session.network_id and network_locations %}
+                            <option value="">— No change —</option>
+                            {% for loc in network_locations %}
+                                <option value="{{ loc.id }}" {% if session.location_id == loc.id %}selected{% endif %}>{{ loc.location_name }}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="">Location (select network first)</option>
+                        {% endif %}
+                    </select>
                     <input
                         type="text"
                         name="location_name"
                         value="{% if modal_mode == 'edit' and session %}{{ session.location_name or '' }}{% elif default_location %}{{ default_location.location_name or '' }}{% endif %}"
-                        placeholder="e.g., Home, EA Station"
+                        placeholder="Or type a new location name"
                         class="input input-bordered w-full"
                     >
                 </label>

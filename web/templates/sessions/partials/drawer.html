@@ -107,6 +107,10 @@
                         {% set current_network_id = session.network_id %}
                         {% set input_class = 'input input-sm input-bordered w-full' %}
                         {% set datalist_id = 'drawer-network-list' %}
+                        {# D-D7: cascade wiring — network change refills #drawer-location-id via
+                           hx-get="/locations/by-network" hx-target="#drawer-location-id" on the
+                           combobox text input (see partials/network_combobox.html). #}
+                        {% set cascade_target_id = 'drawer-location-id' %}
                         {% include "partials/network_combobox.html" %}
                     </span>
                 </dd>
@@ -246,7 +250,7 @@
                 >
             </div>
             <div class="flex justify-between items-center">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Location Name</dt>
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Location</dt>
                 <dd class="text-base-content text-base">
                     <!-- Read mode -->
                     <span data-read-field>
@@ -261,15 +265,30 @@
                             <span class="text-base-content/40">—</span>
                         {% endif %}
                     </span>
-                    <!-- Edit mode -->
-                    <input
-                        type="text"
-                        name="location_name"
-                        data-edit-field
-                        value="{{ session.location_name or '' }}"
-                        placeholder="e.g., Home, EA Station"
-                        class="hidden input input-sm input-bordered w-full"
-                    >
+                    {# Edit mode: D-D7 cascade target. Populated on first open from network_locations;
+                       refilled by HTMX when the network combobox above fires 'change'. Free-text
+                       location_name input retained below as fallback for first-time entries. #}
+                    <span data-edit-field class="hidden w-full">
+                        <select name="location_id"
+                                id="drawer-location-id"
+                                class="select select-sm select-bordered w-full mb-2">
+                            {% if session.network_id and network_locations %}
+                                <option value="">— No change —</option>
+                                {% for loc in network_locations %}
+                                    <option value="{{ loc.id }}" {% if session.location_id == loc.id %}selected{% endif %}>{{ loc.location_name }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="">Location (select network first)</option>
+                            {% endif %}
+                        </select>
+                        <input
+                            type="text"
+                            name="location_name"
+                            value="{{ session.location_name or '' }}"
+                            placeholder="Or type a new location name"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </span>
                 </dd>
             </div>
             <div class="flex justify-between items-center">

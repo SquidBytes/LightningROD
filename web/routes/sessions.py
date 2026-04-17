@@ -41,6 +41,26 @@ async def get_review_count(db: AsyncSession, device_id: Optional[str] = None) ->
     return result.scalar() or 0
 
 
+async def _verified_locations_for_network(
+    db: AsyncSession, network_id: Optional[int]
+) -> list[EVLocationLookup]:
+    """Phase 28-04 D-D7: initial server-rendered options for the session-edit
+    location <select>. Mirrors GET /locations/by-network's filter (verified
+    locations for the given network, ordered by name). Returns an empty list
+    when network_id is falsy — the template renders the 'select network first'
+    placeholder in that case."""
+    if not network_id:
+        return []
+    stmt = (
+        select(EVLocationLookup)
+        .where(EVLocationLookup.network_id == network_id)
+        .where(EVLocationLookup.is_verified == True)  # noqa: E712
+        .order_by(EVLocationLookup.location_name)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 @router.get("/sessions", response_class=HTMLResponse)
 async def sessions(
     request: Request,
@@ -269,6 +289,7 @@ async def new_session_modal(
         "default_date": date.today().isoformat(),
         "default_location": default_location,
         "networks": all_networks,
+        "network_locations": [],
         "stalls": [],
     }
     return templates.TemplateResponse(request, "sessions/partials/modal.html", context)
@@ -471,6 +492,7 @@ async def create_session(
     ref_data = load_reference_charge_curve(active_vehicle)
     ref_curve = ref_data["curve"] if ref_data else None
     mini_chart_html = build_mini_charge_curve(new_session, ref_curve=ref_curve)
+    network_locations = await _verified_locations_for_network(db, new_session.network_id)
     context = {
         **unit_ctx,
         "session": new_session,
@@ -479,6 +501,7 @@ async def create_session(
         "next_id": None,
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
+        "network_locations": network_locations,
         "user_tz": user_tz,
         "vehicles": vehicles,
         "mini_chart_html": mini_chart_html,
@@ -716,6 +739,7 @@ async def update_session(
     mini_chart_html = build_mini_charge_curve(session, ref_curve=_ref_curve)
 
     unit_ctx = await get_unit_context(db)
+    network_locations = await _verified_locations_for_network(db, session.network_id)
     context = {
         **unit_ctx,
         "session": session,
@@ -724,6 +748,7 @@ async def update_session(
         "next_id": None,
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
+        "network_locations": network_locations,
         "user_tz": user_tz,
         "vehicles": vehicles,
         "mini_chart_html": mini_chart_html,
@@ -801,6 +826,7 @@ async def session_detail(
     mini_chart_html = build_mini_charge_curve(session, ref_curve=_ref_curve)
 
     unit_ctx = await get_unit_context(db)
+    network_locations = await _verified_locations_for_network(db, session.network_id)
     context = {
         **unit_ctx,
         "session": session,
@@ -809,6 +835,7 @@ async def session_detail(
         "next_id": next_id,
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
+        "network_locations": network_locations,
         "stall_label": stall_label,
         "user_tz": user_tz,
         "vehicles": vehicles,
@@ -843,6 +870,11 @@ async def session_modal(
     if session.location_id:
         stalls = await get_stalls_for_location(db, session.location_id)
 
+    # D-D7 cascade: server-render the location <select> options for the session's
+    # current network so the dropdown is populated on first modal open. HTMX takes
+    # over on subsequent network changes via GET /locations/by-network.
+    network_locations = await _verified_locations_for_network(db, session.network_id)
+
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
     unit_ctx = await get_unit_context(db)
 
@@ -855,6 +887,7 @@ async def session_modal(
         "default_location": None,
         "network_map": {n.id: n for n in all_networks},
         "networks": all_networks,
+        "network_locations": network_locations,
         "stalls": stalls,
         "user_tz": user_tz,
     }
