@@ -695,6 +695,56 @@ async def associate_location(
     return response
 
 
+@router.post("/location/{location_id}/promote", response_class=HTMLResponse)
+async def promote_location(
+    location_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Promote-to-own-Network: one-click create+associate+verify (Phase 28 /
+    D-C3).
+
+    Intended for the one-off-charger case — a campground plug, a small
+    business, a non-branded public charger — where the location IS the
+    'network'. In one click:
+
+    - Creates a new ``EVChargingNetwork`` named after the location with
+      ``is_verified=True`` and ``source_system="manual"``.
+    - Sets ``loc.network_id`` to the new network.
+    - Flips ``loc.is_verified=True`` and ``loc.source_system="manual"``.
+
+    Valid for any unverified location regardless of current ``network_id``
+    — a mis-auto-associated location can be Promote'd to its own network
+    in one click; the new network replaces the prior ``network_id``.
+    """
+    result = await db.execute(
+        select(EVLocationLookup).where(EVLocationLookup.id == location_id)
+    )
+    loc = result.scalar_one_or_none()
+    if loc is None:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    new_net = EVChargingNetwork(
+        network_name=loc.location_name,
+        is_verified=True,
+        source_system="manual",
+    )
+    db.add(new_net)
+    await db.flush()  # populate id before linking
+
+    loc.network_id = new_net.id
+    loc.is_verified = True
+    loc.source_system = "manual"
+    await db.commit()
+
+    ctx = await _locations_context(db, filter="unverified")
+    return templates.TemplateResponse(
+        request,
+        "review/partials/review_locations_table.html",
+        ctx,
+    )
+
+
 @router.post("/location/{location_id}/edit", response_class=HTMLResponse)
 async def edit_location(
     location_id: int,

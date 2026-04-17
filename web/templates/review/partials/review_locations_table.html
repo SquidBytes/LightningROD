@@ -111,6 +111,17 @@
                         Merge
                     </button>
                     {% if not loc.is_verified %}
+                    {# Phase 28 / D-C3: one-click Promote-to-own-Network for the
+                       one-off-charger case. Creates a new network named after
+                       the location, associates, and flips is_verified=True —
+                       all in a single transaction server-side. #}
+                    <button class="btn btn-xs btn-outline"
+                            hx-post="/review/location/{{ loc.id }}/promote"
+                            hx-target="#review-inner"
+                            hx-swap="innerHTML"
+                            hx-confirm="Create a new network named '{{ loc.location_name }}' and mark this location verified?">
+                        Promote
+                    </button>
                     <button class="btn btn-xs btn-error"
                             hx-post="/review/location/{{ loc.id }}/delete"
                             hx-target="#review-inner"
