@@ -1114,3 +1114,132 @@ async def test_single_row_session_drawer_location_select_cascades_off_network(
     assert 'hx-get="/locations/by-network"' in body
     assert 'hx-target="#drawer-location-id"' in body
     assert 'id="drawer-location-id"' in body
+
+
+# ---------------------------------------------------------------------------
+# Phase 28-05 / Thread C: Associate + Promote row actions for unverified
+# location rows.
+# ---------------------------------------------------------------------------
+
+
+async def test_associate_modal_returns_picker_form(client, db_session):
+    """D-C1: GET /review/location/{id}/associate-modal returns a lightweight
+    picker form wired to POST the chosen network via a datalist combobox.
+
+    The form must post to /review/location/{id}/associate, contain a hidden
+    `network_id` input (auto-populated by the datalist resolver), and carry a
+    datalist attribute so the combobox UX works. The 'network-datalist'
+    substring is intentionally loose — any id of the form ``network-datalist*``
+    satisfies the contract and keeps the picker's datalist distinct from the
+    edit-modal's network <select>.
+    """
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="PickerLocation",
+        is_verified=False,
+        network_id=None,
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/review/location/{loc.id}/associate-modal")
+
+    assert response.status_code == 200
+    body = response.text
+    assert f'hx-post="/review/location/{loc.id}/associate"' in body
+    assert 'name="network_id"' in body  # hidden input for resolved id
+    assert 'list="network-datalist' in body  # datalist combobox wiring
+
+
+async def test_associate_location_to_existing_network_does_not_verify(
+    client, db_session
+):
+    """D-C5: associating an unverified location with an existing network must
+    persist the network_id AND leave is_verified=False. Verification is a
+    separate action from association."""
+    net = await NetworkFactory.create(
+        db_session, network_name="ExistingTargetNet", is_verified=True
+    )
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="ToBeAssociated",
+        is_verified=False,
+        network_id=None,
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        f"/review/location/{loc.id}/associate",
+        data={
+            "network_id": str(net.id),
+            "network_name": net.network_name,
+        },
+    )
+
+    assert response.status_code == 200
+    refreshed = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == loc.id)
+        )
+    ).scalar_one()
+    assert refreshed.network_id == net.id
+    assert refreshed.is_verified is False, (
+        "D-C5: Associate must NOT flip is_verified"
+    )
+
+
+async def test_associate_location_to_new_network_creates_unverified_network(
+    client, db_session
+):
+    """D-C1: associating with a free-text name that does not match any existing
+    network (case-insensitive) creates a brand-new EVChargingNetwork row with
+    is_verified=False and source_system='manual', and the location becomes
+    associated with it. The location's is_verified is not touched (D-C5)."""
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="NewNetAssocLoc",
+        is_verified=False,
+        network_id=None,
+    )
+    await db_session.commit()
+
+    # Count existing networks with this name before the POST — must be zero
+    # so the handler falls through to the create branch.
+    new_name = "Brand New Co"
+    pre_count = (
+        await db_session.execute(
+            select(EVChargingNetwork).where(
+                EVChargingNetwork.network_name == new_name
+            )
+        )
+    ).scalars().all()
+    assert len(pre_count) == 0
+
+    response = await client.post(
+        f"/review/location/{loc.id}/associate",
+        data={
+            "network_id": "",
+            "network_name": new_name,
+        },
+    )
+
+    assert response.status_code == 200
+
+    # The network was created and carries the expected provenance fields.
+    created = (
+        await db_session.execute(
+            select(EVChargingNetwork).where(
+                EVChargingNetwork.network_name == new_name
+            )
+        )
+    ).scalar_one()
+    assert created.is_verified is False
+    assert created.source_system == "manual"
+
+    # The location now points at that new network, but remains unverified.
+    refreshed = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == loc.id)
+        )
+    ).scalar_one()
+    assert refreshed.network_id == created.id
+    assert refreshed.is_verified is False
