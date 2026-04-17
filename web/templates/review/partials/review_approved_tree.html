@@ -1,5 +1,6 @@
-{# Approved tree partial -- collapsible networks with nested approved locations,
-   plus a Standalone Locations section at the bottom. #}
+{# Approved tree partial -- collapsible networks with nested approved locations.
+   Standalone verified locations (network_id IS NULL) render inside a synthetic
+   "No Network" pseudo-node at the bottom of the same tree (D-B5 / D-B6). #}
 
 {% if not approved_networks and not standalone_locations %}
 <div class="alert">
@@ -15,7 +16,6 @@
     <span>These verified entries are used to automatically match networks and locations on new charging sessions. Edit or merge an entry to change how future sessions get tagged.</span>
 </div>
 
-{% if approved_networks %}
 <div class="overflow-x-auto mb-6">
     <table class="table table-sm">
         <thead>
@@ -118,58 +118,91 @@
                 </td>
             </tr>
             {% endfor %}
+
+            {# Synthetic "No Network" pseudo-node for standalone verified locations (D-B6).
+               Renders only when there is at least one standalone location so the
+               tree stays visually clean when every verified location is attached
+               to a real network. Uses the same chevron + child-row shape as a
+               real network row with the sentinel id `none`. #}
+            {% if standalone_locations %}
+            <tr id="approved-net-row-none"
+                class="cursor-pointer hover transition-colors"
+                onclick="toggleApprovedNetwork('none')">
+                <td>
+                    <svg id="approved-chevron-none"
+                         class="h-3 w-3 text-base-content/40 transition-transform duration-200 flex-shrink-0"
+                         viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                              d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                              clip-rule="evenodd"/>
+                    </svg>
+                </td>
+                <td>
+                    <span class="inline-block w-3 h-3 rounded-full mr-1 align-middle" style="background-color: #6B7280"></span>
+                    <span class="font-medium text-base-content/70">No Network</span>
+                    <span class="badge badge-sm badge-ghost ml-2">Standalone</span>
+                </td>
+                <td>
+                    <span class="badge badge-sm badge-ghost">{{ standalone_locations | length }}</span>
+                </td>
+                <td>
+                    {# Standalone-pseudo-node has no aggregate session count — child rows show their own. #}
+                    <span class="text-base-content/40 text-sm">—</span>
+                </td>
+                <td class="text-right" onclick="event.stopPropagation()">
+                    {# No network-level edit/merge on the pseudo-node — it is not a real network. #}
+                    <span class="text-base-content/40 text-sm">—</span>
+                </td>
+            </tr>
+
+            {# Children row for standalone locations (collapsed by default). #}
+            <tr id="approved-net-children-none" class="hidden">
+                <td colspan="5" class="bg-base-300/30 px-6 py-3">
+                    <table class="table table-xs">
+                        <thead>
+                            <tr>
+                                <th>Location</th>
+                                <th>Address</th>
+                                <th>Type</th>
+                                <th>Sessions</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for loc in standalone_locations %}
+                            <tr>
+                                <td>{{ loc.location_name }}</td>
+                                <td class="max-w-48 truncate">{{ loc.address or '-' }}</td>
+                                <td>
+                                    {% if loc.location_type %}
+                                    <span class="badge badge-xs badge-ghost capitalize">{{ loc.location_type }}</span>
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge badge-xs badge-ghost">{{ loc_session_counts.get(loc.id, 0) }}</span>
+                                </td>
+                                <td class="text-right">
+                                    <div class="flex justify-end gap-1 flex-wrap">
+                                        <button class="btn btn-xs btn-info"
+                                                onclick="document.getElementById('edit-approved-loc-{{ loc.id }}').showModal()">
+                                            Edit
+                                        </button>
+                                        <button class="btn btn-xs btn-neutral"
+                                                onclick="openMergeModal('location', {{ loc.id }})">
+                                            Merge
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </td>
+            </tr>
+            {% endif %}
         </tbody>
     </table>
 </div>
-{% endif %}
-
-{% if standalone_locations %}
-<div>
-    <h2 class="text-lg font-semibold mb-2">Standalone Locations</h2>
-    <p class="text-base-content/60 text-sm mb-3">Approved locations not attached to any network.</p>
-    <div class="overflow-x-auto">
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Address</th>
-                    <th>Type</th>
-                    <th>Sessions</th>
-                    <th class="text-right">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for loc in standalone_locations %}
-                <tr>
-                    <td>{{ loc.location_name }}</td>
-                    <td class="max-w-48 truncate">{{ loc.address or '-' }}</td>
-                    <td>
-                        {% if loc.location_type %}
-                        <span class="badge badge-sm badge-ghost capitalize">{{ loc.location_type }}</span>
-                        {% else %}-{% endif %}
-                    </td>
-                    <td>
-                        <span class="badge badge-sm badge-ghost">{{ loc_session_counts.get(loc.id, 0) }}</span>
-                    </td>
-                    <td class="text-right">
-                        <div class="flex justify-end gap-1 flex-wrap">
-                            <button class="btn btn-xs btn-info"
-                                    onclick="document.getElementById('edit-approved-loc-{{ loc.id }}').showModal()">
-                                Edit
-                            </button>
-                            <button class="btn btn-xs btn-neutral"
-                                    onclick="openMergeModal('location', {{ loc.id }})">
-                                Merge
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
 
 {# Edit modals for all approved locations (networked + standalone) #}
 {% set ns = namespace(all_locs=[]) %}
