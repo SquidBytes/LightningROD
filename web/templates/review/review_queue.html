@@ -82,6 +82,21 @@
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
+{# Shared page-scope location edit modal (Phase 28 / D-A2).
+   Lives OUTSIDE #review-inner so HTMX swaps on the locations table
+   don't destroy the dialog mid-request. Content loaded lazily via
+   openEditLocModal(id) -> GET /review/location/{id}/edit-form. #}
+<dialog id="edit-loc-modal" class="modal">
+    <div class="modal-box max-w-lg">
+        <button type="button"
+                class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                onclick="closeEditLocModal()"
+                aria-label="Close">&#x2715;</button>
+        <div id="edit-loc-modal-content"></div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <script>
 function openNetworkModal(networkId) {
     htmx.ajax('GET', '/review/networks/' + networkId + '/edit-modal',
@@ -111,6 +126,17 @@ function closeMergeModal() {
     document.getElementById('merge-modal-content').innerHTML = '';
 }
 
+function openEditLocModal(locationId) {
+    htmx.ajax('GET', '/review/location/' + locationId + '/edit-form',
+        {target: '#edit-loc-modal-content', swap: 'innerHTML'});
+    document.getElementById('edit-loc-modal').showModal();
+}
+
+function closeEditLocModal() {
+    document.getElementById('edit-loc-modal').close();
+    document.getElementById('edit-loc-modal-content').innerHTML = '';
+}
+
 // When network modal closes (after save/convert), refresh the active content area
 document.body.addEventListener('closeNetworkModal', function() {
     closeNetworkModal();
@@ -127,6 +153,18 @@ window.__reviewActiveTab = '{{ active_tab }}';
 // When merge completes, close the modal (table already refreshed by HTMX swap)
 document.body.addEventListener('closeMergeModal', function() {
     closeMergeModal();
+});
+
+// When location edit saves (Phase 28 / D-A2), close the page-scope dialog
+// and refresh the active tab's content. The server already returned the
+// locations partial into #review-inner, but if the user is on the Approved
+// tab we need to refetch the tree to reflect any network/verification shifts.
+document.body.addEventListener('closeEditLocModal', function() {
+    closeEditLocModal();
+    if (window.__reviewActiveTab === 'approved') {
+        htmx.ajax('GET', '/review/approved',
+            {target: '#review-content', swap: 'innerHTML'});
+    }
 });
 
 // Collapsible tree toggle (approved tab)

@@ -507,6 +507,34 @@ async def review_edit_network(
     return response
 
 
+@router.get("/location/{location_id}/edit-form", response_class=HTMLResponse)
+async def review_location_edit_form(
+    location_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the location-edit form markup for the page-scope
+    #edit-loc-modal dialog (Phase 28 / D-A2).
+
+    Replaces the per-row <dialog id="edit-loc-{id}"> elements that used
+    to live inside #review-inner — those dialogs were destroyed by the
+    HTMX swap that refreshed the locations table on save, which is the
+    Thread A save-bug symptom.
+    """
+    result = await db.execute(
+        select(EVLocationLookup).where(EVLocationLookup.id == location_id)
+    )
+    loc = result.scalar_one_or_none()
+    if loc is None:
+        raise HTTPException(status_code=404, detail="Location not found")
+    all_networks = await get_all_networks(db)
+    return templates.TemplateResponse(
+        request,
+        "review/partials/review_location_edit_form.html",
+        {"loc": loc, "all_networks": all_networks},
+    )
+
+
 @router.post("/location/{location_id}/edit", response_class=HTMLResponse)
 async def edit_location(
     location_id: int,
@@ -522,7 +550,12 @@ async def edit_location(
 ):
     """Edit a location. Accepts optional numeric fields as strings so empty
     form values coerce cleanly to None instead of tripping FastAPI's 422
-    validation on `Optional[int/float]`."""
+    validation on `Optional[int/float]`.
+
+    Fires ``HX-Trigger: closeEditLocModal`` so the page-scope dialog
+    listener in review_queue.html dismisses the modal on success
+    (Phase 28 / D-A2, Pattern S1).
+    """
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
     )
@@ -537,11 +570,13 @@ async def edit_location(
         loc.cost_per_kwh = float(cost_per_kwh) if cost_per_kwh.strip() else None
         await db.commit()
     ctx = await _locations_context(db, filter="unverified")
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "review/partials/review_locations_table.html",
         ctx,
     )
+    response.headers["HX-Trigger"] = "closeEditLocModal"
+    return response
 
 
 @router.post("/location/{location_id}/delete", response_class=HTMLResponse)
