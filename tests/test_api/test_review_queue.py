@@ -646,3 +646,109 @@ async def test_review_location_edit_form_endpoint_returns_form(client, db_sessio
     body = response.text
     assert f'hx-post="/review/location/{loc.id}/edit"' in body
     assert 'name="network_id"' in body
+
+
+# ---------------------------------------------------------------------------
+# 9. Phase 28 Task 2-01 — Pending filter lock (D-B3) + Approved badge removal (D-B4)
+# ---------------------------------------------------------------------------
+
+
+async def test_pending_tab_networks_excludes_verified(client, db_session):
+    """D-B3: GET /review?tab=pending&sub=networks never leaks verified networks.
+
+    Seeds a mix of verified and unverified rows and asserts that only the
+    unverified names appear in the page body. Regression-locks the
+    filter="unverified" SQL guard in _networks_context.
+    """
+    unverified_names = ["PendingNetAlpha", "PendingNetBravo"]
+    verified_names = ["ApprovedNetCharlie", "ApprovedNetDelta", "ApprovedNetEcho"]
+    for name in unverified_names:
+        await NetworkFactory.create(db_session, network_name=name, is_verified=False)
+    for name in verified_names:
+        await NetworkFactory.create(db_session, network_name=name, is_verified=True)
+    await db_session.commit()
+
+    response = await client.get("/review?tab=pending&sub=networks")
+
+    assert response.status_code == 200
+    body = response.text
+    for name in unverified_names:
+        assert name in body, f"expected unverified network {name!r} to render"
+    # Verified names must not appear as a rendered table row. The merge-target
+    # dropdown can include them, so scope the check to the tbody row id pattern
+    # used by review_networks_table.html (`id="net-row-{id}"` — only the main
+    # table renders these IDs, not the dropdown).
+    for v_name in verified_names:
+        # The verified row would render as `>ApprovedNetCharlie<` inside the
+        # `<td>` of the main `net-row-*` table. A simple substring check on the
+        # name would false-positive on dropdown options, so check that no
+        # `id="net-row-` marker sits before the verified name in the body.
+        # Simpler: confirm the verified name doesn't appear inside the
+        # rendered <tbody> at all by checking for the name inside a `<td>`.
+        assert f"<td>\n                    {v_name}" not in body and \
+               f"<td>{v_name}" not in body, (
+            f"verified network {v_name!r} leaked into pending table"
+        )
+
+
+async def test_pending_tab_locations_excludes_verified(client, db_session):
+    """D-B3: GET /review?tab=pending&sub=locations never leaks verified locations."""
+    unverified_names = ["PendingLocAlpha", "PendingLocBravo"]
+    verified_names = ["ApprovedLocCharlie", "ApprovedLocDelta", "ApprovedLocEcho"]
+    for name in unverified_names:
+        await LocationLookupFactory.create(
+            db_session, location_name=name, is_verified=False
+        )
+    for name in verified_names:
+        await LocationLookupFactory.create(
+            db_session, location_name=name, is_verified=True
+        )
+    await db_session.commit()
+
+    response = await client.get("/review?tab=pending&sub=locations")
+
+    assert response.status_code == 200
+    body = response.text
+    for name in unverified_names:
+        assert name in body, f"expected unverified location {name!r} to render"
+    for v_name in verified_names:
+        # The locations table renders `<td>{{ loc.location_name }}</td>` at
+        # line 45 of review_locations_table.html. Check that exact pattern does
+        # not contain the verified name.
+        assert f"<td>{v_name}</td>" not in body, (
+            f"verified location {v_name!r} leaked into pending table"
+        )
+
+
+async def test_pending_badge_shows_combined_unverified_count(client, db_session):
+    """D-B3 + D-B4: the Pending tab badge reflects total unverified count
+    (networks + locations), and the Approved tab has NO success badge."""
+    # 2 unverified networks + 1 verified network
+    await NetworkFactory.create(db_session, network_name="UN1", is_verified=False)
+    await NetworkFactory.create(db_session, network_name="UN2", is_verified=False)
+    await NetworkFactory.create(db_session, network_name="VN1", is_verified=True)
+    # 3 unverified locations + 2 verified locations
+    for i in range(3):
+        await LocationLookupFactory.create(
+            db_session, location_name=f"UL{i}", is_verified=False
+        )
+    for i in range(2):
+        await LocationLookupFactory.create(
+            db_session, location_name=f"VL{i}", is_verified=True
+        )
+    await db_session.commit()
+
+    response = await client.get("/review")
+
+    assert response.status_code == 200
+    body = response.text
+    # Pending badge retained — warning badge with combined unverified count
+    # (2 networks + 3 locations = 5).
+    assert 'badge badge-sm badge-warning">5<' in body, (
+        "expected pending badge-warning to render the combined count '5'"
+    )
+    # Approved tab's success badge removed (D-B4).
+    assert 'badge badge-sm badge-success' not in body.split("id=\"review-content\"")[0], (
+        "Approved tab's badge-success should have been removed from the tab "
+        "header — verified-row badges INSIDE the approved tree are fine."
+    )
