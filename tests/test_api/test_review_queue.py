@@ -918,3 +918,106 @@ async def test_approved_tree_renders_network_children_in_nested_rows(
     assert idx_marker < idx_bravo, (
         "ChildLocBravo must render inside the expandable child row"
     )
+
+
+# ---------------------------------------------------------------------------
+# 11. Phase 28-03 Task 2 — Merge crosses verified/unverified warning (D-D4/D-D5)
+# ---------------------------------------------------------------------------
+
+
+async def test_merge_preview_network_warns_when_source_verified_target_unverified(
+    client, db_session
+):
+    """D-D4: when the merge preview is rendered and at least one target has a
+    different is_verified status than the source, the modal renders an
+    alert-warning line ("This merge crosses verified...") so the user
+    understands the surviving row's verification impact.
+
+    D-D5: the merge submit button remains enabled — the dialog is a foot-gun
+    guard, not a block. There is no server-side gating.
+    """
+    source = await NetworkFactory.create(
+        db_session, network_name="VerifiedSource", is_verified=True
+    )
+    # Target with DIFFERING verified status — triggers the warning.
+    await NetworkFactory.create(
+        db_session, network_name="UnverifiedTarget", is_verified=False
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/review/network/{source.id}/merge-preview")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "This merge crosses verified" in body, (
+        "expected cross-verification warning copy when a differing-status "
+        "target exists in the dropdown"
+    )
+    # The submit button itself must not be disabled (D-D5 — UI-only guard).
+    assert 'class="btn btn-warning">Merge' in body, (
+        "expected Merge submit button to render without `disabled` attribute"
+    )
+    # Belt-and-suspenders: ensure no disabled Merge button literal
+    assert 'disabled>Merge' not in body and "disabled type=\"submit\"" not in body
+
+
+async def test_merge_preview_network_no_warning_when_same_status(
+    client, db_session
+):
+    """D-D4: when every available target matches the source's is_verified,
+    the warning is NOT rendered."""
+    source = await NetworkFactory.create(
+        db_session, network_name="UnverifiedSource", is_verified=False
+    )
+    # Only targets with the SAME status — no warning should appear.
+    await NetworkFactory.create(
+        db_session, network_name="AnotherUnverified", is_verified=False
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/review/network/{source.id}/merge-preview")
+
+    assert response.status_code == 200
+    assert "This merge crosses verified" not in response.text
+
+
+async def test_merge_preview_location_warns_when_source_verified_target_unverified(
+    client, db_session
+):
+    """D-D4 symmetric pair for location merges."""
+    source = await LocationLookupFactory.create(
+        db_session, location_name="VerifiedSourceLoc", is_verified=True
+    )
+    await LocationLookupFactory.create(
+        db_session, location_name="UnverifiedTargetLoc", is_verified=False
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/review/location/{source.id}/merge-preview")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "This merge crosses verified" in body, (
+        "expected cross-verification warning copy when a differing-status "
+        "target location exists in the dropdown"
+    )
+    assert 'class="btn btn-warning">Merge' in body
+
+
+async def test_merge_preview_location_no_warning_when_same_status(
+    client, db_session
+):
+    """D-D4 symmetric: no warning when location targets all share the source's
+    verified status."""
+    source = await LocationLookupFactory.create(
+        db_session, location_name="UnverifiedSourceLoc", is_verified=False
+    )
+    await LocationLookupFactory.create(
+        db_session, location_name="AnotherUnverifiedLoc", is_verified=False
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/review/location/{source.id}/merge-preview")
+
+    assert response.status_code == 200
+    assert "This merge crosses verified" not in response.text
