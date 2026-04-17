@@ -965,7 +965,19 @@ async def test_merge_preview_network_no_warning_when_same_status(
     client, db_session
 ):
     """D-D4: when every available target matches the source's is_verified,
-    the warning is NOT rendered."""
+    the warning is NOT rendered.
+
+    Note: Alembic-seeded predefined networks (ChargePoint, EVgo, etc.) are
+    all verified and persist across tests (they live in migration, not the
+    per-test transaction). We delete them in this test so the scenario
+    "all targets share the source's status" is actually achievable.
+    """
+    from sqlalchemy import delete
+    # Clear the seed-migrated verified networks so the only targets left are
+    # our unverified test rows (the per-test transaction rollback reverts this).
+    await db_session.execute(
+        delete(EVChargingNetwork).where(EVChargingNetwork.is_verified == True)  # noqa: E712
+    )
     source = await NetworkFactory.create(
         db_session, network_name="UnverifiedSource", is_verified=False
     )
@@ -1008,7 +1020,15 @@ async def test_merge_preview_location_no_warning_when_same_status(
     client, db_session
 ):
     """D-D4 symmetric: no warning when location targets all share the source's
-    verified status."""
+    verified status.
+
+    Note: no seeded locations exist today, but clear any that might exist
+    to keep the test robust against future seeding.
+    """
+    from sqlalchemy import delete
+    await db_session.execute(
+        delete(EVLocationLookup).where(EVLocationLookup.is_verified == True)  # noqa: E712
+    )
     source = await LocationLookupFactory.create(
         db_session, location_name="UnverifiedSourceLoc", is_verified=False
     )
