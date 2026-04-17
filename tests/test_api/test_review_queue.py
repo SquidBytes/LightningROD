@@ -1041,3 +1041,76 @@ async def test_merge_preview_location_no_warning_when_same_status(
 
     assert response.status_code == 200
     assert "This merge crosses verified" not in response.text
+
+
+# ---------------------------------------------------------------------------
+# Phase 28-04 Task 2 — Single-row session edit modal + drawer cascade (D-D7)
+# ---------------------------------------------------------------------------
+
+
+async def test_single_row_session_modal_location_select_cascades_off_network(
+    client, db_session
+):
+    """D-D7: the advanced edit modal rendered at GET /charging/sessions/{id}/modal
+    must carry a location <select name="location_id"> target and the network
+    field must wire an HTMX hx-get cascade to /locations/by-network targeted
+    at that select. The cascade mirrors the group-edit bar (Task 1) so the
+    same endpoint and UX applies everywhere a user picks a network next to a
+    location."""
+    vehicle = await VehicleFactory.create(db_session)
+    net = await NetworkFactory.create(db_session, network_name="ModalCascadeNet")
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="ModalCascadeLoc",
+        network_id=net.id,
+        is_verified=True,
+    )
+    session = await ChargingSessionFactory.create(
+        db_session,
+        device_id=vehicle.device_id,
+        network_id=net.id,
+        location_id=loc.id,
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/charging/sessions/{session.id}/modal")
+
+    assert response.status_code == 200
+    body = response.text
+    assert 'name="location_id"' in body
+    assert 'hx-get="/locations/by-network"' in body
+    assert 'hx-target="#modal-location-id"' in body
+    assert 'id="modal-location-id"' in body
+
+
+async def test_single_row_session_drawer_location_select_cascades_off_network(
+    client, db_session
+):
+    """D-D7: the drawer detail rendered at GET /charging/sessions/{id}/detail
+    must carry a location <select name="location_id"> target and the network
+    field must wire an HTMX hx-get cascade to /locations/by-network targeted
+    at that select. Symmetric to the modal cascade."""
+    vehicle = await VehicleFactory.create(db_session)
+    net = await NetworkFactory.create(db_session, network_name="DrawerCascadeNet")
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="DrawerCascadeLoc",
+        network_id=net.id,
+        is_verified=True,
+    )
+    session = await ChargingSessionFactory.create(
+        db_session,
+        device_id=vehicle.device_id,
+        network_id=net.id,
+        location_id=loc.id,
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/charging/sessions/{session.id}/detail")
+
+    assert response.status_code == 200
+    body = response.text
+    assert 'name="location_id"' in body
+    assert 'hx-get="/locations/by-network"' in body
+    assert 'hx-target="#drawer-location-id"' in body
+    assert 'id="drawer-location-id"' in body
