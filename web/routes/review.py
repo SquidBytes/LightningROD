@@ -431,6 +431,64 @@ async def verify_network(
     )
 
 
+@router.post("/network/{network_id}/unverify", response_class=HTMLResponse)
+async def unverify_network(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """D-D1 / D-D2: flag-flip only.
+
+    Flips ``is_verified`` from ``True`` to ``False`` so a mis-verified network
+    reappears on the Pending tab. Explicitly does NOT touch ``source_system``
+    (the row keeps its provenance marker) and writes no audit record. This is
+    the recovery path for the one-click verify button; without it, reversing
+    a bad verification requires DB surgery.
+
+    Returns the refreshed approved-tree partial because the Unverify click
+    originates on the Approved tab.
+    """
+    result = await db.execute(
+        select(EVChargingNetwork).where(EVChargingNetwork.id == network_id)
+    )
+    net = result.scalar_one_or_none()
+    if net:
+        net.is_verified = False
+        await db.commit()
+    ctx = await _approved_tree_context(db)
+    return templates.TemplateResponse(
+        request,
+        "review/partials/review_approved_tree.html",
+        ctx,
+    )
+
+
+@router.post("/location/{location_id}/unverify", response_class=HTMLResponse)
+async def unverify_location(
+    location_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """D-D1 / D-D2: flag-flip only.
+
+    Symmetric to ``unverify_network``. Flips ``loc.is_verified`` back to
+    ``False`` without touching ``source_system`` or writing an audit row.
+    """
+    result = await db.execute(
+        select(EVLocationLookup).where(EVLocationLookup.id == location_id)
+    )
+    loc = result.scalar_one_or_none()
+    if loc:
+        loc.is_verified = False
+        await db.commit()
+    ctx = await _approved_tree_context(db)
+    return templates.TemplateResponse(
+        request,
+        "review/partials/review_approved_tree.html",
+        ctx,
+    )
+
+
 @router.get("/networks/{network_id}/edit-modal", response_class=HTMLResponse)
 async def review_edit_network_modal(
     network_id: int,

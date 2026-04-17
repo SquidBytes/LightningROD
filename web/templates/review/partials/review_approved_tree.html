@@ -65,6 +65,14 @@
                                 onclick="openMergeModal('network', {{ net.id }})">
                             Merge
                         </button>
+                        {% if net.is_verified %}
+                        <button class="btn btn-xs btn-warning"
+                                hx-post="/review/network/{{ net.id }}/unverify"
+                                hx-target="#review-content"
+                                hx-swap="innerHTML">
+                            Unverify
+                        </button>
+                        {% endif %}
                     </div>
                 </td>
             </tr>
@@ -106,6 +114,14 @@
                                                 onclick="openMergeModal('location', {{ loc.id }})">
                                             Merge
                                         </button>
+                                        {% if loc.is_verified %}
+                                        <button class="btn btn-xs btn-warning"
+                                                hx-post="/review/location/{{ loc.id }}/unverify"
+                                                hx-target="#review-content"
+                                                hx-swap="innerHTML">
+                                            Unverify
+                                        </button>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
@@ -191,6 +207,14 @@
                                                 onclick="openMergeModal('location', {{ loc.id }})">
                                             Merge
                                         </button>
+                                        {% if loc.is_verified %}
+                                        <button class="btn btn-xs btn-warning"
+                                                hx-post="/review/location/{{ loc.id }}/unverify"
+                                                hx-target="#review-content"
+                                                hx-swap="innerHTML">
+                                            Unverify
+                                        </button>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
