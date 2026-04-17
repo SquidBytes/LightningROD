@@ -593,6 +593,108 @@ async def review_location_edit_form(
     )
 
 
+@router.get("/location/{location_id}/associate-modal", response_class=HTMLResponse)
+async def associate_location_modal(
+    location_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the Associate picker form for the page-scope #edit-loc-modal
+    dialog (Phase 28 / D-C1).
+
+    The picker is a lightweight alternative to the full location edit modal —
+    just a network <datalist> combobox + submit. Associating from here does
+    NOT change ``loc.is_verified`` (D-C5); it only sets ``network_id``.
+    """
+    result = await db.execute(
+        select(EVLocationLookup).where(EVLocationLookup.id == location_id)
+    )
+    loc = result.scalar_one_or_none()
+    if loc is None:
+        raise HTTPException(status_code=404, detail="Location not found")
+    all_networks = await get_all_networks(db)
+    return templates.TemplateResponse(
+        request,
+        "review/partials/review_associate_modal.html",
+        {"loc": loc, "all_networks": all_networks},
+    )
+
+
+@router.post("/location/{location_id}/associate", response_class=HTMLResponse)
+async def associate_location(
+    location_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    network_id: str = Form(""),
+    network_name: str = Form(""),
+):
+    """Associate an unverified location with a network (Phase 28 / D-C1).
+
+    Resolution order:
+
+    1. If ``network_id`` is provided and non-empty, use it verbatim
+       (datalist match path — the client resolver populated the hidden
+       input because the typed text matched an existing network).
+    2. Else if ``network_name`` (case-insensitive) matches an existing
+       network, use that id (user typed a known name without triggering
+       the datalist match, or submitted via a non-datalist flow).
+    3. Else create a brand-new ``EVChargingNetwork`` with
+       ``is_verified=False`` and ``source_system="manual"`` and
+       associate.
+
+    **D-C5:** ``loc.is_verified`` is NEVER touched here. Association and
+    verification are separate actions so a user can tentatively associate
+    without vouching for the name/slug.
+    """
+    result = await db.execute(
+        select(EVLocationLookup).where(EVLocationLookup.id == location_id)
+    )
+    loc = result.scalar_one_or_none()
+    if loc is None:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    nid: Optional[int] = None
+    if network_id.strip():
+        nid = int(network_id)
+    elif network_name.strip():
+        # Case-insensitive lookup so the user typing "chargepoint" vs
+        # "ChargePoint" resolves to the same row without creating a dup.
+        existing = (
+            await db.execute(
+                select(EVChargingNetwork).where(
+                    func.lower(EVChargingNetwork.network_name)
+                    == network_name.strip().lower()
+                )
+            )
+        ).scalar_one_or_none()
+        if existing:
+            nid = existing.id
+        else:
+            new_net = EVChargingNetwork(
+                network_name=network_name.strip(),
+                is_verified=False,
+                source_system="manual",
+            )
+            db.add(new_net)
+            await db.flush()
+            nid = new_net.id
+
+    if nid is not None:
+        loc.network_id = nid
+        # D-C5: explicit no-op on is_verified. Kept as a comment-anchor so
+        # a future 'helpful' refactor cannot silently add an auto-verify.
+    await db.commit()
+
+    ctx = await _locations_context(db, filter="unverified")
+    response = templates.TemplateResponse(
+        request,
+        "review/partials/review_locations_table.html",
+        ctx,
+    )
+    response.headers["HX-Trigger"] = "closeEditLocModal"
+    return response
+
+
 @router.post("/location/{location_id}/edit", response_class=HTMLResponse)
 async def edit_location(
     location_id: int,

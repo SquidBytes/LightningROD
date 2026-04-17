@@ -89,6 +89,18 @@
                             hx-swap="innerHTML">
                         Verify
                     </button>
+                    {# Phase 28 / D-C1: lightweight Associate picker — loads into
+                       the shared page-scope #edit-loc-modal content div and POSTs
+                       to /review/location/{id}/associate. Kept before Edit so
+                       the common-case flow reads left-to-right:
+                       Verify -> Associate -> Edit -> Merge -> Delete. #}
+                    <button class="btn btn-xs btn-accent"
+                            hx-get="/review/location/{{ loc.id }}/associate-modal"
+                            hx-target="#edit-loc-modal-content"
+                            hx-swap="innerHTML"
+                            onclick="document.getElementById('edit-loc-modal').showModal()">
+                        Associate
+                    </button>
                     {% endif %}
                     <button class="btn btn-xs btn-info"
                             onclick="openEditLocModal({{ loc.id }})">
