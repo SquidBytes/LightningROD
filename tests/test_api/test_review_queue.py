@@ -492,3 +492,89 @@ async def test_edit_network_persists_field_changes(client, db_session):  # pragm
         )
     ).scalar_one()
     assert refreshed.network_name == "Renamed"
+
+
+# ---------------------------------------------------------------------------
+# 7. Phase 28 Task 1 — Review-scoped network edit (D-A1, D-A3)
+# ---------------------------------------------------------------------------
+
+
+async def test_review_edit_network_persists_changes(client, db_session):
+    """PUT /review/networks/{id} persists edits and returns the review
+    networks partial (not the settings network_management partial)."""
+    net = await NetworkFactory.create(
+        db_session, network_name="Before Rename", is_verified=False
+    )
+    await db_session.commit()
+
+    response = await client.put(
+        f"/review/networks/{net.id}",
+        data={
+            "network_name": "Renamed Via Review",
+            "color": "#123456",
+            "cost_per_kwh": "0.42",
+        },
+    )
+
+    assert response.status_code == 200
+    refreshed = (
+        await db_session.execute(
+            select(EVChargingNetwork).where(EVChargingNetwork.id == net.id)
+        )
+    ).scalar_one()
+    assert refreshed.network_name == "Renamed Via Review"
+    assert refreshed.color == "#123456"
+    assert float(refreshed.cost_per_kwh) == pytest.approx(0.42, abs=0.001)
+
+    # Body should contain the review networks partial markup, not the settings
+    # network_management-card partial.
+    body = response.text
+    assert 'hx-get="/review/networks"' in body
+    assert 'id="network-management-card"' not in body
+
+
+async def test_review_edit_network_fires_close_trigger(client, db_session):
+    """PUT /review/networks/{id} sets HX-Trigger: closeNetworkModal so the
+    page-scope modal listener can dismiss the dialog on success."""
+    net = await NetworkFactory.create(
+        db_session, network_name="Will Close", is_verified=False
+    )
+    await db_session.commit()
+
+    response = await client.put(
+        f"/review/networks/{net.id}",
+        data={
+            "network_name": "Still Will Close",
+            "color": "",
+            "cost_per_kwh": "",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "closeNetworkModal" in response.headers.get("HX-Trigger", "")
+
+
+async def test_review_edit_network_modal_fetch_returns_details_only(
+    client, db_session
+):
+    """GET /review/networks/{id}/edit-modal returns the network_edit_modal
+    template but with only the Details tab rendered (Locations and
+    Subscription tabs hidden per D-A3)."""
+    net = await NetworkFactory.create(
+        db_session, network_name="Details Only Net", is_verified=False
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/review/networks/{net.id}/edit-modal")
+
+    assert response.status_code == 200
+    body = response.text
+    # Details-only: the other tabs' aria-labels must not render
+    assert 'aria-label="Locations"' not in body
+    assert 'aria-label="Subscription"' not in body
+    # But Details tab + form field must be present
+    assert 'aria-label="Details"' in body
+    assert 'name="network_name"' in body
+    # Save button must target the review-scoped endpoint + review swap zone
+    assert 'hx-put="/review/networks/' in body
+    assert 'hx-target="#review-inner"' in body
