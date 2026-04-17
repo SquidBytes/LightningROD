@@ -71,13 +71,8 @@ async def test_verify_unverified_location_marks_it_verified(client, db_session):
     assert refreshed.source_system == "manual"
 
 
-@pytest.mark.xfail(
-    reason="Phase 28: no unverify/toggle-back endpoint exists yet. "
-    "verify endpoint is one-way (False→True only).",
-    strict=False,
-)
 async def test_unverify_verified_network_reverts_status(client, db_session):
-    """Verified→unverified transition (round-trip). Phase 28 should add this."""
+    """Verified→unverified transition (round-trip). Phase 28-03 D-D1."""
     net = await NetworkFactory.create(
         db_session, network_name="Verified Net", is_verified=True
     )
@@ -95,11 +90,8 @@ async def test_unverify_verified_network_reverts_status(client, db_session):
     assert refreshed.is_verified is False
 
 
-@pytest.mark.xfail(
-    reason="Phase 28: no unverify/toggle-back endpoint exists for locations.",
-    strict=False,
-)
 async def test_unverify_verified_location_reverts_status(client, db_session):
+    """Verified→unverified transition for locations. Phase 28-03 D-D1."""
     loc = await LocationLookupFactory.create(
         db_session, location_name="Verified Loc", is_verified=True
     )
@@ -114,6 +106,60 @@ async def test_unverify_verified_location_reverts_status(client, db_session):
         )
     ).scalar_one()
     assert refreshed.is_verified is False
+
+
+async def test_unverify_network_does_not_change_source_system(client, db_session):
+    """D-D2 guarantee: unverify is a pure flag-flip.
+
+    The handler must NOT mutate ``source_system`` (no 'manual' overwrite, no
+    reset to NULL). A network auto-detected from Home Assistant that was
+    mis-verified should still remember it came from HA after being unverified.
+    """
+    net = await NetworkFactory.create(
+        db_session,
+        network_name="Misverified Net",
+        is_verified=True,
+        source_system="home_assistant",
+    )
+    await db_session.commit()
+
+    response = await client.post(f"/review/network/{net.id}/unverify")
+
+    assert response.status_code == 200
+    refreshed = (
+        await db_session.execute(
+            select(EVChargingNetwork).where(EVChargingNetwork.id == net.id)
+        )
+    ).scalar_one()
+    assert refreshed.is_verified is False
+    assert refreshed.source_system == "home_assistant", (
+        "D-D2: unverify must NOT touch source_system"
+    )
+
+
+async def test_unverify_location_does_not_change_source_system(client, db_session):
+    """D-D2 guarantee: location unverify is a pure flag-flip; source_system
+    is preserved across the transition."""
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="Misverified Loc",
+        is_verified=True,
+        source_system="home_assistant",
+    )
+    await db_session.commit()
+
+    response = await client.post(f"/review/location/{loc.id}/unverify")
+
+    assert response.status_code == 200
+    refreshed = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == loc.id)
+        )
+    ).scalar_one()
+    assert refreshed.is_verified is False
+    assert refreshed.source_system == "home_assistant", (
+        "D-D2: unverify must NOT touch source_system"
+    )
 
 
 # ---------------------------------------------------------------------------
