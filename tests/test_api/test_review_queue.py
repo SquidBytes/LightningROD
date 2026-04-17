@@ -578,3 +578,71 @@ async def test_review_edit_network_modal_fetch_returns_details_only(
     # Save button must target the review-scoped endpoint + review swap zone
     assert 'hx-put="/review/networks/' in body
     assert 'hx-target="#review-inner"' in body
+
+
+# ---------------------------------------------------------------------------
+# 8. Phase 28 Task 2 — Page-scope location edit modal + HX-Trigger close
+# ---------------------------------------------------------------------------
+
+
+async def test_review_edit_location_fires_close_trigger(client, db_session):
+    """POST /review/location/{id}/edit now returns HX-Trigger: closeEditLocModal
+    alongside the locations partial (D-A2 / Pattern S1). The body listener
+    in review_queue.html closes the page-scope #edit-loc-modal on success."""
+    net = await NetworkFactory.create(
+        db_session, network_name="CloseTriggerNet", is_verified=True
+    )
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="Before Close",
+        network_id=None,
+        is_verified=False,
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        f"/review/location/{loc.id}/edit",
+        data={
+            "location_name": "After Close",
+            "address": "",
+            "location_type": "",
+            "network_id": str(net.id),
+            "latitude": "",
+            "longitude": "",
+            "cost_per_kwh": "",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "closeEditLocModal" in response.headers.get("HX-Trigger", "")
+    refreshed = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == loc.id)
+        )
+    ).scalar_one()
+    assert refreshed.location_name == "After Close"
+    assert refreshed.network_id == net.id
+
+
+async def test_review_location_edit_form_endpoint_returns_form(client, db_session):
+    """GET /review/location/{id}/edit-form returns the form markup for the
+    page-scope #edit-loc-modal. Must include the POST target back to
+    /review/location/{id}/edit and the network <select> (D-C2 retained
+    association path)."""
+    await NetworkFactory.create(
+        db_session, network_name="Form Endpoint Net", is_verified=True
+    )
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="Form Endpoint Loc",
+        network_id=None,
+        is_verified=False,
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/review/location/{loc.id}/edit-form")
+
+    assert response.status_code == 200
+    body = response.text
+    assert f'hx-post="/review/location/{loc.id}/edit"' in body
+    assert 'name="network_id"' in body
