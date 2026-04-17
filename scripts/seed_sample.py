@@ -35,6 +35,7 @@ from sqlalchemy.exc import IntegrityError
 from db.engine import AsyncSessionLocal
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
+from db.models.reference import EVChargingNetwork, EVLocationLookup
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle import EVVehicle
 
@@ -46,7 +47,8 @@ SAMPLE_VEHICLE = {
     "make": "Ford",
     "model": "F-150 Lightning",
     "year": 2024,
-    "trim": "Standard Range",
+    "trim_level": "XLT",
+    "battery_option": "Standard Range",
     "battery_capacity_kwh": 98.0,        # usable
     "battery_gross_capacity_kwh": 108.0, # gross (matches FordPass reporting)
     "vin": "1FT8W3ED5LFB0D19",
@@ -164,22 +166,26 @@ def transform_battery_row(csv_row: dict, device_id: str) -> Optional[dict]:
 # Charging session transform
 # ---------------------------------------------------------------------------
 
-def transform_session_row(csv_row: dict, device_id: str) -> Optional[dict]:
-    """Transform a session CSV row to a DB row that mirrors HASS-ingested fields.
+def transform_session_row(
+    csv_row: dict,
+    device_id: str,
+    network_lookup: Optional[dict] = None,
+    location_id_map: Optional[dict] = None,
+) -> Optional[dict]:
+    """Transform a session CSV row to a DB row ready for cost testing.
 
-    We intentionally leave null every column that hass_processor.handle_energy_transfer
-    does NOT populate, so seeded sessions look exactly like real HASS data:
+    Populates cost, is_free, location_type, network_id, and location_id so
+    that compute_session_cost can exercise all cascade paths:
 
-      * cost / cost_without_overrides   (energytransferlogentry has no cost)
-      * is_free                          (not in HA payload)
-      * location_type                    (HASS leaves session.location_type null;
-                                          location lookup infers type on the
-                                          locations row, not on the session)
-      * charging_voltage / charging_amperage  (HA exposes only weightedAverage kW)
-      * evse_voltage / evse_amperage / evse_kw / evse_energy_kwh /
-        evse_max_power_kw / evse_source (no charger-side telemetry in HA)
+      - Paid home sessions (is_free=False, cost imported) → actual vs estimated
+        difference once the Home location has cost_per_kwh set.
+      - Free work sessions (is_free=True, cost=None) → free charging display
+        with savings estimate from the Workplace Energy network rate.
+      - Public DC sessions (is_free=False, cost imported, network rate) →
+        actual vs estimated difference via network cost_per_kwh.
 
-    Everything kept below maps 1:1 to a field the HASS handler fills in.
+    Fields still intentionally omitted (HASS doesn't populate them):
+      charging_voltage, charging_amperage, evse_voltage/amperage/kw/energy/source
     """
     session_start = parse_timestamp(csv_row.get("session_start_utc", ""))
     energy_kwh = float_or_none(csv_row.get("energy_kwh", ""))
@@ -189,16 +195,45 @@ def transform_session_row(csv_row: dict, device_id: str) -> Optional[dict]:
 
     session_id = parse_uuid(csv_row.get("session_id", ""))
     if session_id is None:
-        # Generate deterministic UUID
         loc = csv_row.get("location_name", "")
         key = f"{session_start.isoformat() if session_start else ''}|{loc}|{energy_kwh or ''}"
         session_id = uuid.UUID(bytes=hashlib.md5(key.encode()).digest())
+
+    location_name = str_or_none(csv_row.get("location_name", ""))
+    is_free = parse_bool(csv_row.get("is_free", ""))
+
+    # Resolve network_id from the charging_network column
+    net_name = csv_row.get("charging_network", "").strip()
+    network_id = network_lookup.get(net_name) if network_lookup and net_name else None
+
+    # Prefer seeded location IDs (guaranteed to have cost_per_kwh configured)
+    # over raw CSV numeric IDs which may not exist in a fresh DB.
+    location_id = None
+    if location_id_map and location_name:
+        location_id = location_id_map.get(location_name)
+    if location_id is None:
+        location_id = int_or_none(csv_row.get("location_id", ""))
+
+    # Cost: free sessions should show as is_free, not as a $0 import.
+    # Stripping cost here ensures the free-charging / savings cascade path
+    # is exercised correctly (compute_session_cost step a vs step b).
+    if is_free:
+        cost = None
+        cost_without_overrides = None
+        cost_source = None
+    else:
+        cost = float_or_none(csv_row.get("cost", ""))
+        cost_without_overrides = float_or_none(csv_row.get("cost_without_overrides", ""))
+        cost_source = "imported" if cost is not None else None
 
     db_row = {
         "session_id": session_id,
         "device_id": device_id,
         "charge_type": str_or_none(csv_row.get("charge_type", "")),
-        "location_name": str_or_none(csv_row.get("location_name", "")),
+        "location_name": location_name,
+        "location_type": str_or_none(csv_row.get("location_type", "")),
+        "is_free": is_free,
+        "network_id": network_id,
         "charging_kw": float_or_none(csv_row.get("charging_kw", "")),
         "session_start_utc": session_start,
         "session_end_utc": parse_timestamp(csv_row.get("session_end_utc", "")),
@@ -207,15 +242,17 @@ def transform_session_row(csv_row: dict, device_id: str) -> Optional[dict]:
         "start_soc": float_or_none(csv_row.get("start_soc", "")),
         "end_soc": float_or_none(csv_row.get("end_soc", "")),
         "energy_kwh": energy_kwh,
+        "cost": cost,
+        "cost_without_overrides": cost_without_overrides,
+        "cost_source": cost_source,
         "is_complete": parse_bool(csv_row.get("is_complete", "True")),
-        "location_id": int_or_none(csv_row.get("location_id", "")),
+        "location_id": location_id,
         "address": str_or_none(csv_row.get("location_address", "")),
         "latitude": float_or_none(csv_row.get("latitude", "")),
         "longitude": float_or_none(csv_row.get("longitude", "")),
         "max_power": float_or_none(csv_row.get("max_power", "")),
         "min_power": float_or_none(csv_row.get("min_power", "")),
         # CSV stores miles; convert to km for metric-canonical storage.
-        # hass_processor normalizes totalDistanceAdded the same way.
         "distance_added": _mi_to_km(float_or_none(csv_row.get("miles_added", ""))),
         "source_system": SOURCE_SYSTEM,
     }
@@ -285,18 +322,6 @@ def transform_trip_row(csv_row: dict, device_id: str) -> Optional[dict]:
     return db_row
 
 
-# Session columns to update on upsert conflict — kept in sync with the
-# HASS-compatible subset in transform_session_row (no cost/is_free/EVSE/etc).
-SESSION_UPDATABLE = [
-    "device_id", "charge_type", "location_name",
-    "session_start_utc", "session_end_utc", "charge_duration_seconds",
-    "energy_kwh", "charging_kw", "max_power", "min_power", "start_soc", "end_soc",
-    "distance_added",
-    "is_complete", "recorded_at", "source_system",
-    "location_id", "address", "latitude", "longitude",
-]
-
-
 # ---------------------------------------------------------------------------
 # Seed logic
 # ---------------------------------------------------------------------------
@@ -308,7 +333,8 @@ async def seed_vehicle(device_id: str, dry_run: bool) -> None:
     print(f"{'='*60}")
 
     vehicle_data = {**SAMPLE_VEHICLE, "device_id": device_id}
-    print(f"  {vehicle_data['year']} {vehicle_data['make']} {vehicle_data['model']} {vehicle_data['trim']}")
+    trim_parts = filter(None, [vehicle_data.get("trim_level"), vehicle_data.get("battery_option")])
+    print(f"  {vehicle_data['year']} {vehicle_data['make']} {vehicle_data['model']} {' '.join(trim_parts)}")
     print(f"  VIN: {vehicle_data['vin']}")
     print(f"  Device ID: {device_id}")
     print(f"  Battery: {vehicle_data['battery_capacity_kwh']} kWh")
@@ -403,7 +429,108 @@ async def seed_battery(device_id: str, csv_path: str, dry_run: bool) -> int:
     return len(transformed)
 
 
-async def seed_sessions(device_id: str, csv_path: str, dry_run: bool) -> int:
+async def seed_cost_reference(dry_run: bool) -> dict[str, int]:
+    """Seed reference locations and networks needed for cost testing.
+
+    Creates or updates:
+    - "Home" location with cost_per_kwh=0.16 — supplies estimated_cost for
+      home sessions so actual vs estimated differences are visible. The Home
+      *network* is is_free=True (correct — you own the charger), but that
+      skips the network-level estimated_cost calc, so the location override
+      is what makes the comparison work.
+    - "Work" location with no cost_per_kwh — employer-provided free charging.
+    - "Workplace Energy" network with cost_per_kwh=0.35, is_free=False — the
+      "what would this have cost at a public L2" rate that drives the free-
+      charging savings display for work sessions.
+
+    Returns {location_name: location_id} for use in transform_session_row.
+    """
+    print(f"\n{'='*60}")
+    print("  COST REFERENCE DATA")
+    print(f"{'='*60}")
+
+    if dry_run:
+        print("  [DRY RUN] Would seed cost reference locations and networks")
+        return {}
+
+
+    location_id_map: dict[str, int] = {}
+
+    async with AsyncSessionLocal() as session:
+        # --- Workplace Energy network ---
+        # Not in PREDEFINED_NETWORKS, so won't be auto-created with a rate.
+        # Create it with a public L2 rate so work session savings can be computed.
+        result = await session.execute(
+            select(EVChargingNetwork).where(EVChargingNetwork.network_name == "Workplace Energy")
+        )
+        workplace_net = result.scalar_one_or_none()
+        if workplace_net:
+            workplace_net.cost_per_kwh = 0.35
+            workplace_net.is_free = False
+            print("  Updated Workplace Energy network (cost_per_kwh=0.35)")
+        else:
+            workplace_net = EVChargingNetwork(
+                network_name="Workplace Energy",
+                cost_per_kwh=0.35,
+                is_free=False,
+                color="#22C55E",
+                source_system=SOURCE_SYSTEM,
+            )
+            session.add(workplace_net)
+            print("  Created Workplace Energy network (cost_per_kwh=0.35)")
+
+        # --- Home location ---
+        # cost_per_kwh=0.16 provides estimated_cost for home sessions.
+        # The Home network is is_free=True so the network-level estimated_cost
+        # calc is skipped; location override is the only path.
+        result = await session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.location_name == "Home")
+        )
+        home_loc = result.scalar_one_or_none()
+        if home_loc:
+            home_loc.cost_per_kwh = 0.16
+            home_loc.location_type = "home"
+            print(f"  Updated Home location (cost_per_kwh=0.16, id={home_loc.id})")
+        else:
+            home_loc = EVLocationLookup(
+                location_name="Home",
+                location_type="home",
+                cost_per_kwh=0.16,
+                source_system=SOURCE_SYSTEM,
+            )
+            session.add(home_loc)
+            await session.flush()  # get id before commit
+            print(f"  Created Home location (cost_per_kwh=0.16, id={home_loc.id})")
+
+        # --- Work location ---
+        result = await session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.location_name == "Work")
+        )
+        work_loc = result.scalar_one_or_none()
+        if work_loc:
+            work_loc.location_type = "work"
+            print(f"  Updated Work location (id={work_loc.id})")
+        else:
+            work_loc = EVLocationLookup(
+                location_name="Work",
+                location_type="work",
+                source_system=SOURCE_SYSTEM,
+            )
+            session.add(work_loc)
+            await session.flush()
+            print(f"  Created Work location (id={work_loc.id})")
+
+        await session.commit()
+
+        location_id_map["Home"] = home_loc.id
+        location_id_map["Work"] = work_loc.id
+
+    return location_id_map
+
+
+async def seed_sessions(
+    device_id: str, csv_path: str, dry_run: bool, location_id_map: dict | None = None
+) -> int:
     print(f"\n{'='*60}")
     print("  CHARGING SESSIONS")
     print(f"{'='*60}")
@@ -413,9 +540,28 @@ async def seed_sessions(device_id: str, csv_path: str, dry_run: bool) -> int:
         raw_rows = list(csv.DictReader(f))
     print(f"  Loaded {len(raw_rows)} rows")
 
+    # Resolve charging_network names → network IDs for estimated_cost computation
+    print("  Resolving network names...")
+    from web.queries.settings import resolve_network
+    network_names: set[str] = set()
+    for r in raw_rows:
+        name = r.get("charging_network", "").strip()
+        if name:
+            network_names.add(name)
+
+    network_lookup: dict[str, Optional[int]] = {}
+    if network_names and not dry_run:
+        async with AsyncSessionLocal() as db:
+            for name in sorted(network_names):
+                network_lookup[name] = await resolve_network(db, network_name=name)
+            await db.commit()
+        print(f"  Resolved {len(network_lookup)} networks: {list(network_lookup)}")
+    elif dry_run:
+        print(f"  [DRY RUN] Would resolve networks: {sorted(network_names)}")
+
     transformed = []
     for raw_row in raw_rows:
-        db_row = transform_session_row(raw_row, device_id)
+        db_row = transform_session_row(raw_row, device_id, network_lookup, location_id_map)
         if db_row:
             transformed.append(db_row)
     print(f"  Transformed {len(transformed)} rows")
@@ -425,11 +571,8 @@ async def seed_sessions(device_id: str, csv_path: str, dry_run: bool) -> int:
         return len(transformed)
 
     async with AsyncSessionLocal() as session:
-        # Delete existing sample rows before re-insert. An upsert would keep
-        # stale values in columns we now deliberately leave unset (cost, is_free,
-        # location_type, evse_*), masking the "HASS-only" shape we want to
-        # simulate. Match the seed_battery / seed_trips delete-and-insert
-        # pattern instead.
+        # Delete before re-insert so stale values from previous runs
+        # (old network_id, cost_source, etc.) don't survive.
         result = await session.execute(
             text("DELETE FROM ev_charging_session WHERE source_system = :src AND device_id = :did"),
             {"src": SOURCE_SYSTEM, "did": device_id},
@@ -505,7 +648,6 @@ async def verify(device_id: str):
         )
         b = result.fetchone()
 
-        # Session stats — no cost/location_type (HASS-parity seed doesn't set them)
         result = await session.execute(
             text("""
                 SELECT COUNT(*) AS total,
@@ -513,7 +655,13 @@ async def verify(device_id: str):
                        COUNT(*) FILTER (WHERE charge_type = 'DC') AS dc,
                        ROUND(SUM(energy_kwh)::numeric, 1) AS total_kwh,
                        COUNT(*) FILTER (WHERE location_name ILIKE 'Home') AS home,
-                       COUNT(*) FILTER (WHERE location_name ILIKE 'Work') AS work
+                       COUNT(*) FILTER (WHERE location_name ILIKE 'Work') AS work,
+                       COUNT(*) FILTER (WHERE is_free = true) AS free_sessions,
+                       COUNT(*) FILTER (WHERE cost IS NOT NULL) AS with_cost,
+                       COUNT(*) FILTER (WHERE cost IS NULL AND is_free = false) AS no_cost_paid,
+                       COUNT(*) FILTER (WHERE cost_source = 'imported') AS imported_cost,
+                       COUNT(*) FILTER (WHERE network_id IS NOT NULL) AS with_network,
+                       ROUND(SUM(cost) FILTER (WHERE cost IS NOT NULL)::numeric, 2) AS total_cost
                 FROM ev_charging_session WHERE device_id = :did
             """),
             {"did": device_id},
@@ -551,6 +699,12 @@ async def verify(device_id: str):
     print(f"    AC: {s.ac} | DC: {s.dc}")
     print(f"    Home: {s.home} | Work: {s.work} | Other: {s.total - s.home - s.work}")
     print(f"    Total energy: {s.total_kwh} kWh")
+    print(f"    With network_id: {s.with_network}")
+    print(f"    Free sessions:   {s.free_sessions}")
+    print(f"    With cost:       {s.with_cost}  (imported: {s.imported_cost})")
+    print(f"    No cost (paid):  {s.no_cost_paid}  (estimated-only display)")
+    total_cost = float(s.total_cost) if s.total_cost is not None else 0.0
+    print(f"    Total cost:      ${total_cost:.2f}")
 
     print("\n  Trip Metrics:")
     print(f"    Total trips:  {t.total}")
@@ -588,7 +742,10 @@ async def seed(args: argparse.Namespace):
         await seed_battery(device_id, battery_csv, dry_run)
 
     if seed_all or args.sessions_only:
-        await seed_sessions(device_id, sessions_csv, dry_run)
+        # Seed reference data (locations + networks) so cost features work,
+        # then pass the location_id_map to the session seeder.
+        location_id_map = await seed_cost_reference(dry_run)
+        await seed_sessions(device_id, sessions_csv, dry_run, location_id_map=location_id_map)
 
     if seed_all or args.trips_only:
         await seed_trips(device_id, trips_csv, dry_run)

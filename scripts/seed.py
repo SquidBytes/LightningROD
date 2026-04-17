@@ -57,6 +57,7 @@ UPDATABLE_COLUMNS = [
     "end_soc",
     "cost",
     "cost_without_overrides",
+    "cost_source",
     "distance_added",
     "charging_voltage",
     "charging_amperage",
@@ -73,6 +74,7 @@ UPDATABLE_COLUMNS = [
     "evse_kw",
     "evse_energy_kwh",
     "evse_max_power_kw",
+    "charger_rated_kw",
     "evse_source",
     "stall_id",
 ]
@@ -261,6 +263,7 @@ COLUMN_MAP = {
     "evse_kw": ("evse_kw", float_or_none),
     "evse_energy_kwh": ("evse_energy_kwh", float_or_none),
     "evse_max_power_kw": ("evse_max_power_kw", float_or_none),
+    "charger_rated_kw": ("charger_rated_kw", float_or_none),
     "evse_source": ("evse_source", str_or_none),
     "stall_id": ("stall_id", int_or_none),
     # --- Pipeline metadata ---
@@ -410,6 +413,10 @@ def transform_row(
     db_row["device_id"] = vin or db_row.get("device_id") or "csv_seed"
     db_row["source_system"] = db_row.get("source_system") or "csv_seed"
     db_row["charge_type"] = normalize_charge_type(csv_charge_type, location_name)
+
+    # Mark CSV-imported cost so the cost hierarchy knows it came from import
+    if db_row.get("cost") is not None and not db_row.get("cost_source"):
+        db_row["cost_source"] = "imported"
 
     # CSV-provided location_type and is_free take precedence over classifier
     if not db_row.get("location_type"):
