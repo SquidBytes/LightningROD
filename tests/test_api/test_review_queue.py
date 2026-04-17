@@ -1243,3 +1243,101 @@ async def test_associate_location_to_new_network_creates_unverified_network(
     ).scalar_one()
     assert refreshed.network_id == created.id
     assert refreshed.is_verified is False
+
+
+async def test_promote_location_creates_network_and_verifies(client, db_session):
+    """D-C3: POST /review/location/{id}/promote creates a new network named
+    after the location, sets ``loc.network_id`` to it, and flips
+    ``loc.is_verified=True`` — all in one click for the one-off-charger case
+    (campground chargers, small businesses, non-branded chargers).
+
+    The new network is is_verified=True + source_system="manual" because the
+    user's explicit Promote click vouches for both the location and the
+    network that will now carry its name.
+    """
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="RV Park Charger",
+        is_verified=False,
+        network_id=None,
+        source_system="home_assistant",
+    )
+    await db_session.commit()
+
+    # Sanity — no network with this name exists yet.
+    pre = (
+        await db_session.execute(
+            select(EVChargingNetwork).where(
+                EVChargingNetwork.network_name == "RV Park Charger"
+            )
+        )
+    ).scalars().all()
+    assert len(pre) == 0
+
+    response = await client.post(f"/review/location/{loc.id}/promote")
+
+    assert response.status_code == 200
+
+    created = (
+        await db_session.execute(
+            select(EVChargingNetwork).where(
+                EVChargingNetwork.network_name == "RV Park Charger"
+            )
+        )
+    ).scalar_one()
+    assert created.is_verified is True
+    assert created.source_system == "manual"
+
+    refreshed = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == loc.id)
+        )
+    ).scalar_one()
+    assert refreshed.network_id == created.id
+    assert refreshed.is_verified is True
+    assert refreshed.source_system == "manual"
+
+
+async def test_promote_location_works_for_already_networked_location(
+    client, db_session
+):
+    """D-C3: Promote is valid for any unverified location regardless of its
+    current network_id. A location that was auto-associated to the wrong
+    network can be Promote'd to its own new network in one click — the new
+    network replaces the prior network_id on the location row."""
+    prior_net = await NetworkFactory.create(
+        db_session,
+        network_name="PriorMisassociatedNet",
+        is_verified=True,
+    )
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="DistinctChargerSite",
+        is_verified=False,
+        network_id=prior_net.id,
+    )
+    await db_session.commit()
+
+    response = await client.post(f"/review/location/{loc.id}/promote")
+
+    assert response.status_code == 200
+
+    new_net = (
+        await db_session.execute(
+            select(EVChargingNetwork).where(
+                EVChargingNetwork.network_name == "DistinctChargerSite"
+            )
+        )
+    ).scalar_one()
+    assert new_net.is_verified is True
+
+    refreshed = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == loc.id)
+        )
+    ).scalar_one()
+    # The location's network_id must now point at the freshly-created
+    # network — not the prior misassociation.
+    assert refreshed.network_id == new_net.id
+    assert refreshed.network_id != prior_net.id
+    assert refreshed.is_verified is True
