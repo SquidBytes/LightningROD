@@ -41,12 +41,23 @@
                 <span id="selected-count" class="text-base text-base-content/70 font-medium whitespace-nowrap min-w-[100px]">0 selected</span>
 
                 <div class="form-control">
+                    {# Network combobox → location <select> cascade (D-D6 pure HTMX, no fetch()).
+                       resolveNetworkCombobox() sets the hidden #bulk-network-id synchronously,
+                       then HTMX's hx-trigger="change" on the text input issues hx-get with the
+                       hidden's value included (hx-include selector targets [data-network-hidden]). #}
                     <input type="hidden" name="network_id" id="bulk-network-id" value="" data-network-hidden>
                     <input type="text" id="bulk-network" list="bulk-network-list"
                            placeholder="Network..."
                            class="input input-bordered input-sm w-40"
                            autocomplete="off"
-                           oninput="resolveNetworkCombobox(this); refreshBulkLocations();">
+                           oninput="resolveNetworkCombobox(this); htmx.trigger(this, 'change');"
+                           hx-get="/locations/by-network"
+                           hx-trigger="change"
+                           hx-include="[data-network-hidden]"
+                           hx-target="#bulk-location-id"
+                           hx-swap="innerHTML"
+                           hx-params="network_id"
+                           hx-on::after-request="document.getElementById('bulk-location-id').disabled = !document.getElementById('bulk-network-id').value">
                     <datalist id="bulk-network-list">
                         {% for net in networks %}
                         <option value="{{ net.network_name }}" data-id="{{ net.id }}"></option>
@@ -280,26 +291,10 @@ document.body.addEventListener('session-created', function(evt) {
 // --- Group Edit ---
 var _groupEditActive = false;
 
-function refreshBulkLocations() {
-    var netId = document.getElementById('bulk-network-id').value;
-    var select = document.getElementById('bulk-location-id');
-    if (!select) return;
-    if (!netId) {
-        select.innerHTML = '<option value="">Location (select network first)</option>';
-        select.disabled = true;
-        return;
-    }
-    fetch('/locations/by-network?network_id=' + encodeURIComponent(netId), {
-        headers: { 'HX-Request': 'true' }
-    }).then(function(resp) {
-        if (!resp.ok) return;
-        return resp.text();
-    }).then(function(html) {
-        if (html == null) return;
-        select.innerHTML = html;
-        select.disabled = false;
-    });
-}
+// Phase 28-04 D-D6: refreshBulkLocations() removed. The network→location cascade
+// is now pure HTMX (hx-get + hx-trigger="change" on #bulk-network). The text input's
+// oninput fires htmx.trigger(this, 'change') after resolveNetworkCombobox() has set
+// the hidden #bulk-network-id, so HTMX issues the request with an up-to-date network_id.
 
 function toggleGroupEdit() {
     _groupEditActive = !_groupEditActive;
