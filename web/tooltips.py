@@ -104,9 +104,9 @@ TOOLTIPS: dict[str, str] = {
         "Monthly kWh recovered via regenerative braking, also shown as a share of trip energy."
     ),
     "driving_performance_total_regen":(
-        "Sum of range recovered via regenerative braking"
+        "Sum of range recovered via regenerative braking."
     ),
     "driving_performance_range_recovered":(
-        "Distance recovered from regenerative braking"
+        "Distance recovered from regenerative braking."
     ),
 }
