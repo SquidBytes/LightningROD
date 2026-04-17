@@ -84,7 +84,7 @@
 
 <script>
 function openNetworkModal(networkId) {
-    htmx.ajax('GET', '/settings/networks/' + networkId + '/edit-modal',
+    htmx.ajax('GET', '/review/networks/' + networkId + '/edit-modal',
         {target: '#network-modal-content', swap: 'innerHTML'});
     document.getElementById('network-modal').showModal();
 }

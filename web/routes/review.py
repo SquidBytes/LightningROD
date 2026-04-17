@@ -431,6 +431,82 @@ async def verify_network(
     )
 
 
+@router.get("/networks/{network_id}/edit-modal", response_class=HTMLResponse)
+async def review_edit_network_modal(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the network_edit_modal template rendered in review context
+    (D-A1, D-A3):
+
+    - ``save_url``       -> ``/review/networks/{id}``
+    - ``save_target``    -> ``#review-inner``
+    - ``save_swap``      -> ``innerHTML``
+    - ``caller_context`` -> ``'review'`` (hides Locations + Subscription tabs)
+    """
+    result = await db.execute(
+        select(EVChargingNetwork).where(EVChargingNetwork.id == network_id)
+    )
+    network = result.scalar_one_or_none()
+    if not network:
+        raise HTTPException(status_code=404, detail="Network not found")
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/network_edit_modal.html",
+        {
+            "network": network,
+            "save_url": f"/review/networks/{network_id}",
+            "save_target": "#review-inner",
+            "save_swap": "innerHTML",
+            "caller_context": "review",
+        },
+    )
+
+
+@router.put("/networks/{network_id}", response_class=HTMLResponse)
+async def review_edit_network(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    network_name: str = Form(...),
+    cost_per_kwh: Optional[float] = Form(None),
+    color: Optional[str] = Form(None),
+    is_free: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+):
+    """Review-scoped network edit (D-A1).
+
+    Persists changes and returns the review networks partial plus
+    ``HX-Trigger: closeNetworkModal`` so the page-scope dialog listener in
+    review_queue.html dismisses the modal on success.
+
+    Form signature mirrors ``PUT /settings/networks/{network_id}`` so the
+    shared network_edit_modal template can submit to either endpoint
+    identically.
+    """
+    result = await db.execute(
+        select(EVChargingNetwork).where(EVChargingNetwork.id == network_id)
+    )
+    net = result.scalar_one_or_none()
+    if net is not None:
+        net.network_name = network_name
+        net.cost_per_kwh = cost_per_kwh
+        net.color = color.strip() if color and color.strip() else None
+        net.is_free = is_free is not None
+        if notes is not None:
+            net.notes = notes.strip() or None
+        await db.commit()
+    ctx = await _networks_context(db, filter="unverified")
+    response = templates.TemplateResponse(
+        request,
+        "review/partials/review_networks_table.html",
+        ctx,
+    )
+    response.headers["HX-Trigger"] = "closeNetworkModal"
+    return response
+
+
 @router.post("/location/{location_id}/edit", response_class=HTMLResponse)
 async def edit_location(
     location_id: int,
