@@ -752,3 +752,123 @@ async def test_pending_badge_shows_combined_unverified_count(client, db_session)
         "Approved tab's badge-success should have been removed from the tab "
         "header — verified-row badges INSIDE the approved tree are fine."
     )
+
+
+# ---------------------------------------------------------------------------
+# 10. Phase 28 Task 2-02 — Approved tree with "No Network" pseudo-node (D-B5/D-B6)
+# ---------------------------------------------------------------------------
+
+
+async def test_approved_tree_contains_no_network_pseudo_node_when_standalone_exists(
+    client, db_session
+):
+    """D-B6: standalone verified locations render INSIDE the networks tree
+    as a synthetic 'No Network' pseudo-node (sentinel id 'none'), not in a
+    separate section."""
+    await NetworkFactory.create(
+        db_session, network_name="HasNetTreeNet", is_verified=True
+    )
+    await LocationLookupFactory.create(
+        db_session,
+        location_name="FreeStandaloneCharger",
+        network_id=None,
+        is_verified=True,
+    )
+    await db_session.commit()
+
+    response = await client.get("/review?tab=approved")
+
+    assert response.status_code == 200
+    body = response.text
+    # Pseudo-node parent row + child row markers use the 'none' sentinel
+    assert 'approved-net-row-none' in body, (
+        "expected synthetic pseudo-node parent row (id='approved-net-row-none')"
+    )
+    assert 'approved-net-children-none' in body, (
+        "expected synthetic pseudo-node child row (id='approved-net-children-none')"
+    )
+    # Standalone location renders INSIDE the child row, not in a separate section
+    # — we assert ordering: `approved-net-children-none` appears BEFORE the
+    # standalone location name in the body.
+    idx_children = body.find('approved-net-children-none')
+    idx_loc = body.find('FreeStandaloneCharger')
+    assert idx_children >= 0 and idx_loc >= 0
+    assert idx_children < idx_loc, (
+        "standalone location must render inside the pseudo-node child row, "
+        "not in a separate 'Standalone Locations' section before it"
+    )
+    # The old separate section header must be gone
+    assert 'Standalone Locations' not in body, (
+        "D-B6: the old 'Standalone Locations' h2 section must be removed"
+    )
+
+
+async def test_approved_tree_omits_pseudo_node_when_no_standalone(client, db_session):
+    """D-B6: the synthetic 'No Network' pseudo-node only appears when there
+    are standalone verified locations. With zero standalone rows, the tree
+    renders without it."""
+    net = await NetworkFactory.create(
+        db_session, network_name="OnlyNetworkedTreeNet", is_verified=True
+    )
+    await LocationLookupFactory.create(
+        db_session,
+        location_name="AttachedLocInTree",
+        network_id=net.id,
+        is_verified=True,
+    )
+    await db_session.commit()
+
+    response = await client.get("/review?tab=approved")
+
+    assert response.status_code == 200
+    body = response.text
+    assert 'approved-net-row-none' not in body, (
+        "no-standalone state must NOT render the synthetic 'none' row"
+    )
+    assert 'approved-net-children-none' not in body, (
+        "no-standalone state must NOT render the synthetic 'none' child row"
+    )
+
+
+async def test_approved_tree_renders_network_children_in_nested_rows(
+    client, db_session
+):
+    """D-B5: networked verified locations render inside the parent network's
+    expandable child row (approved-net-children-{network.id}), not as a flat
+    locations table beside the networks table."""
+    net = await NetworkFactory.create(
+        db_session, network_name="ParentTreeNet", is_verified=True
+    )
+    await LocationLookupFactory.create(
+        db_session,
+        location_name="ChildLocAlpha",
+        network_id=net.id,
+        is_verified=True,
+    )
+    await LocationLookupFactory.create(
+        db_session,
+        location_name="ChildLocBravo",
+        network_id=net.id,
+        is_verified=True,
+    )
+    await db_session.commit()
+
+    response = await client.get("/review?tab=approved")
+
+    assert response.status_code == 200
+    body = response.text
+    child_row_marker = f'approved-net-children-{net.id}'
+    assert child_row_marker in body, (
+        f"expected child-row id {child_row_marker!r} in tree markup"
+    )
+    # Both children must appear AFTER the child-row marker (nested inside it)
+    idx_marker = body.find(child_row_marker)
+    idx_alpha = body.find('ChildLocAlpha')
+    idx_bravo = body.find('ChildLocBravo')
+    assert idx_marker >= 0 and idx_alpha >= 0 and idx_bravo >= 0
+    assert idx_marker < idx_alpha, (
+        "ChildLocAlpha must render inside the expandable child row"
+    )
+    assert idx_marker < idx_bravo, (
+        "ChildLocBravo must render inside the expandable child row"
+    )
