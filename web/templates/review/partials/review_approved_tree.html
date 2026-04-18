@@ -88,7 +88,7 @@
                                 <th>Address</th>
                                 <th>Type</th>
                                 <th>Sessions</th>
-                                <th class="text-right">Actions</th>
+                                <th class="text-right w-56">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -105,23 +105,48 @@
                                     <span class="badge badge-xs badge-ghost">{{ loc_session_counts.get(loc.id, 0) }}</span>
                                 </td>
                                 <td class="text-right">
-                                    <div class="flex justify-end gap-1 flex-wrap">
-                                        <button class="btn btn-xs btn-info"
-                                                onclick="openEditLocModal({{ loc.id }}, 'approved')">
-                                            Edit
-                                        </button>
-                                        <button class="btn btn-xs btn-neutral"
-                                                onclick="openMergeModal('location', {{ loc.id }}, 'approved')">
-                                            Merge
-                                        </button>
+                                    {# Phase 28.1 G3: Action-cell visual grouping (D-UX1/D-UX2 adapted to
+                                       verified rows). Clusters read left-to-right: Unverify+Edit | Merge.
+                                       The per-cluster marker class below carries no CSS rules — it is a
+                                       grep anchor used by the 28.1-02 smoke tests. #}
+                                    <div class="flex justify-end gap-3 flex-wrap items-start">
+                                        {# Cluster 1: Unverify + Edit — verify-class left group
+                                           (mirrors Pending's Verify+Edit cluster). #}
                                         {% if loc.is_verified %}
-                                        <button class="btn btn-xs btn-warning"
-                                                hx-post="/review/location/{{ loc.id }}/unverify"
-                                                hx-target="#review-content"
-                                                hx-swap="innerHTML">
-                                            Unverify
-                                        </button>
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-warning"
+                                                    hx-post="/review/location/{{ loc.id }}/unverify"
+                                                    hx-target="#review-content"
+                                                    hx-swap="innerHTML">
+                                                Unverify
+                                            </button>
+                                            <button class="btn btn-xs btn-info"
+                                                    onclick="openEditLocModal({{ loc.id }}, 'approved')">
+                                                Edit
+                                            </button>
+                                        </div>
+                                        {% else %}
+                                        {# Defensive — if an unverified row ever lands in the Approved tree,
+                                           render Edit without an Unverify button. #}
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-info"
+                                                    onclick="openEditLocModal({{ loc.id }}, 'approved')">
+                                                Edit
+                                            </button>
+                                        </div>
                                         {% endif %}
+
+                                        {# Cluster 2: Merge — transform / relationship actions. #}
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-neutral"
+                                                    onclick="openMergeModal('location', {{ loc.id }}, 'approved')">
+                                                Merge
+                                            </button>
+                                        </div>
+
+                                        {# Cluster 3: intentionally empty — Approved-tab location rows have no
+                                           destructive action (Delete is Pending-only per Phase 28-02). The
+                                           outer gap-3 still provides the visual grouping cue. #}
                                     </div>
                                 </td>
                             </tr>
@@ -181,7 +206,7 @@
                                 <th>Address</th>
                                 <th>Type</th>
                                 <th>Sessions</th>
-                                <th class="text-right">Actions</th>
+                                <th class="text-right w-56">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -198,23 +223,48 @@
                                     <span class="badge badge-xs badge-ghost">{{ loc_session_counts.get(loc.id, 0) }}</span>
                                 </td>
                                 <td class="text-right">
-                                    <div class="flex justify-end gap-1 flex-wrap">
-                                        <button class="btn btn-xs btn-info"
-                                                onclick="openEditLocModal({{ loc.id }}, 'approved')">
-                                            Edit
-                                        </button>
-                                        <button class="btn btn-xs btn-neutral"
-                                                onclick="openMergeModal('location', {{ loc.id }}, 'approved')">
-                                            Merge
-                                        </button>
+                                    {# Phase 28.1 G3: Action-cell visual grouping (D-UX1/D-UX2 adapted to
+                                       verified rows). Clusters read left-to-right: Unverify+Edit | Merge.
+                                       The per-cluster marker class below carries no CSS rules — it is a
+                                       grep anchor used by the 28.1-02 smoke tests. #}
+                                    <div class="flex justify-end gap-3 flex-wrap items-start">
+                                        {# Cluster 1: Unverify + Edit — verify-class left group
+                                           (mirrors Pending's Verify+Edit cluster). #}
                                         {% if loc.is_verified %}
-                                        <button class="btn btn-xs btn-warning"
-                                                hx-post="/review/location/{{ loc.id }}/unverify"
-                                                hx-target="#review-content"
-                                                hx-swap="innerHTML">
-                                            Unverify
-                                        </button>
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-warning"
+                                                    hx-post="/review/location/{{ loc.id }}/unverify"
+                                                    hx-target="#review-content"
+                                                    hx-swap="innerHTML">
+                                                Unverify
+                                            </button>
+                                            <button class="btn btn-xs btn-info"
+                                                    onclick="openEditLocModal({{ loc.id }}, 'approved')">
+                                                Edit
+                                            </button>
+                                        </div>
+                                        {% else %}
+                                        {# Defensive — if an unverified row ever lands in the Approved tree,
+                                           render Edit without an Unverify button. #}
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-info"
+                                                    onclick="openEditLocModal({{ loc.id }}, 'approved')">
+                                                Edit
+                                            </button>
+                                        </div>
                                         {% endif %}
+
+                                        {# Cluster 2: Merge — transform / relationship actions. #}
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-neutral"
+                                                    onclick="openMergeModal('location', {{ loc.id }}, 'approved')">
+                                                Merge
+                                            </button>
+                                        </div>
+
+                                        {# Cluster 3: intentionally empty — Approved-tab location rows have no
+                                           destructive action (Delete is Pending-only per Phase 28-02). The
+                                           outer gap-3 still provides the visual grouping cue. #}
                                     </div>
                                 </td>
                             </tr>

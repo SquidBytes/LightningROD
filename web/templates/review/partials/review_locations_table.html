@@ -36,7 +36,7 @@
                 <th>Sessions</th>
                 <th>Source</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th class="w-56">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -81,54 +81,72 @@
                     <span class="badge badge-sm badge-warning">Unverified</span>
                     {% endif %}
                 </td>
-                <td class="flex gap-1 flex-wrap">
+                <td class="flex gap-3 flex-wrap items-start">
+                    {# Phase 28.1 G3: Action-cell visual grouping (D-UX1/D-UX2).
+                       Three clusters, left-to-right: Verify+Edit | Associate+Promote+Merge | Delete.
+                       Inner gap-1 between siblings; outer gap-3 between clusters.
+                       The per-cluster marker class below carries no CSS rules — it is a
+                       grep anchor used by the 28.1-02 smoke tests. #}
+
+                    {# Cluster 1: Verify / Edit — the "commit this entry" left group. #}
+                    <div class="flex gap-1 flex-wrap review-action-cluster">
+                        {% if not loc.is_verified %}
+                        <button class="btn btn-xs btn-success"
+                                hx-post="/review/location/{{ loc.id }}/verify"
+                                hx-target="#review-inner"
+                                hx-swap="innerHTML">
+                            Verify
+                        </button>
+                        {% endif %}
+                        <button class="btn btn-xs btn-info"
+                                onclick="openEditLocModal({{ loc.id }})">
+                            Edit
+                        </button>
+                    </div>
+
+                    {# Cluster 2: Associate / Promote / Merge — transform / relationship actions. #}
+                    <div class="flex gap-1 flex-wrap review-action-cluster">
+                        {% if not loc.is_verified %}
+                        {# Phase 28 / D-C1: lightweight Associate picker — loads into
+                           the shared page-scope #edit-loc-modal content div and POSTs
+                           to /review/location/{id}/associate. #}
+                        <button class="btn btn-xs btn-accent"
+                                hx-get="/review/location/{{ loc.id }}/associate-modal"
+                                hx-target="#edit-loc-modal-content"
+                                hx-swap="innerHTML"
+                                onclick="document.getElementById('edit-loc-modal').showModal()">
+                            Associate
+                        </button>
+                        {# Phase 28 / D-C3: one-click Promote-to-own-Network for the
+                           one-off-charger case. Creates a new network named after
+                           the location, associates, and flips is_verified=True —
+                           all in a single transaction server-side. #}
+                        <button class="btn btn-xs btn-outline"
+                                hx-post="/review/location/{{ loc.id }}/promote"
+                                hx-target="#review-inner"
+                                hx-swap="innerHTML"
+                                hx-confirm="Create a new network named '{{ loc.location_name }}' and mark this location verified?">
+                            Promote
+                        </button>
+                        {% endif %}
+                        <button class="btn btn-xs btn-neutral"
+                                onclick="openMergeModal('location', {{ loc.id }})">
+                            Merge
+                        </button>
+                    </div>
+
+                    {# Cluster 3: Delete — destructive right group. Gated entirely on
+                       is_verified=False so verified rows render no destructive cluster. #}
                     {% if not loc.is_verified %}
-                    <button class="btn btn-xs btn-success"
-                            hx-post="/review/location/{{ loc.id }}/verify"
-                            hx-target="#review-inner"
-                            hx-swap="innerHTML">
-                        Verify
-                    </button>
-                    {# Phase 28 / D-C1: lightweight Associate picker — loads into
-                       the shared page-scope #edit-loc-modal content div and POSTs
-                       to /review/location/{id}/associate. Kept before Edit so
-                       the common-case flow reads left-to-right:
-                       Verify -> Associate -> Edit -> Merge -> Delete. #}
-                    <button class="btn btn-xs btn-accent"
-                            hx-get="/review/location/{{ loc.id }}/associate-modal"
-                            hx-target="#edit-loc-modal-content"
-                            hx-swap="innerHTML"
-                            onclick="document.getElementById('edit-loc-modal').showModal()">
-                        Associate
-                    </button>
-                    {% endif %}
-                    <button class="btn btn-xs btn-info"
-                            onclick="openEditLocModal({{ loc.id }})">
-                        Edit
-                    </button>
-                    <button class="btn btn-xs btn-neutral"
-                            onclick="openMergeModal('location', {{ loc.id }})">
-                        Merge
-                    </button>
-                    {% if not loc.is_verified %}
-                    {# Phase 28 / D-C3: one-click Promote-to-own-Network for the
-                       one-off-charger case. Creates a new network named after
-                       the location, associates, and flips is_verified=True —
-                       all in a single transaction server-side. #}
-                    <button class="btn btn-xs btn-outline"
-                            hx-post="/review/location/{{ loc.id }}/promote"
-                            hx-target="#review-inner"
-                            hx-swap="innerHTML"
-                            hx-confirm="Create a new network named '{{ loc.location_name }}' and mark this location verified?">
-                        Promote
-                    </button>
-                    <button class="btn btn-xs btn-error"
-                            hx-post="/review/location/{{ loc.id }}/delete"
-                            hx-target="#review-inner"
-                            hx-swap="innerHTML"
-                            hx-confirm="Delete this location? Sessions will be unlinked.">
-                        Delete
-                    </button>
+                    <div class="flex gap-1 flex-wrap review-action-cluster">
+                        <button class="btn btn-xs btn-error"
+                                hx-post="/review/location/{{ loc.id }}/delete"
+                                hx-target="#review-inner"
+                                hx-swap="innerHTML"
+                                hx-confirm="Delete this location? Sessions will be unlinked.">
+                            Delete
+                        </button>
+                    </div>
                     {% endif %}
                 </td>
             </tr>
