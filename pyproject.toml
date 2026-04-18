@@ -68,5 +68,6 @@ select = ["E4", "E7", "E9", "F"]
 # the canonical reason to allow late module imports.
 "scripts/seed.py" = ["E402"]
 "scripts/seed_sample.py" = ["E402"]
+"scripts/seed_review_queue.py" = ["E402"]
 # web/main.py resolves APP_VERSION before importing routers. Structural, not a bug.
 "web/main.py" = ["E402"]
