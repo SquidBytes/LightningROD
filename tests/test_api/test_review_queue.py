@@ -1522,3 +1522,92 @@ async def test_review_merge_network_preview_accepts_return_to(client, db_session
     assert response.status_code == 200
     assert b'name="return_to"' in response.content
     assert b'value="approved"' in response.content
+
+
+# ---------------------------------------------------------------------------
+# Phase 28.1 G2: Approved-tab edit dialog hoist (ports 28-01 pattern)
+# ---------------------------------------------------------------------------
+
+
+async def test_review_edit_approved_location_fires_close_trigger(client, db_session):
+    """G2: Edit save originating from the Approved tab returns the approved-tree
+    partial into #review-content AND emits HX-Trigger: closeEditLocModal so the
+    page-scope #edit-loc-modal closes. Resolves MA-01 + MA-02.
+    """
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="Before Approved Rename",
+        is_verified=True,
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        f"/review/location/{loc.id}/edit",
+        data={
+            "location_name": "Renamed Approved",
+            "address": "",
+            "location_type": "",
+            "network_id": "",
+            "latitude": "",
+            "longitude": "",
+            "cost_per_kwh": "",
+            "return_to": "approved",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get("HX-Trigger") == "closeEditLocModal"
+    body = response.text
+    # Approved-tree partial markers
+    assert "These verified entries are used" in body
+    # Must NOT be the pending locations table
+    assert 'hx-get="/review/locations"' not in body
+
+    refreshed = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == loc.id)
+        )
+    ).scalar_one()
+    assert refreshed.location_name == "Renamed Approved"
+
+
+async def test_review_location_edit_form_accepts_return_to_approved(
+    client, db_session
+):
+    """G2: GET /review/location/{id}/edit-form?return_to=approved embeds a
+    hidden return_to input with value="approved" so the form POST carries
+    the tab context back to the edit handler.
+    """
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="EditFormApprovedCtx",
+        is_verified=True,
+    )
+    await db_session.commit()
+
+    response = await client.get(
+        f"/review/location/{loc.id}/edit-form?return_to=approved"
+    )
+
+    assert response.status_code == 200
+    assert b'name="return_to"' in response.content
+    assert b'value="approved"' in response.content
+    assert b'hx-post="/review/location/' in response.content
+
+
+async def test_review_location_edit_form_default_return_to_is_pending(
+    client, db_session
+):
+    """G2: GET /review/location/{id}/edit-form with no query param defaults to
+    return_to="pending" (backward compatible with Pending-tab call site)."""
+    loc = await LocationLookupFactory.create(
+        db_session,
+        location_name="EditFormDefaultCtx",
+        is_verified=False,
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/review/location/{loc.id}/edit-form")
+
+    assert response.status_code == 200
+    assert b'value="pending"' in response.content
