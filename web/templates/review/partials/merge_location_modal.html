@@ -24,8 +24,11 @@
     </div>
 
     <form hx-post="/review/location/{{ source.id }}/merge"
-          hx-target="#review-inner"
+          hx-target="{% if return_to == 'approved' %}#review-content{% else %}#review-inner{% endif %}"
           hx-swap="innerHTML">
+        {# Phase 28.1 G1: carry caller's tab context into POST so the server
+           renders the approved-tree or pending-table partial accordingly. #}
+        <input type="hidden" name="return_to" value="{{ return_to | default('pending') }}">
 
         <label class="form-control w-full">
             <div class="label"><span class="label-text">Merge into:</span></div>

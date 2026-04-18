@@ -114,8 +114,12 @@ function closeNetworkModal() {
     document.getElementById('network-modal-content').innerHTML = '';
 }
 
-function openMergeModal(type, sourceId) {
-    htmx.ajax('GET', '/review/' + type + '/' + sourceId + '/merge-preview',
+function openMergeModal(type, sourceId, returnTo) {
+    // Phase 28.1 G1: accept caller tab context so the merge-preview renders
+    // a hidden return_to input, and the subsequent POST lands back on the
+    // correct swap zone (#review-content on approved, #review-inner on pending).
+    var rt = returnTo || 'pending';
+    htmx.ajax('GET', '/review/' + type + '/' + sourceId + '/merge-preview?return_to=' + encodeURIComponent(rt),
         {target: '#merge-modal-content', swap: 'innerHTML'});
     document.getElementById('merge-modal').showModal();
 }

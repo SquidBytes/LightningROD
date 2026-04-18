@@ -62,7 +62,7 @@
                             Edit
                         </button>
                         <button class="btn btn-xs btn-neutral"
-                                onclick="openMergeModal('network', {{ net.id }})">
+                                onclick="openMergeModal('network', {{ net.id }}, 'approved')">
                             Merge
                         </button>
                         {% if net.is_verified %}
@@ -111,7 +111,7 @@
                                             Edit
                                         </button>
                                         <button class="btn btn-xs btn-neutral"
-                                                onclick="openMergeModal('location', {{ loc.id }})">
+                                                onclick="openMergeModal('location', {{ loc.id }}, 'approved')">
                                             Merge
                                         </button>
                                         {% if loc.is_verified %}
@@ -204,7 +204,7 @@
                                             Edit
                                         </button>
                                         <button class="btn btn-xs btn-neutral"
-                                                onclick="openMergeModal('location', {{ loc.id }})">
+                                                onclick="openMergeModal('location', {{ loc.id }}, 'approved')">
                                             Merge
                                         </button>
                                         {% if loc.is_verified %}

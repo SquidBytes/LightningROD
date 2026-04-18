@@ -848,9 +848,18 @@ async def delete_network(
 async def network_merge_preview(
     source_id: int,
     request: Request,
+    return_to: str = "pending",  # Phase 28.1 G1 — caller tab context (pending|approved)
     db: AsyncSession = Depends(get_db),
 ):
-    """Show merge preview modal for a network with counts of affected items."""
+    """Show merge preview modal for a network with counts of affected items.
+
+    `return_to` plumbs the caller's active tab through to the POST handler
+    so the response partial lands in the correct swap zone. Value is echoed
+    verbatim into a hidden input inside the rendered form (T-28.1-02 — only
+    compared via `== "approved"` in handler/template; all other values fall
+    through to the pending branch, so no validation beyond string equality
+    is required).
+    """
     result = await db.execute(
         select(EVChargingNetwork).where(EVChargingNetwork.id == source_id)
     )
@@ -896,6 +905,7 @@ async def network_merge_preview(
             "subscription_count": subscription_count,
             "location_count": location_count,
             "target_options": target_options,
+            "return_to": return_to,  # Phase 28.1 G1
         },
     )
 
@@ -905,9 +915,16 @@ async def merge_network(
     source_id: int,
     request: Request,
     target_id: int = Form(...),
+    return_to: str = Form("pending"),  # Phase 28.1 G1 — pending|approved
     db: AsyncSession = Depends(get_db),
 ):
-    """Merge source network into target: reassign all references, delete source."""
+    """Merge source network into target: reassign all references, delete source.
+
+    `return_to` selects the response partial so the caller's active tab
+    sees its own swap zone refresh. `approved` -> approved-tree partial
+    into #review-content; anything else -> networks table into
+    #review-inner. Compared via strict equality (T-28.1-01).
+    """
     if source_id == target_id:
         raise HTTPException(status_code=400, detail="Cannot merge a network into itself")
 
@@ -957,13 +974,24 @@ async def merge_network(
     await db.execute(delete(EVChargingNetwork).where(EVChargingNetwork.id == source_id))
     await db.commit()
 
-    # Return refreshed networks table with HX-Trigger to close modal
-    ctx = await _networks_context(db)
-    response = templates.TemplateResponse(
-        request,
-        "review/partials/review_networks_table.html",
-        ctx,
-    )
+    # Phase 28.1 G1: render the correct partial for the caller's active tab.
+    # Approved callers land back on the tree (#review-content); Pending
+    # callers land back on the networks table (#review-inner). Both paths
+    # emit HX-Trigger: closeMergeModal so the page-scope merge dialog closes.
+    if return_to == "approved":
+        ctx = await _approved_tree_context(db)
+        response = templates.TemplateResponse(
+            request,
+            "review/partials/review_approved_tree.html",
+            ctx,
+        )
+    else:
+        ctx = await _networks_context(db)
+        response = templates.TemplateResponse(
+            request,
+            "review/partials/review_networks_table.html",
+            ctx,
+        )
     response.headers["HX-Trigger"] = "closeMergeModal"
     return response
 
@@ -972,9 +1000,15 @@ async def merge_network(
 async def location_merge_preview(
     source_id: int,
     request: Request,
+    return_to: str = "pending",  # Phase 28.1 G1 — pending|approved
     db: AsyncSession = Depends(get_db),
 ):
-    """Show merge preview modal for a location with counts of affected items."""
+    """Show merge preview modal for a location with counts of affected items.
+
+    `return_to` is echoed into a hidden input inside the rendered form so
+    the subsequent POST carries the caller's tab context. See
+    `network_merge_preview` for the shared rationale (T-28.1-02).
+    """
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == source_id)
     )
@@ -1014,6 +1048,7 @@ async def location_merge_preview(
             "session_count": session_count,
             "stall_count": stall_count,
             "target_options": target_options,
+            "return_to": return_to,  # Phase 28.1 G1
         },
     )
 
@@ -1023,9 +1058,16 @@ async def merge_location(
     source_id: int,
     request: Request,
     target_id: int = Form(...),
+    return_to: str = Form("pending"),  # Phase 28.1 G1 — pending|approved
     db: AsyncSession = Depends(get_db),
 ):
-    """Merge source location into target: reassign all references, delete source."""
+    """Merge source location into target: reassign all references, delete source.
+
+    `return_to` selects the response partial — `approved` returns the
+    approved-tree into #review-content so an Approved-tab user sees their
+    tree refresh; anything else returns the locations table into
+    #review-inner. Strict-equality compare (T-28.1-01).
+    """
     if source_id == target_id:
         raise HTTPException(status_code=400, detail="Cannot merge a location into itself")
 
@@ -1086,12 +1128,23 @@ async def merge_location(
     await db.execute(delete(EVLocationLookup).where(EVLocationLookup.id == source_id))
     await db.commit()
 
-    # Return refreshed locations table with HX-Trigger to close modal
-    ctx = await _locations_context(db)
-    response = templates.TemplateResponse(
-        request,
-        "review/partials/review_locations_table.html",
-        ctx,
-    )
+    # Phase 28.1 G1: render the correct partial for the caller's active tab.
+    # Approved callers land back on the tree (#review-content); Pending
+    # callers land back on the locations table (#review-inner). Both paths
+    # emit HX-Trigger: closeMergeModal so the page-scope merge dialog closes.
+    if return_to == "approved":
+        ctx = await _approved_tree_context(db)
+        response = templates.TemplateResponse(
+            request,
+            "review/partials/review_approved_tree.html",
+            ctx,
+        )
+    else:
+        ctx = await _locations_context(db)
+        response = templates.TemplateResponse(
+            request,
+            "review/partials/review_locations_table.html",
+            ctx,
+        )
     response.headers["HX-Trigger"] = "closeMergeModal"
     return response
