@@ -1341,3 +1341,184 @@ async def test_promote_location_works_for_already_networked_location(
     assert refreshed.network_id == new_net.id
     assert refreshed.network_id != prior_net.id
     assert refreshed.is_verified is True
+
+
+# ---------------------------------------------------------------------------
+# Phase 28.1 G1: Merge location-into-location regression (Pending + Approved tabs)
+# ---------------------------------------------------------------------------
+
+
+async def test_review_merge_location_into_location_pending(client, db_session):
+    """G1: Merge an unverified src location into an unverified tgt location
+    from the Pending tab.
+
+    `return_to="pending"` must:
+    - succeed (200)
+    - return the locations-table partial (pending swap zone #review-inner)
+    - emit HX-Trigger: closeMergeModal
+    - delete the source row
+    - keep the target row
+    """
+    src = await LocationLookupFactory.create(
+        db_session,
+        location_name="PendingMergeSrc",
+        is_verified=False,
+        latitude=40.0,
+        longitude=-74.0,
+    )
+    tgt = await LocationLookupFactory.create(
+        db_session,
+        location_name="PendingMergeTgt",
+        is_verified=False,
+        latitude=41.0,
+        longitude=-75.0,
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        f"/review/location/{src.id}/merge",
+        data={"target_id": str(tgt.id), "return_to": "pending"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get("HX-Trigger") == "closeMergeModal"
+    # Pending partial signature: the search input driving the locations table
+    body = response.text
+    assert 'hx-get="/review/locations"' in body
+
+    src_row = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == src.id)
+        )
+    ).scalar_one_or_none()
+    assert src_row is None
+    tgt_row = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == tgt.id)
+        )
+    ).scalar_one()
+    assert tgt_row.location_name == "PendingMergeTgt"
+
+
+async def test_review_merge_location_into_location_approved(client, db_session):
+    """G1: Merge a verified src location into a verified tgt location from the
+    Approved tab.
+
+    `return_to="approved"` must:
+    - succeed (200)
+    - return the approved-tree partial (approved swap zone #review-content)
+    - NOT return the pending locations-table partial
+    - emit HX-Trigger: closeMergeModal
+    - delete source, keep target
+    """
+    src = await LocationLookupFactory.create(
+        db_session,
+        location_name="ApprovedMergeSrc",
+        is_verified=True,
+        latitude=40.0,
+        longitude=-74.0,
+    )
+    tgt = await LocationLookupFactory.create(
+        db_session,
+        location_name="ApprovedMergeTgt",
+        is_verified=True,
+        latitude=41.0,
+        longitude=-75.0,
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        f"/review/location/{src.id}/merge",
+        data={"target_id": str(tgt.id), "return_to": "approved"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get("HX-Trigger") == "closeMergeModal"
+    body = response.text
+    # Approved-tree markers
+    assert "These verified entries are used" in body
+    # Must NOT be the pending locations table
+    assert 'hx-get="/review/locations"' not in body
+
+    src_row = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == src.id)
+        )
+    ).scalar_one_or_none()
+    assert src_row is None
+    tgt_row = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == tgt.id)
+        )
+    ).scalar_one()
+    assert tgt_row.location_name == "ApprovedMergeTgt"
+
+
+async def test_review_merge_location_preview_accepts_return_to_and_renders_hidden_input(
+    client, db_session
+):
+    """G1: GET /review/location/{id}/merge-preview?return_to=approved renders
+    a hidden return_to input baked into the merge form with value="approved".
+    """
+    src = await LocationLookupFactory.create(
+        db_session, location_name="PreviewLocSrc", is_verified=True
+    )
+    await LocationLookupFactory.create(
+        db_session, location_name="PreviewLocTgt", is_verified=True
+    )
+    await db_session.commit()
+
+    response = await client.get(
+        f"/review/location/{src.id}/merge-preview?return_to=approved"
+    )
+
+    assert response.status_code == 200
+    assert b'name="return_to"' in response.content
+    assert b'value="approved"' in response.content
+    assert b'hx-post="/review/location/' in response.content
+
+
+async def test_review_merge_location_crosses_warning_still_renders_on_preview(
+    client, db_session
+):
+    """D-D4 regression lock: the merge-crosses-verification warning block +
+    data-is-verified attributes remain when the location-merge preview is
+    rendered, regardless of the G1 `return_to` plumbing.
+    """
+    src = await LocationLookupFactory.create(
+        db_session, location_name="CrossSrcLoc", is_verified=False
+    )
+    await LocationLookupFactory.create(
+        db_session, location_name="CrossTgtVerifiedLoc", is_verified=True
+    )
+    await db_session.commit()
+
+    response = await client.get(f"/review/location/{src.id}/merge-preview")
+
+    assert response.status_code == 200
+    body = response.text
+    assert f"merge-location-cross-warning-{src.id}" in body
+    # The data-is-verified attribute on at least one target option — the
+    # verified target we created above ensures has_crossing=True.
+    assert 'data-is-verified="1"' in body
+
+
+async def test_review_merge_network_preview_accepts_return_to(client, db_session):
+    """G1 symmetric: GET /review/network/{id}/merge-preview?return_to=approved
+    bakes the hidden input with value="approved".
+    """
+    src = await NetworkFactory.create(
+        db_session, network_name="PreviewNetSrc", is_verified=True
+    )
+    await NetworkFactory.create(
+        db_session, network_name="PreviewNetTgt", is_verified=True
+    )
+    await db_session.commit()
+
+    response = await client.get(
+        f"/review/network/{src.id}/merge-preview?return_to=approved"
+    )
+
+    assert response.status_code == 200
+    assert b'name="return_to"' in response.content
+    assert b'value="approved"' in response.content
