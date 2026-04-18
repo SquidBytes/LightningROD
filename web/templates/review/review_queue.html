@@ -129,8 +129,12 @@ function closeMergeModal() {
     document.getElementById('merge-modal-content').innerHTML = '';
 }
 
-function openEditLocModal(locationId) {
-    htmx.ajax('GET', '/review/location/' + locationId + '/edit-form',
+function openEditLocModal(locationId, returnTo) {
+    // Phase 28.1 G2: accept caller tab context so the edit-form renders with
+    // a hidden return_to input, and the subsequent POST lands back on the
+    // correct swap zone (#review-content on approved, #review-inner on pending).
+    var rt = returnTo || 'pending';
+    htmx.ajax('GET', '/review/location/' + locationId + '/edit-form?return_to=' + encodeURIComponent(rt),
         {target: '#edit-loc-modal-content', swap: 'innerHTML'});
     document.getElementById('edit-loc-modal').showModal();
 }

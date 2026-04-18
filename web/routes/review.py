@@ -569,6 +569,7 @@ async def review_edit_network(
 async def review_location_edit_form(
     location_id: int,
     request: Request,
+    return_to: str = "pending",  # Phase 28.1 G2 — pending|approved
     db: AsyncSession = Depends(get_db),
 ):
     """Return the location-edit form markup for the page-scope
@@ -578,6 +579,12 @@ async def review_location_edit_form(
     to live inside #review-inner — those dialogs were destroyed by the
     HTMX swap that refreshed the locations table on save, which is the
     Thread A save-bug symptom.
+
+    Phase 28.1 G2 extension: accept a `return_to` query param and pass
+    it into the template context so the rendered form carries the
+    caller's tab context through to the POST /review/location/{id}/edit
+    submission. Ensures Approved-tab saves return the approved-tree
+    partial rather than the pending locations table (resolves MA-02).
     """
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
@@ -589,7 +596,11 @@ async def review_location_edit_form(
     return templates.TemplateResponse(
         request,
         "review/partials/review_location_edit_form.html",
-        {"loc": loc, "all_networks": all_networks},
+        {
+            "loc": loc,
+            "all_networks": all_networks,
+            "return_to": return_to,  # Phase 28.1 G2
+        },
     )
 
 
@@ -757,6 +768,7 @@ async def edit_location(
     latitude: str = Form(""),
     longitude: str = Form(""),
     cost_per_kwh: str = Form(""),
+    return_to: str = Form("pending"),  # Phase 28.1 G2 — pending|approved
 ):
     """Edit a location. Accepts optional numeric fields as strings so empty
     form values coerce cleanly to None instead of tripping FastAPI's 422
@@ -765,6 +777,12 @@ async def edit_location(
     Fires ``HX-Trigger: closeEditLocModal`` so the page-scope dialog
     listener in review_queue.html dismisses the modal on success
     (Phase 28 / D-A2, Pattern S1).
+
+    Phase 28.1 G2: `return_to` selects the response partial. `approved`
+    returns the approved-tree partial into #review-content so the
+    Approved-tab caller's tree refreshes; anything else returns the
+    pending locations table into #review-inner. Strict-equality compare
+    (T-28.1-01).
     """
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
@@ -779,12 +797,23 @@ async def edit_location(
         loc.longitude = float(longitude) if longitude.strip() else None
         loc.cost_per_kwh = float(cost_per_kwh) if cost_per_kwh.strip() else None
         await db.commit()
-    ctx = await _locations_context(db, filter="unverified")
-    response = templates.TemplateResponse(
-        request,
-        "review/partials/review_locations_table.html",
-        ctx,
-    )
+    # Phase 28.1 G2 / MA-02: branch on caller tab so the approved tree
+    # refreshes in place rather than the wrong (pending) partial being
+    # swapped into #review-content.
+    if return_to == "approved":
+        ctx = await _approved_tree_context(db)
+        response = templates.TemplateResponse(
+            request,
+            "review/partials/review_approved_tree.html",
+            ctx,
+        )
+    else:
+        ctx = await _locations_context(db, filter="unverified")
+        response = templates.TemplateResponse(
+            request,
+            "review/partials/review_locations_table.html",
+            ctx,
+        )
     response.headers["HX-Trigger"] = "closeEditLocModal"
     return response
 

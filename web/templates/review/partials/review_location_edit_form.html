@@ -14,9 +14,12 @@ mid-close, the Thread A bug this plan fixes).
 <h3 class="text-xl font-semibold text-base-content">{{ loc.location_name }}</h3>
 
 <form hx-post="/review/location/{{ loc.id }}/edit"
-      hx-target="#review-inner"
+      hx-target="{% if return_to == 'approved' %}#review-content{% else %}#review-inner{% endif %}"
       hx-swap="innerHTML"
       class="mt-5 space-y-4">
+    {# Phase 28.1 G2: carry caller's tab context into POST so the server
+       renders the approved-tree or pending-table partial accordingly. #}
+    <input type="hidden" name="return_to" value="{{ return_to | default('pending') }}">
 
     <label class="form-control w-full">
         <div class="label"><span class="label-text text-sm">Location Name</span></div>
