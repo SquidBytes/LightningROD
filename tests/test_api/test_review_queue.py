@@ -1611,3 +1611,143 @@ async def test_review_location_edit_form_default_return_to_is_pending(
 
     assert response.status_code == 200
     assert b'value="pending"' in response.content
+
+
+# ---------------------------------------------------------------------------
+# Phase 28.1 G3: Action-cell visual grouping (cluster classes + button order)
+# ---------------------------------------------------------------------------
+
+
+async def test_review_pending_locations_actions_use_cluster_grouping(
+    client, db_session
+):
+    """G3: Pending-tab unverified location row renders the three-cluster
+    action cell with `review-action-cluster` marker class, in D-UX2 locked
+    left→right order (Verify, Edit, Associate, Promote, Merge, Delete), and
+    the Actions column is widened to w-56 (D-UX3)."""
+    await LocationLookupFactory.create(
+        db_session,
+        location_name="G3PendingActionsLoc",
+        is_verified=False,
+    )
+    await db_session.commit()
+
+    response = await client.get("/review/locations")
+
+    assert response.status_code == 200
+
+    # Cluster marker present — three clusters × one row.
+    assert b"review-action-cluster" in response.content
+    assert response.content.count(b"review-action-cluster") == 3
+
+    # D-UX2 left→right order: Verify, Edit, Associate, Promote, Merge, Delete.
+    verify_pos = response.content.find(b">\n                            Verify\n")
+    edit_pos = response.content.find(b">\n                            Edit\n")
+    associate_pos = response.content.find(
+        b">\n                            Associate\n"
+    )
+    promote_pos = response.content.find(b">\n                            Promote\n")
+    merge_pos = response.content.find(b">\n                            Merge\n")
+    delete_pos = response.content.find(b">\n                            Delete\n")
+    # All six labels must render.
+    assert verify_pos != -1
+    assert edit_pos != -1
+    assert associate_pos != -1
+    assert promote_pos != -1
+    assert merge_pos != -1
+    assert delete_pos != -1
+    # Locked order from D-UX2.
+    assert (
+        verify_pos
+        < edit_pos
+        < associate_pos
+        < promote_pos
+        < merge_pos
+        < delete_pos
+    )
+
+    # D-UX3: Actions <th> carries w-56.
+    assert b'<th class="w-56">Actions</th>' in response.content
+
+
+async def test_review_approved_tree_location_actions_use_cluster_grouping(
+    client, db_session
+):
+    """G3: Approved-tab child location row renders the cluster-marker class
+    and the Unverify+Edit | Merge left→right order on verified rows. Inner
+    Actions <th> carries the w-56 widening."""
+    net = await NetworkFactory.create(
+        db_session, network_name="G3ApprovedActionsNet", is_verified=True
+    )
+    await LocationLookupFactory.create(
+        db_session,
+        location_name="G3ApprovedChildLoc",
+        network_id=net.id,
+        is_verified=True,
+    )
+    await db_session.commit()
+
+    response = await client.get("/review/approved")
+
+    assert response.status_code == 200
+
+    # Cluster marker present on the child-loc row(s).
+    assert b"review-action-cluster" in response.content
+
+    # D-UX2 (approved-adapted) order on the location row: Unverify, Edit, Merge.
+    unverify_pos = response.content.find(
+        b">\n                                                Unverify\n"
+    )
+    edit_pos = response.content.find(
+        b">\n                                                Edit\n"
+    )
+    merge_pos = response.content.find(
+        b">\n                                                Merge\n"
+    )
+    assert unverify_pos != -1
+    assert edit_pos != -1
+    assert merge_pos != -1
+    assert unverify_pos < edit_pos < merge_pos
+
+    # D-UX3: inner-table Actions <th> carries w-56.
+    assert b'<th class="text-right w-56">Actions</th>' in response.content
+
+
+async def test_review_approved_tree_standalone_location_actions_use_cluster_grouping(
+    client, db_session
+):
+    """G3: Approved-tab standalone verified location row (rendered under the
+    "No Network" pseudo-node) uses the same cluster grouping + button order."""
+    await LocationLookupFactory.create(
+        db_session,
+        location_name="G3ApprovedStandaloneLoc",
+        network_id=None,
+        is_verified=True,
+    )
+    await db_session.commit()
+
+    response = await client.get("/review/approved")
+
+    assert response.status_code == 200
+
+    # Standalone pseudo-node rendered — confirms we are hitting the
+    # standalone-location branch of the tree.
+    assert b'<tr id="approved-net-row-none"' in response.content
+
+    # Cluster marker present on the standalone row.
+    assert b"review-action-cluster" in response.content
+
+    # D-UX2 (approved-adapted) order: Unverify, Edit, Merge.
+    unverify_pos = response.content.find(
+        b">\n                                                Unverify\n"
+    )
+    edit_pos = response.content.find(
+        b">\n                                                Edit\n"
+    )
+    merge_pos = response.content.find(
+        b">\n                                                Merge\n"
+    )
+    assert unverify_pos != -1
+    assert edit_pos != -1
+    assert merge_pos != -1
+    assert unverify_pos < edit_pos < merge_pos
