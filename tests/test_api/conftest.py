@@ -21,6 +21,7 @@ async def client(db_session):
         battery, charging, costs, csv_import, dashboard, driving_performance,
         locations, performance, review, sessions, settings, trips,
     )
+    from web.routes.admin import data_sources as admin_data_sources
     from web.main import localtime_filter
 
     app = FastAPI(title="LightningROD-Test")
@@ -37,11 +38,12 @@ async def client(db_session):
     app.include_router(locations.router)
     app.include_router(trips.router, prefix="/driving")
     app.include_router(driving_performance.router, prefix="/driving")
+    app.include_router(admin_data_sources.router)
 
     # Register localtime filter on Jinja2 templates
     for route_module in [dashboard, sessions, costs, performance, settings,
                          csv_import, charging, review, battery, trips,
-                         driving_performance]:
+                         driving_performance, admin_data_sources]:
         if hasattr(route_module, "templates"):
             route_module.templates.env.filters["localtime"] = localtime_filter
 

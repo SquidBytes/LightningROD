@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <h1 class="text-2xl font-bold mb-2">Data Sources</h1>
+    <p class="text-base-content/70 mb-6">
+        Every field LightningROD ingests is declared in a source adapter's
+        <code class="text-sm">FIELD_CONTRACTS</code> registry. This page shows the
+        current registry and the last raw value observed for each contract.
+        Per Phase 29 D-C1, the registry is the single source of truth for unit handling.
+    </p>
+
+    {% for group in groups %}
+    <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-3">{{ group.source_name }}</h2>
+
+        {% if group.rows %}
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Source Entity</th>
+                        <th>Source Attribute</th>
+                        <th>Source Unit</th>
+                        <th>DB Table</th>
+                        <th>DB Column</th>
+                        <th>Target Unit</th>
+                        <th>Last Raw Value</th>
+                        <th>Last Seen (UTC)</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in group.rows %}
+                    <tr>
+                        <td><code class="text-xs">{{ row.contract.source_entity_pattern }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.source_attribute }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.source_unit }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.target_db_table }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.target_db_column }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.target_unit }}</code></td>
+                        <td>
+                            {% if row.last_seen %}
+                                <code class="text-xs">{{ row.last_seen.value }}</code>
+                                {% if row.last_seen.converted is not none and row.last_seen.converted != row.last_seen.value %}
+                                    <span class="text-base-content/50 text-xs">&rarr; {{ row.last_seen.converted }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-base-content/40 text-xs">never observed</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.last_seen %}
+                                <span class="text-xs text-base-content/70">{{ row.last_seen.seen_at }}</span>
+                            {% else %}
+                                <span class="text-base-content/40 text-xs">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="text-xs text-base-content/70">{{ row.contract.notes }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-base-content/50 text-sm">No contracts registered for this source.</p>
+        {% endif %}
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}
