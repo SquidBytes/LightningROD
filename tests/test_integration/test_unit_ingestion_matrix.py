@@ -16,6 +16,7 @@ from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
 from web.services.sources.ha_fordpass.adapter import process_event
+from web.unit_system import convert_distance
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
@@ -28,6 +29,53 @@ MATRIX = {
     "metric_ha_imperial_vehicle.json":   {"hv_battery_range": 418, "hv_battery_max_range": 418, "trip_distance": 19, "distance_added": 103},
     "imperial_ha_metric_vehicle.json":   {"hv_battery_range": 418, "hv_battery_max_range": 418, "trip_distance": 19, "distance_added": 103},
     "imperial_ha_imperial_vehicle.json": {"hv_battery_range": 418, "hv_battery_max_range": 418, "trip_distance": 19, "distance_added": 103},
+}
+
+# Display-layer oracles (D-E6 — Plan 29-04 Task 2).
+# Stored values are km; display values are derived by unit_system.convert_distance
+# for the user's distance_unit preference ("us" -> mi, "metric" -> km).
+# MI_PER_KM == 0.621371 (web/unit_system.py).
+MATRIX_DISPLAY = {
+    "metric_ha_metric_vehicle.json": {
+        "hv_battery_range_km_display": 260.0,
+        "hv_battery_range_mi_display": 161.6,  # 260 * 0.621371
+        "hv_battery_max_range_km_display": 418.0,
+        "hv_battery_max_range_mi_display": 259.7,  # 418 * 0.621371
+        "trip_distance_km_display": 19.0,
+        "trip_distance_mi_display": 11.8,  # 19 * 0.621371
+        "distance_added_km_display": 103.0,
+        "distance_added_mi_display": 64.0,  # 103 * 0.621371
+    },
+    "metric_ha_imperial_vehicle.json": {
+        "hv_battery_range_km_display": 418.0,
+        "hv_battery_range_mi_display": 259.7,
+        "hv_battery_max_range_km_display": 418.0,
+        "hv_battery_max_range_mi_display": 259.7,
+        "trip_distance_km_display": 19.0,
+        "trip_distance_mi_display": 11.8,
+        "distance_added_km_display": 103.0,
+        "distance_added_mi_display": 64.0,
+    },
+    "imperial_ha_metric_vehicle.json": {
+        "hv_battery_range_km_display": 418.0,
+        "hv_battery_range_mi_display": 259.7,
+        "hv_battery_max_range_km_display": 418.0,
+        "hv_battery_max_range_mi_display": 259.7,
+        "trip_distance_km_display": 19.0,
+        "trip_distance_mi_display": 11.8,
+        "distance_added_km_display": 103.0,
+        "distance_added_mi_display": 64.0,
+    },
+    "imperial_ha_imperial_vehicle.json": {
+        "hv_battery_range_km_display": 418.0,
+        "hv_battery_range_mi_display": 259.7,
+        "hv_battery_max_range_km_display": 418.0,
+        "hv_battery_max_range_mi_display": 259.7,
+        "trip_distance_km_display": 19.0,
+        "trip_distance_mi_display": 11.8,
+        "distance_added_km_display": 103.0,
+        "distance_added_mi_display": 64.0,
+    },
 }
 
 
@@ -90,3 +138,38 @@ async def test_matrix_fixture_yields_metric_storage(fixture_name, expected, db_s
     assert session.ingest_schema_version == 2, (
         f"{fixture_name}: session.ingest_schema_version = {session.ingest_schema_version}, expected 2 (D-D1)"
     )
+
+    # -----------------------------------------------------------------
+    # Display-layer assertions (D-E6, Plan 29-04 Task 2)
+    # -----------------------------------------------------------------
+    # Closes the loop from HA payload -> adapter -> DB -> rendered pixel.
+    # Same storage values must render correctly for BOTH user preferences.
+    disp = MATRIX_DISPLAY[fixture_name]
+
+    # Distance unit "metric" -> km passthrough
+    assert convert_distance(battery.hv_battery_range, "metric") == pytest.approx(
+        disp["hv_battery_range_km_display"], abs=0.1
+    ), f"{fixture_name}: hv_battery_range metric-display mismatch"
+    assert convert_distance(battery.hv_battery_max_range, "metric") == pytest.approx(
+        disp["hv_battery_max_range_km_display"], abs=0.1
+    ), f"{fixture_name}: hv_battery_max_range metric-display mismatch"
+    assert convert_distance(trip.distance, "metric") == pytest.approx(
+        disp["trip_distance_km_display"], abs=0.1
+    ), f"{fixture_name}: trip.distance metric-display mismatch"
+    assert convert_distance(session.distance_added, "metric") == pytest.approx(
+        disp["distance_added_km_display"], abs=0.1
+    ), f"{fixture_name}: distance_added metric-display mismatch"
+
+    # Distance unit "us" -> mi conversion (MI_PER_KM = 0.621371)
+    assert convert_distance(battery.hv_battery_range, "us") == pytest.approx(
+        disp["hv_battery_range_mi_display"], abs=0.5
+    ), f"{fixture_name}: hv_battery_range us-display mismatch"
+    assert convert_distance(battery.hv_battery_max_range, "us") == pytest.approx(
+        disp["hv_battery_max_range_mi_display"], abs=0.5
+    ), f"{fixture_name}: hv_battery_max_range us-display mismatch"
+    assert convert_distance(trip.distance, "us") == pytest.approx(
+        disp["trip_distance_mi_display"], abs=0.5
+    ), f"{fixture_name}: trip.distance us-display mismatch"
+    assert convert_distance(session.distance_added, "us") == pytest.approx(
+        disp["distance_added_mi_display"], abs=0.5
+    ), f"{fixture_name}: distance_added us-display mismatch"

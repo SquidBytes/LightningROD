@@ -17,6 +17,7 @@ from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
 from web.services.sources.ha_fordpass.adapter import process_event
+from web.unit_system import convert_distance
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
@@ -56,6 +57,18 @@ async def test_reporter_19km_trip_not_multiplied(db_session):
         REGRESSION_MESSAGE + f"  got {trip.distance} km (expected 19.0)"
     )
 
+    # Display-layer lock (Plan 29-04 Task 2, D-E6)
+    km_display = convert_distance(trip.distance, "metric")
+    mi_display = convert_distance(trip.distance, "us")
+    assert km_display == pytest.approx(19.0, abs=0.1), (
+        REGRESSION_MESSAGE + f"  km display {km_display}, expected 19.0"
+    )
+    assert mi_display == pytest.approx(11.8, abs=0.2), (
+        REGRESSION_MESSAGE
+        + f"  mi display {mi_display}, expected ~11.8 (19 km * 0.621371). "
+        "If this shows ~30.6 the 2026-03-21 bug is back."
+    )
+
 
 async def test_reporter_64mi_103km_charge_added(db_session):
     """Lock: charge-added 103 km must store as 103 km distance_added, NOT 165.8 km."""
@@ -70,6 +83,18 @@ async def test_reporter_64mi_103km_charge_added(db_session):
     assert session is not None, REGRESSION_MESSAGE + "  (no charging session row written)"
     assert session.distance_added == pytest.approx(103.0, abs=0.5), (
         REGRESSION_MESSAGE + f"  got {session.distance_added} km (expected 103.0)"
+    )
+
+    # Display-layer lock (Plan 29-04 Task 2, D-E6) — 64 mi corresponds to 103 km
+    km_display = convert_distance(session.distance_added, "metric")
+    mi_display = convert_distance(session.distance_added, "us")
+    assert km_display == pytest.approx(103.0, abs=0.1), (
+        REGRESSION_MESSAGE + f"  km display {km_display}, expected 103.0"
+    )
+    assert mi_display == pytest.approx(64.0, abs=0.5), (
+        REGRESSION_MESSAGE
+        + f"  mi display {mi_display}, expected ~64.0 (103 km * 0.621371). "
+        "If this shows ~101.9 the reporter scenario is regressing."
     )
 
 
@@ -91,4 +116,16 @@ async def test_reporter_260mi_418km_max_range(db_session):
     assert battery is not None, REGRESSION_MESSAGE + "  (no battery status row written)"
     assert battery.hv_battery_max_range == pytest.approx(418.0, abs=0.5), (
         REGRESSION_MESSAGE + f"  got {battery.hv_battery_max_range} km (expected 418.0)"
+    )
+
+    # Display-layer lock (Plan 29-04 Task 2, D-E6) — 260 mi corresponds to 418 km
+    km_display = convert_distance(battery.hv_battery_max_range, "metric")
+    mi_display = convert_distance(battery.hv_battery_max_range, "us")
+    assert km_display == pytest.approx(418.0, abs=0.1), (
+        REGRESSION_MESSAGE + f"  km display {km_display}, expected 418.0"
+    )
+    assert mi_display == pytest.approx(260.0, abs=0.5), (
+        REGRESSION_MESSAGE
+        + f"  mi display {mi_display}, expected ~260.0 (418 km * 0.621371). "
+        "Reporter saw 492 mi where correct is 260 mi."
     )
