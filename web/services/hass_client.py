@@ -196,26 +196,11 @@ class HASSClient:
             logger.info("Loaded %d entity states from HA", len(self._entity_states))
             self._detect_vin()
 
-            # Detect FordPass preferred distance units from elveh sensor attributes
-            if self._ha_config:
-                for eid, state in self._entity_states.items():
-                    if eid.startswith("sensor.fordpass_") and eid.endswith("_elveh"):
-                        uom = (state.get("attributes", {}).get("unit_of_measurement") or "").lower()
-                        self._ha_config["_fordpass_distance_unit"] = "mi" if "mi" in uom else "km"
-                        logger.info("FordPass preferred units: distance=%s",
-                                    self._ha_config["_fordpass_distance_unit"])
-                        break
-                        
-            # Detect temperature units from fordpass - can be different from distance units.
-            if self._ha_config:
-                for eid, state in self._entity_states.items():
-                    if eid.startswith("sensor.fordpass_") and eid.endswith("outsidetemp"):
-                        uom = (state.get("attributes", {}).get("unit_of_measurement") or "")
-                        self._ha_config["_fordpass_temp_unit"] = "degF" if "°F" in uom else "degC"
-                        logger.info("FordPass preferred units: temp=%s",
-                                    self._ha_config["_fordpass_temp_unit"])
-                        break
-                        
+            # Phase 29 D-A4: the elveh/outsidetemp startup probe that used to
+            # stash FordPass preferred distance + temperature units on ha_config
+            # has been DELETED. Unit handling now lives entirely in
+            # web/services/sources/ha_fordpass/adapter.py via FIELD_CONTRACTS +
+            # per-event UoM lookup (D-B3).
 
         # Step 6: Process initial snapshot through event handler
         # This captures current state (e.g. last energytransferlogentry) as DB records
