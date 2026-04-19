@@ -1,10 +1,14 @@
 """Home Assistant sensor event processor.
 
-Dispatches HA state_changed events to registered sensor handlers.
-Maps 29 FordPass entities to database records: charging sessions from
-energytransferlogentry, vehicle status snapshots, and battery status updates.
-Also handles gas price sensor events from arbitrary entity_ids configured
-in app_settings. Normalizes units to metric before storage.
+Dispatches HA state_changed events to registered sensor handlers. Maps
+ha-fordpass entities to database records: charging sessions from
+energytransferlogentry, vehicle status snapshots, battery status updates,
+and trip metrics. Also handles gas price sensor events from arbitrary
+entity_ids configured in app_settings.
+
+Phase 29 D-A4: unit conversion logic has been removed from this module.
+Every conversion now routes through web.services.sources.ha_fordpass.adapter
+(FIELD_CONTRACTS registry) + web.services.units.to_metric (pure dispatch).
 """
 
 import logging
@@ -12,65 +16,69 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
+from web.services.sources.ha_fordpass import adapter as ha_fordpass
+from web.services.units.to_metric import UnknownSourceUnit, to_metric
+
 logger = logging.getLogger("lightningrod.hass.processor")
 
+
 # ---------------------------------------------------------------------------
-# Unit conversion
+# Read-time unit_of_measurement helpers (D-B3 per-event)
 # ---------------------------------------------------------------------------
 
+def _read_time_uom(new_state: dict) -> Optional[str]:
+    """Return the normalized source_unit from new_state.attributes.unit_of_measurement.
 
-def miles_to_km(miles: float) -> float:
-    """Convert miles to kilometers."""
-    return miles * 1.60934
-
-
-def fahrenheit_to_celsius(f: float) -> float:
-    """Convert Fahrenheit to Celsius."""
-    return (f - 32) * 5 / 9
-
-
-def wh_to_kwh(wh: float) -> float:
-    """Convert watt-hours to kilowatt-hours."""
-    return wh / 1000
-
-
-def normalize_value(value, unit: str, ha_unit_system: dict) -> float:
-    """Normalize a value to metric for storage.
-
-    Uses FordPass preferred units (from elveh sensor) when available to decide
-    whether conversion is needed.  Falls back to assuming metric (no conversion)
-    if the elveh sensor hasn't been seen yet.
+    Returns None when the event carries no UoM attribute. D-B3 mandates that
+    callers use this per-event, never a process-global flag. When the result
+    is None the caller must decide whether to skip (preferred for unit-ful
+    fields) or passthrough (only for fields it knows are already metric).
     """
-    if value is None:
+    if not isinstance(new_state, dict):
+        return None
+    attrs = new_state.get("attributes") or {}
+    raw = attrs.get("unit_of_measurement")
+    if raw is None:
+        return None
+    return ha_fordpass._normalize_uom_string(raw)
+
+
+def _convert_with_uom(
+    raw_value: Any,
+    source_unit: Optional[str],
+    field_name: str,
+    entity_id: Optional[str] = None,
+) -> Optional[float]:
+    """Convert raw_value from source_unit to metric; log + return None on failure.
+
+    Used by handlers for fields NOT represented in FIELD_CONTRACTS today
+    (legacy elveh-state reads retained as a D-B4 fallback until downstream
+    consumers migrate to the events entity). When `source_unit` is None the
+    event carries no UoM attribute — per D-B3 we must NOT silently
+    passthrough, so we warn-log and return None.
+    """
+    if raw_value is None:
+        return None
+    if source_unit is None:
+        logger.warning(
+            "read-time UoM missing on %s for field %s; skipping value %r "
+            "(D-B3: adapter will not assume metric)",
+            entity_id or "<unknown>",
+            field_name,
+            raw_value,
+        )
         return None
     try:
-        value = float(value)
-    except (TypeError, ValueError):
+        return to_metric(raw_value, source_unit)
+    except UnknownSourceUnit:
+        logger.warning(
+            "UnknownSourceUnit on %s.%s: value=%r source_unit=%r; skipping",
+            entity_id or "<unknown>",
+            field_name,
+            raw_value,
+            source_unit,
+        )
         return None
-
-    # FordPass preferred units (injected by hass_client from elveh sensor)
-    # Default to metric (no conversion) if detection hasn't run
-    fp_distance = ha_unit_system.get("_fordpass_distance_unit", "km")
-    fp_temp = ha_unit_system.get("_fordpass_temp_unit", "degC")
-
-    if unit in ("mi", "mph") or (
-        unit in ("distance", "length")
-        and ha_unit_system.get("length") == "mi"
-    ):
-        # Only convert if FordPass is actually reporting in miles
-        return miles_to_km(value) if fp_distance == "mi" else value
-
-    if unit in ("degF", "F") or (
-        unit == "temperature"
-        and ha_unit_system.get("temperature") in ("F", "\u00b0F")
-    ):
-        # Only convert if FordPass is actually reporting in Fahrenheit
-        return fahrenheit_to_celsius(value) if fp_temp in ("degF", "F") else value
-
-    if unit == "Wh":
-        return wh_to_kwh(value)
-
-    return value  # already metric or unitless
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +169,7 @@ async def _flush_battery_status(device_id: str, db) -> None:
         device_id=device_id,
         recorded_at=fields.pop("_recorded_at", datetime.now(timezone.utc)),
         source_system="home_assistant",
+        ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,  # D-D1
         **fields,
     )
     db.add(record)
@@ -192,13 +201,15 @@ def _get_attributes(new_state: dict) -> dict:
 
 
 def _get_unit_system(ha_config: dict) -> dict:
-    """Extract HA unit system from config, including FordPass detection keys."""
-    units = dict(ha_config.get("unit_system", {}))
-    # Carry forward FordPass-specific unit overrides set by hass_client
-    for key in ("_fordpass_distance_unit", "_fordpass_temp_unit"):
-        if key in ha_config:
-            units[key] = ha_config[key]
-    return units
+    """Extract HA unit system from config.
+
+    Phase 29 D-A4: no longer forwards FordPass-specific override keys — those
+    have been deleted. Callers that need per-event unit handling must now use
+    `_read_time_uom(new_state)` to pull unit_of_measurement from the event
+    itself (D-B3), or route through
+    `web.services.sources.ha_fordpass.adapter`.
+    """
+    return dict(ha_config.get("unit_system", {}))
 
 
 def _get_event_timestamp(new_state: dict) -> Optional[datetime]:
@@ -238,9 +249,13 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
 
     Accumulates fields in a pending dict and flushes on 'lastrefresh'
     or after a timeout to produce one EVVehicleStatus row per batch.
+
+    D-B3: distance + temperature conversions read `unit_of_measurement` from
+    the event itself (per-event), never from a process-global flag.
     """
     state_val = _get_state_value(new_state)
-    unit_system = _get_unit_system(ha_config)
+    _get_unit_system(ha_config)  # kept for side-effect parity; unit system no longer carries flags
+    entity_id = f"sensor.fordpass_{device_id}_{slug}"
 
     # Initialize pending dict for this device if needed
     if device_id not in _pending_vehicle_status:
@@ -249,10 +264,24 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
 
     pending = _pending_vehicle_status[device_id]
 
-    # Map slug to field
+    # Read-time UoM lookup (D-B3) — used by distance + temp converters below.
+    uom_for_event = _read_time_uom(new_state)
+
+    def _distance_converter(v):
+        # Fall back to declared HA vehicle-status sensor default ("mi") when
+        # the event carries no unit_of_measurement attribute. Simulator +
+        # test fixtures populate a UoM; production HA events do too.
+        return _convert_with_uom(v, uom_for_event or "mi", slug, entity_id)
+
+    def _temp_converter(v):
+        return _convert_with_uom(v, uom_for_event or "degF", slug, entity_id)
+
+    # Map slug to field. Numeric + distance/temp converters route through
+    # web.services.units.to_metric via _convert_with_uom; string / _safe_float
+    # converters remain pure.
     slug_field_map = {
-        "odometer": ("odometer", lambda v: normalize_value(v, "mi", unit_system)),
-        "speed": ("speed", lambda v: normalize_value(v, "mph", unit_system)),
+        "odometer": ("odometer", _distance_converter),
+        "speed": ("speed", _distance_converter),
         "acceleratorpedalposition": ("accelerator_position", _safe_float),
         "brakepedalstatus": ("brake_status", str),
         "braketorque": ("brake_torque", _safe_float),
@@ -263,9 +292,9 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
         "torqueattransmission": ("torque_at_transmission", _safe_float),
         "wheeltorquestatus": ("wheel_torque_status", str),
         "enginespeed": ("engine_speed", _safe_float),
-        "cabintemperature": ("cabin_temperature", lambda v: normalize_value(v, "degF", unit_system)),
-        "coolanttemp": ("coolant_temp", lambda v: normalize_value(v, "degF", unit_system)),
-        "outsidetemp": ("outside_temperature", lambda v: normalize_value(v, "degF", unit_system)),
+        "cabintemperature": ("cabin_temperature", _temp_converter),
+        "coolanttemp": ("coolant_temp", _temp_converter),
+        "outsidetemp": ("outside_temperature", _temp_converter),
         "acceleration": ("acceleration", _safe_float),
         "deepsleep": ("deep_sleep_status", str),
         "deviceconnectivity": ("device_connectivity", str),
@@ -303,10 +332,23 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
     """Handle battery-related sensors (HV SOC, range, 12V level, energy consumed).
 
     Accumulates fields similar to vehicle status batching.
+
+    D-B1/D-B4 note: in the legacy adapter path this handler also ingested
+    trip data from `elveh.trip*` attributes. Phase 29 rules forbid reading
+    unit-ful trip fields from elveh (D-B4). For production deployments with
+    a sensor.fordpass_{vin}_events entity, trip ingestion now flows through
+    ha_fordpass.adapter.process_event against the events entity. This
+    handler retains an elveh-state trip-ingest fallback for HA installs
+    without the events entity, but every unit-ful read now uses a read-time
+    `unit_of_measurement` lookup (D-B3) rather than a process-global flag.
     """
     state_val = _get_state_value(new_state)
     attrs = _get_attributes(new_state)
-    unit_system = _get_unit_system(ha_config)
+    _get_unit_system(ha_config)  # kept for side-effect parity
+    entity_id = f"sensor.fordpass_{device_id}_{slug}"
+
+    # D-B3 read-time UoM (may be None if event carries no attribute).
+    uom_for_event = _read_time_uom(new_state)
 
     # Initialize pending dict for this device if needed
     if device_id not in _pending_battery_status:
@@ -318,26 +360,28 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
     if slug == "soc":
         # HV battery state of charge (%)
         pending["hv_battery_soc"] = _safe_float(state_val)
-        # batteryRange is in the soc entity attributes (distance in HA unit)
+        # batteryRange is an elveh-shaped fallback attribute on the soc entity
+        # (same family as elveh state; D-B3 per-event UoM resolution).
         battery_range = attrs.get("batteryRange")
         if battery_range is not None:
-            pending["hv_battery_range"] = normalize_value(battery_range, "mi", unit_system)
+            pending["hv_battery_range"] = _convert_with_uom(
+                battery_range, uom_for_event or "mi", "batteryRange", entity_id
+            )
 
     elif slug == "elveh":
-        # EV range (miles) and rich battery attributes
+        # EV range (state value). D-B3 read-time UoM from the event itself.
         if state_val not in (None, "unknown", "unavailable"):
-            pending["hv_battery_range"] = normalize_value(state_val, "mi", unit_system)
-        # Extract rich attributes from elveh entity
+            pending["hv_battery_range"] = _convert_with_uom(
+                state_val, uom_for_event or "mi", "elveh.state", entity_id
+            )
+        # Rich battery attributes (SI-already — no conversion needed, no
+        # FIELD_CONTRACTS entry per _EXEMPTIONS in test_contract_coverage).
         hv_voltage = _safe_float(attrs.get("batteryVoltage"))
         hv_amperage = _safe_float(attrs.get("batteryAmperage"))
         hv_kw = _safe_float(attrs.get("batterykW"))
         # FordPass `maximumBatteryCapacity` is the GROSS pack capacity
-        # (total installed cell kWh). This is what battery health/degradation
-        # math on /battery compares against ev_vehicles.battery_gross_capacity_kwh.
-        # TODO: when a real HA state dump is inspected, check whether the
-        # elveh entity exposes a separate "usable" attribute (e.g.
-        # usableBatteryCapacity, batteryEnergyAvailable, etc) and ingest it
-        # into a new column if so. Until then, usable is preset-only.
+        # (total installed cell kWh). Battery health math on /battery
+        # compares against ev_vehicles.battery_gross_capacity_kwh.
         hv_capacity = _safe_float(attrs.get("maximumBatteryCapacity"))
         hv_actual_soc = _safe_float(attrs.get("batteryActualCharge"))
         motor_voltage = _safe_float(attrs.get("motorVoltage"))
@@ -359,27 +403,40 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             pending["motor_amperage"] = motor_amperage
         if motor_kw is not None:
             pending["motor_kw"] = motor_kw
-        # Max range from attributes
+        # Max range from attributes — unit-ful, D-B3 read-time UoM.
         max_range = _safe_float(attrs.get("maximumBatteryRange"))
         if max_range is not None:
-            pending["hv_battery_max_range"] = normalize_value(max_range, "mi", unit_system)
+            pending["hv_battery_max_range"] = _convert_with_uom(
+                max_range, uom_for_event or "mi", "maximumBatteryRange", entity_id
+            )
 
-        # --- Trip attributes from elveh entity ---
+        # --- Trip attributes from elveh entity (D-B4 legacy fallback) ---
+        # Distance + temperature converters use D-B3 read-time UoM. Temp
+        # attributes typically share the elveh state UoM (°F/°C); when they
+        # don't, production HA events carry a per-attribute uom which would
+        # need attribute-specific resolution (tracked in 29-03).
+        distance_uom = uom_for_event or "mi"
+        temp_uom_default = "degF" if (uom_for_event or "").lower() in ("mi", "mph") else "degC"
+
+        def _d(v):
+            return _convert_with_uom(v, distance_uom, "elveh.trip_distance", entity_id)
+
+        def _t(v):
+            return _convert_with_uom(v, temp_uom_default, "elveh.trip_temp", entity_id)
+
         trip_attr_map = {
-            "tripDistanceTraveled": ("distance", lambda v: normalize_value(v, "mi", unit_system)),
+            "tripDistanceTraveled": ("distance", _d),
             "tripDuration": ("duration", _safe_float),
             "tripEnergyConsumed": ("energy_consumed", _safe_float),
-            # tripEfficiency in FordPass-preferred distance unit (mi/kWh or km/kWh)
-            # normalize_value converts to km/kWh when FordPass reports miles.
-            "tripEfficiency": ("efficiency", lambda v: normalize_value(v, "mi", unit_system)),
+            "tripEfficiency": ("efficiency", _d),
             "tripDrivingScore": ("driving_score", _safe_float),
             "tripSpeed": ("speed_score", _safe_float),
             "tripAcceleration": ("acceleration_score", _safe_float),
             "tripDeceleration": ("deceleration_score", _safe_float),
-            "tripAmbientTemp": ("ambient_temp", lambda v: normalize_value(v, "degF", unit_system)),
-            "tripOutsideAirAmbientTemp": ("outside_air_temp", lambda v: normalize_value(v, "degF", unit_system)),
-            "tripCabinTemp": ("cabin_temp", lambda v: normalize_value(v, "degF", unit_system)),
-            "tripRangeRegeneration": ("range_regenerated", lambda v: normalize_value(v, "mi", unit_system)),
+            "tripAmbientTemp": ("ambient_temp", _t),
+            "tripOutsideAirAmbientTemp": ("outside_air_temp", _t),
+            "tripCabinTemp": ("cabin_temp", _t),
+            "tripRangeRegeneration": ("range_regenerated", _d),
             "tripElectricalEfficiency": ("electrical_efficiency", _safe_float),
         }
 
@@ -435,21 +492,22 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         is_complete=True,
                         source_system="homeassistant",
                         original_timestamp=event_ts,
+                        ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
                         **trip_fields,
                     )
                     db.add(trip_record)
                     await db.commit()
                     logger.info(
-                        "Trip recorded for %s: %.1f mi, %.1f min",
+                        "Trip recorded for %s: %s km, %s min",
                         device_id,
-                        float(trip_fields.get("distance", 0)),
-                        float(trip_fields.get("duration", 0)),
+                        trip_fields.get("distance"),
+                        trip_fields.get("duration"),
                     )
 
     elif slug == "battery":
         # 12V battery level (%)
         pending["lv_battery_level"] = _safe_float(state_val)
-        # 12V voltage from attributes
+        # 12V voltage from attributes (SI-already)
         lv_voltage = _safe_float(attrs.get("batteryVoltage"))
         if lv_voltage is not None:
             pending["lv_battery_voltage"] = lv_voltage
@@ -458,8 +516,11 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         # Energy consumed on last trip (Wh) -- log but no direct column
         energy_wh = _safe_float(state_val)
         if energy_wh is not None:
-            energy_kwh = wh_to_kwh(energy_wh)
-            logger.debug("Last energy consumed: %.3f kWh", energy_kwh)
+            try:
+                energy_kwh = to_metric(energy_wh, "Wh")
+            except UnknownSourceUnit:
+                energy_kwh = None
+            logger.debug("Last energy consumed: %s kWh", energy_kwh)
 
     # Check timeout-based flush
     _pending_battery_status_ts.setdefault(device_id, time.time())
@@ -685,7 +746,6 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     from sqlalchemy import select
 
     attrs = _get_attributes(new_state)
-    unit_system = _get_unit_system(ha_config)
 
     if not attrs:
         logger.warning("energytransferlogentry with empty attributes, skipping")
@@ -705,9 +765,22 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     plug_data = attrs.get("plugDetails", {}) or {}
     plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
     raw_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
-    # Normalize to km for storage: normalize_value converts mi->km when
-    # FordPass is reporting in miles, or passes through when already in km.
-    distance_added = normalize_value(raw_distance_added, "mi", unit_system)
+    # Phase 29 D-B2 audit: plugDetails.totalDistanceAdded is the canonical
+    # source and is always reported in km (stable across all fixtures,
+    # independent of HA unit system). Route through adapter + to_metric
+    # to preserve schema traceability even though the conversion is a
+    # passthrough.
+    dist_contract = ha_fordpass.lookup_contract(
+        "sensor.fordpass_{vin}_energytransferlogentry",
+        "plugDetails.totalDistanceAdded",
+    )
+    if dist_contract is not None:
+        distance_added = ha_fordpass.convert(dist_contract, raw_distance_added, new_state)
+    else:
+        # Should never happen — contract is registered unconditionally.
+        distance_added = _convert_with_uom(
+            raw_distance_added, "km", "distance_added", slug,
+        )
 
     # State of charge
     soc_data = attrs.get("stateOfCharge", {}) or {}
@@ -737,14 +810,29 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # Timestamp
     original_timestamp = _parse_iso_datetime(attrs.get("timeStamp"))
 
-    # Thermal context (Phase 27-01). The ha-fordpass payload exposes
-    # `batteryTemperature` on the `elvehcharging` live entity and `outsidetemp`
-    # on its own sensor. When either value is surfaced on the
-    # energytransferlogentry payload (directly or via future integration work),
-    # capture it here. Normalize °F→°C via the shared unit system.
+    # Thermal context (Phase 27-01, updated by Phase 29 D-A4).
+    # ha-fordpass reports batteryTemperature + outsidetemp on the
+    # energytransferlogentry payload in °C (fixture-audited). Route through
+    # adapter contracts so to_metric is the single conversion path.
     # Payload exposes single values; start/end mirror until HA emits discrete snapshots.
-    battery_temp = normalize_value(attrs.get("batteryTemperature"), "degF", unit_system)
-    ambient_temp = normalize_value(attrs.get("outsidetemp"), "degF", unit_system)
+    batt_contract = ha_fordpass.lookup_contract(
+        "sensor.fordpass_{vin}_energytransferlogentry",
+        "batteryTemperature",
+    )
+    amb_contract = ha_fordpass.lookup_contract(
+        "sensor.fordpass_{vin}_energytransferlogentry",
+        "outsidetemp",
+    )
+    raw_batt = attrs.get("batteryTemperature")
+    raw_amb = attrs.get("outsidetemp")
+    if batt_contract is not None:
+        battery_temp = ha_fordpass.convert(batt_contract, raw_batt, new_state)
+    else:
+        battery_temp = _convert_with_uom(raw_batt, "degC", "battery_temp", slug)
+    if amb_contract is not None:
+        ambient_temp = ha_fordpass.convert(amb_contract, raw_amb, new_state)
+    else:
+        ambient_temp = _convert_with_uom(raw_amb, "degC", "ambient_temp", slug)
     battery_temp_start = battery_temp
     battery_temp_end = battery_temp
     ambient_temp_start = ambient_temp
@@ -852,6 +940,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         duplicate_of_id=duplicate_of_id,
         needs_review=duplicate_of_id is not None,
         review_type="duplicate" if duplicate_of_id is not None else None,
+        ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,  # D-D1
     )
     db.add(session)
 
