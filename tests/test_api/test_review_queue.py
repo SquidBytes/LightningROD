@@ -1751,3 +1751,132 @@ async def test_review_approved_tree_standalone_location_actions_use_cluster_grou
     assert edit_pos != -1
     assert merge_pos != -1
     assert unverify_pos < edit_pos < merge_pos
+
+
+# ---------------------------------------------------------------------------
+# Phase 28.1 Gap Closure (WR-01): D-B3 Pending filter lock on POST merge path
+# ---------------------------------------------------------------------------
+# Phase 28.1-01 shipped G1 merge-return-routing with two bare context-helper
+# calls on the Pending branches of merge_location (review.py:1172) and
+# merge_network (review.py:1018). Those calls omit filter="unverified",
+# defaulting to filter="all", which leaks verified rows into the post-merge
+# Pending partial. D-B3 (Pending filter lock) is the invariant being
+# restored on the POST merge path. These tests mirror the absence-assertion
+# pattern from test_pending_tab_locations_excludes_verified (line 740) and
+# test_pending_tab_networks_excludes_verified (line ~700), but scoped to
+# the POST /review/{type}/{id}/merge handlers instead of the GET tab loads.
+
+
+async def test_review_merge_location_pending_excludes_verified(client, db_session):
+    """WR-01 regression: POST /review/location/{id}/merge with return_to=pending
+    MUST return a locations-table partial that contains ONLY unverified rows.
+
+    Seed 1 verified + 2 unverified locations. Merge the two unverified rows
+    on the Pending tab. Assert verified row does NOT appear in the response
+    body. This would fail against review.py:1172 _locations_context(db)
+    without filter="unverified" and passes after the fix.
+    """
+    verified_name = "VerifiedLocLeak"
+    src_name = "PendingMergeSrcFilter"
+    tgt_name = "PendingMergeTgtFilter"
+    await LocationLookupFactory.create(
+        db_session, location_name=verified_name, is_verified=True
+    )
+    src = await LocationLookupFactory.create(
+        db_session,
+        location_name=src_name,
+        is_verified=False,
+        latitude=40.0,
+        longitude=-74.0,
+    )
+    tgt = await LocationLookupFactory.create(
+        db_session,
+        location_name=tgt_name,
+        is_verified=False,
+        latitude=41.0,
+        longitude=-75.0,
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        f"/review/location/{src.id}/merge",
+        data={"target_id": str(tgt.id), "return_to": "pending"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get("HX-Trigger") == "closeMergeModal"
+    body = response.text
+    # Partial shape still present (G1 invariant — not regressed by the fix).
+    assert 'hx-get="/review/locations"' in body
+    # Target unverified row stays visible.
+    assert tgt_name in body, (
+        f"expected unverified target {tgt_name!r} to render post-merge"
+    )
+    # D-B3: verified row MUST NOT leak into the pending partial.
+    # Mirrors the assertion at test_pending_tab_locations_excludes_verified:764.
+    assert f"<td>{verified_name}</td>" not in body, (
+        f"verified location {verified_name!r} leaked into pending "
+        f"merge response body — D-B3 violated on merge_location POST"
+    )
+    # Source row deleted (G1 reassignment invariant — not regressed).
+    src_row = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == src.id)
+        )
+    ).scalar_one_or_none()
+    assert src_row is None
+
+
+async def test_review_merge_network_pending_excludes_verified(client, db_session):
+    """WR-01 regression: POST /review/network/{id}/merge with return_to=pending
+    MUST return a networks-table partial that contains ONLY unverified rows.
+
+    Symmetric to test_review_merge_location_pending_excludes_verified; locks
+    review.py:1018 against D-B3 regression.
+    """
+    verified_name = "VerifiedNetLeak"
+    src_name = "PendingNetMergeSrc"
+    tgt_name = "PendingNetMergeTgt"
+    await NetworkFactory.create(
+        db_session, network_name=verified_name, is_verified=True
+    )
+    src = await NetworkFactory.create(
+        db_session, network_name=src_name, is_verified=False
+    )
+    tgt = await NetworkFactory.create(
+        db_session, network_name=tgt_name, is_verified=False
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        f"/review/network/{src.id}/merge",
+        data={"target_id": str(tgt.id), "return_to": "pending"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get("HX-Trigger") == "closeMergeModal"
+    body = response.text
+    # Partial shape still present.
+    assert 'hx-get="/review/networks"' in body
+    # Target unverified row stays visible.
+    assert tgt_name in body, (
+        f"expected unverified target {tgt_name!r} to render post-merge"
+    )
+    # D-B3: verified row MUST NOT leak. Networks-table renders the name
+    # inside a <td> — use the same dual-pattern check as
+    # test_pending_tab_networks_excludes_verified (line 734-735) because
+    # the networks table may indent the cell contents.
+    assert (
+        f"<td>{verified_name}</td>" not in body
+        and f"<td>\n                    {verified_name}" not in body
+    ), (
+        f"verified network {verified_name!r} leaked into pending "
+        f"merge response body — D-B3 violated on merge_network POST"
+    )
+    # Source row deleted.
+    src_row = (
+        await db_session.execute(
+            select(EVChargingNetwork).where(EVChargingNetwork.id == src.id)
+        )
+    ).scalar_one_or_none()
+    assert src_row is None
