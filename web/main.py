@@ -44,6 +44,7 @@ from web.routes import (
     settings,
     trips,
 )
+from web.routes.admin import data_sources as admin_data_sources
 
 
 def localtime_filter(dt, tz_str: str = "UTC", fmt: str | None = None):
@@ -111,6 +112,7 @@ def create_app() -> FastAPI:
     app.include_router(locations.router)
     app.include_router(trips.router, prefix="/driving")
     app.include_router(driving_performance.router, prefix="/driving")
+    app.include_router(admin_data_sources.router)
 
     # Register Jinja filters on all Jinja2Templates instances used by routes
     from web.unit_system import (
@@ -128,7 +130,7 @@ def create_app() -> FastAPI:
             return fn(value, unit) if value is not None else None
         return inner
 
-    for route_module in [dashboard, sessions, costs, performance, settings, csv_import, charging, review, battery, trips, driving_performance]:
+    for route_module in [dashboard, sessions, costs, performance, settings, csv_import, charging, review, battery, trips, driving_performance, admin_data_sources]:
         if hasattr(route_module, "templates"):
             env = route_module.templates.env
             env.globals["tooltips"] = TOOLTIPS
