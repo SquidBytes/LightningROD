@@ -1015,7 +1015,7 @@ async def merge_network(
             ctx,
         )
     else:
-        ctx = await _networks_context(db)
+        ctx = await _networks_context(db, filter="unverified")
         response = templates.TemplateResponse(
             request,
             "review/partials/review_networks_table.html",
@@ -1169,7 +1169,7 @@ async def merge_location(
             ctx,
         )
     else:
-        ctx = await _locations_context(db)
+        ctx = await _locations_context(db, filter="unverified")
         response = templates.TemplateResponse(
             request,
             "review/partials/review_locations_table.html",
