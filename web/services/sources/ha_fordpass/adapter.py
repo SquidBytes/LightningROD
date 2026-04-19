@@ -295,13 +295,19 @@ def _entity_suffix(entity_id: Optional[str]) -> Optional[str]:
     """Return the trailing slug of a fordpass entity_id, or None.
 
     Example: sensor.fordpass_ABC123_elveh -> "elveh"
+    Example: sensor.fordpass_YOUR_VIN_metrics -> "metrics"
+
+    Uses rsplit so VINs containing underscores (e.g., the PII-free fixture
+    placeholder `YOUR_VIN`) still parse correctly. Fordpass slugs are always
+    single tokens (elveh, metrics, events, energytransferlogentry, outsidetemp,
+    soc, odometer, etc.) so the trailing segment is unambiguous.
     """
     if not entity_id or not isinstance(entity_id, str):
         return None
     if not entity_id.startswith(_ENTITY_SUFFIX_PREFIX):
         return None
     remainder = entity_id[len(_ENTITY_SUFFIX_PREFIX):]
-    parts = remainder.split("_", 1)
+    parts = remainder.rsplit("_", 1)
     if len(parts) < 2:
         return None
     return parts[1]
@@ -445,11 +451,16 @@ def _safe_float(val: Any) -> Optional[float]:
 # ---------------------------------------------------------------------------
 
 def _device_id_from_entity(entity_id: str) -> Optional[str]:
-    """Extract the VIN segment from sensor.fordpass_{vin}_{slug}."""
+    """Extract the VIN segment from sensor.fordpass_{vin}_{slug}.
+
+    Uses rsplit so that VIN placeholders containing underscores (e.g. the
+    PII-free fixture placeholder `YOUR_VIN`) return as the full VIN rather
+    than being truncated at the first underscore.
+    """
     if not entity_id or not entity_id.startswith(_ENTITY_SUFFIX_PREFIX):
         return None
     remainder = entity_id[len(_ENTITY_SUFFIX_PREFIX):]
-    parts = remainder.split("_", 1)
+    parts = remainder.rsplit("_", 1)
     if not parts or not parts[0]:
         return None
     return parts[0]

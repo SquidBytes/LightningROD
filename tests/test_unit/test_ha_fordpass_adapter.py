@@ -62,12 +62,20 @@ def test_elveh_state_read_time_uom_lookup():
 # --- D-B4: elveh attributes are NOT read ---
 
 def test_elveh_tripDistanceTraveled_not_read():
-    """D-B4: adapter must NOT read tripDistanceTraveled from elveh attributes.
-    Trip data comes from `events` entity xev-key-off-trip-segment-data instead.
+    """D-B4: adapter's FIELD_CONTRACTS must NOT contain an entry sourced from
+    elveh.tripDistanceTraveled (or any elveh.trip* attribute). Trip data comes
+    from the events entity xev-key-off-trip-segment-data instead.
     """
-    # No direct assertion possible until adapter exists; test is a named lock.
-    # Filled out in 29-02 with a behavior assertion.
-    pass
+    elveh_trip_reads = [
+        c for c in FIELD_CONTRACTS
+        if "elveh" in c.source_entity_pattern
+        and "tripDistance" in c.source_attribute
+    ]
+    assert not elveh_trip_reads, (
+        f"D-B4 violation: adapter reads trip distance from elveh attributes: "
+        f"{[(c.source_entity_pattern, c.source_attribute) for c in elveh_trip_reads]}. "
+        "Trip data must come from sensor.{vin}_events.xev-key-off-trip-segment-data."
+    )
 
 
 # Placeholder: one real test per FIELD_CONTRACTS entry will be added in 29-02

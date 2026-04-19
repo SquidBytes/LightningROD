@@ -27,6 +27,9 @@ pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
 _TEST_DEVICE_ID = "TESTVIN001"
 
+# Phase 29 D-A4: the legacy FordPass preferred-unit flags on ha_config were
+# deleted; unit handling now lives in the ha_fordpass adapter FIELD_CONTRACTS
+# + to_metric dispatch.
 _HA_CONFIG = {
     "location_name": "Test Home",
     "time_zone": "America/New_York",
@@ -36,8 +39,6 @@ _HA_CONFIG = {
         "temperature": "\u00b0F",
         "volume": "gal",
     },
-    "_fordpass_distance_unit": "mi",
-    "_fordpass_temp_unit": "degF",
 }
 
 
