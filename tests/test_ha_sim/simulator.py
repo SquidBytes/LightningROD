@@ -311,16 +311,17 @@ def make_charging_session_event(
     city: Optional[str] = "Washington",
     state: Optional[str] = "DC",
     max_power_w: float = 150000.0,
-    battery_temp_f: Optional[float] = None,
-    outside_temp_f: Optional[float] = None,
+    battery_temp_c: Optional[float] = None,
+    outside_temp_c: Optional[float] = None,
 ) -> tuple[str, dict]:
     """Generate an energytransferlogentry event.
 
     Returns (entity_id, new_state) tuple matching what hass_processor expects.
 
-    ``battery_temp_f`` / ``outside_temp_f`` inject the Phase 27-01 thermal
-    context fields (°F) at the top of the attrs dict. Omit them to test the
-    "payload without temp keys" path.
+    ``battery_temp_c`` / ``outside_temp_c`` inject the Phase 27-01 thermal
+    context fields (°C — matches real ha-fordpass payload semantics per
+    Phase 29 D-B2 audit) at the top of the attrs dict. Omit them to test
+    the "payload without temp keys" path.
     """
     entity_id = f"sensor.fordpass_{device_id}_energytransferlogentry"
     now = _now_iso()
@@ -358,10 +359,10 @@ def make_charging_session_event(
         },
         "timeStamp": now,
     }
-    if battery_temp_f is not None:
-        attrs["batteryTemperature"] = battery_temp_f
-    if outside_temp_f is not None:
-        attrs["outsidetemp"] = outside_temp_f
+    if battery_temp_c is not None:
+        attrs["batteryTemperature"] = battery_temp_c
+    if outside_temp_c is not None:
+        attrs["outsidetemp"] = outside_temp_c
     new_state = {
         "state": "complete",
         "last_changed": now,

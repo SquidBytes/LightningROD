@@ -25,7 +25,10 @@ from web.services.hass_processor import (
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
-# Default HA config matching the simulator's config
+# Default HA config matching the simulator's config.
+# Phase 29 D-A4: the legacy FordPass preferred-unit flags on ha_config were
+# deleted; unit handling now lives in the ha_fordpass adapter FIELD_CONTRACTS
+# + to_metric dispatch.
 _HA_CONFIG = {
     "location_name": "Test Home",
     "time_zone": "America/New_York",
@@ -35,8 +38,6 @@ _HA_CONFIG = {
         "temperature": "\u00b0F",
         "volume": "gal",
     },
-    "_fordpass_distance_unit": "mi",
-    "_fordpass_temp_unit": "degF",
 }
 
 _TEST_DEVICE_ID = "TESTVIN001"
@@ -104,8 +105,11 @@ async def test_charging_session_ingestion(db_session):
 
 @pytest.mark.asyncio
 async def test_ingestion_captures_charging_temps(db_session):
-    """Phase 27-01: batteryTemperature + outsidetemp on the energytransferlogentry
-    payload populate EVChargingSession.{battery,ambient}_temp_{start,end} in °C."""
+    """Phase 27-01 (updated by Phase 29 D-B2): batteryTemperature + outsidetemp
+    arrive in degC on the energytransferlogentry payload (matches real
+    ha-fordpass integration). They populate EVChargingSession.{battery,ambient}_temp_{start,end}
+    in degC via adapter FIELD_CONTRACTS (passthrough, no unit conversion).
+    """
     from db.models.charging_session import EVChargingSession
 
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
@@ -117,8 +121,8 @@ async def test_ingestion_captures_charging_temps(db_session):
         network_name="Home",
         start_soc=56.0,
         end_soc=80.0,
-        battery_temp_f=77.0,    # -> 25.0 °C
-        outside_temp_f=72.05,   # -> ~22.25 °C
+        battery_temp_c=25.0,     # passthrough to DB
+        outside_temp_c=22.25,    # passthrough to DB
     )
 
     await _dispatch_event(entity_id, new_state, db_session)

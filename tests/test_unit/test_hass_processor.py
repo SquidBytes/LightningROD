@@ -1,20 +1,20 @@
 """Pure function unit tests for hass_processor.
 
-Tests unit conversions, slug extraction, value parsing, and other pure functions
-that do NOT require a database connection.
-"""
+Tests slug extraction, device_id resolution, value parsing, address formatting,
+and other pure helper functions that do NOT require a database connection.
 
-from unittest.mock import AsyncMock, MagicMock, patch
+Phase 29 cleanup: tests for the deleted legacy value-normalizer helper and
+its mi/degF/Wh convenience wrappers have been removed because the behavioral
+surface they covered is now owned by `tests/test_unit/test_to_metric.py`.
+The 2026-03-21 auto-detect unit system logic is gone per D-A4; see
+`.planning/phases/29-unit-ingestion-overhaul/29-CONTEXT.md`.
+"""
 
 import pytest
 
 from web.services.hass_processor import (
     extract_slug,
-    fahrenheit_to_celsius,
     get_device_id,
-    miles_to_km,
-    normalize_value,
-    wh_to_kwh,
     _safe_float,
     _normalize_charge_type,
     _format_address,
@@ -23,98 +23,6 @@ from web.services.hass_processor import (
 
 
 pytestmark = pytest.mark.unit
-
-
-# ---------------------------------------------------------------------------
-# Unit conversion tests
-# ---------------------------------------------------------------------------
-
-
-def test_miles_to_km():
-    assert miles_to_km(100) == pytest.approx(160.934, abs=0.001)
-
-
-def test_miles_to_km_zero():
-    assert miles_to_km(0) == 0.0
-
-
-def test_fahrenheit_to_celsius():
-    assert fahrenheit_to_celsius(212) == pytest.approx(100.0, abs=0.01)
-
-
-def test_fahrenheit_to_celsius_freezing():
-    assert fahrenheit_to_celsius(32) == pytest.approx(0.0, abs=0.01)
-
-
-def test_wh_to_kwh():
-    assert wh_to_kwh(1000) == pytest.approx(1.0, abs=0.001)
-
-
-def test_wh_to_kwh_fractional():
-    assert wh_to_kwh(2500) == pytest.approx(2.5, abs=0.001)
-
-
-# ---------------------------------------------------------------------------
-# normalize_value tests
-# ---------------------------------------------------------------------------
-
-
-def test_normalize_value_miles_imperial():
-    """FordPass reports miles -> convert to km."""
-    result = normalize_value(100, "mi", {"_fordpass_distance_unit": "mi"})
-    assert result == pytest.approx(160.934, abs=0.001)
-
-
-def test_normalize_value_miles_metric_passthrough():
-    """FordPass reports km -> skip conversion, pass through."""
-    result = normalize_value(100, "mi", {"_fordpass_distance_unit": "km"})
-    assert result == 100.0
-
-
-def test_normalize_value_miles_default_fallback():
-    """No FordPass unit info -> default to metric, pass through."""
-    result = normalize_value(100, "mi", {})
-    assert result == 100.0
-
-
-def test_normalize_value_fahrenheit_imperial():
-    """FordPass reports degF -> convert to Celsius."""
-    result = normalize_value(212, "degF", {"_fordpass_temp_unit": "degF"})
-    assert result == pytest.approx(100.0, abs=0.01)
-
-
-def test_normalize_value_fahrenheit_metric_passthrough():
-    """FordPass reports degC -> skip conversion, pass through."""
-    result = normalize_value(100, "degF", {"_fordpass_temp_unit": "degC"})
-    assert result == 100.0
-
-
-def test_normalize_value_fahrenheit_default_fallback():
-    """No FordPass temp info -> default to metric, pass through."""
-    result = normalize_value(212, "degF", {})
-    assert result == 212.0
-
-
-def test_normalize_value_wh():
-    """Wh conversion unchanged by FordPass units."""
-    result = normalize_value(5000, "Wh", {})
-    assert result == pytest.approx(5.0, abs=0.001)
-
-
-def test_normalize_value_metric_passthrough():
-    """Metric values pass through unchanged."""
-    result = normalize_value(42.0, "km", {"_fordpass_distance_unit": "km"})
-    assert result == 42.0
-
-
-def test_normalize_value_none():
-    result = normalize_value(None, "mi", {})
-    assert result is None
-
-
-def test_normalize_value_invalid():
-    result = normalize_value("not_a_number", "mi", {})
-    assert result is None
 
 
 # ---------------------------------------------------------------------------
@@ -225,93 +133,3 @@ def test_parse_iso_datetime():
 def test_parse_iso_datetime_none():
     assert _parse_iso_datetime(None) is None
     assert _parse_iso_datetime("") is None
-
-
-# ---------------------------------------------------------------------------
-# Phase 27-01: Charging-session thermal context tests
-#
-# These exercise the energytransferlogentry handler with a mocked db. We skip
-# the duplicate-detection branch by omitting session_start_utc, and stub
-# resolve_location / resolve_network so the handler path reduces to
-# "parse attrs -> db.add(EVChargingSession)". The asserts run against the
-# single EVChargingSession instance captured from `db.add`.
-# ---------------------------------------------------------------------------
-
-
-def _make_fake_db():
-    """Return an AsyncMock db whose `add` captures the session instance."""
-    db = AsyncMock()
-    db.add = MagicMock()  # sync method on real session
-    # db.execute is only reachable on paths we intentionally skip, but stub it anyway
-    exec_result = MagicMock()
-    exec_result.all.return_value = []
-    exec_result.scalar_one_or_none.return_value = None
-    db.execute.return_value = exec_result
-    return db
-
-
-def _charging_payload(**overrides):
-    """Build an energytransferlogentry-shaped payload for handler tests.
-
-    Omits `energyTransferDuration` so duplicate detection is skipped.
-    """
-    attrs = {
-        "energyConsumed": 23.5,
-        "chargerType": "AC_BASIC",
-        "stateOfCharge": {"firstSOC": 56.0, "lastSOC": 80.0},
-        "power": {"max": 7446.4, "min": 0.0, "weightedAverage": 6628.9},
-        "plugDetails": {"totalPluggedInTime": 11538, "totalDistanceAdded": 80.0},
-        # location deliberately omitted -> resolve_location returns None path
-    }
-    attrs.update(overrides)
-    return {"state": "complete", "attributes": attrs}
-
-
-@pytest.mark.asyncio
-async def test_charging_session_persists_temp_fields():
-    """batteryTemperature + outsidetemp (°F) -> mirrored °C on start/end columns."""
-    from web.services.hass_processor import handle_energy_transfer
-
-    payload = _charging_payload(batteryTemperature=77.0, outsidetemp=72.05)
-    db = _make_fake_db()
-    ha_config = {"_fordpass_temp_unit": "degF"}
-
-    with patch(
-        "web.queries.locations.resolve_location", new=AsyncMock(return_value=None)
-    ):
-        await handle_energy_transfer(
-            "energytransferlogentry", payload, ha_config, "TESTVIN001", db
-        )
-
-    assert db.add.call_count == 1, "Expected exactly one db.add(session)"
-    session = db.add.call_args[0][0]
-
-    # 77°F = 25°C, 72.05°F ≈ 22.25°C
-    assert session.battery_temp_start == pytest.approx(25.0, abs=0.01)
-    assert session.battery_temp_end == pytest.approx(25.0, abs=0.01)
-    assert session.ambient_temp_start == pytest.approx(22.25, abs=0.01)
-    assert session.ambient_temp_end == pytest.approx(22.25, abs=0.01)
-
-
-@pytest.mark.asyncio
-async def test_charging_session_missing_temp_fields_is_ok():
-    """No batteryTemperature/outsidetemp keys -> columns stay None, no raise."""
-    from web.services.hass_processor import handle_energy_transfer
-
-    payload = _charging_payload()  # no temp keys
-    db = _make_fake_db()
-    ha_config = {"_fordpass_temp_unit": "degF"}
-
-    with patch(
-        "web.queries.locations.resolve_location", new=AsyncMock(return_value=None)
-    ):
-        await handle_energy_transfer(
-            "energytransferlogentry", payload, ha_config, "TESTVIN001", db
-        )
-
-    assert db.add.call_count == 1
-    session = db.add.call_args[0][0]
-    assert session.battery_temp_start is None
-    assert session.battery_temp_end is None
-    assert session.ambient_temp_start is None
-    assert session.ambient_temp_end is None
