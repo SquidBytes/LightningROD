@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -116,6 +116,12 @@ class EVChargingSession(Base):
         TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
     )
     original_timestamp: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
+
+    # Pipeline schema version (Phase 29, D-D1). NULL = pre-v2 / suspect era
+    # spanning 2026-03-21 onward (commit abd736b double-conversion bug).
+    # 2 = ingested via adapter-driven pipeline with declared source units.
+    # See .planning/phases/29-unit-ingestion-overhaul/29-CONTEXT.md D-D1/D-D3.
+    ingest_schema_version: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("session_id", name="uq_ev_charging_session_session_id"),
