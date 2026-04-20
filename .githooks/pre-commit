@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 #
-# LightningROD pre-commit hook — runs ruff on staged Python files.
+# LightningROD pre-commit hook.
+#
+# Current checks on staged Python changes:
+# - ruff lint
+# - reference hygiene (no internal planning shorthand in added comments/docstrings)
 #
 # Activate once per clone:
 #     git config core.hooksPath .githooks
@@ -40,6 +44,25 @@ if ! "$RUFF" check "${staged_py[@]}"; then
     echo "    $RUFF check --fix ${staged_py[*]}"
     echo
     echo "Or bypass (not recommended): git commit --no-verify"
+    exit 1
+fi
+
+if [ -x "$REPO_ROOT/.venv/bin/python" ]; then
+    PYTHON="$REPO_ROOT/.venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON="python3"
+else
+    echo "pre-commit: python3 not found; cannot run reference hygiene check."
+    echo "            Install Python or use the repo .venv."
+    exit 1
+fi
+
+echo "pre-commit: checking reference hygiene on added comment/docstring lines..."
+if ! "$PYTHON" scripts/check_reference_hygiene.py --staged --paths "${staged_py[@]}"; then
+    echo
+    echo "pre-commit: reference hygiene check failed."
+    echo "            Remove internal planning IDs/references (e.g. D2, D-B3, 'Phase 29', CONTEXT.md)"
+    echo "            from new comments/docstrings, then restage."
     exit 1
 fi
 
