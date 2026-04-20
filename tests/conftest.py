@@ -25,8 +25,7 @@ _migrations_done = False
 
 def _run_alembic_migrations():
     """Run Alembic migrations via subprocess to avoid event loop conflicts.
-
-    The Alembic env.py uses asyncio.run() internally, which cannot be called
+    The Alembic env.py uses asyncio.run internally, which cannot be called
     from within an already-running event loop (as in an async pytest fixture).
     Running as a subprocess avoids this entirely.
     """

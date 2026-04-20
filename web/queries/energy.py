@@ -1,3 +1,5 @@
+"""Query helpers for energy."""
+
 import statistics
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -245,19 +247,15 @@ async def efficiency_over_time_series(
 
 async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict | None:
     """Compute regen braking summary from EVTripMetrics.
-
     Returns None when ev_trip_metrics has no rows with range_regenerated data
     (triggers "No data available" card state in the template).
-
     Returns dict with:
-    - regen_total: float
-    - trip_count: int
-
+    regen_total: float
+    trip_count: int
     NOTE: range_regenerated units are ambiguous — likely "miles of range recovered"
     but not confirmed. Template uses generic "range units" label.
     TODO: Validate range_regenerated units against raw fordpass API response.
-
-    PITFALL: SUM() on empty/null data returns NULL not 0. Count-first guard prevents
+    PITFALL: SUM on empty/null data returns NULL not 0. Count-first guard prevents
     TypeError: float(None).
     """
     trip_filter = build_time_filter_trip(time_range)
@@ -768,9 +766,8 @@ async def has_real_charge_curve_data(
 ) -> bool:
     """True iff any DC session in window has >= 3 EVBatteryStatus rows within its
     [session_start_utc, session_end_utc] span.
-
-    Reuses Phase 17.1's "< 3 detailed points" threshold for fallback trigger:
-    when True the synthetic curve is hidden and the real Phase 17.1 charge curve
+    Reuses 's "< 3 detailed points" threshold for fallback trigger:
+    when True the synthetic curve is hidden and the real charge curve
     chart is rendered instead.
     """
     sess_stmt = select(

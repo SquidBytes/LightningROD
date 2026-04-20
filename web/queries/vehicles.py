@@ -1,3 +1,5 @@
+"""Query helpers for vehicles."""
+
 from typing import Optional
 
 from sqlalchemy import select
@@ -123,9 +125,8 @@ def lookup_battery_values(
     battery_option: str,
 ) -> Optional[tuple[float, float]]:
     """Return (battery_usable_kwh, battery_gross_kwh) for a preset match or None.
-
     Match rule: exact equality on make/model/trim_level/battery_option, and
-    year_min <= year <= year_max. Consumed by plan 27-07's cascade auto-fill.
+    year_min <= year <= year_max. Consumed by cascade auto-fill.
     """
     for row in VEHICLE_PRESETS:
         if (

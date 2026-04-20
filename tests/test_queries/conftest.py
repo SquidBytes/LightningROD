@@ -412,13 +412,11 @@ async def trip_scenario(db_session):
 
 @pytest_asyncio.fixture
 async def sessions_with_battery_status(db_session):
-    """Phase 25 (Plan 25-02): DC session with >=3 battery_status points.
-
+    """DC session with >=3 battery_status points.
     Creates:
-    - 1 vehicle (device_id 'charge_p25_real_vin')
-    - 1 DC session spanning 1 hour
-    - 5 EVBatteryStatus rows with recorded_at inside the session window
-
+    1 vehicle (device_id 'charge_p25_real_vin')
+    1 DC session spanning 1 hour
+    5 EVBatteryStatus rows with recorded_at inside the session window
     has_real_charge_curve_data should return True against this.
     """
     device_id = "charge_p25_real_vin"
@@ -462,13 +460,11 @@ async def sessions_with_battery_status(db_session):
 
 @pytest_asyncio.fixture
 async def sessions_without_battery_status(db_session):
-    """Phase 25 (Plan 25-02): DC-only sessions with no battery_status rows.
-
+    """DC-only sessions with no battery_status rows.
     Creates:
-    - 1 vehicle (device_id 'charge_p25_synth_vin')
-    - 3 DC sessions with peak kW [100.0, 150.0, 200.0] → median 150.0
-    - 0 battery_status rows (synthetic fallback path)
-
+    1 vehicle (device_id 'charge_p25_synth_vin')
+    3 DC sessions with peak kW [100.0, 150.0, 200.0] → median 150.0
+    0 battery_status rows (synthetic fallback path)
     Returned dict includes expected.median_peak_kw / dc_session_count for
     deterministic assertions.
     """

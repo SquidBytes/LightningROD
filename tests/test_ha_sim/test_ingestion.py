@@ -105,7 +105,7 @@ async def test_charging_session_ingestion(db_session):
 
 @pytest.mark.asyncio
 async def test_ingestion_captures_charging_temps(db_session):
-    """Phase 27-01 (updated by Phase 29 D-B2): batteryTemperature + outsidetemp
+    """(updated by ): batteryTemperature + outsidetemp
     arrive in degC on the energytransferlogentry payload (matches real
     ha-fordpass integration). They populate EVChargingSession.{battery,ambient}_temp_{start,end}
     in degC via adapter FIELD_CONTRACTS (passthrough, no unit conversion).

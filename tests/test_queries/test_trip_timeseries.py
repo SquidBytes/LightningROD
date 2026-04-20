@@ -1,5 +1,4 @@
-"""Tests for Phase 18.1 trip time-series query functions and chart builders.
-
+"""Tests for trip time-series query functions and chart builders.
 Covers: query_trip_battery_series, query_trip_vehicle_series,
 _interpolate_series, build_drive_graph, build_environment_chart,
 and the expanded chart builders.

@@ -19,14 +19,12 @@ logger = logging.getLogger("lightningrod.test.ha_sim")
 
 class HASimulator:
     """Standalone asyncio WebSocket server speaking the HA protocol.
-
     Usage::
-
-        sim = HASimulator()
-        await sim.start()
-        print(f"ws://localhost:{sim.port}")
-        await sim.inject_event("sensor.fordpass_TESTVIN_soc", {"state": "80"})
-        await sim.stop()
+    sim = HASimulator
+    await sim.start
+    print(f"ws://localhost:{sim.port}")
+    await sim.inject_event("sensor.fordpass_TESTVIN_soc", {"state": "80"})
+    await sim.stop
     """
 
     def __init__(
@@ -315,12 +313,10 @@ def make_charging_session_event(
     outside_temp_c: Optional[float] = None,
 ) -> tuple[str, dict]:
     """Generate an energytransferlogentry event.
-
     Returns (entity_id, new_state) tuple matching what hass_processor expects.
-
-    ``battery_temp_c`` / ``outside_temp_c`` inject the Phase 27-01 thermal
+    ``battery_temp_c`` / ``outside_temp_c`` inject the thermal
     context fields (°C — matches real ha-fordpass payload semantics per
-    Phase 29 D-B2 audit) at the top of the attrs dict. Omit them to test
+    audit) at the top of the attrs dict. Omit them to test
     the "payload without temp keys" path.
     """
     entity_id = f"sensor.fordpass_{device_id}_energytransferlogentry"

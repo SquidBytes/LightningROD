@@ -7,12 +7,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 @pytest.fixture
 def stub_unit_context():
     """Patch get_unit_context so import_rows doesn't need a fully-wired mock DB.
-
     import_rows looks up user unit preferences via get_unit_context → this would
     otherwise require the caller to wire a mock db.execute(...) result chain.
     These unit tests only care about row counting, so stubbing the unit-context
     lookup with "us" defaults keeps the mocks focused and avoids leaking
-    un-awaited coroutines when AsyncMock auto-generates .all() as a coroutine.
+    un-awaited coroutines when AsyncMock auto-generates.all as a coroutine.
     """
     stub = {
         "distance_unit": "us",

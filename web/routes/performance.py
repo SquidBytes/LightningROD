@@ -1,3 +1,5 @@
+"""Route handlers for performance."""
+
 from typing import Annotated, Optional
 
 import plotly.graph_objects as go

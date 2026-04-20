@@ -1,9 +1,7 @@
-"""Tests for the performance summary sparkline query helpers (Phase 27-05).
-
+"""Tests for the performance summary sparkline query helpers.
 Covers two new query functions added to web/queries/energy.py:
-  - monthly_energy_series: (month_start, total_kwh) tuples per month.
-  - efficiency_over_time_series: (date, km_per_kwh) tuples per session.
-
+monthly_energy_series: (month_start, total_kwh) tuples per month.
+efficiency_over_time_series: (date, km_per_kwh) tuples per session.
 Unit base for efficiency matches the rest of energy.py: distance_added is stored
 in km, energy_kwh in kWh, so efficiency is returned in km/kWh (metric base).
 Route handlers apply unit conversion (MI_PER_KM) when rendering for US units.

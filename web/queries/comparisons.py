@@ -1,3 +1,5 @@
+"""Query helpers for comparisons."""
+
 from typing import Optional
 
 from sqlalchemy import select

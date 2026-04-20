@@ -1,3 +1,5 @@
+"""Route handlers for trips."""
+
 import math
 from datetime import date, datetime, timezone
 from typing import Annotated, Optional

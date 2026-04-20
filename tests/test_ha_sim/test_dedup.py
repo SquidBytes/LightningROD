@@ -1,12 +1,11 @@
-"""Integration tests for HA-side session and trip deduplication (Phase 23 backfill).
-
+"""Integration tests for HA-side session and trip deduplication ( backfill).
 Covers:
-- Charging session dedup via energytransferlogentry events (repeat, updated
-  end_time, updated energy, fuzzy window).
-- Cross-source dedup: manual/CSV session already exists, HA delivers matching
-  event -> new row is flagged rather than silently duplicated.
-- Trip dedup: regression coverage for the "3 trips for 1 real trip" bug noted
-  in WORKING.md (line 132). Identical trip events should produce one row.
+Charging session dedup via energytransferlogentry events (repeat, updated
+end_time, updated energy, fuzzy window).
+Cross-source dedup: manual/CSV session already exists, HA delivers matching
+event -> new row is flagged rather than silently duplicated.
+Trip dedup: regression coverage for the "3 trips for 1 real trip" bug noted
+in WORKING.md (line 132). Identical trip events should produce one row.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -55,8 +54,7 @@ async def _dispatch_event(entity_id: str, new_state: dict, db) -> None:
 
 def _freeze_event_time(new_state: dict, when: datetime) -> None:
     """Rewrite the event + begin/end timestamps to a fixed moment.
-
-    The charging_session helper uses _now_iso() for begin/end; tests need
+    The charging_session helper uses _now_iso for begin/end; tests need
     deterministic start_time windows to validate the ±30 minute dedup window.
     """
     iso = when.isoformat()

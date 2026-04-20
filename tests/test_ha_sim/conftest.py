@@ -17,18 +17,10 @@ async def ha_simulator():
 
 @pytest.fixture(autouse=True)
 def clear_processor_state():
-    """Clear hass_processor + ha_fordpass adapter module-level state dicts.
+    """Clear shared in-memory processor state before and after each test.
 
-    Prevents cross-test contamination from:
-    - Accumulated pending status fields and last-seen trip values
-      (Pitfall 6 from RESEARCH.md).
-    - The ha_fordpass adapter's `_last_seen_raw` cache (D-C3), which
-      would otherwise leak state across parametrized matrix tests and
-      could mask regressions by showing stale correct values.
-
-    Plan 29-04 Task 2 Step 4: _last_seen_raw clear extended into the
-    existing fixture (sibling fixture deferred — single autouse is
-    simpler and the cache lives next to the dicts we already clear).
+    This prevents cross-test leakage from pending status buffers and the
+    adapter's ``_last_seen_raw`` cache.
     """
     from web.services import hass_processor
 

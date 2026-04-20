@@ -1,3 +1,5 @@
+"""Database models for reference."""
+
 from datetime import date, datetime
 from typing import Optional
 
@@ -81,10 +83,9 @@ class EVLocationLookup(Base):
 
 class EVLocationGPSAlias(Base):
     """GPS coordinate alias for a known location.
-
     Created when locations are merged (source GPS becomes alias on target)
     or when a user confirms a first-time auto-association.
-    Used by resolve_location() to match future sessions to known locations.
+    Used by resolve_location to match future sessions to known locations.
     """
 
     __tablename__ = "ev_location_gps_aliases"
@@ -101,9 +102,8 @@ class EVLocationGPSAlias(Base):
 
 class EVNetworkNameAlias(Base):
     """Alternate name alias for a charging network.
-
     Created when networks are merged (source name becomes alias on target).
-    Used by resolve_network() to match future sessions to canonical networks.
+    Used by resolve_network to match future sessions to canonical networks.
     """
 
     __tablename__ = "ev_network_name_aliases"

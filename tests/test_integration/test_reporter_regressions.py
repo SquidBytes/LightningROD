@@ -1,10 +1,7 @@
-"""Reporter-scenario regression locks (D-E4).
+"""Regression tests for the reported FordPass unit-conversion bug cases.
 
-Three named tests for the exact values reported by the user + ha-fordpass
-integration author on 2026-04-19. Failure messages explicitly reference the
-2026-03-21 bug (commit abd736b) so future regressions are unmistakable.
-
-Phase 29 Plan 02 Task 3: wired up against the ha_fordpass adapter.
+These tests lock the known bad scenarios and verify both stored values and
+display conversions.
 """
 
 import json
@@ -27,8 +24,8 @@ REGRESSION_MESSAGE = (
     "REGRESSION: this is the 2026-03-21 double-conversion bug (commit abd736b) "
     "returning. The ha-fordpass adapter multiplied an already-metric attribute "
     "value by 1.609344 on ingestion. Check web/services/units/to_metric.py "
-    "source_unit dispatch AND verify the adapter is reading from the metrics/events "
-    "entities per D-B1, not elveh attributes per D-B4."
+    "source_unit dispatch and verify the adapter is reading the intended "
+    "metrics/events entities, not elveh trip attributes."
 )
 
 
@@ -57,7 +54,7 @@ async def test_reporter_19km_trip_not_multiplied(db_session):
         REGRESSION_MESSAGE + f"  got {trip.distance} km (expected 19.0)"
     )
 
-    # Display-layer lock (Plan 29-04 Task 2, D-E6)
+    # Display-layer lock.
     km_display = convert_distance(trip.distance, "metric")
     mi_display = convert_distance(trip.distance, "us")
     assert km_display == pytest.approx(19.0, abs=0.1), (
@@ -85,7 +82,7 @@ async def test_reporter_64mi_103km_charge_added(db_session):
         REGRESSION_MESSAGE + f"  got {session.distance_added} km (expected 103.0)"
     )
 
-    # Display-layer lock (Plan 29-04 Task 2, D-E6) — 64 mi corresponds to 103 km
+    # Display-layer lock: 64 mi corresponds to 103 km.
     km_display = convert_distance(session.distance_added, "metric")
     mi_display = convert_distance(session.distance_added, "us")
     assert km_display == pytest.approx(103.0, abs=0.1), (
@@ -118,7 +115,7 @@ async def test_reporter_260mi_418km_max_range(db_session):
         REGRESSION_MESSAGE + f"  got {battery.hv_battery_max_range} km (expected 418.0)"
     )
 
-    # Display-layer lock (Plan 29-04 Task 2, D-E6) — 260 mi corresponds to 418 km
+    # Display-layer lock: 260 mi corresponds to 418 km.
     km_display = convert_distance(battery.hv_battery_max_range, "metric")
     mi_display = convert_distance(battery.hv_battery_max_range, "us")
     assert km_display == pytest.approx(418.0, abs=0.1), (

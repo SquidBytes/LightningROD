@@ -1,3 +1,5 @@
+"""Route handlers for dashboard."""
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates

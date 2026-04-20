@@ -1,13 +1,11 @@
-"""Tests for network auto-detection and resolution (Phase 19 backfill).
-
+"""Tests for network auto-detection and resolution ( backfill).
 Covers the service-layer flow that wires incoming session signals
 (network name strings, GPS coordinates) to canonical network and
 location rows, including alias-based resolution created by prior merges.
-
 Scope:
-- resolve_network: exact name, alias, auto-create paths
-- resolve_location: GPS auto-create with attached network,
-  GPS alias match (location memory), unverified auto-create
+resolve_network: exact name, alias, auto-create paths
+resolve_location: GPS auto-create with attached network,
+GPS alias match (location memory), unverified auto-create
 """
 
 import pytest
@@ -113,10 +111,9 @@ async def test_resolve_network_matches_alias(db_session):
 
 async def test_resolve_network_predefined_gets_brand_metadata(db_session):
     """Auto-create for a known predefined name fills color/cost from template.
-
     Predefined networks (Tesla Supercharger etc.) are seeded by migrations
     as verified rows. To exercise the auto-create path we first delete any
-    existing match so resolve_network() hits the create branch.
+    existing match so resolve_network hits the create branch.
     """
     from sqlalchemy import delete as sa_delete
 
@@ -279,9 +276,8 @@ async def test_duplicate_networks_can_be_surfaced_by_lowercased_name(db_session)
     """Two auto-created networks that differ only by casing/whitespace can be
     grouped together by lowercased name — the building block for a
     'merge candidate' query.
-
-    NOTE: Phase 19 does not ship a dedicated merge-candidates endpoint.
-    Duplicate prevention happens at resolve_network() time (case-insensitive
+    NOTE: does not ship a dedicated merge-candidates endpoint.
+    Duplicate prevention happens at resolve_network time (case-insensitive
     lookup + alias check). This test documents that once a raw duplicate
     exists in the DB (e.g. seeded / imported), it is grouped by lowered name.
     """

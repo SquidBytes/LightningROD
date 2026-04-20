@@ -1,3 +1,5 @@
+"""Query helpers for sessions."""
+
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 

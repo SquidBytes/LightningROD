@@ -1,8 +1,6 @@
 """Locations routes — HTMX-friendly dropdown helpers for locations keyed by network.
-
-Phase 27-07 (Thread 5b): Sessions group-edit bar cascades from a selected
-network to a filtered location dropdown. `GET /locations/by-network` returns an
-`<option>` fragment for direct innerHTML swap.
+Sessions group-edit bar cascades from a selected network to a filtered location dropdown. 
+`GET /locations/by-network` returns an `<option>` fragment for direct innerHTML swap.
 """
 
 from typing import Optional

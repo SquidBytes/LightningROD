@@ -1,17 +1,4 @@
-"""Functional tests for the Review Queue (Phase 28 prep).
-
-These tests capture the INTENDED behavior of the review queue. Some tests
-are expected to fail (marked xfail) because they expose bugs that Phase 28
-will address — failing ones are valuable signal, not bugs in the tests.
-
-Covered:
-- Verification status toggle (unverified → verified, and reverse)
-- Location ↔ network association via edit endpoint (persists in DB)
-- Unverified-only filtering on the pending tabs
-- Reference Data / approved listing
-- Charging-session group-edit cascade (locations-by-network query)
-- Edit modal save (the WORKING.md-flagged bug)
-"""
+"""Functional tests for review queue routes and partial responses."""
 
 from __future__ import annotations
 
@@ -72,7 +59,7 @@ async def test_verify_unverified_location_marks_it_verified(client, db_session):
 
 
 async def test_unverify_verified_network_reverts_status(client, db_session):
-    """Verified→unverified transition (round-trip). Phase 28-03 D-D1."""
+    """Verified→unverified transition for networks (round-trip)."""
     net = await NetworkFactory.create(
         db_session, network_name="Verified Net", is_verified=True
     )
@@ -91,7 +78,7 @@ async def test_unverify_verified_network_reverts_status(client, db_session):
 
 
 async def test_unverify_verified_location_reverts_status(client, db_session):
-    """Verified→unverified transition for locations. Phase 28-03 D-D1."""
+    """Verified→unverified transition for locations (round-trip)."""
     loc = await LocationLookupFactory.create(
         db_session, location_name="Verified Loc", is_verified=True
     )
@@ -109,8 +96,7 @@ async def test_unverify_verified_location_reverts_status(client, db_session):
 
 
 async def test_unverify_network_does_not_change_source_system(client, db_session):
-    """D-D2 guarantee: unverify is a pure flag-flip.
-
+    """Guarantee: unverify is a pure flag flip.
     The handler must NOT mutate ``source_system`` (no 'manual' overwrite, no
     reset to NULL). A network auto-detected from Home Assistant that was
     mis-verified should still remember it came from HA after being unverified.
@@ -133,13 +119,14 @@ async def test_unverify_network_does_not_change_source_system(client, db_session
     ).scalar_one()
     assert refreshed.is_verified is False
     assert refreshed.source_system == "home_assistant", (
-        "D-D2: unverify must NOT touch source_system"
+        "unverify must not change source_system"
     )
 
 
 async def test_unverify_location_does_not_change_source_system(client, db_session):
-    """D-D2 guarantee: location unverify is a pure flag-flip; source_system
-    is preserved across the transition."""
+    """Guarantee: location unverify is a pure flag flip; source_system
+    is preserved across the transition.
+    """
     loc = await LocationLookupFactory.create(
         db_session,
         location_name="Misverified Loc",
@@ -158,7 +145,7 @@ async def test_unverify_location_does_not_change_source_system(client, db_sessio
     ).scalar_one()
     assert refreshed.is_verified is False
     assert refreshed.source_system == "home_assistant", (
-        "D-D2: unverify must NOT touch source_system"
+        "unverify must not change source_system"
     )
 
 
@@ -425,8 +412,7 @@ async def test_locations_by_network_without_id_returns_placeholder(client):
 
 async def test_bulk_session_edit_applies_network_and_location(client, db_session):
     """PUT /charging/sessions/bulk persists network_id + location_id changes.
-
-    This is the backend for the Sessions group-edit bar that Phase 27-07
+    This is the backend for the Sessions group-edit bar that
     cascaded — test that the underlying persistence is correct.
     """
     vehicle = await VehicleFactory.create(db_session)
@@ -470,8 +456,8 @@ async def test_bulk_session_edit_applies_network_and_location(client, db_session
 
 async def test_edit_location_persists_all_field_changes(client, db_session):
     """The POST endpoint the edit modal hits persists name, address, coords,
-    type, network_id, cost. If this fails, it's the WORKING.md bug flagged
-    for Phase 28 (modal edits not saving)."""
+    type, network_id, and cost fields.
+    """
     net = await NetworkFactory.create(db_session, network_name="EditNet")
     loc = await LocationLookupFactory.create(
         db_session,
@@ -520,7 +506,7 @@ async def test_edit_location_persists_all_field_changes(client, db_session):
     "done via settings routes, not the review queue."
 )
 async def test_edit_network_persists_field_changes(client, db_session):  # pragma: no cover
-    """Network edit endpoint expected in Phase 28."""
+    """Network edit endpoint expected."""
     net = await NetworkFactory.create(
         db_session, network_name="Original", is_verified=False
     )
@@ -605,7 +591,8 @@ async def test_review_edit_network_modal_fetch_returns_details_only(
 ):
     """GET /review/networks/{id}/edit-modal returns the network_edit_modal
     template but with only the Details tab rendered (Locations and
-    Subscription tabs hidden per D-A3)."""
+    Subscription tabs hidden).
+    """
     net = await NetworkFactory.create(
         db_session, network_name="Details Only Net", is_verified=False
     )
@@ -627,14 +614,15 @@ async def test_review_edit_network_modal_fetch_returns_details_only(
 
 
 # ---------------------------------------------------------------------------
-# 8. Phase 28 Task 2 — Page-scope location edit modal + HX-Trigger close
+# 8. Page-scope location edit modal + close trigger behavior
 # ---------------------------------------------------------------------------
 
 
 async def test_review_edit_location_fires_close_trigger(client, db_session):
     """POST /review/location/{id}/edit now returns HX-Trigger: closeEditLocModal
-    alongside the locations partial (D-A2 / Pattern S1). The body listener
-    in review_queue.html closes the page-scope #edit-loc-modal on success."""
+    alongside the locations partial. The body listener
+    in review_queue.html closes the page-scope #edit-loc-modal on success.
+    """
     net = await NetworkFactory.create(
         db_session, network_name="CloseTriggerNet", is_verified=True
     )
@@ -673,8 +661,8 @@ async def test_review_edit_location_fires_close_trigger(client, db_session):
 async def test_review_location_edit_form_endpoint_returns_form(client, db_session):
     """GET /review/location/{id}/edit-form returns the form markup for the
     page-scope #edit-loc-modal. Must include the POST target back to
-    /review/location/{id}/edit and the network <select> (D-C2 retained
-    association path)."""
+    /review/location/{id}/edit and the network <select>.
+    """
     await NetworkFactory.create(
         db_session, network_name="Form Endpoint Net", is_verified=True
     )
@@ -695,13 +683,12 @@ async def test_review_location_edit_form_endpoint_returns_form(client, db_sessio
 
 
 # ---------------------------------------------------------------------------
-# 9. Phase 28 Task 2-01 — Pending filter lock (D-B3) + Approved badge removal (D-B4)
+# 9. Pending filter lock + approved tab rendering checks
 # ---------------------------------------------------------------------------
 
 
 async def test_pending_tab_networks_excludes_verified(client, db_session):
-    """D-B3: GET /review?tab=pending&sub=networks never leaks verified networks.
-
+    """GET /review?tab=pending&sub=networks never leaks verified networks.
     Seeds a mix of verified and unverified rows and asserts that only the
     unverified names appear in the page body. Regression-locks the
     filter="unverified" SQL guard in _networks_context.
@@ -738,7 +725,7 @@ async def test_pending_tab_networks_excludes_verified(client, db_session):
 
 
 async def test_pending_tab_locations_excludes_verified(client, db_session):
-    """D-B3: GET /review?tab=pending&sub=locations never leaks verified locations."""
+    """GET /review?tab=pending&sub=locations never leaks verified locations."""
     unverified_names = ["PendingLocAlpha", "PendingLocBravo"]
     verified_names = ["ApprovedLocCharlie", "ApprovedLocDelta", "ApprovedLocEcho"]
     for name in unverified_names:
@@ -767,8 +754,7 @@ async def test_pending_tab_locations_excludes_verified(client, db_session):
 
 
 async def test_pending_badge_shows_combined_unverified_count(client, db_session):
-    """D-B3 + D-B4: the Pending tab badge reflects total unverified count
-    (networks + locations), and the Approved tab has NO success badge."""
+    """Test that pending badge shows combined unverified count."""
     # 2 unverified networks + 1 verified network
     await NetworkFactory.create(db_session, network_name="UN1", is_verified=False)
     await NetworkFactory.create(db_session, network_name="UN2", is_verified=False)
@@ -808,9 +794,10 @@ async def test_pending_badge_shows_combined_unverified_count(client, db_session)
 async def test_approved_tree_contains_no_network_pseudo_node_when_standalone_exists(
     client, db_session
 ):
-    """D-B6: standalone verified locations render INSIDE the networks tree
+    """Standalone verified locations render inside the networks tree
     as a synthetic 'No Network' pseudo-node (sentinel id 'none'), not in a
-    separate section."""
+    separate section.
+    """
     await NetworkFactory.create(
         db_session, network_name="HasNetTreeNet", is_verified=True
     )
@@ -850,9 +837,10 @@ async def test_approved_tree_contains_no_network_pseudo_node_when_standalone_exi
 
 
 async def test_approved_tree_omits_pseudo_node_when_no_standalone(client, db_session):
-    """D-B6: the synthetic 'No Network' pseudo-node only appears when there
+    """The synthetic 'No Network' pseudo-node only appears when there
     are standalone verified locations. With zero standalone rows, the tree
-    renders without it."""
+    renders without it.
+    """
     net = await NetworkFactory.create(
         db_session, network_name="OnlyNetworkedTreeNet", is_verified=True
     )
@@ -879,9 +867,10 @@ async def test_approved_tree_omits_pseudo_node_when_no_standalone(client, db_ses
 async def test_approved_tree_renders_network_children_in_nested_rows(
     client, db_session
 ):
-    """D-B5: networked verified locations render inside the parent network's
+    """Networked verified locations render inside the parent network's
     expandable child row (approved-net-children-{network.id}), not as a flat
-    locations table beside the networks table."""
+    locations table beside the networks table.
+    """
     net = await NetworkFactory.create(
         db_session, network_name="ParentTreeNet", is_verified=True
     )
@@ -928,12 +917,11 @@ async def test_approved_tree_renders_network_children_in_nested_rows(
 async def test_merge_preview_network_warns_when_source_verified_target_unverified(
     client, db_session
 ):
-    """D-D4: when the merge preview is rendered and at least one target has a
+    """When merge preview has a target with different verification status,
     different is_verified status than the source, the modal renders an
     alert-warning line ("This merge crosses verified...") so the user
     understands the surviving row's verification impact.
-
-    D-D5: the merge submit button remains enabled — the dialog is a foot-gun
+    The merge submit button remains enabled — the dialog is a foot-gun
     guard, not a block. There is no server-side gating.
     """
     source = await NetworkFactory.create(
@@ -964,9 +952,8 @@ async def test_merge_preview_network_warns_when_source_verified_target_unverifie
 async def test_merge_preview_network_no_warning_when_same_status(
     client, db_session
 ):
-    """D-D4: when every available target matches the source's is_verified,
+    """When every available target matches the source's is_verified value,
     the warning is NOT rendered.
-
     Note: Alembic-seeded predefined networks (ChargePoint, EVgo, etc.) are
     all verified and persist across tests (they live in migration, not the
     per-test transaction). We delete them in this test so the scenario
@@ -996,7 +983,7 @@ async def test_merge_preview_network_no_warning_when_same_status(
 async def test_merge_preview_location_warns_when_source_verified_target_unverified(
     client, db_session
 ):
-    """D-D4 symmetric pair for location merges."""
+    """Symmetric warning behavior for location merges."""
     source = await LocationLookupFactory.create(
         db_session, location_name="VerifiedSourceLoc", is_verified=True
     )
@@ -1019,9 +1006,8 @@ async def test_merge_preview_location_warns_when_source_verified_target_unverifi
 async def test_merge_preview_location_no_warning_when_same_status(
     client, db_session
 ):
-    """D-D4 symmetric: no warning when location targets all share the source's
+    """Symmetric: no warning when location targets all share the source's
     verified status.
-
     Note: no seeded locations exist today, but clear any that might exist
     to keep the test robust against future seeding.
     """
@@ -1044,19 +1030,18 @@ async def test_merge_preview_location_no_warning_when_same_status(
 
 
 # ---------------------------------------------------------------------------
-# Phase 28-04 Task 2 — Single-row session edit modal + drawer cascade (D-D7)
+# Session edit modal and drawer network/location cascade behavior
 # ---------------------------------------------------------------------------
 
 
 async def test_single_row_session_modal_location_select_cascades_off_network(
     client, db_session
 ):
-    """D-D7: the advanced edit modal rendered at GET /charging/sessions/{id}/modal
-    must carry a location <select name="location_id"> target and the network
-    field must wire an HTMX hx-get cascade to /locations/by-network targeted
-    at that select. The cascade mirrors the group-edit bar (Task 1) so the
-    same endpoint and UX applies everywhere a user picks a network next to a
-    location."""
+    """The session edit modal includes a network-to-location HTMX cascade.
+
+    The modal form must render ``<select name="location_id">`` and wire
+    ``hx-get="/locations/by-network"`` to update that select.
+    """
     vehicle = await VehicleFactory.create(db_session)
     net = await NetworkFactory.create(db_session, network_name="ModalCascadeNet")
     loc = await LocationLookupFactory.create(
@@ -1086,10 +1071,11 @@ async def test_single_row_session_modal_location_select_cascades_off_network(
 async def test_single_row_session_drawer_location_select_cascades_off_network(
     client, db_session
 ):
-    """D-D7: the drawer detail rendered at GET /charging/sessions/{id}/detail
-    must carry a location <select name="location_id"> target and the network
-    field must wire an HTMX hx-get cascade to /locations/by-network targeted
-    at that select. Symmetric to the modal cascade."""
+    """The session drawer uses the same network-to-location HTMX cascade.
+
+    The drawer form must render ``<select name="location_id">`` and wire
+    ``hx-get="/locations/by-network"`` to update that select.
+    """
     vehicle = await VehicleFactory.create(db_session)
     net = await NetworkFactory.create(db_session, network_name="DrawerCascadeNet")
     loc = await LocationLookupFactory.create(
@@ -1117,15 +1103,13 @@ async def test_single_row_session_drawer_location_select_cascades_off_network(
 
 
 # ---------------------------------------------------------------------------
-# Phase 28-05 / Thread C: Associate + Promote row actions for unverified
-# location rows.
+# Associate and Promote actions for unverified location rows
 # ---------------------------------------------------------------------------
 
 
 async def test_associate_modal_returns_picker_form(client, db_session):
-    """D-C1: GET /review/location/{id}/associate-modal returns a lightweight
+    """GET /review/location/{id}/associate-modal returns a lightweight
     picker form wired to POST the chosen network via a datalist combobox.
-
     The form must post to /review/location/{id}/associate, contain a hidden
     `network_id` input (auto-populated by the datalist resolver), and carry a
     datalist attribute so the combobox UX works. The 'network-datalist'
@@ -1153,9 +1137,10 @@ async def test_associate_modal_returns_picker_form(client, db_session):
 async def test_associate_location_to_existing_network_does_not_verify(
     client, db_session
 ):
-    """D-C5: associating an unverified location with an existing network must
+    """Associating an unverified location with an existing network must
     persist the network_id AND leave is_verified=False. Verification is a
-    separate action from association."""
+    separate action from association.
+    """
     net = await NetworkFactory.create(
         db_session, network_name="ExistingTargetNet", is_verified=True
     )
@@ -1190,10 +1175,11 @@ async def test_associate_location_to_existing_network_does_not_verify(
 async def test_associate_location_to_new_network_creates_unverified_network(
     client, db_session
 ):
-    """D-C1: associating with a free-text name that does not match any existing
+    """Associating with a free-text name that does not match any existing
     network (case-insensitive) creates a brand-new EVChargingNetwork row with
     is_verified=False and source_system='manual', and the location becomes
-    associated with it. The location's is_verified is not touched (D-C5)."""
+    associated with it. The location's is_verified is not touched.
+    """
     loc = await LocationLookupFactory.create(
         db_session,
         location_name="NewNetAssocLoc",
@@ -1246,11 +1232,10 @@ async def test_associate_location_to_new_network_creates_unverified_network(
 
 
 async def test_promote_location_creates_network_and_verifies(client, db_session):
-    """D-C3: POST /review/location/{id}/promote creates a new network named
+    """POST /review/location/{id}/promote creates a new network named
     after the location, sets ``loc.network_id`` to it, and flips
     ``loc.is_verified=True`` — all in one click for the one-off-charger case
     (campground chargers, small businesses, non-branded chargers).
-
     The new network is is_verified=True + source_system="manual" because the
     user's explicit Promote click vouches for both the location and the
     network that will now carry its name.
@@ -1301,10 +1286,11 @@ async def test_promote_location_creates_network_and_verifies(client, db_session)
 async def test_promote_location_works_for_already_networked_location(
     client, db_session
 ):
-    """D-C3: Promote is valid for any unverified location regardless of its
+    """Promote is valid for any unverified location regardless of its
     current network_id. A location that was auto-associated to the wrong
     network can be Promote'd to its own new network in one click — the new
-    network replaces the prior network_id on the location row."""
+    network replaces the prior network_id on the location row.
+    """
     prior_net = await NetworkFactory.create(
         db_session,
         network_name="PriorMisassociatedNet",
@@ -1344,13 +1330,12 @@ async def test_promote_location_works_for_already_networked_location(
 
 
 # ---------------------------------------------------------------------------
-# Phase 28.1 G1: Merge location-into-location regression (Pending + Approved tabs)
+# Merge location into location (Pending and Approved caller paths)
 # ---------------------------------------------------------------------------
 
 
 async def test_review_merge_location_into_location_pending(client, db_session):
-    """G1: Merge an unverified src location into an unverified tgt location
-    from the Pending tab.
+    """Merge an unverified source location into an unverified target location.
 
     `return_to="pending"` must:
     - succeed (200)
@@ -1401,8 +1386,7 @@ async def test_review_merge_location_into_location_pending(client, db_session):
 
 
 async def test_review_merge_location_into_location_approved(client, db_session):
-    """G1: Merge a verified src location into a verified tgt location from the
-    Approved tab.
+    """Merge a verified source location into a verified target location.
 
     `return_to="approved"` must:
     - succeed (200)
@@ -1457,8 +1441,7 @@ async def test_review_merge_location_into_location_approved(client, db_session):
 async def test_review_merge_location_preview_accepts_return_to_and_renders_hidden_input(
     client, db_session
 ):
-    """G1: GET /review/location/{id}/merge-preview?return_to=approved renders
-    a hidden return_to input baked into the merge form with value="approved".
+    """The location merge preview echoes ``return_to`` as a hidden input.
     """
     src = await LocationLookupFactory.create(
         db_session, location_name="PreviewLocSrc", is_verified=True
@@ -1481,9 +1464,10 @@ async def test_review_merge_location_preview_accepts_return_to_and_renders_hidde
 async def test_review_merge_location_crosses_warning_still_renders_on_preview(
     client, db_session
 ):
-    """D-D4 regression lock: the merge-crosses-verification warning block +
-    data-is-verified attributes remain when the location-merge preview is
-    rendered, regardless of the G1 `return_to` plumbing.
+    """Location merge preview keeps cross-verification warning UI in place.
+
+    The warning block and ``data-is-verified`` attributes must still render
+    even when ``return_to`` routing is present.
     """
     src = await LocationLookupFactory.create(
         db_session, location_name="CrossSrcLoc", is_verified=False
@@ -1504,8 +1488,7 @@ async def test_review_merge_location_crosses_warning_still_renders_on_preview(
 
 
 async def test_review_merge_network_preview_accepts_return_to(client, db_session):
-    """G1 symmetric: GET /review/network/{id}/merge-preview?return_to=approved
-    bakes the hidden input with value="approved".
+    """The network merge preview echoes ``return_to`` as a hidden input.
     """
     src = await NetworkFactory.create(
         db_session, network_name="PreviewNetSrc", is_verified=True
@@ -1525,14 +1508,15 @@ async def test_review_merge_network_preview_accepts_return_to(client, db_session
 
 
 # ---------------------------------------------------------------------------
-# Phase 28.1 G2: Approved-tab edit dialog hoist (ports 28-01 pattern)
+# Approved-tab edit dialog behavior
 # ---------------------------------------------------------------------------
 
 
 async def test_review_edit_approved_location_fires_close_trigger(client, db_session):
-    """G2: Edit save originating from the Approved tab returns the approved-tree
-    partial into #review-content AND emits HX-Trigger: closeEditLocModal so the
-    page-scope #edit-loc-modal closes. Resolves MA-01 + MA-02.
+    """Approved-tab edit save returns the approved tree and close trigger.
+
+    The response should target the approved tree partial and emit
+    ``HX-Trigger: closeEditLocModal`` so the modal closes on success.
     """
     loc = await LocationLookupFactory.create(
         db_session,
@@ -1574,9 +1558,7 @@ async def test_review_edit_approved_location_fires_close_trigger(client, db_sess
 async def test_review_location_edit_form_accepts_return_to_approved(
     client, db_session
 ):
-    """G2: GET /review/location/{id}/edit-form?return_to=approved embeds a
-    hidden return_to input with value="approved" so the form POST carries
-    the tab context back to the edit handler.
+    """Edit form accepts ``return_to=approved`` and preserves it in markup.
     """
     loc = await LocationLookupFactory.create(
         db_session,
@@ -1598,8 +1580,7 @@ async def test_review_location_edit_form_accepts_return_to_approved(
 async def test_review_location_edit_form_default_return_to_is_pending(
     client, db_session
 ):
-    """G2: GET /review/location/{id}/edit-form with no query param defaults to
-    return_to="pending" (backward compatible with Pending-tab call site)."""
+    """Edit form defaults ``return_to`` to ``pending`` when not provided."""
     loc = await LocationLookupFactory.create(
         db_session,
         location_name="EditFormDefaultCtx",
@@ -1614,17 +1595,17 @@ async def test_review_location_edit_form_default_return_to_is_pending(
 
 
 # ---------------------------------------------------------------------------
-# Phase 28.1 G3: Action-cell visual grouping (cluster classes + button order)
+# Action-cell visual grouping and button order
 # ---------------------------------------------------------------------------
 
 
 async def test_review_pending_locations_actions_use_cluster_grouping(
     client, db_session
 ):
-    """G3: Pending-tab unverified location row renders the three-cluster
-    action cell with `review-action-cluster` marker class, in D-UX2 locked
-    left→right order (Verify, Edit, Associate, Promote, Merge, Delete), and
-    the Actions column is widened to w-56 (D-UX3)."""
+    """Pending location rows render grouped actions in a fixed order.
+
+    Expected order: Verify, Edit, Associate, Promote, Merge, Delete.
+    """
     await LocationLookupFactory.create(
         db_session,
         location_name="G3PendingActionsLoc",
@@ -1673,9 +1654,10 @@ async def test_review_pending_locations_actions_use_cluster_grouping(
 async def test_review_approved_tree_location_actions_use_cluster_grouping(
     client, db_session
 ):
-    """G3: Approved-tab child location row renders the cluster-marker class
-    and the Unverify+Edit | Merge left→right order on verified rows. Inner
-    Actions <th> carries the w-56 widening."""
+    """Approved child-location rows render grouped actions in fixed order.
+
+    Expected order: Unverify, Edit, Merge.
+    """
     net = await NetworkFactory.create(
         db_session, network_name="G3ApprovedActionsNet", is_verified=True
     )
@@ -1716,8 +1698,7 @@ async def test_review_approved_tree_location_actions_use_cluster_grouping(
 async def test_review_approved_tree_standalone_location_actions_use_cluster_grouping(
     client, db_session
 ):
-    """G3: Approved-tab standalone verified location row (rendered under the
-    "No Network" pseudo-node) uses the same cluster grouping + button order."""
+    """Standalone approved locations use the same grouped action order."""
     await LocationLookupFactory.create(
         db_session,
         location_name="G3ApprovedStandaloneLoc",
@@ -1754,22 +1735,14 @@ async def test_review_approved_tree_standalone_location_actions_use_cluster_grou
 
 
 # ---------------------------------------------------------------------------
-# Phase 28.1 Gap Closure (WR-01): D-B3 Pending filter lock on POST merge path
+# Pending merge responses must keep verified rows out of pending tables
 # ---------------------------------------------------------------------------
-# Phase 28.1-01 shipped G1 merge-return-routing with two bare context-helper
-# calls on the Pending branches of merge_location (review.py:1172) and
-# merge_network (review.py:1018). Those calls omit filter="unverified",
-# defaulting to filter="all", which leaks verified rows into the post-merge
-# Pending partial. D-B3 (Pending filter lock) is the invariant being
-# restored on the POST merge path. These tests mirror the absence-assertion
-# pattern from test_pending_tab_locations_excludes_verified (line 740) and
-# test_pending_tab_networks_excludes_verified (line ~700), but scoped to
-# the POST /review/{type}/{id}/merge handlers instead of the GET tab loads.
+# These tests lock a past bug where pending merge handlers returned an
+# unfiltered partial and leaked verified rows into pending tables.
 
 
 async def test_review_merge_location_pending_excludes_verified(client, db_session):
-    """WR-01 regression: POST /review/location/{id}/merge with return_to=pending
-    MUST return a locations-table partial that contains ONLY unverified rows.
+    """Pending location merge response contains only unverified rows.
 
     Seed 1 verified + 2 unverified locations. Merge the two unverified rows
     on the Pending tab. Assert verified row does NOT appear in the response
@@ -1806,19 +1779,18 @@ async def test_review_merge_location_pending_excludes_verified(client, db_sessio
     assert response.status_code == 200
     assert response.headers.get("HX-Trigger") == "closeMergeModal"
     body = response.text
-    # Partial shape still present (G1 invariant — not regressed by the fix).
+    # Partial shape still present.
     assert 'hx-get="/review/locations"' in body
     # Target unverified row stays visible.
     assert tgt_name in body, (
         f"expected unverified target {tgt_name!r} to render post-merge"
     )
-    # D-B3: verified row MUST NOT leak into the pending partial.
-    # Mirrors the assertion at test_pending_tab_locations_excludes_verified:764.
+    # Verified row must not leak into the pending partial.
     assert f"<td>{verified_name}</td>" not in body, (
         f"verified location {verified_name!r} leaked into pending "
-        f"merge response body — D-B3 violated on merge_location POST"
+        "merge response body on merge_location POST"
     )
-    # Source row deleted (G1 reassignment invariant — not regressed).
+    # Source row deleted.
     src_row = (
         await db_session.execute(
             select(EVLocationLookup).where(EVLocationLookup.id == src.id)
@@ -1828,11 +1800,9 @@ async def test_review_merge_location_pending_excludes_verified(client, db_sessio
 
 
 async def test_review_merge_network_pending_excludes_verified(client, db_session):
-    """WR-01 regression: POST /review/network/{id}/merge with return_to=pending
-    MUST return a networks-table partial that contains ONLY unverified rows.
+    """Pending network merge response contains only unverified rows.
 
-    Symmetric to test_review_merge_location_pending_excludes_verified; locks
-    review.py:1018 against D-B3 regression.
+    Symmetric to ``test_review_merge_location_pending_excludes_verified``.
     """
     verified_name = "VerifiedNetLeak"
     src_name = "PendingNetMergeSrc"
@@ -1862,16 +1832,13 @@ async def test_review_merge_network_pending_excludes_verified(client, db_session
     assert tgt_name in body, (
         f"expected unverified target {tgt_name!r} to render post-merge"
     )
-    # D-B3: verified row MUST NOT leak. Networks-table renders the name
-    # inside a <td> — use the same dual-pattern check as
-    # test_pending_tab_networks_excludes_verified (line 734-735) because
-    # the networks table may indent the cell contents.
+    # Verified row must not leak. Networks-table may indent cell contents.
     assert (
         f"<td>{verified_name}</td>" not in body
         and f"<td>\n                    {verified_name}" not in body
     ), (
         f"verified network {verified_name!r} leaked into pending "
-        f"merge response body — D-B3 violated on merge_network POST"
+        "merge response body on merge_network POST"
     )
     # Source row deleted.
     src_row = (

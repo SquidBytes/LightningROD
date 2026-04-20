@@ -46,13 +46,13 @@ async def test_smoke_charging_sessions(client):
 
 
 async def test_smoke_driving_sessions(client):
-    """GET /driving/sessions renders the trip list (phase 25 rename)."""
+    """GET /driving/sessions renders the trip list ( rename)."""
     response = await client.get("/driving/sessions")
     assert response.status_code == 200
 
 
 async def test_smoke_driving_performance(client):
-    """GET /driving/performance renders the driving analytics page (phase 25)."""
+    """GET /driving/performance renders the driving analytics page."""
     response = await client.get("/driving/performance")
     assert response.status_code == 200
 

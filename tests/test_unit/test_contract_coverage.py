@@ -1,12 +1,7 @@
-"""Invariant: every unit-ful DB column has >= 1 FIELD_CONTRACTS entry.
+"""Ensure every unit-aware DB column has a matching field contract.
 
-D-E2. This version discovers unit-ful columns via SQLAlchemy model
-introspection at collection time (Plan 29-04 Task 1), so adding a new
-unit-ful column automatically enrolls it in the coverage check — no
-test edit required. Adding a new unit-ful column without a contract
-fails CI.
-
-Replaces the 29-00 hard-coded `_UNIT_FUL_COLUMNS` set.
+The test discovers columns from SQLAlchemy metadata so new columns are
+automatically checked without editing a hard-coded list.
 """
 
 import pytest
@@ -19,9 +14,9 @@ import db.models.battery_status  # noqa: F401
 
 pytestmark = pytest.mark.unit
 
-# Tables this phase's contract-coverage invariant applies to.
+# Tables this contract-coverage invariant applies to.
 # Other tables (ev_vehicles, ev_location, reference data, etc.) are out of
-# scope for Phase 29 — they are not touched by the ha_fordpass adapter.
+# scope because they are not populated through the ha_fordpass adapter.
 _WATCHED_TABLES: set[str] = {
     "ev_trip_metrics",
     "ev_charging_session",
@@ -109,7 +104,7 @@ def test_exemptions_only_apply_to_watched_tables():
 
 
 def test_discovery_finds_expected_minimum_set():
-    """Sanity: ensure the token-based discovery captures the known Phase 29
+    """Sanity: ensure the token-based discovery captures the known
     unit-ful columns. If discovery regresses (e.g. a token gets dropped),
     this test fails loudly before the coverage check can silently pass.
     """

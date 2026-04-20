@@ -1,3 +1,5 @@
+"""Database models for vehicle status."""
+
 from datetime import datetime
 from typing import Optional
 

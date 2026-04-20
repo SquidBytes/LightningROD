@@ -1,12 +1,6 @@
-"""Cache-behavior tests for ha_fordpass.adapter._last_seen_raw (D-C3).
+"""Cache behavior tests for ``ha_fordpass.adapter._last_seen_raw``.
 
-Plan 29-04 Task 2. Covers:
-- Record writes key using the f"{entity_pattern}|{attribute}" convention
-- Record overwrites an existing key
-- Clear empties the cache
-- Key convention matches what /admin/data-sources builds when displaying
-  cached values (must stay in lockstep with
-  web/routes/admin/data_sources.py)
+These tests cover key format, overwrite behavior, and cache clearing.
 """
 
 from datetime import datetime, timezone
@@ -69,7 +63,7 @@ def test_record_last_seen_updates_existing_key():
 
 
 def test_record_last_seen_effective_unit_overrides_contract_unit():
-    """D-B3 read-time fallback must record the effective unit, not the
+    """read-time fallback must record the effective unit, not the
     contract default. This keeps /admin/data-sources honest for
     elveh-shaped contracts that resolve UoM per event.
     """

@@ -1,7 +1,6 @@
-"""DB-backed tests for /charging/costs summary ratio helpers (Phase 27-06).
-
+"""DB-backed tests for /charging/costs summary ratio helpers.
 Covers `avg_cost_per_session`, `cost_per_mile`, `cost_per_kwh`, and
-`free_charging_savings`. The critical invariant under test is the D2 decision:
+`free_charging_savings`. The critical invariant under test is the decision:
 sessions with NULL `distance_added` are excluded from BOTH the numerator and
 denominator of `cost_per_mile`. Empty denominators return `None` so the UI can
 render `—` rather than `$0.00` or `NaN`.

@@ -1,3 +1,5 @@
+"""Database migration script."""
+
 import asyncio
 from logging.config import fileConfig
 

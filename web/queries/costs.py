@@ -1,3 +1,5 @@
+"""Query helpers for costs."""
+
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -13,7 +15,7 @@ from db.models.reference import EVChargingNetwork, EVLocationLookup, EVNetworkSu
 
 # km -> miles conversion factor for cost-per-mile display.
 # distance_added is stored in km; we divide cost by (distance_km * _KM_TO_MI)
-# to get $/mi. Decision D2 in phase 27 CONTEXT.md.
+# to get $/mi.
 _KM_TO_MI = 0.621371
 
 # Shared Plotly modebar config — show minimal controls, hide logo
@@ -79,31 +81,27 @@ def compute_session_cost(
     subscription_periods: list = None,
 ) -> dict:
     """Compute display cost for a session using the cost hierarchy cascade.
-
     Supports both new-style and old-style call signatures:
     - New: compute_session_cost(session, network=net_obj, location=loc_obj)
-    - Old: compute_session_cost(session, networks_by_name)  (positional dict)
-    - Old: compute_session_cost(session, networks_by_name=name_dict)  (keyword)
-
+    - Old: compute_session_cost(session, networks_by_name) (positional dict)
+    - Old: compute_session_cost(session, networks_by_name=name_dict) (keyword)
     Cost cascade order:
     1. Session is_free flag
     2. Stored user cost (cost_source='manual' or 'imported')
     3. Location cost_per_kwh override (if location has cost_per_kwh set)
     4. Network cost_per_kwh (from network FK)
     5. No cost data available
-
     NOTE: Callers in sessions.py, comparisons.py, dashboard.py still use
-    old positional dict signature. Plan 03 will update them.
-
+    old positional dict signature. will update them.
     Returns dict with keys:
     - display_cost: float|None
     - cost_source: str|None
     - is_free: bool
     - cost_per_kwh: float|None
     - calculation: str|None
-    - estimated_cost: float|None  (always calculated from hierarchy)
-    - actual_cost_per_kwh: float|None  (session.cost / energy_kwh when both exist)
-    - cost_difference: float|None  (session.cost - estimated_cost when both exist)
+    - estimated_cost: float|None (always calculated from hierarchy)
+    - actual_cost_per_kwh: float|None (session.cost / energy_kwh when both exist)
+    - cost_difference: float|None (session.cost - estimated_cost when both exist)
     """
     # Backward compat: if network arg is actually a dict, treat as networks_by_name
     if isinstance(network, dict):
@@ -617,16 +615,16 @@ async def query_subscription_savings(
 
 
 # ---------------------------------------------------------------------------
-# Phase 27-06: summary-row ratio helpers (avg/session, $/mi, $/kWh, free savings)
+# Summary-row ratio helpers (avg/session, $/mi, $/kWh, free savings)
 # ---------------------------------------------------------------------------
 #
 # Each helper accepts (db, device_id, time_range) and returns Optional[float].
 # Ratios return None when the denominator is zero OR no usable rows exist —
 # the template renders `—` in that case rather than `$0.00`/NaN.
 #
-# Critical rule (Decision D2): cost_per_mile excludes rows with
-# `distance_added IS NULL` from BOTH numerator and denominator. Enforced at
-# the SQL WHERE clause so aggregation sees only complete rows.
+# Cost-per-mile excludes rows with `distance_added IS NULL` from both
+# numerator and denominator. Enforced at the SQL WHERE clause so aggregation
+# only sees complete rows.
 
 
 async def avg_cost_per_session(
@@ -662,8 +660,8 @@ async def cost_per_mile(
 ) -> Optional[float]:
     """Sum(cost) / Sum(distance_added_km * 0.621371) over the range.
 
-    Sessions with `distance_added IS NULL` are excluded from BOTH the
-    numerator and the denominator (D2). Returns None when denominator is 0.
+    Sessions with `distance_added IS NULL` are excluded from both the
+    numerator and denominator. Returns None when denominator is 0.
     """
     stmt = (
         select(

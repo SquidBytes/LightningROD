@@ -1,1 +1,1 @@
-"""Admin subpackage — diagnostic endpoints (Phase 29+)."""
+"""Package for web.routes.admin modules."""

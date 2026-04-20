@@ -114,8 +114,7 @@ async def compute_monthly_averages(
     db: AsyncSession, entity_id: str
 ) -> dict[tuple[int, int], float]:
     """Query GasPriceReading for given entity_id, group by year+month.
-
-    Returns {(year, month): avg_price}. Used by Plan 03 for HA sensor integration.
+    Returns {(year, month): avg_price}. Used for HA sensor integration.
     """
     result = await db.execute(
         select(
@@ -133,7 +132,7 @@ async def compute_monthly_averages(
 async def store_gas_price_reading(
     db: AsyncSession, entity_id: str, price: float, recorded_at
 ) -> None:
-    """Insert a GasPriceReading row. Used by Plan 03 for HA sensor integration."""
+    """Insert a GasPriceReading row. Used for HA sensor integration."""
     reading = GasPriceReading(
         entity_id=entity_id,
         price=price,

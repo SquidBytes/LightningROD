@@ -1,3 +1,5 @@
+"""Query helpers for settings."""
+
 import json
 from typing import Optional
 

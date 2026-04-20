@@ -1,13 +1,11 @@
 """Pure function unit tests for hass_processor.
-
 Tests slug extraction, device_id resolution, value parsing, address formatting,
 and other pure helper functions that do NOT require a database connection.
-
-Phase 29 cleanup: tests for the deleted legacy value-normalizer helper and
+cleanup: tests for the deleted legacy value-normalizer helper and
 its mi/degF/Wh convenience wrappers have been removed because the behavioral
 surface they covered is now owned by `tests/test_unit/test_to_metric.py`.
-The 2026-03-21 auto-detect unit system logic is gone per D-A4; see
-`.planning/phases/29-unit-ingestion-overhaul/29-CONTEXT.md`.
+The 2026-03-21 auto-detect unit system logic is gone ; see
+``.
 """
 
 import pytest

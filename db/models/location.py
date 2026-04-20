@@ -1,3 +1,5 @@
+"""Database models for location."""
+
 from datetime import datetime
 from typing import Optional
 

@@ -1,3 +1,5 @@
+"""Route handlers for sessions."""
+
 import json
 import math
 import uuid
@@ -44,11 +46,12 @@ async def get_review_count(db: AsyncSession, device_id: Optional[str] = None) ->
 async def _verified_locations_for_network(
     db: AsyncSession, network_id: Optional[int]
 ) -> list[EVLocationLookup]:
-    """Phase 28-04 D-D7: initial server-rendered options for the session-edit
+    """initial server-rendered options for the session-edit
     location <select>. Mirrors GET /locations/by-network's filter (verified
     locations for the given network, ordered by name). Returns an empty list
     when network_id is falsy — the template renders the 'select network first'
-    placeholder in that case."""
+    placeholder in that case.
+    """
     if not network_id:
         return []
     stmt = (

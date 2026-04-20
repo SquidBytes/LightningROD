@@ -5,26 +5,26 @@ Owns the FIELD_CONTRACTS registry mapping HA entity attributes to DB columns,
 and routes every conversion through web.services.units.to_metric so unit
 handling is explicit and testable.
 
-### D-A4 — no runtime unit auto-detection
+### No runtime unit auto-detection
 This module does NOT import or reference the legacy FordPass preferred-unit
 flags (previously carried on ha_config and the hass_processor value-normalizer
-helper). Those crutches are deleted in Phase 29. Every conversion here flows
+helper). Every conversion here flows
 through a FIELD_CONTRACTS entry with a declared `source_unit`.
 
-### D-B1 — prefer documented-metric entities
+### Prefer documented-metric entities
 Reads from:
   - sensor.fordpass_{vin}_metrics  (attributes always metric per integration author)
   - sensor.fordpass_{vin}_events   (xev-key-off-trip-segment-data always metric)
 
-### D-B3 — read-time UoM fallback for main-state-only fields
+### Read-time UoM fallback for main-state-only fields
 When a field exists only on an elveh-shaped main sensor (e.g. the elveh state
 value itself), the adapter reads
 `new_state["attributes"]["unit_of_measurement"]` at event-processing time and
 uses it as the declared source_unit for THAT SINGLE EVENT. Never a
 process-global flag. Unknown/missing UoM short-circuits the field with a
-warning log — we never silently assume metric.
+warning log. The adapter never silently assumes metric.
 
-### D-B4 — elveh attributes are NOT read for unit-bearing trip data
+### Elveh attributes are not read for unit-bearing trip data
 Trip fields (distance, energy_consumed, ambient/cabin/outside_air temps, etc)
 come from `sensor.fordpass_{vin}_events.xev-key-off-trip-segment-data`, not
 from `sensor.fordpass_{vin}_elveh` attributes. The elveh attribute UoM
@@ -34,7 +34,7 @@ SI-already (V, A, kW) and need no conversion — they carry no FIELD_CONTRACTS
 entry for that reason (see `tests/test_unit/test_contract_coverage.py`
 `_EXEMPTIONS`).
 
-### D-B2 AUDIT RESULT — canonical source for ev_charging_session.distance_added
+### Canonical source for ev_charging_session.distance_added
 Evidence (from `tests/fixtures/ha_payloads/*.json`):
 
   | Fixture                            | plugDetails.totalDistanceAdded | elveh.totalDistanceAdded |
@@ -52,7 +52,7 @@ integration emits this field in km at the source.
 
 There is NO distance-added-shaped attribute on sensor.fordpass_{vin}_metrics
 or sensor.fordpass_{vin}_events. The elveh.totalDistanceAdded attribute
-carries the same value but is forbidden by D-B4.
+carries the same value but is intentionally not used.
 
 **Decision: source = sensor.fordpass_{vin}_energytransferlogentry /
 plugDetails.totalDistanceAdded, source_unit = "km".** This kills the
@@ -73,7 +73,7 @@ logger = logging.getLogger("lightningrod.sources.ha_fordpass")
 
 
 # ---------------------------------------------------------------------------
-# FIELD_CONTRACTS registry (D-C1)
+# FIELD_CONTRACTS registry
 # ---------------------------------------------------------------------------
 # Every unit-ful DB column handled by this adapter appears here. The
 # tests/test_unit/test_contract_coverage.py invariant test asserts that every
@@ -84,7 +84,7 @@ logger = logging.getLogger("lightningrod.sources.ha_fordpass")
 # Today that means: km, mi, kmh, mph, degC, degF, F, kWh, Wh, s, seconds.
 
 FIELD_CONTRACTS: list[FieldContract] = [
-    # --- ev_battery_status (from sensor.{vin}_metrics, D-B1) -------------------
+    # --- ev_battery_status (from sensor.{vin}_metrics) -------------------
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_metrics",
         source_attribute="xevBatteryRange",
@@ -92,7 +92,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_db_table="ev_battery_status",
         target_db_column="hv_battery_range",
         target_unit="km",
-        notes="D-B1 canonical metric source; replaces elveh state reading per D-B4",
+        notes="Canonical metric source; replaces elveh state reading",
     ),
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_metrics",
@@ -101,14 +101,14 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_db_table="ev_battery_status",
         target_db_column="hv_battery_max_range",
         target_unit="km",
-        notes="D-B1 canonical metric source; replaces elveh.maximumBatteryRange per D-B4",
+        notes="Canonical metric source; replaces elveh.maximumBatteryRange",
     ),
 
     # --- ev_battery_status: hv_battery_temperature --------------------------
     # Source exists only on the energytransferlogentry payload
     # (attrs.batteryTemperature) and is documented °C per integration author.
-    # Contract lives here rather than elveh because D-B4 forbids elveh unit-ful
-    # reads and metrics entity does not expose this attribute.
+    # Contract lives here because metrics entity does not expose this
+    # attribute and this adapter avoids elveh unit-bearing trip reads.
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_energytransferlogentry",
         source_attribute="batteryTemperature",
@@ -119,7 +119,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
         notes="Only exposed on energytransferlogentry payload; integration emits °C",
     ),
 
-    # --- ev_trip_metrics (from sensor.{vin}_events xev-key-off-trip-segment-data, D-B1) ---
+    # --- ev_trip_metrics (from sensor.{vin}_events xev-key-off-trip-segment-data) ---
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_events",
         source_attribute="xev-key-off-trip-segment-data.distance_traveled",
@@ -127,7 +127,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_db_table="ev_trip_metrics",
         target_db_column="distance",
         target_unit="km",
-        notes="D-B1 canonical; replaces elveh.tripDistanceTraveled per D-B4",
+        notes="Canonical source; replaces elveh.tripDistanceTraveled",
     ),
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_events",
@@ -136,7 +136,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_db_table="ev_trip_metrics",
         target_db_column="energy_consumed",
         target_unit="kWh",
-        notes="D-B1 canonical; Wh -> kWh via to_metric",
+        notes="Canonical source; Wh -> kWh via to_metric",
     ),
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_events",
@@ -145,7 +145,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_db_table="ev_trip_metrics",
         target_db_column="ambient_temp",
         target_unit="degC",
-        notes="D-B1 canonical metric source; replaces elveh.tripAmbientTemp per D-B4",
+        notes="Canonical metric source; replaces elveh.tripAmbientTemp",
     ),
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_events",
@@ -154,7 +154,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_db_table="ev_trip_metrics",
         target_db_column="cabin_temp",
         target_unit="degC",
-        notes="D-B1 canonical metric source; replaces elveh.tripCabinTemp per D-B4",
+        notes="Canonical metric source; replaces elveh.tripCabinTemp",
     ),
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_events",
@@ -163,11 +163,11 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_db_table="ev_trip_metrics",
         target_db_column="outside_air_temp",
         target_unit="degC",
-        notes="D-B1 canonical metric source; replaces elveh.tripOutsideAirAmbientTemp per D-B4",
+        notes="Canonical metric source; replaces elveh.tripOutsideAirAmbientTemp",
     ),
     # efficiency and range_regenerated are not currently exposed on the events
     # entity (absent from every 29-00 fixture). They remain sourced from elveh
-    # state-level attributes for now; per D-B4 the adapter reads them with the
+    # state-level attributes for now; the adapter reads them with the
     # elveh state's read-time unit_of_measurement, NOT from the attribute UoM.
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_elveh",
@@ -177,7 +177,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_db_column="efficiency",
         target_unit="km",
         notes=(
-            "D-B3 read-time fallback — elveh attribute in HA-preferred distance "
+            "Read-time fallback — elveh attribute in HA-preferred distance "
             "unit (km/kWh or mi/kWh). Adapter derives the per-event source_unit "
             "from new_state.attributes.unit_of_measurement at read-time. NOT from "
             "a process-global flag. This contract's declared source_unit is the "
@@ -192,7 +192,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_db_table="ev_trip_metrics",
         target_db_column="range_regenerated",
         target_unit="km",
-        notes="D-B3 read-time fallback — elveh attribute; see tripEfficiency contract",
+        notes="Read-time fallback — elveh attribute; see tripEfficiency contract",
     ),
 
     # --- ev_charging_session (from sensor.{vin}_energytransferlogentry) ----------
@@ -204,7 +204,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_db_column="distance_added",
         target_unit="km",
         notes=(
-            "D-B2 audit: ha-fordpass emits plugDetails.totalDistanceAdded in km "
+            "Fixture audit: ha-fordpass emits plugDetails.totalDistanceAdded in km "
             "regardless of HA unit system (verified across all 4 29-00 fixtures). "
             "Kills 2026-03-21 bug (commit abd736b) that multiplied 103 km by "
             "1.609344 producing 165.8 km."
@@ -253,11 +253,11 @@ FIELD_CONTRACTS: list[FieldContract] = [
 
 
 # ---------------------------------------------------------------------------
-# _last_seen_raw cache (D-C3)
+# _last_seen_raw cache
 # ---------------------------------------------------------------------------
 # Keyed by f"{source_entity_pattern}|{source_attribute}". Stores a dict of
 # {"value": <raw>, "unit": <source_unit>, "seen_at": <iso8601 UTC>, "converted": <metric>}.
-# Consumed by /admin/data-sources diagnostic page in Plan 29-03.
+# Consumed by /admin/data-sources diagnostic page.
 
 _last_seen_raw: dict[str, dict[str, Any]] = {}
 
@@ -268,10 +268,10 @@ def _record_last_seen(
     converted: Any,
     effective_unit: Optional[str] = None,
 ) -> None:
-    """Record the last-seen raw value for diagnostic display (D-C3).
+    """Record the last-seen raw value for diagnostic display.
 
     `effective_unit` overrides `contract.source_unit` when a read-time UoM
-    fallback (D-B3) was used. Keeps the displayed unit honest.
+    fallback was used. Keeps the displayed unit honest.
     """
     key = f"{contract.source_entity_pattern}|{contract.source_attribute}"
     _last_seen_raw[key] = {
@@ -286,7 +286,7 @@ def _record_last_seen(
 # Lookup + conversion helpers (consumed by hass_processor.py in Task 2)
 # ---------------------------------------------------------------------------
 
-INGEST_SCHEMA_VERSION = 2  # D-D1: mark every new adapter-driven row
+INGEST_SCHEMA_VERSION = 2  # mark every new adapter-driven row
 
 _ENTITY_SUFFIX_PREFIX = "sensor.fordpass_"
 
@@ -345,7 +345,7 @@ def lookup_contract(
 def _resolve_source_unit(
     contract: FieldContract, new_state: Optional[dict]
 ) -> str:
-    """D-B3: if contract sources from elveh state, read read-time UoM from event.
+    """If contract sources from elveh state, read read-time UoM from event.
 
     For contracts whose source_entity_pattern ends in `_elveh` and whose
     source_attribute is the state value (not a nested attribute), the adapter
@@ -371,10 +371,9 @@ def _resolve_source_unit(
 
 
 def _normalize_uom_string(raw: str) -> Optional[str]:
-    """Normalize an HA `unit_of_measurement` string to a to_metric() key.
-
+    """Normalize an HA `unit_of_measurement` string to a to_metric key.
     Maps the common HA UoM spellings (with/without degree sign, case
-    variations) to the canonical strings recognized by to_metric().
+    variations) to the canonical strings recognized by to_metric.
     Returns None for unrecognized inputs so callers can fall back.
     """
     if not isinstance(raw, str):
@@ -410,8 +409,8 @@ def convert(
     """Convert `raw_value` to metric via `contract` + optional read-time UoM.
 
     Logs and returns None on UnknownSourceUnit so the adapter boundary absorbs
-    unit failures rather than propagating them to the caller (D-A4). Records
-    the conversion in `_last_seen_raw` for diagnostics (D-C3).
+    unit failures rather than propagating them to the caller. Records the
+    conversion in `_last_seen_raw` for diagnostics.
     """
     if raw_value is None:
         return None
@@ -474,17 +473,14 @@ async def process_event(
     entity_id: str, new_state: dict, db: AsyncSession
 ) -> None:
     """Route an HA state_changed event to the appropriate write path.
-
-    D-A4 guarantee: zero runtime unit auto-detection; every conversion goes
-    through a FIELD_CONTRACTS entry via `convert()`.
-
+    Guarantee: zero runtime unit auto-detection; every conversion goes
+    through a FIELD_CONTRACTS entry via `convert`.
     Dispatches by entity suffix:
-      - _metrics                 -> writes ev_battery_status row (range / max_range)
-      - _events                  -> writes ev_trip_metrics row (from xev-key-off-trip-segment-data)
-      - _energytransferlogentry  -> writes ev_charging_session row
-      - everything else          -> no-op (handled by hass_processor's legacy handlers,
-                                   or explicitly ignored)
-
+    _metrics -> writes ev_battery_status row (range / max_range)
+    _events -> writes ev_trip_metrics row (from xev-key-off-trip-segment-data)
+    _energytransferlogentry -> writes ev_charging_session row
+    everything else -> no-op (handled by hass_processor's legacy handlers,
+    or explicitly ignored)
     Unknown entity or missing attribute: log debug + return. No exception
     propagates to the caller (the HA WebSocket event loop).
     """
@@ -515,7 +511,7 @@ async def process_event(
             "UnknownSourceUnit escaped convert() for %s: %s", entity_id, exc
         )
     except Exception:
-        # D-A4 / T-29-02-04: the adapter never raises into the WebSocket loop.
+        # The adapter must never raise into the WebSocket loop.
         logger.exception("ha_fordpass.process_event failed for %s", entity_id)
 
 
@@ -590,11 +586,10 @@ async def _handle_metrics_entity(
 async def _handle_events_entity(
     entity_id: str, new_state: dict, device_id: str, db: AsyncSession
 ) -> None:
-    """sensor.fordpass_{vin}_events -> ev_trip_metrics row (D-B1).
+    """sensor.fordpass_{vin}_events -> ev_trip_metrics row.
 
     Reads xev-key-off-trip-segment-data attribute subkey. This is the
-    canonical metric source for trip data per D-B1; elveh.trip* attributes
-    are NOT read per D-B4.
+    canonical metric source for trip data; elveh.trip* attributes are not read.
     """
     from db.models.trip_metrics import EVTripMetrics
 
@@ -657,7 +652,7 @@ async def _handle_energy_transfer_entity(
 ) -> None:
     """sensor.fordpass_{vin}_energytransferlogentry -> ev_charging_session row.
 
-    Uses the D-B2 audit result: plugDetails.totalDistanceAdded is already km.
+    Uses fixture-audited behavior: plugDetails.totalDistanceAdded is already km.
     Battery + ambient temps are already °C on this payload (per contract).
     """
     from db.models.charging_session import EVChargingSession
@@ -678,7 +673,7 @@ async def _handle_energy_transfer_entity(
     session_end_utc = _parse_iso(duration_data.get("end"))
     charge_duration_seconds = _safe_float(duration_data.get("totalTime"))
 
-    # Plug details + distance_added via FIELD_CONTRACTS (D-B2)
+    # Plug details + distance_added via FIELD_CONTRACTS.
     plug_data = attrs.get("plugDetails") or {}
     plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
     dist_contract = lookup_contract(pattern, "plugDetails.totalDistanceAdded")

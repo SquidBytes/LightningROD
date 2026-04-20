@@ -1,9 +1,7 @@
-"""Phase 20: Gas comparison schema — ICE columns, gas price history, gas price readings
-
+"""ICE Fuel comparison schema — ICE columns, Fuel price history, Fuel price readings
 Add ICE comparison columns to ev_vehicles, create gas_price_history table
 with two price tracks, create gas_price_readings staging table for HA sensor
 data, and remove deprecated gas_price_per_gallon and vehicle_mpg app_settings.
-
 Revision ID: p20_gas_comparison
 Revises: i1j2k3l4m5n6
 Create Date: 2026-03-19

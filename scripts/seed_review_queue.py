@@ -344,12 +344,10 @@ async def retag_after_scenario(scenario: dict, session_start_utc: datetime) -> N
 
 async def backfill_sample_locations(db) -> int:
     """Insert unverified ev_location_lookup rows for distinct sample session locations.
-
     seed_sample.py seeds only Home and Work into ev_location_lookup but the
     sample sessions reference ~13 other location_names (public chargers). This
-    mirrors what resolve_location() would have produced during live HA
+    mirrors what resolve_location would have produced during live HA
     ingestion, so the Locations review tab is populated.
-
     Idempotent: skips location names already present (case-insensitive).
     Never touches Home/Work — those are verified and owned by seed_sample.py.
     """

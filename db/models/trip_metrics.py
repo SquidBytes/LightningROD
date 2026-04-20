@@ -1,3 +1,5 @@
+"""Database models for trip metrics."""
+
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -73,10 +75,9 @@ class EVTripMetrics(Base):
     )
     original_timestamp: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
 
-    # Pipeline schema version (Phase 29, D-D1). NULL = pre-v2 / suspect era
-    # spanning 2026-03-21 onward (commit abd736b double-conversion bug).
-    # 2 = ingested via adapter-driven pipeline with declared source units.
-    # See .planning/phases/29-unit-ingestion-overhaul/29-CONTEXT.md D-D1/D-D3.
+    # Pipeline schema version. NULL = legacy rows from the suspect conversion
+    # era around 2026-03-21 (commit abd736b). Value 2 = adapter-driven ingest
+    # with declared source units.
     ingest_schema_version: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (

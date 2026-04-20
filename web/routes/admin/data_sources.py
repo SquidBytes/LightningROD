@@ -1,11 +1,9 @@
 """Admin: Data Sources diagnostic page.
-
 Reads the FIELD_CONTRACTS registry + _last_seen_raw cache from each source
-adapter and renders a searchable table. Purpose: per Phase 29 CONTEXT.md D-C3,
+adapter and renders a searchable table. Purpose: ,
 let the user trace any displayed value -> source entity -> attribute -> unit ->
 raw value last observed.
-
-Single-user app -> ungated route per D-C3. Future multi-user would add an
+Single-user app -> ungated route . Future multi-user would add an
 admin-only guard here.
 """
 from __future__ import annotations

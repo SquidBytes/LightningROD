@@ -657,7 +657,7 @@ hass_service = HASSClient()
 async def _noop_handler(
     entity_id: str, old_state: dict, new_state: dict, ha_config: dict
 ) -> None:
-    """Placeholder event handler. Replaced by sensor processor in Plan 03."""
+    """Placeholder event handler. Replaced by sensor processor in."""
     pass
 
 

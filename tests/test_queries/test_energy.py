@@ -85,7 +85,7 @@ async def test_energy_summary_empty(db_session):
 
 
 async def test_phase_25_by_charge_type_includes_cost(db_session):
-    """Phase 25: by_charge_type entries include a total_cost field summed from session.cost."""
+    """by_charge_type entries include a total_cost field summed from session.cost."""
     from datetime import datetime, timezone
     from db.models.charging_session import EVChargingSession
     from db.models.vehicle import EVVehicle

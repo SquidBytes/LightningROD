@@ -1,6 +1,5 @@
 """Connection, auth, and event delivery tests for the HA WebSocket simulator.
-
-Tests use raw websockets.connect() to verify protocol compliance directly,
+Tests use raw websockets.connect to verify protocol compliance directly,
 ensuring the simulator implements the exact same protocol that hass_client.py
 expects.
 """

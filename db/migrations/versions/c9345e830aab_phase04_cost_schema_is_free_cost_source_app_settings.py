@@ -21,7 +21,7 @@ TIMESTAMPTZ = TIMESTAMP(timezone=True)
 
 
 def upgrade() -> None:
-    """Phase 04 cost schema changes."""
+    """cost schema changes."""
 
     # --- Schema changes ---
 
@@ -176,7 +176,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Revert phase 04 cost schema changes."""
+    """Revert cost schema changes."""
     op.drop_table("app_settings")
     op.drop_column("ev_charging_session", "cost_source")
     op.drop_column("ev_charging_networks", "is_free")

@@ -1,3 +1,5 @@
+"""Route handlers for costs."""
+
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Header, Request

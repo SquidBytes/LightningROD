@@ -1,9 +1,7 @@
-"""Phase 22: Seed Big 7 charging networks
-
+"""Seed Big 7 charging networks
 Insert the 7 most common US EV charging networks into ev_charging_networks
 with source_system='seed'. Idempotent — skips networks that already exist
 (matched by network_name). Downgrade removes only seed-sourced rows.
-
 Revision ID: q22_seed_networks
 Revises: p20_gas_comparison
 Create Date: 2026-03-26

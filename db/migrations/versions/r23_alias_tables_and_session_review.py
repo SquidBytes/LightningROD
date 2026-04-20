@@ -1,10 +1,8 @@
-"""Phase 23: Alias tables and session review columns
-
+"""Alias tables and session review columns
 Create ev_location_gps_aliases and ev_network_name_aliases tables for
 location memory and network name resolution. Add duplicate_of_id,
 needs_review, and review_type columns to ev_charging_session for
 duplicate detection and review queue support.
-
 Revision ID: r23_alias_session_review
 Revises: q22_seed_networks
 Create Date: 2026-03-27

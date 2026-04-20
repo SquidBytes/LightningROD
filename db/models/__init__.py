@@ -1,3 +1,5 @@
+"""Package for db.models modules."""
+
 # Import Base and ALL model classes so Alembic's autogenerate sees all tables.
 # CRITICAL: Every model module must be imported here. If a module is missing,
 # alembic revision --autogenerate will produce an empty migration.

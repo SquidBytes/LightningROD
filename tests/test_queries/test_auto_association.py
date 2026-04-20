@@ -1,11 +1,9 @@
 """Auto-association tests: location memory (GPS + verified match) + network memory.
-
-Phase 23 introduced:
-- `resolve_location`: prefers GPS alias hits, then verified-location proximity
-  matches over creating new unverified rows.
-- `resolve_network`: checks `EVNetworkNameAlias` so previously-merged names
-  map back to the canonical network.
-
+introduced:
+`resolve_location`: prefers GPS alias hits, then verified-location proximity
+matches over creating new unverified rows.
+`resolve_network`: checks `EVNetworkNameAlias` so previously-merged names
+map back to the canonical network.
 These tests verify that a new ingestion at a known coordinate/alias reuses
 the existing row and does NOT create a duplicate unverified location/network.
 """
