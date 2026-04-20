@@ -132,7 +132,34 @@ _pending_battery_status_ts: dict[str, float] = {}
 # Track last-seen trip values per device to detect new trips
 _last_trip_values: dict[str, dict[str, Any]] = {}
 
+# Per-device timestamps of the last adapter-owned (_metrics / _events) event.
+# Used by legacy handlers (elveh) to avoid duplicate writes when the adapter
+# has already covered the same logical data. When the adapter is not wired
+# for a given install (no metrics/events entity), these dicts stay empty and
+# legacy handlers behave as before.
+_last_metrics_seen_ts: dict[str, float] = {}
+_last_events_seen_ts: dict[str, float] = {}
+
 _FLUSH_TIMEOUT = 30  # seconds
+
+# Window within which a recent adapter write blocks the elveh fallback.
+# Must be >= typical HA burst cadence so the two entities are treated as a
+# single logical update. 60s is comfortably above the ~30s batch window that
+# hass_processor itself uses for flushes.
+_ADAPTER_DEDUPE_WINDOW = 60  # seconds
+
+
+def _adapter_recently_handled(sentinel: dict[str, float], device_id: str) -> bool:
+    """Return True if `sentinel[device_id]` is within `_ADAPTER_DEDUPE_WINDOW`.
+
+    Read-only helper — lookup only, never mutates the sentinel. Used by
+    legacy elveh ingestion to decide whether the adapter has already
+    written authoritative data for this device.
+    """
+    ts = sentinel.get(device_id)
+    if ts is None:
+        return False
+    return (time.time() - ts) <= _ADAPTER_DEDUPE_WINDOW
 
 
 async def _flush_vehicle_status(device_id: str, db) -> None:
@@ -229,6 +256,39 @@ def _get_event_timestamp(new_state: dict) -> Optional[datetime]:
             except (ValueError, TypeError):
                 continue
     return None
+
+
+# ---------------------------------------------------------------------------
+# Adapter-delegated handler (metrics + events entities)
+# ---------------------------------------------------------------------------
+
+@handles("metrics", "events")
+async def handle_via_adapter(slug, new_state, ha_config, device_id, db):
+    """Delegate _metrics and _events entities to ha_fordpass.process_event.
+
+    These slugs are the metric-canonical sources for battery status
+    (xevBatteryRange / xevBatteryMaximumRange) and trip metrics
+    (xev-key-off-trip-segment-data). The adapter owns the FIELD_CONTRACTS
+    routing; this dispatcher simply hands off.
+
+    Also records a per-device sentinel timestamp so the legacy elveh
+    fallback can detect that the adapter has already handled this logical
+    update and skip its duplicate writes.
+    """
+    entity_id = f"sensor.fordpass_{device_id}_{slug}"
+    try:
+        await ha_fordpass.process_event(entity_id, new_state, db)
+    finally:
+        # Always record the sentinel, even if the adapter returned early
+        # (e.g. missing xev-key-off-trip-segment-data). The elveh fallback
+        # should still defer to the adapter's coverage decision: if the
+        # events entity fired but carried no trip payload, elveh must not
+        # rewrite trip rows using its unreliable attribute UoM.
+        now = time.time()
+        if slug == "metrics":
+            _last_metrics_seen_ts[device_id] = now
+        elif slug == "events":
+            _last_events_seen_ts[device_id] = now
 
 
 # ---------------------------------------------------------------------------
@@ -364,13 +424,37 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             )
 
     elif slug == "elveh":
-        # EV range (state value) uses read-time UoM from the event itself.
-        if state_val not in (None, "unknown", "unavailable"):
-            pending["hv_battery_range"] = _convert_with_uom(
-                state_val, uom_for_event or "mi", "elveh.state", entity_id
+        # --- Battery range / max_range fallback ---
+        # Only write when the metrics entity has NOT recently covered this
+        # device. The `sensor.fordpass_{vin}_metrics` path (adapter-owned)
+        # supplies richer, metric-canonical values for both fields.
+        metrics_handled = _adapter_recently_handled(_last_metrics_seen_ts, device_id)
+        if not metrics_handled:
+            # EV range (state value) uses read-time UoM from the event itself.
+            if state_val not in (None, "unknown", "unavailable"):
+                pending["hv_battery_range"] = _convert_with_uom(
+                    state_val, uom_for_event or "mi", "elveh.state", entity_id
+                )
+            # Max range from attributes — unit-bearing, read-time UoM.
+            max_range = _safe_float(attrs.get("maximumBatteryRange"))
+            if max_range is not None:
+                pending["hv_battery_max_range"] = _convert_with_uom(
+                    max_range, uom_for_event or "mi", "maximumBatteryRange", entity_id
+                )
+        else:
+            logger.debug(
+                "elveh: skipping hv_battery_range/max_range for %s — "
+                "adapter metrics entity handled this device recently",
+                device_id,
             )
+
         # Rich battery attributes (SI-already — no conversion needed, no
         # FIELD_CONTRACTS entry per _EXEMPTIONS in test_contract_coverage).
+        # These are elveh-exclusive fields: voltage/amperage/kW/capacity for
+        # both the pack and the motor. The adapter's metrics entity covers
+        # hv_battery_voltage / amperage / kw / capacity, so when it has
+        # recently fired we skip those too; motor_* remain elveh-only and
+        # are always written.
         hv_voltage = _safe_float(attrs.get("batteryVoltage"))
         hv_amperage = _safe_float(attrs.get("batteryAmperage"))
         hv_kw = _safe_float(attrs.get("batterykW"))
@@ -382,30 +466,45 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         motor_voltage = _safe_float(attrs.get("motorVoltage"))
         motor_amperage = _safe_float(attrs.get("motorAmperage"))
         motor_kw = _safe_float(attrs.get("motorkW"))
-        if hv_voltage is not None:
-            pending["hv_battery_voltage"] = hv_voltage
-        if hv_amperage is not None:
-            pending["hv_battery_amperage"] = hv_amperage
-        if hv_kw is not None:
-            pending["hv_battery_kw"] = hv_kw
-        if hv_capacity is not None:
-            pending["hv_battery_capacity"] = hv_capacity
-        if hv_actual_soc is not None:
-            pending["hv_battery_actual_soc"] = hv_actual_soc
+        if not metrics_handled:
+            if hv_voltage is not None:
+                pending["hv_battery_voltage"] = hv_voltage
+            if hv_amperage is not None:
+                pending["hv_battery_amperage"] = hv_amperage
+            if hv_kw is not None:
+                pending["hv_battery_kw"] = hv_kw
+            if hv_capacity is not None:
+                pending["hv_battery_capacity"] = hv_capacity
+            if hv_actual_soc is not None:
+                pending["hv_battery_actual_soc"] = hv_actual_soc
         if motor_voltage is not None:
             pending["motor_voltage"] = motor_voltage
         if motor_amperage is not None:
             pending["motor_amperage"] = motor_amperage
         if motor_kw is not None:
             pending["motor_kw"] = motor_kw
-        # Max range from attributes — unit-bearing, read-time UoM.
-        max_range = _safe_float(attrs.get("maximumBatteryRange"))
-        if max_range is not None:
-            pending["hv_battery_max_range"] = _convert_with_uom(
-                max_range, uom_for_event or "mi", "maximumBatteryRange", entity_id
-            )
 
         # --- Trip attributes from elveh entity (legacy fallback) ---
+        # When the events entity (adapter-owned) has recently written
+        # ev_trip_metrics rows for this device, skip the entire elveh
+        # trip block to avoid duplicate rows. Elveh-only fields
+        # (efficiency / range_regenerated / driving_score and related
+        # score fields / tripElectricalEfficiency) are intentionally
+        # DROPPED when events is active — the adapter's events handler
+        # does not persist them today. They can be re-added later via a
+        # dedicated elveh-only supplemental write path.
+        if _adapter_recently_handled(_last_events_seen_ts, device_id):
+            logger.debug(
+                "elveh: skipping trip block for %s — adapter events "
+                "entity handled this device recently",
+                device_id,
+            )
+            # Fall through to timeout-based flush check below.
+            _pending_battery_status_ts.setdefault(device_id, time.time())
+            if time.time() - _pending_battery_status_ts[device_id] > _FLUSH_TIMEOUT:
+                await _flush_battery_status(device_id, db)
+            return
+
         # Distance + temperature converters use read-time UoM. Temp
         # attributes typically share the elveh state UoM (°F/°C); when they
         # don't, production HA events carry a per-attribute uom which would
@@ -419,11 +518,31 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         def _t(v):
             return _convert_with_uom(v, temp_uom_default, "elveh.trip_temp", entity_id)
 
+        # Adapter-routed converters for elveh-sourced fields that DO have a
+        # FIELD_CONTRACTS entry. Routing through ha_fordpass.convert records
+        # the conversion in adapter._last_seen_raw so /admin/data-sources
+        # shows elveh observations alongside metrics/events ones. Contracts
+        # for elveh state-unit distance fields use read-time UoM resolution
+        # internally via adapter._resolve_source_unit.
+        _elveh_pattern = "sensor.fordpass_{vin}_elveh"
+        _efficiency_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripEfficiency")
+        _range_regen_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripRangeRegeneration")
+
+        def _efficiency_conv(v):
+            if _efficiency_contract is None:
+                return _d(v)
+            return ha_fordpass.convert(_efficiency_contract, v, new_state)
+
+        def _range_regen_conv(v):
+            if _range_regen_contract is None:
+                return _d(v)
+            return ha_fordpass.convert(_range_regen_contract, v, new_state)
+
         trip_attr_map = {
             "tripDistanceTraveled": ("distance", _d),
             "tripDuration": ("duration", _safe_float),
             "tripEnergyConsumed": ("energy_consumed", _safe_float),
-            "tripEfficiency": ("efficiency", _d),
+            "tripEfficiency": ("efficiency", _efficiency_conv),
             "tripDrivingScore": ("driving_score", _safe_float),
             "tripSpeed": ("speed_score", _safe_float),
             "tripAcceleration": ("acceleration_score", _safe_float),
@@ -431,7 +550,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             "tripAmbientTemp": ("ambient_temp", _t),
             "tripOutsideAirAmbientTemp": ("outside_air_temp", _t),
             "tripCabinTemp": ("cabin_temp", _t),
-            "tripRangeRegeneration": ("range_regenerated", _d),
+            "tripRangeRegeneration": ("range_regenerated", _range_regen_conv),
             "tripElectricalEfficiency": ("electrical_efficiency", _safe_float),
         }
 
