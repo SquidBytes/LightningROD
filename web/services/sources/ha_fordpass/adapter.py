@@ -66,6 +66,7 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from web.services.units import detection
 from web.services.units.contracts import FieldContract
 from web.services.units.to_metric import to_metric, UnknownSourceUnit
 
@@ -410,7 +411,8 @@ def convert(
 
     Logs and returns None on UnknownSourceUnit so the adapter boundary absorbs
     unit failures rather than propagating them to the caller. Records the
-    conversion in `_last_seen_raw` for diagnostics.
+    conversion in `_last_seen_raw` for diagnostics AND in the unit-detection
+    layer (method=declared) so the data-sources page surfaces the source.
     """
     if raw_value is None:
         return None
@@ -429,6 +431,14 @@ def convert(
         )
         return None
     _record_last_seen(contract, raw_value, converted, effective_unit=source_unit)
+    # Record into the unit-detection layer so /admin/data-sources can
+    # show the declared unit alongside read-time / cross-ref observations.
+    detection.record_declared(
+        contract.source_entity_pattern,
+        contract.source_attribute,
+        source_unit,
+        raw_value,
+    )
     return converted
 
 
@@ -536,16 +546,38 @@ async def _handle_metrics_entity(
     range_contract = lookup_contract(pattern, "xevBatteryRange")
     max_range_contract = lookup_contract(pattern, "xevBatteryMaximumRange")
 
+    raw_range = attrs.get("xevBatteryRange")
+    raw_max_range = attrs.get("xevBatteryMaximumRange")
     hv_range = (
-        convert(range_contract, attrs.get("xevBatteryRange"), new_state)
+        convert(range_contract, raw_range, new_state)
         if range_contract
         else None
     )
     hv_max_range = (
-        convert(max_range_contract, attrs.get("xevBatteryMaximumRange"), new_state)
+        convert(max_range_contract, raw_max_range, new_state)
         if max_range_contract
         else None
     )
+
+    # Cross-reference: metrics is canonical (km). If any target entity has
+    # recent reads for the paired attributes, let the detection layer derive
+    # the target unit from the observed ratio.
+    if hv_range is not None:
+        detection.try_cross_reference(
+            device_id,
+            "sensor.fordpass_{vin}_metrics",
+            "xevBatteryRange",
+            hv_range,
+            "km",
+        )
+    if hv_max_range is not None:
+        detection.try_cross_reference(
+            device_id,
+            "sensor.fordpass_{vin}_metrics",
+            "xevBatteryMaximumRange",
+            hv_max_range,
+            "km",
+        )
 
     # SI-already scalar attributes pass through without conversion
     hv_soc = _safe_float(attrs.get("xevBatteryStateOfCharge"))
@@ -616,6 +648,41 @@ async def _handle_events_entity(
     ambient = convert(ambient_c, trip.get("ambient_temp"), new_state) if ambient_c else None
     cabin = convert(cabin_c, trip.get("cabin_temp"), new_state) if cabin_c else None
     outside_air = convert(outside_c, trip.get("outside_air_temp"), new_state) if outside_c else None
+
+    # Cross-reference: events trip fields are always metric. Let the detection
+    # layer use them as the canonical reference for paired elveh attributes.
+    if distance is not None:
+        detection.try_cross_reference(
+            device_id,
+            "sensor.fordpass_{vin}_events",
+            "xev-key-off-trip-segment-data.distance_traveled",
+            distance,
+            "km",
+        )
+    if ambient is not None:
+        detection.try_cross_reference(
+            device_id,
+            "sensor.fordpass_{vin}_events",
+            "xev-key-off-trip-segment-data.ambient_temp",
+            ambient,
+            "degC",
+        )
+    if cabin is not None:
+        detection.try_cross_reference(
+            device_id,
+            "sensor.fordpass_{vin}_events",
+            "xev-key-off-trip-segment-data.cabin_temp",
+            cabin,
+            "degC",
+        )
+    if outside_air is not None:
+        detection.try_cross_reference(
+            device_id,
+            "sensor.fordpass_{vin}_events",
+            "xev-key-off-trip-segment-data.outside_air_temp",
+            outside_air,
+            "degC",
+        )
 
     # duration (s) is SI-passthrough; no contract conversion needed
     duration = _safe_float(trip.get("trip_duration"))

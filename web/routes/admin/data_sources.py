@@ -5,6 +5,10 @@ let the user trace any displayed value -> source entity -> attribute -> unit ->
 raw value last observed.
 Single-user app -> ungated route . Future multi-user would add an
 admin-only guard here.
+
+Also merges in unit-detection records (web.services.units.detection) so the
+table surfaces cross-referenced + read-time-detected sources that do NOT
+appear in FIELD_CONTRACTS.
 """
 from __future__ import annotations
 
@@ -18,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
 from web.queries.vehicles import get_active_vehicle, get_all_vehicles
+from web.services.units import detection
 from web.services.units.contracts import FieldContract
 
 router = APIRouter(prefix="/admin")
@@ -42,7 +47,8 @@ def _load_groups() -> list[dict[str, Any]]:
             {
                 "source_name": "ha_fordpass",
                 "rows": [
-                    {"contract": FieldContract, "last_seen": dict | None},
+                    {"contract": FieldContract, "last_seen": dict | None,
+                     "detection": DetectionRecord | None},
                     ...
                 ],
             },
@@ -50,14 +56,37 @@ def _load_groups() -> list[dict[str, Any]]:
         ]
     """
     out: list[dict[str, Any]] = []
+    detection_index = {
+        (r.entity_pattern, r.attribute): r for r in detection.snapshot()
+    }
+
     for source_name, module_path in _ADAPTER_MODULES:
         module = importlib.import_module(module_path)
         contracts: list[FieldContract] = list(getattr(module, "FIELD_CONTRACTS", []))
         last_seen: dict[str, dict[str, Any]] = dict(getattr(module, "_last_seen_raw", {}))
-        rows = [
-            {"contract": c, "last_seen": last_seen.get(_contract_key(c))}
-            for c in sorted(contracts, key=lambda x: (x.source_entity_pattern, x.source_attribute))
-        ]
+        rows = []
+        covered: set[tuple[str, str]] = set()
+        for c in sorted(
+            contracts, key=lambda x: (x.source_entity_pattern, x.source_attribute)
+        ):
+            key = (c.source_entity_pattern, c.source_attribute)
+            covered.add(key)
+            rows.append(
+                {
+                    "contract": c,
+                    "last_seen": last_seen.get(_contract_key(c)),
+                    "detection": detection_index.get(key),
+                }
+            )
+
+        # Surface detection-only sources (no FIELD_CONTRACTS entry) so the
+        # user can see unit-detection coverage for elveh attributes, soc
+        # batteryRange, vehicle-status sensors, etc.
+        for (ent, attr), rec in sorted(detection_index.items()):
+            if (ent, attr) in covered:
+                continue
+            rows.append({"contract": None, "last_seen": None, "detection": rec})
+
         out.append({"source_name": source_name, "rows": rows})
     out.sort(key=lambda g: g["source_name"])
     return out

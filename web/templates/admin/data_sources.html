@@ -25,6 +25,10 @@
                         <th>DB Table</th>
                         <th>DB Column</th>
                         <th>Target Unit</th>
+                        <th>Detected Unit</th>
+                        <th>Method</th>
+                        <th>Confidence</th>
+                        <th>Cross-Ref</th>
                         <th>Last Raw Value</th>
                         <th>Last Seen (UTC)</th>
                         <th>Notes</th>
@@ -33,18 +37,48 @@
                 <tbody>
                     {% for row in group.rows %}
                     <tr>
-                        <td><code class="text-xs">{{ row.contract.source_entity_pattern }}</code></td>
-                        <td><code class="text-xs">{{ row.contract.source_attribute }}</code></td>
-                        <td><code class="text-xs">{{ row.contract.source_unit }}</code></td>
-                        <td><code class="text-xs">{{ row.contract.target_db_table }}</code></td>
-                        <td><code class="text-xs">{{ row.contract.target_db_column }}</code></td>
-                        <td><code class="text-xs">{{ row.contract.target_unit }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.source_entity_pattern if row.contract else row.detection.entity_pattern }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.source_attribute if row.contract else row.detection.attribute }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.source_unit if row.contract else '' }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.target_db_table if row.contract else '' }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.target_db_column if row.contract else '' }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.target_unit if row.contract else '' }}</code></td>
+                        <td>
+                            {% if row.detection and row.detection.detected_unit %}
+                                <code class="text-xs">{{ row.detection.detected_unit }}</code>
+                            {% else %}
+                                <span class="text-base-content/40 text-xs">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.detection %}
+                                <span class="text-xs">{{ row.detection.method }}</span>
+                            {% else %}
+                                <span class="text-base-content/40 text-xs">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.detection %}
+                                <span class="text-xs">{{ row.detection.confidence }}</span>
+                            {% else %}
+                                <span class="text-base-content/40 text-xs">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.detection and row.detection.method == 'cross_reference' %}
+                                <span class="text-xs">raw={{ row.detection.sample_raw }}, canonical={{ row.detection.sample_canonical }}{% if row.detection.ratio is not none %}, ratio={{ '%.3f' % row.detection.ratio }}{% endif %}</span>
+                            {% else %}
+                                <span class="text-base-content/40 text-xs">&mdash;</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if row.last_seen %}
                                 <code class="text-xs">{{ row.last_seen.value }}</code>
                                 {% if row.last_seen.converted is not none and row.last_seen.converted != row.last_seen.value %}
                                     <span class="text-base-content/50 text-xs">&rarr; {{ row.last_seen.converted }}</span>
                                 {% endif %}
+                            {% elif row.detection and row.detection.sample_raw is not none %}
+                                <code class="text-xs">{{ row.detection.sample_raw }}</code>
                             {% else %}
                                 <span class="text-base-content/40 text-xs">never observed</span>
                             {% endif %}
@@ -52,11 +86,19 @@
                         <td>
                             {% if row.last_seen %}
                                 <span class="text-xs text-base-content/70">{{ row.last_seen.seen_at }}</span>
+                            {% elif row.detection %}
+                                <span class="text-xs text-base-content/70">{{ row.detection.last_seen }}</span>
                             {% else %}
                                 <span class="text-base-content/40 text-xs">&mdash;</span>
                             {% endif %}
                         </td>
-                        <td><span class="text-xs text-base-content/70">{{ row.contract.notes }}</span></td>
+                        <td>
+                            {% if row.contract %}
+                                <span class="text-xs text-base-content/70">{{ row.contract.notes }}</span>
+                            {% elif row.detection and row.detection.unknown_reason %}
+                                <span class="text-xs text-base-content/70">{{ row.detection.unknown_reason }}</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

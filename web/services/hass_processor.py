@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from web.services.sources.ha_fordpass import adapter as ha_fordpass
+from web.services.units import detection
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
 
 logger = logging.getLogger("lightningrod.hass.processor")
@@ -48,16 +49,59 @@ def _convert_with_uom(
     source_unit: Optional[str],
     field_name: str,
     entity_id: Optional[str] = None,
+    *,
+    entity_pattern: Optional[str] = None,
+    attribute: Optional[str] = None,
+    device_id: Optional[str] = None,
 ) -> Optional[float]:
     """Convert raw_value from source_unit to metric; log + return None on failure.
 
     Used by handlers for fields not represented in FIELD_CONTRACTS today.
     When `source_unit` is None, the event carries no UoM attribute. In that
-    case we do not silently passthrough; we warn-log and return None.
+    case we first consult the unit-detection layer (which may have
+    cross-referenced a unit from a sibling entity), and if that also has no
+    answer we warn-log and return None.
+
+    `entity_pattern` / `attribute` are passed through to the detection layer
+    so unit-of-measurement observations for this source get recorded. If a
+    caller omits them we derive `entity_pattern` from `entity_id`, and fall
+    back to using `field_name` as the attribute key.
     """
     if raw_value is None:
         return None
+
+    # Derive detection keys. Callers may pass entity_pattern/attribute
+    # explicitly; if not, derive them from entity_id + field_name.
+    if entity_pattern is None and entity_id is not None:
+        entity_pattern = ha_fordpass._entity_pattern(entity_id)
+    if attribute is None:
+        attribute = field_name or ""
+
     if source_unit is None:
+        # Try the detection layer as a last-resort fallback.
+        resolved = None
+        if entity_pattern is not None:
+            resolved = detection.resolve_unit(entity_pattern, attribute or "")
+        if resolved is not None:
+            try:
+                converted = to_metric(raw_value, resolved)
+            except UnknownSourceUnit:
+                logger.warning(
+                    "detection.resolve_unit returned %r but to_metric rejected it "
+                    "on %s.%s (value=%r); skipping",
+                    resolved,
+                    entity_id or "<unknown>",
+                    field_name,
+                    raw_value,
+                )
+                return None
+            logger.debug(
+                "read-time UoM absent on %s.%s; detection layer resolved %r",
+                entity_id or "<unknown>",
+                field_name,
+                resolved,
+            )
+            return converted
         logger.warning(
             "read-time UoM missing on %s for field %s; skipping value %r "
             "(adapter will not assume metric)",
@@ -65,9 +109,18 @@ def _convert_with_uom(
             field_name,
             raw_value,
         )
+        if entity_pattern is not None:
+            detection.record_unknown(
+                entity_pattern,
+                attribute or "",
+                raw_value,
+                reason="no unit_of_measurement on event",
+                device_id=device_id,
+            )
         return None
+
     try:
-        return to_metric(raw_value, source_unit)
+        converted = to_metric(raw_value, source_unit)
     except UnknownSourceUnit:
         logger.warning(
             "UnknownSourceUnit on %s.%s: value=%r source_unit=%r; skipping",
@@ -77,6 +130,16 @@ def _convert_with_uom(
             source_unit,
         )
         return None
+
+    if entity_pattern is not None:
+        detection.record_read_time(
+            entity_pattern,
+            attribute or "",
+            source_unit,
+            raw_value,
+            device_id=device_id,
+        )
+    return converted
 
 
 # ---------------------------------------------------------------------------
@@ -282,14 +345,22 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
     # Read-time UoM lookup used by distance + temp converters below.
     uom_for_event = _read_time_uom(new_state)
 
+    _entity_pattern_vs = f"sensor.fordpass_{{vin}}_{slug}"
+
     def _distance_converter(v):
         # Fall back to declared HA vehicle-status sensor default ("mi") when
         # the event carries no unit_of_measurement attribute. Simulator +
         # test fixtures populate a UoM; production HA events do too.
-        return _convert_with_uom(v, uom_for_event or "mi", slug, entity_id)
+        return _convert_with_uom(
+            v, uom_for_event or "mi", slug, entity_id,
+            entity_pattern=_entity_pattern_vs, attribute="", device_id=device_id,
+        )
 
     def _temp_converter(v):
-        return _convert_with_uom(v, uom_for_event or "degF", slug, entity_id)
+        return _convert_with_uom(
+            v, uom_for_event or "degF", slug, entity_id,
+            entity_pattern=_entity_pattern_vs, attribute="", device_id=device_id,
+        )
 
     # Map slug to field. Numeric + distance/temp converters route through
     # web.services.units.to_metric via _convert_with_uom; string / _safe_float
@@ -376,15 +447,31 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         # (same family as elveh state; uses per-event UoM resolution).
         battery_range = attrs.get("batteryRange")
         if battery_range is not None:
+            # The soc state uom is typically "%", which is NOT the batteryRange
+            # attribute's unit. Fall back to the legacy "mi" default when the
+            # event carries "%", no uom, or the uom doesn't look like a
+            # distance. The detection layer still gets a read_time_uom record
+            # for "mi" so cross-ref can refine it against metrics.xevBatteryRange.
+            range_uom = uom_for_event
+            if range_uom in (None, "%", "percent") or range_uom not in (
+                "mi", "km", "mph", "kmh"
+            ):
+                range_uom = "mi"
             pending["hv_battery_range"] = _convert_with_uom(
-                battery_range, uom_for_event or "mi", "batteryRange", entity_id
+                battery_range, range_uom, "batteryRange", entity_id,
+                entity_pattern="sensor.fordpass_{vin}_soc",
+                attribute="batteryRange",
+                device_id=device_id,
             )
 
     elif slug == "elveh":
         # EV range (state value) uses read-time UoM from the event itself.
         if state_val not in (None, "unknown", "unavailable"):
             pending["hv_battery_range"] = _convert_with_uom(
-                state_val, uom_for_event or "mi", "elveh.state", entity_id
+                state_val, uom_for_event or "mi", "elveh.state", entity_id,
+                entity_pattern="sensor.fordpass_{vin}_elveh",
+                attribute="",
+                device_id=device_id,
             )
         # Rich battery attributes (SI-already — no conversion needed, no
         # FIELD_CONTRACTS entry per _EXEMPTIONS in test_contract_coverage).
@@ -419,22 +506,35 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         max_range = _safe_float(attrs.get("maximumBatteryRange"))
         if max_range is not None:
             pending["hv_battery_max_range"] = _convert_with_uom(
-                max_range, uom_for_event or "mi", "maximumBatteryRange", entity_id
+                max_range, uom_for_event or "mi", "maximumBatteryRange", entity_id,
+                entity_pattern="sensor.fordpass_{vin}_elveh",
+                attribute="maximumBatteryRange",
+                device_id=device_id,
             )
 
         # --- Trip attributes from elveh entity (legacy fallback) ---
         # Distance + temperature converters use read-time UoM. Temp
         # attributes typically share the elveh state UoM (°F/°C); when they
         # don't, production HA events carry a per-attribute uom which would
-        # need attribute-specific resolution (tracked in 29-03).
+        # need attribute-specific resolution.
         distance_uom = uom_for_event or "mi"
         temp_uom_default = "degF" if (uom_for_event or "").lower() in ("mi", "mph") else "degC"
 
-        def _d(v):
-            return _convert_with_uom(v, distance_uom, "elveh.trip_distance", entity_id)
+        _elveh_pat = "sensor.fordpass_{vin}_elveh"
 
-        def _t(v):
-            return _convert_with_uom(v, temp_uom_default, "elveh.trip_temp", entity_id)
+        def _d(v, _attr: str = ""):
+            return _convert_with_uom(
+                v, distance_uom, "elveh.trip_distance", entity_id,
+                entity_pattern=_elveh_pat, attribute=_attr,
+                device_id=device_id,
+            )
+
+        def _t(v, _attr: str = ""):
+            return _convert_with_uom(
+                v, temp_uom_default, "elveh.trip_temp", entity_id,
+                entity_pattern=_elveh_pat, attribute=_attr,
+                device_id=device_id,
+            )
 
         # Adapter-routed converters for elveh-sourced fields that DO have a
         # FIELD_CONTRACTS entry. Routing through ha_fordpass.convert records
@@ -473,10 +573,16 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         }
 
         trip_fields = {}
+        # Converters that want the HA attribute name (for detection-layer
+        # bookkeeping) are _d and _t. Others accept just the value.
+        _attribute_aware = {_d, _t}
         for attr_key, (field_name, converter) in trip_attr_map.items():
             val = attrs.get(attr_key)
             if val is not None:
-                converted = converter(val)
+                if converter in _attribute_aware:
+                    converted = converter(val, attr_key)
+                else:
+                    converted = converter(val)
                 if converted is not None:
                     trip_fields[field_name] = converted
 
