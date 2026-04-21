@@ -52,7 +52,20 @@
                         </td>
                         <td>
                             {% if row.detection %}
-                                <span class="text-xs">{{ row.detection.method }}</span>
+                                {% set _m = row.detection.method %}
+                                {% if _m == 'declared' %}
+                                    <span class="badge badge-success badge-xs">declared</span>
+                                {% elif _m == 'read_time_uom' %}
+                                    <span class="badge badge-info badge-xs">read_time</span>
+                                {% elif _m == 'device_class_ha_config' %}
+                                    <span class="badge badge-primary badge-xs">device_class</span>
+                                {% elif _m == 'cross_reference' %}
+                                    <span class="badge badge-warning badge-xs">cross_ref</span>
+                                {% elif _m == 'unknown' %}
+                                    <span class="badge badge-error badge-xs">unknown</span>
+                                {% else %}
+                                    <span class="text-xs">{{ _m }}</span>
+                                {% endif %}
                             {% else %}
                                 <span class="text-base-content/40 text-xs">&mdash;</span>
                             {% endif %}
@@ -96,7 +109,15 @@
                             {% if row.contract %}
                                 <span class="text-xs text-base-content/70">{{ row.contract.notes }}</span>
                             {% elif row.detection and row.detection.unknown_reason %}
-                                <span class="text-xs text-base-content/70">{{ row.detection.unknown_reason }}</span>
+                                {% if row.detection.method == 'unknown' and '|' in row.detection.unknown_reason %}
+                                    <div class="flex flex-wrap gap-1">
+                                        {% for bit in row.detection.unknown_reason.split('|') %}
+                                            <span class="badge badge-error badge-xs">{{ bit }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-xs text-base-content/70">{{ row.detection.unknown_reason }}</span>
+                                {% endif %}
                             {% endif %}
                         </td>
                     </tr>

@@ -387,6 +387,9 @@ def make_trip_event(
         "last_changed": now,
         "last_updated": now,
         "attributes": {
+            # Production HA emits unit_of_measurement for the elveh state.
+            # Detection resolver requires a signal; no more silent "mi" default.
+            "unit_of_measurement": "mi",
             "batteryVoltage": 390.0,
             "batteryAmperage": 5.0,
             "batterykW": 1.95,

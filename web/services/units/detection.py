@@ -3,15 +3,19 @@
 Records and resolves the unit-of-measurement for every (entity, attribute)
 data source we ingest from Home Assistant.
 
-Four detection methods, priority order when resolving a unit:
-  1. declared         — source appears in FIELD_CONTRACTS (events/metrics/
-                        energytransferlogentry fields)
-  2. read_time_uom    — event carried new_state.attributes.unit_of_measurement
-  3. cross_reference  — ratio-matched against a known-metric canonical value
-                        from events/metrics for the same device + semantic
-                        field in a recent time window
-  4. unknown          — none of the above; value recorded with flag for
-                        later user override (future work)
+Five detection methods, priority order when resolving a unit:
+  1. declared                — source appears in FIELD_CONTRACTS (events/
+                               metrics/energytransferlogentry fields)
+  2. read_time_uom           — event carried
+                               new_state.attributes.unit_of_measurement
+  3. device_class_ha_config  — inferred from
+                               new_state.attributes.device_class combined
+                               with the HA instance's unit_system preference
+  4. cross_reference         — ratio-matched against a known-metric canonical
+                               value from events/metrics for the same device +
+                               semantic field in a recent time window
+  5. unknown                 — no signal resolved; value recorded with flag
+                               for later user override (future work)
 
 Storage: module-level in-memory cache. No DB persistence in this pass.
 Survives for the life of the process.
@@ -35,14 +39,16 @@ logger = logging.getLogger("lightningrod.units.detection")
 
 _METHOD_DECLARED = "declared"
 _METHOD_READ_TIME = "read_time_uom"
+_METHOD_DEVICE_CLASS = "device_class_ha_config"
 _METHOD_CROSS_REF = "cross_reference"
 _METHOD_UNKNOWN = "unknown"
 
 _METHOD_PRIORITY = {
     _METHOD_DECLARED: 0,
     _METHOD_READ_TIME: 1,
-    _METHOD_CROSS_REF: 2,
-    _METHOD_UNKNOWN: 3,
+    _METHOD_DEVICE_CLASS: 2,
+    _METHOD_CROSS_REF: 3,
+    _METHOD_UNKNOWN: 4,
 }
 
 
@@ -224,6 +230,10 @@ def _confidence_for_declared() -> str:
 
 
 def _confidence_for_read_time() -> str:
+    return "high"
+
+
+def _confidence_for_device_class() -> str:
     return "medium"
 
 
@@ -243,8 +253,10 @@ def _confidence_for_cross_ref(obs: int) -> str:
 def _insert_or_update(new: DetectionRecord) -> None:
     """Insert `new` unless an existing higher-priority record is in place.
 
-    Priority: declared < read_time_uom < cross_reference < unknown
-    (lower number wins). Same priority -> keep latest (overwrite).
+    Priority (lower number wins):
+      declared < read_time_uom < device_class_ha_config < cross_reference
+      < unknown
+    Same priority -> keep latest (overwrite).
     """
     key = _key(new.entity_pattern, new.attribute)
     existing = _records.get(key)
@@ -339,6 +351,11 @@ def record_unknown(
 
     Populates the recent-reads buffer so a future canonical observation
     can upgrade this record via cross-reference.
+
+    `reason` should be the bitstring of failed signals (e.g.
+    "no_uom|no_device_class|no_unit_system|no_cross_ref") so the diagnostic
+    page can surface each missing signal distinctly. Free-form strings are
+    still accepted for backwards compatibility.
     """
     rec = DetectionRecord(
         entity_pattern=entity_pattern,
@@ -354,6 +371,39 @@ def record_unknown(
     )
     _insert_or_update(rec)
     if device_id:
+        _buffer_add(device_id, entity_pattern, attribute, raw_value)
+
+
+def record_device_class_inference(
+    entity_pattern: str,
+    attribute: str,
+    unit: str,
+    device_class: str,
+    ha_unit_system: Any,
+    raw_value: Any = None,
+    device_id: Optional[str] = None,
+) -> None:
+    """Record a source whose unit was inferred from device_class + unit_system.
+
+    `device_class` and `ha_unit_system` are recorded via `unknown_reason`
+    (repurposed as a provenance string for this method) so the diagnostic
+    page can show the user exactly how the inference was made.
+    """
+    provenance = f"device_class={device_class!r}, ha_unit_system={ha_unit_system!r}"
+    rec = DetectionRecord(
+        entity_pattern=entity_pattern,
+        attribute=attribute,
+        detected_unit=unit,
+        method=_METHOD_DEVICE_CLASS,
+        confidence=_confidence_for_device_class(),
+        sample_raw=_safe_float(raw_value),
+        sample_canonical=None,
+        ratio=None,
+        last_seen=_now(),
+        unknown_reason=provenance,
+    )
+    _insert_or_update(rec)
+    if device_id and raw_value is not None:
         _buffer_add(device_id, entity_pattern, attribute, raw_value)
 
 
@@ -455,6 +505,311 @@ def resolve_unit(entity_pattern: str, attribute: str) -> Optional[str]:
     if rec is None:
         return None
     return rec.detected_unit
+
+
+# ---------------------------------------------------------------------------
+# HA unit_system + device_class inference
+# ---------------------------------------------------------------------------
+
+_METRIC_LENGTH_TOKENS = {"km", "m", "metric", "si"}
+_IMPERIAL_LENGTH_TOKENS = {"mi", "ft", "imperial", "us", "us_customary"}
+_METRIC_TEMP_TOKENS = {"°c", "c", "degc", "celsius", "metric"}
+_IMPERIAL_TEMP_TOKENS = {"°f", "f", "degf", "fahrenheit", "imperial", "us", "us_customary"}
+
+
+def _coerce_unit_system_family(ha_unit_system: Any, field_type: str) -> Optional[str]:
+    """Normalize HA unit_system to 'metric' or 'imperial' for a given field_type.
+
+    Accepts:
+      * a dict such as {"length": "km", "temperature": "°C", ...}
+      * a flat string "metric" or "imperial" (older HA shape)
+      * None / anything else -> returns None (caller falls back to unknown)
+    """
+    if ha_unit_system is None:
+        return None
+    # Flat string form.
+    if isinstance(ha_unit_system, str):
+        s = ha_unit_system.strip().lower()
+        if s in ("metric", "si"):
+            return "metric"
+        if s in ("imperial", "us", "us_customary"):
+            return "imperial"
+        return None
+    if not isinstance(ha_unit_system, dict):
+        return None
+    # Dict form. Pick the key that disambiguates this field_type, then
+    # normalize the value via token sets.
+    length_key = None
+    for k in ("length", "distance"):
+        if k in ha_unit_system:
+            length_key = str(ha_unit_system[k]).strip().lower()
+            break
+    temp_key = (
+        str(ha_unit_system["temperature"]).strip().lower()
+        if "temperature" in ha_unit_system
+        else None
+    )
+    if field_type in ("distance", "speed"):
+        if length_key in _METRIC_LENGTH_TOKENS:
+            return "metric"
+        if length_key in _IMPERIAL_LENGTH_TOKENS:
+            return "imperial"
+    if field_type == "temperature":
+        if temp_key in _METRIC_TEMP_TOKENS:
+            return "metric"
+        if temp_key in _IMPERIAL_TEMP_TOKENS:
+            return "imperial"
+    # Nothing relevant to this field_type; fall back to any global indicator.
+    if length_key in _METRIC_LENGTH_TOKENS or temp_key in _METRIC_TEMP_TOKENS:
+        return "metric"
+    if length_key in _IMPERIAL_LENGTH_TOKENS or temp_key in _IMPERIAL_TEMP_TOKENS:
+        return "imperial"
+    return None
+
+
+# Map normalized unit strings -> semantic field_type, so read-time UoM
+# applied to one field (e.g. the state's "mi") isn't blindly reused when a
+# handler is asking about a temperature attribute.
+_UNIT_FIELD_TYPES: dict[str, str] = {
+    "km": "distance",
+    "mi": "distance",
+    "kmh": "speed",
+    "mph": "speed",
+    "degC": "temperature",
+    "degF": "temperature",
+    "F": "temperature",
+    "kWh": "energy",
+    "Wh": "energy",
+    "kW": "power",
+    "s": "duration",
+    "seconds": "duration",
+}
+
+
+def _unit_matches_field_type(unit: Optional[str], field_type: str) -> bool:
+    """Return True when `unit` is the right kind of unit for `field_type`.
+
+    A resolver answer like ("mi", read_time_uom) is only valid when the
+    handler asked for a distance — applying mi -> km conversion math to a
+    temperature value would silently corrupt data.
+
+    Unknown / unmapped field_type is treated as permissive (no check).
+    """
+    if unit is None:
+        return False
+    expected = _UNIT_FIELD_TYPES.get(unit)
+    if expected is None:
+        # Unit we don't know how to classify — trust the caller.
+        return True
+    return expected == field_type
+
+
+def _unit_from_device_class(
+    device_class: Optional[str],
+    ha_unit_system: Any,
+    field_type: str,
+) -> Optional[str]:
+    """Derive a source unit from HA's device_class + unit_system.
+
+    Returns None when the combination is ambiguous or not supported.
+
+    Supported:
+      device_class="temperature" -> degC (metric) / degF (imperial)
+      device_class="distance"    -> km   (metric) / mi   (imperial)
+      device_class="speed"       -> kmh  (metric) / mph  (imperial)
+      device_class="energy"      -> kWh  (always, HA standardizes)
+      device_class="power"       -> kW   (always, HA standardizes)
+      device_class="pressure"    -> None (hPa/psi/kPa ambiguous; out of scope)
+    """
+    if not device_class:
+        return None
+    dc = device_class.strip().lower()
+
+    if dc == "energy":
+        return "kWh"
+    if dc == "power":
+        return "kW"
+    if dc == "pressure":
+        return None
+
+    family = _coerce_unit_system_family(ha_unit_system, field_type)
+    if family is None:
+        return None
+
+    if dc == "temperature":
+        return "degC" if family == "metric" else "degF"
+    if dc == "distance":
+        return "km" if family == "metric" else "mi"
+    if dc == "speed":
+        return "kmh" if family == "metric" else "mph"
+    return None
+
+
+def _compose_unknown_reason(
+    raw_uom: Any,
+    device_class: Optional[str],
+    unit_system: Any,
+    existing: Optional[DetectionRecord],
+) -> str:
+    """Build the pipe-separated bitstring reason for an unknown resolution."""
+    bits: list[str] = []
+    if not raw_uom:
+        bits.append("no_uom")
+    if not device_class:
+        bits.append("no_device_class")
+    if unit_system is None or unit_system == {}:
+        bits.append("no_unit_system")
+    if existing is None or existing.method == _METHOD_UNKNOWN:
+        bits.append("no_cross_ref")
+    return "|".join(bits) if bits else "no_signals"
+
+
+def resolve_source_unit(
+    *,
+    entity_id: str,
+    attribute: str,
+    new_state: dict,
+    ha_config: dict,
+    field_type: str,
+    record: bool = True,
+    raw_value: Any = None,
+    device_id: Optional[str] = None,
+) -> tuple[Optional[str], str, str]:
+    """Resolve the source unit for an HA event, using only HA signals.
+
+    Returns (unit, method, confidence).
+
+    Priority chain:
+      1. declared              — (entity_pattern, attribute) in FIELD_CONTRACTS
+      2. read_time_uom         — normalized new_state.attributes.unit_of_measurement
+      3. device_class_ha_config — new_state.attributes.device_class + ha_config.unit_system
+      4. cross_reference       — prior resolved entry in detection cache
+      5. unknown               — no signal; return (None, "unknown", "low")
+
+    Never returns a hardcoded default unit. Callers are expected to handle
+    a None unit by skipping conversion.
+
+    When `record=True` (default), this function also records the resolution
+    into the detection layer so /admin/data-sources surfaces it. Set
+    `record=False` when the caller will do its own recording.
+
+    `raw_value` and `device_id` are forwarded into the detection records
+    (used by cross-reference buffer population).
+    """
+    # Late imports to avoid a circular dependency: ha_fordpass.adapter imports
+    # this module.
+    from web.services.sources.ha_fordpass import adapter as ha_fordpass
+
+    entity_pattern = ha_fordpass._entity_pattern(entity_id) if entity_id else ""
+    attrs = (new_state or {}).get("attributes") or {} if isinstance(new_state, dict) else {}
+
+    # --- 1. declared via FIELD_CONTRACTS ---------------------------------
+    contract = ha_fordpass.lookup_contract(entity_pattern, attribute)
+    if contract is not None:
+        try:
+            resolved = ha_fordpass._resolve_source_unit(contract, new_state)
+        except Exception:
+            resolved = contract.source_unit
+        if record and resolved:
+            record_declared(entity_pattern, attribute, resolved, raw_value)
+        return resolved, _METHOD_DECLARED, _confidence_for_declared()
+
+    # --- 2. read_time_uom ------------------------------------------------
+    raw_uom = attrs.get("unit_of_measurement")
+    normalized = ha_fordpass._normalize_uom_string(raw_uom) if raw_uom else None
+    # Only accept the event's UoM when it matches the field_type. The event
+    # attribute `unit_of_measurement` is the entity's STATE unit; nested
+    # attributes (e.g. elveh.tripAmbientTemp on a `mi`-unit state) have
+    # independent semantics that the state UoM cannot describe.
+    if normalized and _unit_matches_field_type(normalized, field_type):
+        if record:
+            record_read_time(
+                entity_pattern, attribute, normalized, raw_value, device_id=device_id
+            )
+        return normalized, _METHOD_READ_TIME, _confidence_for_read_time()
+
+    # --- 3. device_class + ha_config.unit_system ------------------------
+    device_class = attrs.get("device_class")
+    unit_system = (ha_config or {}).get("unit_system") if isinstance(ha_config, dict) else None
+    inferred = _unit_from_device_class(device_class, unit_system, field_type)
+    if inferred is not None:
+        if record:
+            record_device_class_inference(
+                entity_pattern,
+                attribute,
+                inferred,
+                device_class=device_class,
+                ha_unit_system=unit_system,
+                raw_value=raw_value,
+                device_id=device_id,
+            )
+        return inferred, _METHOD_DEVICE_CLASS, _confidence_for_device_class()
+
+    # --- 4. cross_reference / prior detection cache ---------------------
+    existing = _records.get(_key(entity_pattern, attribute))
+    if (
+        existing is not None
+        and existing.detected_unit
+        and _unit_matches_field_type(existing.detected_unit, field_type)
+    ):
+        # Any higher-priority prior record wins.
+        if existing.method == _METHOD_CROSS_REF:
+            if record:
+                # Don't overwrite the cross_reference record's math; just
+                # push the raw_value into the device buffer so subsequent
+                # canonical events can refresh it.
+                if device_id and raw_value is not None:
+                    _buffer_add(device_id, entity_pattern, attribute, raw_value)
+            return existing.detected_unit, _METHOD_CROSS_REF, existing.confidence
+        if existing.method in (_METHOD_READ_TIME, _METHOD_DEVICE_CLASS, _METHOD_DECLARED):
+            # Previously we saw a higher-confidence signal for this source;
+            # honour it even though this event lacks signals of its own.
+            return existing.detected_unit, existing.method, existing.confidence
+
+    # --- 5. unknown ------------------------------------------------------
+    reason = _compose_unknown_reason(raw_uom, device_class, unit_system, existing)
+    if record:
+        record_unknown(
+            entity_pattern, attribute, raw_value, reason, device_id=device_id
+        )
+    return None, _METHOD_UNKNOWN, "low"
+
+
+def convert_with_resolved_unit(
+    *,
+    raw_value: Any,
+    resolved_unit: Optional[str],
+    method: str,
+    confidence: str,
+    entity_id: Optional[str],
+    attribute: str,
+) -> Optional[float]:
+    """Thin wrapper over to_metric for handlers that already called resolve_source_unit.
+
+    When `resolved_unit` is None (method='unknown') we return None — the caller
+    must skip the field. resolve_source_unit already recorded the unknown
+    reason into the detection layer.
+    """
+    # Late import to avoid a circular dep with web.services.units.to_metric,
+    # which is permitted here but keeps module import graph clean.
+    from web.services.units.to_metric import to_metric, UnknownSourceUnit
+
+    if raw_value is None:
+        return None
+    if resolved_unit is None:
+        return None
+    try:
+        return to_metric(raw_value, resolved_unit)
+    except UnknownSourceUnit:
+        logger.warning(
+            "UnknownSourceUnit on %s.%s (value=%r, resolved=%r, method=%s); skipping",
+            entity_id or "<unknown>",
+            attribute,
+            raw_value,
+            resolved_unit,
+            method,
+        )
+        return None
 
 
 def snapshot() -> list[DetectionRecord]:

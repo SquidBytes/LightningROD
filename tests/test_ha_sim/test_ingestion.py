@@ -182,7 +182,10 @@ async def test_battery_status_ingestion(db_session):
 
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
-    # SOC event to populate pending battery status
+    # SOC event to populate pending battery status. The soc entity's own UoM
+    # is "%"; the batteryRange attribute's unit comes from an elveh signal
+    # elsewhere. With no prior cross-reference and no device_class on soc,
+    # the resolver correctly reports unknown and drops hv_battery_range.
     soc_entity = f"sensor.fordpass_{_TEST_DEVICE_ID}_soc"
     soc_state = {
         "state": "75",
@@ -211,9 +214,10 @@ async def test_battery_status_ingestion(db_session):
 
     assert battery is not None, "Battery status not created"
     assert float(battery.hv_battery_soc) == 75.0
-    # Battery range should be converted from miles to km (195 * 1.60934)
-    assert battery.hv_battery_range is not None
-    assert abs(float(battery.hv_battery_range) - 195.0 * 1.60934) < 0.5
+    # hv_battery_range must be None when no unit signal is available — the
+    # resolver never silently defaults to "mi". A later metrics.xevBatteryRange
+    # event would back-fill via cross-reference.
+    assert battery.hv_battery_range is None
     assert battery.source_system == "home_assistant"
 
 

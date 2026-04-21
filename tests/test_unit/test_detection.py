@@ -54,7 +54,7 @@ def test_record_read_time_inserts_with_method_read_time_uom():
     assert len(snap) == 1
     rec = snap[0]
     assert rec.method == "read_time_uom"
-    assert rec.confidence == "medium"
+    assert rec.confidence == "high"
     assert rec.detected_unit == "mi"
 
 
