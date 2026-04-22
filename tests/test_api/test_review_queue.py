@@ -328,16 +328,6 @@ async def test_approved_tab_includes_standalone_locations(client, db_session):
     assert "StandaloneApprovedLoc" in response.text
 
 
-@pytest.mark.skip(
-    reason="Phase 28 will decide whether a dedicated 'Reference Data' route "
-    "(e.g. /reference-data) is added or if /review?tab=approved is the canonical "
-    "listing. Don't invent routes until that lands."
-)
-async def test_reference_data_dedicated_endpoint(client):  # pragma: no cover
-    response = await client.get("/reference-data")
-    assert response.status_code == 200
-
-
 # ---------------------------------------------------------------------------
 # 5. Charging-session group-edit cascade
 # ---------------------------------------------------------------------------
@@ -500,20 +490,16 @@ async def test_edit_location_persists_all_field_changes(client, db_session):
     assert float(refreshed.cost_per_kwh) == pytest.approx(0.42, abs=0.001)
 
 
-@pytest.mark.skip(
-    reason="Phase 28 will add a POST /review/network/{id}/edit endpoint. "
-    "Currently only locations have an edit endpoint; network editing is "
-    "done via settings routes, not the review queue."
-)
-async def test_edit_network_persists_field_changes(client, db_session):  # pragma: no cover
-    """Network edit endpoint expected."""
+async def test_edit_network_persists_field_changes(client, db_session):
+    """PUT /review/networks/{id} persists edits, returns the pending networks
+    partial, and fires HX-Trigger: closeNetworkModal."""
     net = await NetworkFactory.create(
         db_session, network_name="Original", is_verified=False
     )
     await db_session.commit()
 
-    response = await client.post(
-        f"/review/network/{net.id}/edit",
+    response = await client.put(
+        f"/review/networks/{net.id}",
         data={"network_name": "Renamed", "cost_per_kwh": "0.31"},
     )
     assert response.status_code == 200
@@ -524,6 +510,10 @@ async def test_edit_network_persists_field_changes(client, db_session):  # pragm
         )
     ).scalar_one()
     assert refreshed.network_name == "Renamed"
+    assert float(refreshed.cost_per_kwh) == pytest.approx(0.31, abs=0.001)
+
+    assert "closeNetworkModal" in response.headers.get("HX-Trigger", "")
+    assert 'hx-get="/review/networks"' in response.text
 
 
 # ---------------------------------------------------------------------------

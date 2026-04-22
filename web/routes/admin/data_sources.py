@@ -100,9 +100,9 @@ async def data_sources_page(
     active_vehicle = await get_active_vehicle(db)
     all_vehicles = await get_all_vehicles(db)
     return templates.TemplateResponse(
+        request,
         "admin/data_sources.html",
         {
-            "request": request,
             "active_page": "data_sources",
             "active_vehicle": active_vehicle,
             "all_vehicles": all_vehicles,
