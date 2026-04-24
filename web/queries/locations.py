@@ -103,8 +103,8 @@ def _infer_location_type(
 
 
 def _find_geo_match(
-    locations: list, latitude: float, longitude: float
-) -> Optional[object]:
+    locations: list[EVLocationLookup], latitude: float, longitude: float
+) -> Optional[EVLocationLookup]:
     """Find the first location within LOCATION_MATCH_RADIUS_M of the given coordinates."""
     for loc in locations:
         if loc.latitude is not None and loc.longitude is not None:
@@ -118,8 +118,8 @@ def _find_geo_match(
 
 
 def _find_address_match(
-    locations: list, address: str
-) -> Optional[object]:
+    locations: list[EVLocationLookup], address: str
+) -> Optional[EVLocationLookup]:
     """Find the first location whose normalized address matches."""
     norm_incoming = normalize_address(address)
     if not norm_incoming:
@@ -162,8 +162,8 @@ async def _find_gps_alias_match(
 
 
 def _find_all_geo_matches(
-    locations: list, latitude: float, longitude: float
-) -> list[tuple[object, float]]:
+    locations: list[EVLocationLookup], latitude: float, longitude: float
+) -> list[tuple[EVLocationLookup, float]]:
     """Find all locations within LOCATION_MATCH_RADIUS_M, sorted by distance (closest first).
 
     Returns list of (location, distance_meters) tuples.

@@ -1,6 +1,6 @@
 """Query helpers for vehicles."""
 
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -30,7 +30,7 @@ from web.queries.settings import get_app_setting, set_app_setting
 #
 # Authoritative source: RESEARCH.md §2 (Lightning, 34 rows) + §3 (Mach-E,
 # 29 rows). Keep this list synced with that table when battery specs shift.
-VEHICLE_PRESETS = [
+VEHICLE_PRESETS: list[dict[str, Any]] = [
     # -----------------------------------------------------------------
     # Ford F-150 Lightning — 34 rows, MY2022-MY2026 (RESEARCH.md §2)
     # -----------------------------------------------------------------

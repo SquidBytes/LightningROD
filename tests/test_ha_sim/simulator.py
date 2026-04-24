@@ -411,7 +411,7 @@ def make_trip_event(
             "tripAmbientTemp": 72.0,
             "tripOutsideAirAmbientTemp": 68.0,
             "tripCabinTemp": 70.0,
-            "tripRangeRegeneration": 2.5,
+            "tripRangeRegenerated": 2.5,
             "tripElectricalEfficiency": 3.1,
         },
     }

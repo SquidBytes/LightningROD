@@ -48,6 +48,9 @@ jobs:
         # `continue-on-error: true` can be added to suppress
         run: uv run ruff check .
 
+      - name: Mypy type check
+        run: uv run mypy web/ config.py db/ --no-error-summary
+
       - name: Run pytest
         env:
           # conftest.py reads these but already has a hardcoded URL.

@@ -746,7 +746,7 @@ def resolve_source_unit(
                 entity_pattern,
                 attribute,
                 inferred,
-                device_class=device_class,
+                device_class=device_class or "",
                 ha_unit_system=unit_system,
                 raw_value=raw_value,
                 device_id=device_id,

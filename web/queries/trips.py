@@ -119,7 +119,7 @@ async def query_trips(
     # Summary query
     summary_subq = stmt.subquery()
     summary_stmt = select(
-        func.count().label("count"),
+        func.count().label("trip_count"),
         func.sum(summary_subq.c.distance).label("total_distance"),
         func.sum(summary_subq.c.energy_consumed).label("total_energy"),
         func.avg(summary_subq.c.efficiency).label("avg_efficiency"),
@@ -127,7 +127,7 @@ async def query_trips(
     summary_result = await db.execute(summary_stmt)
     summary_row = summary_result.one()
     summary = {
-        "count": summary_row.count or 0,
+        "count": summary_row.trip_count or 0,
         "total_distance": float(summary_row.total_distance) if summary_row.total_distance else 0.0,
         "total_energy": float(summary_row.total_energy) if summary_row.total_energy else 0.0,
         "avg_efficiency": float(summary_row.avg_efficiency) if summary_row.avg_efficiency else None,

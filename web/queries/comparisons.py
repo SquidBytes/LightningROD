@@ -233,7 +233,7 @@ async def query_network_comparison(
         if cost_info["display_cost"] is None:
             continue
 
-        kwh = float(s.energy_kwh)
+        kwh = float(s.energy_kwh or 0)
         hypothetical_cost = kwh * reference_rate
 
         ev_total += cost_info["display_cost"]

@@ -311,10 +311,12 @@ class HASSClient:
 
     async def _send_json(self, data: dict) -> None:
         """Send a JSON message over the websocket."""
+        assert self._ws is not None
         await self._ws.send(json.dumps(data))
 
     async def _recv_json(self) -> dict:
         """Receive and parse a JSON message from the websocket."""
+        assert self._ws is not None
         raw = await self._ws.recv()
         return json.loads(raw)
 
@@ -376,7 +378,7 @@ class HASSClient:
             )
         return applied
 
-    async def _ha_rest_headers(self) -> Optional[dict]:
+    async def _ha_rest_headers(self) -> Optional[tuple[str, dict[str, str]]]:
         """Load ha_url and ha_token from settings and return request headers+base.
 
         Returns (ha_url, headers) tuple or None when credentials are missing.
@@ -519,9 +521,10 @@ class HASSClient:
             if not state_obj.get("attributes"):
                 continue
             try:
-                await self._event_handler(
-                    energy_entity, {}, state_obj, self._ha_config or {}
-                )
+                if self._event_handler is not None:
+                    await self._event_handler(
+                        energy_entity, {}, state_obj, self._ha_config or {}
+                    )
                 result["sessions"]["processed"] += 1
             except Exception as exc:
                 logger.error("Backfill: session state error: %s", exc)

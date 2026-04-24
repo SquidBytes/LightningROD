@@ -95,7 +95,7 @@ async def costs(
                 reference_rate = float(ref_rate_param)
             else:
                 non_free_networks = [n for n in networks if not n.is_free and n.cost_per_kwh]
-                reference_rate = float(non_free_networks[0].cost_per_kwh) if non_free_networks else 0.48
+                reference_rate = float(non_free_networks[0].cost_per_kwh or 0) if non_free_networks else 0.48
             network_comparison = await query_network_comparison(db, reference_rate, time_range=range or "all")
 
     all_vehicles = await get_all_vehicles(db)

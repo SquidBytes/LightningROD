@@ -195,7 +195,7 @@ async def bulk_update_sessions(
     form = await request.form()
 
     # Parse session IDs from comma-separated hidden input
-    session_ids_str = form.get("session_ids", "")
+    session_ids_str = str(form.get("session_ids", ""))
     if not session_ids_str:
         return JSONResponse(status_code=422, content={"error": "No sessions selected"})
 
@@ -214,12 +214,12 @@ async def bulk_update_sessions(
     bulk_sessions = result.scalars().all()
 
     # Apply updates only for fields that were submitted (non-empty)
-    bulk_network_id = form.get("bulk_network_id")
-    bulk_network_name = form.get("bulk_network_name")
-    bulk_charge_type = form.get("bulk_charge_type")
-    bulk_location_id = form.get("bulk_location_id")
-    bulk_location_name = form.get("bulk_location_name")
-    bulk_cost_str = form.get("bulk_cost")
+    bulk_network_id = str(form.get("bulk_network_id")) if form.get("bulk_network_id") is not None else None
+    bulk_network_name = str(form.get("bulk_network_name")) if form.get("bulk_network_name") is not None else None
+    bulk_charge_type = str(form.get("bulk_charge_type")) if form.get("bulk_charge_type") is not None else None
+    bulk_location_id = str(form.get("bulk_location_id")) if form.get("bulk_location_id") is not None else None
+    bulk_location_name = str(form.get("bulk_location_name")) if form.get("bulk_location_name") is not None else None
+    bulk_cost_str = str(form.get("bulk_cost")) if form.get("bulk_cost") is not None else None
 
     # Resolve network name to ID if name provided without ID
     if bulk_network_name and not bulk_network_id:
@@ -589,7 +589,7 @@ async def update_session(
     form_data = await request.form()
     submitted_cost = form_data.get("cost")
     if submitted_cost is not None and submitted_cost != "":
-        new_cost = float(submitted_cost)
+        new_cost = float(str(submitted_cost))
         if session.cost is None or abs(new_cost - float(session.cost)) > 0.001:
             session.cost = new_cost
             session.cost_source = "manual"

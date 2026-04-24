@@ -197,7 +197,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
     ),
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_elveh",
-        source_attribute="tripRangeRegeneration",
+        source_attribute="tripRangeRegenerated",
         source_unit="km",
         target_db_table="ev_trip_metrics",
         target_db_column="range_regenerated",

@@ -128,7 +128,7 @@ async def performance(
         )
         synthetic_curve_chart = build_synthetic_charge_curve_chart(
             max_kw=synthetic_meta["median_peak_kw"] or 0,
-            dc_session_count=synthetic_meta["dc_session_count"],
+            dc_session_count=int(synthetic_meta["dc_session_count"] or 0),
         )
 
     # Build efficiency scatter chart (chart builder applies factors internally)

@@ -57,7 +57,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     all_sessions = all_sessions_result.scalars().all()
 
     monthly_energy_chart = build_monthly_energy_by_network_chart(
-        sessions=all_sessions,
+        sessions=list(all_sessions),
         network_id_to_name=network_id_to_name,
         network_colors=network_colors,
     )

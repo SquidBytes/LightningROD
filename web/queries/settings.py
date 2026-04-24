@@ -1,7 +1,7 @@
 """Query helpers for settings."""
 
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.reference import AppSettings, EVChargerStall, EVChargingNetwork, EVLocationLookup, EVNetworkNameAlias, EVNetworkSubscription
 
 # Predefined EV charging networks with brand-accurate colors
-PREDEFINED_NETWORKS = [
+PREDEFINED_NETWORKS: list[dict[str, Any]] = [
     {"name": "Tesla Supercharger", "color": "#CC0000", "cost_per_kwh": 0.42, "is_free": False},
     {"name": "Electrify America", "color": "#00A94F", "cost_per_kwh": 0.48, "is_free": False},
     {"name": "ChargePoint", "color": "#FF6B2D", "cost_per_kwh": 0.35, "is_free": False},
@@ -337,7 +337,7 @@ async def validate_no_overlap(
     network_id: int,
     start_date,
     end_date=None,
-    exclude_id: int = None,
+    exclude_id: int | None = None,
 ) -> bool:
     """Check that a new/edited period does not overlap any existing period for the same network.
 
@@ -370,7 +370,7 @@ async def create_subscription(
     monthly_fee: float,
     start_date,
     end_date=None,
-    notes: str = None,
+    notes: str | None = None,
 ) -> EVNetworkSubscription:
     """Create a new subscription period. Validates no overlap first.
 
@@ -400,7 +400,7 @@ async def update_subscription(
     monthly_fee: float,
     start_date,
     end_date=None,
-    notes: str = None,
+    notes: str | None = None,
 ) -> Optional[EVNetworkSubscription]:
     """Update an existing subscription period. Validates no overlap (excluding self).
 
