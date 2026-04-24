@@ -10,7 +10,7 @@
       "tripDuration": 30,
       "tripEnergyConsumed": 7.6,
       "tripEfficiency": 2.5,
-      "tripRangeRegeneration": 2.1,
+      "tripRangeRegenerated": 2.1,
       "tripAmbientTemp": 15,
       "tripOutsideAirAmbientTemp": 15,
       "tripCabinTemp": 20,

@@ -11,7 +11,7 @@ commit time and serves as the observable unit contract.
 | Source Entity | Source Attribute | Source Unit | DB Table | DB Column | Target Unit | Notes |
 |---|---|---|---|---|---|---|
 | `sensor.fordpass_{vin}_elveh` | `tripEfficiency` | `km` | `ev_trip_metrics` | `efficiency` | `km` | Read-time fallback — elveh attribute in HA-preferred distance unit (km/kWh or mi/kWh). Adapter derives the per-event source_unit from new_state.attributes.unit_of_measurement at read-time. NOT from a process-global flag. This contract's declared source_unit is the DEFAULT when the event carries no uom; concrete conversion routes through adapter._resolve_source_unit(). |
-| `sensor.fordpass_{vin}_elveh` | `tripRangeRegeneration` | `km` | `ev_trip_metrics` | `range_regenerated` | `km` | Read-time fallback — elveh attribute; see tripEfficiency contract |
+| `sensor.fordpass_{vin}_elveh` | `tripRangeRegenerated` | `km` | `ev_trip_metrics` | `range_regenerated` | `km` | Read-time fallback — elveh attribute; see tripEfficiency contract |
 | `sensor.fordpass_{vin}_energytransferlogentry` | `batteryTemperature` | `degC` | `ev_battery_status` | `hv_battery_temperature` | `degC` | Only exposed on energytransferlogentry payload; integration emits °C |
 | `sensor.fordpass_{vin}_energytransferlogentry` | `batteryTemperature` | `degC` | `ev_charging_session` | `battery_temp_start` | `degC` | ha-fordpass emits °C on the energytransferlogentry payload |
 | `sensor.fordpass_{vin}_energytransferlogentry` | `batteryTemperature` | `degC` | `ev_charging_session` | `battery_temp_end` | `degC` | ha-fordpass exposes a single snapshot value; start/end mirror until HA emits discrete timeseries snapshots |

@@ -612,7 +612,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         # internally via adapter._resolve_source_unit.
         _elveh_pattern = "sensor.fordpass_{vin}_elveh"
         _efficiency_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripEfficiency")
-        _range_regen_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripRangeRegeneration")
+        _range_regen_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripRangeRegenerated")
 
         def _efficiency_conv(v):
             if _efficiency_contract is None:
@@ -636,7 +636,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             "tripAmbientTemp": ("ambient_temp", _t),
             "tripOutsideAirAmbientTemp": ("outside_air_temp", _t),
             "tripCabinTemp": ("cabin_temp", _t),
-            "tripRangeRegeneration": ("range_regenerated", _range_regen_conv),
+            "tripRangeRegenerated": ("range_regenerated", _range_regen_conv),
             "tripElectricalEfficiency": ("electrical_efficiency", _safe_float),
         }
 
