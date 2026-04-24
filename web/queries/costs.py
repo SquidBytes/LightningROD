@@ -1,7 +1,7 @@
 """Query helpers for costs."""
 
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 import plotly.express as px
@@ -77,8 +77,8 @@ def compute_session_cost(
     network=None,
     location=None,
     *,
-    networks_by_name: dict = None,
-    subscription_periods: list = None,
+    networks_by_name: dict | None = None,
+    subscription_periods: list | None = None,
 ) -> dict:
     """Compute display cost for a session using the cost hierarchy cascade.
     Supports both new-style and old-style call signatures:
@@ -113,7 +113,7 @@ def compute_session_cost(
         if session.location_name and session.location_name in networks_by_name:
             network = networks_by_name[session.location_name]
 
-    result = {
+    result: dict[str, Any] = {
         "display_cost": None,
         "cost_source": None,
         "is_free": False,
@@ -251,18 +251,18 @@ async def get_session_cost_context(
 
     Returns (network, location) tuple, either or both may be None.
     """
-    network = None
-    location = None
+    network: Optional[EVChargingNetwork] = None
+    location: Optional[EVLocationLookup] = None
     if session.network_id:
-        result = await db.execute(
+        net_result = await db.execute(
             select(EVChargingNetwork).where(EVChargingNetwork.id == session.network_id)
         )
-        network = result.scalar_one_or_none()
+        network = net_result.scalar_one_or_none()
     if session.location_id:
-        result = await db.execute(
+        loc_result = await db.execute(
             select(EVLocationLookup).where(EVLocationLookup.id == session.location_id)
         )
-        location = result.scalar_one_or_none()
+        location = loc_result.scalar_one_or_none()
     return network, location
 
 
@@ -560,6 +560,8 @@ async def query_subscription_savings(
             continue
 
         net_id = s.network_id
+        if net_id is None:
+            continue
         if net_id not in savings_by_network:
             net_name = network.network_name if network else "Unknown"
             savings_by_network[net_id] = {
@@ -745,7 +747,7 @@ async def free_charging_savings(
     return float(total) if total is not None else 0.0
 
 
-def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, str] = None) -> str:
+def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, str] | None = None) -> str:
     """Build a Plotly horizontal bar chart of cost by network, returning HTML div string.
 
     Args:
@@ -758,7 +760,7 @@ def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, s
     pio.templates.default = "plotly_dark"
 
     df = pd.DataFrame(by_network)
-    kwargs = dict(x="total_cost", y="network", color="network", orientation="h")
+    kwargs: dict[str, Any] = dict(x="total_cost", y="network", color="network", orientation="h")
     if network_colors:
         kwargs["color_discrete_map"] = network_colors
     fig = px.bar(df, **kwargs)
@@ -776,7 +778,7 @@ def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, s
     return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))
 
 
-def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str, str] = None) -> str:
+def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str, str] | None = None) -> str:
     """Build a Plotly stacked bar chart of cost by month and network.
 
     Args:
@@ -789,7 +791,7 @@ def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str,
     pio.templates.default = "plotly_dark"
 
     df = pd.DataFrame(monthly_data)
-    kwargs = dict(x="month", y="cost", color="network", barmode="stack")
+    kwargs: dict[str, Any] = dict(x="month", y="cost", color="network", barmode="stack")
     if network_colors:
         kwargs["color_discrete_map"] = network_colors
     fig = px.bar(df, **kwargs)

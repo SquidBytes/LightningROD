@@ -974,7 +974,7 @@ def build_degradation_chart(
     hover_texts = []
     for i, row in enumerate(data):
         d = row.get("date")
-        d_str = d.strftime("%b %d, %Y") if hasattr(d, "strftime") else str(d)
+        d_str = d.strftime("%b %d, %Y") if d is not None else str(d)
         odo = odometers[i]
         cap = float(row["max_capacity"])
         hover_texts.append(
@@ -1156,7 +1156,7 @@ def build_mini_charge_curve(session, ref_curve: list[dict] | None = None) -> str
     start_soc = float(session.start_soc or 0)
     end_soc = float(session.end_soc or 0)
     # Estimate kW as flat line from session data
-    est_kw = 0
+    est_kw: float = 0.0
     if getattr(session, "charging_kw", None):
         est_kw = abs(float(session.charging_kw))
     elif getattr(session, "max_power", None):

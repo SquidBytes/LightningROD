@@ -1167,7 +1167,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
 # ---------------------------------------------------------------------------
 
 # Cache for gas sensor entity_ids from app_settings to avoid per-event DB query
-_gas_sensor_cache: dict[str, Optional[str]] = {}
+_gas_sensor_cache: dict[str, str] = {}
 _gas_sensor_cache_ts: float = 0.0
 _GAS_SENSOR_CACHE_TTL = 300  # seconds (5 minutes)
 

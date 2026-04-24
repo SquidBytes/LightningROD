@@ -111,7 +111,7 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
 
     for s in sessions:
         total_sessions += 1
-        kwh = float(s.energy_kwh)
+        kwh = float(s.energy_kwh or 0)
         total_kwh += kwh
 
         # Group by charge type — AC, DC, or Unknown (anything else/NULL)
@@ -153,14 +153,14 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
     if len(sessions_for_chart) > 200 and time_range in ("all", "1y"):
         df = pd.DataFrame(sessions_for_chart)
         df["date"] = pd.to_datetime(df["date"], utc=True)
-        sessions_for_chart = (
+        df_chart = (
             df.groupby([df["date"].dt.date, "charge_type"])
             .agg(efficiency=("efficiency", "mean"))
             .reset_index()
         )
         # Convert date back to datetime for chart compatibility
-        sessions_for_chart["date"] = pd.to_datetime(sessions_for_chart["date"])
-        sessions_for_chart = sessions_for_chart.to_dict("records")
+        df_chart["date"] = pd.to_datetime(df_chart["date"])
+        sessions_for_chart = df_chart.to_dict("records")
 
     return {
         "total_kwh": total_kwh,
@@ -322,7 +322,7 @@ async def query_regen_for_chart(
     chart_data = [
         {
             "date": r.start_time,
-            "range_regenerated": float(r.range_regenerated),
+            "range_regenerated": float(r.range_regenerated or 0),
         }
         for r in rows
     ]

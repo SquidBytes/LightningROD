@@ -516,10 +516,10 @@ async def recalculate_network_costs(
     locations = await get_locations_for_network(db, network_id)
     location_cost_map = {loc.id: float(loc.cost_per_kwh) for loc in locations if loc.cost_per_kwh is not None}
 
-    result = await db.execute(
+    sessions_result = await db.execute(
         select(EVChargingSession).where(EVChargingSession.network_id == network_id)
     )
-    sessions = result.scalars().all()
+    sessions = sessions_result.scalars().all()
 
     updated = 0
     for s in sessions:
@@ -606,10 +606,10 @@ async def convert_network_to_location(
     )
 
     # Reassign all sessions from source network to target network + new location
-    result = await db.execute(
+    sessions_result = await db.execute(
         select(EVChargingSession).where(EVChargingSession.network_id == network_id)
     )
-    sessions = result.scalars().all()
+    sessions = sessions_result.scalars().all()
     for s in sessions:
         s.network_id = target_network_id
         s.location_name = location_name
@@ -1489,7 +1489,7 @@ async def _hass_gas_sensors_context(
                 continue
             raw_val = state_obj.get("state")
             try:
-                price = float(raw_val) if raw_val not in (None, "unknown", "unavailable", "") else None
+                price = float(str(raw_val)) if raw_val not in (None, "unknown", "unavailable", "") else None
             except (TypeError, ValueError):
                 price = None
             if price is None:

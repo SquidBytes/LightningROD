@@ -9,7 +9,7 @@ import hashlib
 import io
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # CSV field options — descriptors for all mappable EVChargingSession columns
 # ---------------------------------------------------------------------------
 
-DB_FIELD_OPTIONS = [
+DB_FIELD_OPTIONS: list[dict[str, Any]] = [
     {
         "field": "session_start_utc",
         "label": "Session Start (UTC)",
