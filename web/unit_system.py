@@ -11,7 +11,6 @@ module converts to/from display units based on two independent user settings:
 Users can choose them independently (e.g. mi/kWh with °C).
 """
 
-from typing import Optional
 
 # Conversion constants
 KM_PER_MI = 1.60934
@@ -51,11 +50,11 @@ TEMP_UNITS = {
 }
 
 
-def _normalize_distance_unit(value: Optional[str]) -> str:
+def _normalize_distance_unit(value: str | None) -> str:
     return value if value in DISTANCE_UNIT_VALUES else "us"
 
 
-def _normalize_temp_unit(value: Optional[str]) -> str:
+def _normalize_temp_unit(value: str | None) -> str:
     return value if value in TEMP_UNIT_VALUES else "us"
 
 
@@ -71,21 +70,21 @@ def get_units(distance_unit: str = "us", temp_unit: str = "us") -> dict:
 # ---------------------------------------------------------------------------
 
 
-def convert_distance(km: Optional[float], distance_unit: str) -> Optional[float]:
+def convert_distance(km: float | None, distance_unit: str) -> float | None:
     """Convert km (DB) to display unit."""
     if km is None:
         return None
     return float(km) * MI_PER_KM if _normalize_distance_unit(distance_unit) == "us" else float(km)
 
 
-def convert_efficiency(km_per_kwh: Optional[float], distance_unit: str) -> Optional[float]:
+def convert_efficiency(km_per_kwh: float | None, distance_unit: str) -> float | None:
     """Convert km/kWh (DB) to display efficiency unit (mi/kWh or km/kWh)."""
     if km_per_kwh is None:
         return None
     return float(km_per_kwh) * MI_PER_KM if _normalize_distance_unit(distance_unit) == "us" else float(km_per_kwh)
 
 
-def convert_fuel_efficiency(l_per_100km: Optional[float], distance_unit: str) -> Optional[float]:
+def convert_fuel_efficiency(l_per_100km: float | None, distance_unit: str) -> float | None:
     """Convert L/100km (DB) to display unit (MPG or L/100km).
 
     MPG = 235.215 / L_per_100km
@@ -97,21 +96,21 @@ def convert_fuel_efficiency(l_per_100km: Optional[float], distance_unit: str) ->
     return float(l_per_100km)
 
 
-def convert_fuel_volume(liters: Optional[float], distance_unit: str) -> Optional[float]:
+def convert_fuel_volume(liters: float | None, distance_unit: str) -> float | None:
     """Convert liters (DB) to display unit (gallons or liters)."""
     if liters is None:
         return None
     return float(liters) * GAL_PER_LITER if _normalize_distance_unit(distance_unit) == "us" else float(liters)
 
 
-def convert_speed(kmh: Optional[float], distance_unit: str) -> Optional[float]:
+def convert_speed(kmh: float | None, distance_unit: str) -> float | None:
     """Convert km/h (DB) to display unit (mph or km/h)."""
     if kmh is None:
         return None
     return float(kmh) * MI_PER_KM if _normalize_distance_unit(distance_unit) == "us" else float(kmh)
 
 
-def convert_temp(celsius: Optional[float], temp_unit: str) -> Optional[float]:
+def convert_temp(celsius: float | None, temp_unit: str) -> float | None:
     """Convert °C (DB) to display unit (°F or °C)."""
     if celsius is None:
         return None
@@ -125,14 +124,14 @@ def convert_temp(celsius: Optional[float], temp_unit: str) -> Optional[float]:
 # ---------------------------------------------------------------------------
 
 
-def to_metric_distance(value: Optional[float], distance_unit: str) -> Optional[float]:
+def to_metric_distance(value: float | None, distance_unit: str) -> float | None:
     """Convert user-entered distance to km for storage."""
     if value is None:
         return None
     return float(value) * KM_PER_MI if _normalize_distance_unit(distance_unit) == "us" else float(value)
 
 
-def to_metric_fuel_efficiency(value: Optional[float], distance_unit: str) -> Optional[float]:
+def to_metric_fuel_efficiency(value: float | None, distance_unit: str) -> float | None:
     """Convert user-entered fuel economy to L/100km for storage.
 
     US input is MPG -> L/100km = 235.215 / MPG.
@@ -144,14 +143,14 @@ def to_metric_fuel_efficiency(value: Optional[float], distance_unit: str) -> Opt
     return float(value)
 
 
-def to_metric_fuel_volume(value: Optional[float], distance_unit: str) -> Optional[float]:
+def to_metric_fuel_volume(value: float | None, distance_unit: str) -> float | None:
     """Convert user-entered fuel volume to liters for storage."""
     if value is None:
         return None
     return float(value) * LITER_PER_GAL if _normalize_distance_unit(distance_unit) == "us" else float(value)
 
 
-def to_metric_temp(value: Optional[float], temp_unit: str) -> Optional[float]:
+def to_metric_temp(value: float | None, temp_unit: str) -> float | None:
     """Convert user-entered temperature to °C for storage."""
     if value is None:
         return None

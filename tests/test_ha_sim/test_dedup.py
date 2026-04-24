@@ -8,7 +8,7 @@ Trip dedup: regression coverage for the "3 trips for 1 real trip" bug noted
 in WORKING.md (line 132). Identical trip events should produce one row.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -78,7 +78,7 @@ async def test_ha_session_identical_repeat_is_deduped(db_session):
 
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
-    start = datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc)
+    start = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
 
     entity_id, state1 = make_charging_session_event(
         device_id=_TEST_DEVICE_ID,
@@ -114,7 +114,7 @@ async def test_ha_session_near_duplicate_within_fuzzy_window(db_session):
 
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
-    base = datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
 
     entity_id, state1 = make_charging_session_event(
         device_id=_TEST_DEVICE_ID, energy_kwh=40.0
@@ -145,7 +145,7 @@ async def test_ha_session_outside_fuzzy_window_creates_new(db_session):
 
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
-    base = datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
 
     entity_id, state1 = make_charging_session_event(
         device_id=_TEST_DEVICE_ID, energy_kwh=40.0
@@ -175,7 +175,7 @@ async def test_ha_session_energy_diff_outside_tolerance_creates_new(db_session):
 
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
-    base = datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
 
     entity_id, state1 = make_charging_session_event(
         device_id=_TEST_DEVICE_ID, energy_kwh=10.0
@@ -209,7 +209,7 @@ async def test_ha_session_cross_source_flags_duplicate(db_session):
 
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
-    base = datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
 
     # Pre-existing manual session
     existing = await ChargingSessionFactory.create(

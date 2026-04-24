@@ -8,8 +8,8 @@ Revises: q22_seed_networks
 Create Date: 2026-03-27
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "r23_alias_session_review"
 down_revision = "q22_seed_networks"

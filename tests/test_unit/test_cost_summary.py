@@ -16,7 +16,6 @@ from web.queries.costs import (
     free_charging_savings,
 )
 
-
 pytestmark = pytest.mark.db
 
 

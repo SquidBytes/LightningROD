@@ -18,9 +18,9 @@ import re
 import subprocess
 import sys
 import tokenize
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator
 
 
 @dataclass(frozen=True)

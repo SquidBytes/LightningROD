@@ -11,7 +11,7 @@ database to verify:
   if a duplicate filter is added later, this test will surface that).
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -55,7 +55,7 @@ async def test_csv_detect_duplicates_exact_session_id_match(db_session):
     """detect_duplicates flags a row whose session_id already exists in DB."""
     vehicle = await VehicleFactory.create(db_session)
 
-    start = datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc)
+    start = datetime(2026, 3, 1, 10, 0, tzinfo=UTC)
     location = "Home"
     energy = 25.5
     sid = make_session_id(start, location, energy)
@@ -81,7 +81,7 @@ async def test_csv_detect_duplicates_exact_session_id_match(db_session):
 async def test_csv_detect_duplicates_fuzzy_match_within_window(db_session):
     """Within ±1h window + same location + energy within 10% -> fuzzy_duplicate."""
     vehicle = await VehicleFactory.create(db_session)
-    start = datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc)
+    start = datetime(2026, 3, 1, 10, 0, tzinfo=UTC)
 
     await ChargingSessionFactory.create(
         db_session,
@@ -109,7 +109,7 @@ async def test_csv_detect_duplicates_distinct_row_stays_new(db_session):
     vehicle = await VehicleFactory.create(db_session)
 
     rows = [_csv_row(
-        start=datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc),
+        start=datetime(2026, 3, 1, 10, 0, tzinfo=UTC),
         location="Destination Charger",
         energy=15.0,
         device_id=vehicle.device_id,
@@ -126,7 +126,7 @@ async def test_csv_import_is_idempotent(db_session):
     Second pass: detect -> duplicate -> import (with default skip) does not add.
     """
     vehicle = await VehicleFactory.create(db_session)
-    start = datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc)
+    start = datetime(2026, 3, 1, 10, 0, tzinfo=UTC)
 
     row = _csv_row(start=start, location="Home", energy=12.3,
                    device_id=vehicle.device_id)

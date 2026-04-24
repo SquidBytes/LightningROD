@@ -66,4 +66,22 @@ if ! "$PYTHON" scripts/check_reference_hygiene.py --staged --paths "${staged_py[
     exit 1
 fi
 
+# Locate mypy — prefer the repo venv so the hook matches CI exactly.
+if [ -x "$REPO_ROOT/.venv/bin/mypy" ]; then
+    MYPY="$REPO_ROOT/.venv/bin/mypy"
+elif command -v mypy >/dev/null 2>&1; then
+    MYPY="mypy"
+else
+    MYPY=""
+fi
+
+if [ -n "$MYPY" ]; then
+    echo "pre-commit: running mypy (advisory — does not block commit)..."
+    if ! "$MYPY" web/ config.py db/ --no-error-summary 2>&1; then
+        echo
+        echo "pre-commit: mypy reported type errors (advisory only — commit not blocked)."
+        echo "            Fix before push — CI will enforce this."
+    fi
+fi
+
 exit 0

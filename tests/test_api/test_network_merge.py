@@ -17,11 +17,10 @@ from db.models.reference import (
     EVNetworkNameAlias,
     EVNetworkSubscription,
 )
-from tests.factories.networks import NetworkFactory, SubscriptionFactory
 from tests.factories.locations import LocationLookupFactory
+from tests.factories.networks import NetworkFactory, SubscriptionFactory
 from tests.factories.sessions import ChargingSessionFactory
 from tests.factories.vehicles import VehicleFactory
-
 
 pytestmark = pytest.mark.db
 

@@ -1,8 +1,7 @@
 """Query helpers for energy."""
 
 import statistics
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 import plotly.express as px
@@ -56,7 +55,7 @@ def build_time_filter_trip(range_str: str):
     if not range_str or range_str == "all":
         return None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if range_str == "7d":
         cutoff = now - timedelta(days=7)
@@ -65,7 +64,7 @@ def build_time_filter_trip(range_str: str):
     elif range_str == "90d":
         cutoff = now - timedelta(days=90)
     elif range_str == "ytd":
-        cutoff = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+        cutoff = datetime(now.year, 1, 1, tzinfo=UTC)
     elif range_str == "1y":
         cutoff = now - timedelta(days=365)
     else:
@@ -74,7 +73,7 @@ def build_time_filter_trip(range_str: str):
     return EVTripMetrics.start_time >= cutoff
 
 
-async def query_energy_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict:
+async def query_energy_summary(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> dict:
     """Compute energy summary from EVChargingSession rows.
 
     Returns dict with:
@@ -176,7 +175,7 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
 async def monthly_energy_series(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[tuple[datetime, float]]:
     """Return (month_start, total_energy_kwh) per month in the filter range.
 
@@ -208,7 +207,7 @@ async def monthly_energy_series(
 async def efficiency_over_time_series(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[tuple[datetime, float]]:
     """Return (session_start, km_per_kwh) per session with usable energy+distance.
 
@@ -245,7 +244,7 @@ async def efficiency_over_time_series(
     ]
 
 
-async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict | None:
+async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> dict | None:
     """Compute regen braking summary from EVTripMetrics.
     Returns None when ev_trip_metrics has no rows with range_regenerated data
     (triggers "No data available" card state in the template).
@@ -296,7 +295,7 @@ async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_
 
 
 async def query_regen_for_chart(
-    db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None,
+    db: AsyncSession, time_range: str = "all", device_id: str | None = None,
 ) -> list[dict] | None:
     """Return per-trip regen data for chart secondary y-axis overlay.
 
@@ -342,7 +341,7 @@ async def query_regen_for_chart(
     return chart_data
 
 
-async def query_monthly_energy(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> list[dict]:
+async def query_monthly_energy(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> list[dict]:
     """Return monthly kWh grouped by charge type for stacked area chart.
 
     Returns list of dicts: [{"month": "2025-01", "charge_type": "AC", "kwh": 45.2}, ...]
@@ -719,7 +718,7 @@ def build_synthetic_charge_curve_chart(
 async def query_synthetic_curve_inputs(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> dict:
     """Collect DC-session peak kW values for synthetic curve aggregation.
 
@@ -762,7 +761,7 @@ async def query_synthetic_curve_inputs(
 async def has_real_charge_curve_data(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> bool:
     """True iff any DC session in window has >= 3 EVBatteryStatus rows within its
     [session_start_utc, session_end_utc] span.

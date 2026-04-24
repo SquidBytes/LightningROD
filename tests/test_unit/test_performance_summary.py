@@ -9,7 +9,7 @@ Route handlers apply unit conversion (MI_PER_KM) when rendering for US units.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -31,9 +31,9 @@ async def test_monthly_energy_series_empty_returns_empty_list(db_session):
 async def test_monthly_energy_series_buckets_by_month(db_session):
     """Three sessions across two calendar months → two rows with correct sums."""
     # Use two specific UTC months so the grouping is deterministic.
-    jan = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
-    jan_2 = datetime(2026, 1, 22, 12, 0, 0, tzinfo=timezone.utc)
-    feb = datetime(2026, 2, 10, 12, 0, 0, tzinfo=timezone.utc)
+    jan = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
+    jan_2 = datetime(2026, 1, 22, 12, 0, 0, tzinfo=UTC)
+    feb = datetime(2026, 2, 10, 12, 0, 0, tzinfo=UTC)
 
     await ChargingSessionFactory.create(
         db_session,
@@ -71,7 +71,7 @@ async def test_monthly_energy_series_buckets_by_month(db_session):
 @pytest.mark.asyncio
 async def test_efficiency_over_time_series_excludes_nulls(db_session):
     """Sessions with null/zero energy or distance are excluded."""
-    base = datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 3, 1, 12, 0, 0, tzinfo=UTC)
 
     # Valid: both energy and distance present
     await ChargingSessionFactory.create(
@@ -112,7 +112,7 @@ async def test_efficiency_over_time_series_excludes_nulls(db_session):
 @pytest.mark.asyncio
 async def test_efficiency_over_time_series_respects_device_id(db_session):
     """Filtering by device_id returns only that vehicle's rows."""
-    base = datetime(2026, 3, 15, 12, 0, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 3, 15, 12, 0, 0, tzinfo=UTC)
 
     await ChargingSessionFactory.create(
         db_session,

@@ -1,6 +1,5 @@
 """Route handlers for review."""
 
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -32,7 +31,7 @@ templates = Jinja2Templates(directory="web/templates")
 
 async def _networks_context(
     db: AsyncSession,
-    q: Optional[str] = None,
+    q: str | None = None,
     filter: str = "all",
     sort: str = "name",
 ) -> dict:
@@ -112,7 +111,7 @@ async def _networks_context(
 
 async def _locations_context(
     db: AsyncSession,
-    q: Optional[str] = None,
+    q: str | None = None,
     filter: str = "all",
     sort: str = "name",
 ) -> dict:
@@ -261,7 +260,7 @@ async def review_queue(
     request: Request,
     tab: str = "pending",
     sub: str = "networks",
-    q: Optional[str] = None,
+    q: str | None = None,
     sort: str = "name",
     db: AsyncSession = Depends(get_db),
 ):
@@ -339,7 +338,7 @@ async def review_queue(
 @router.get("/networks", response_class=HTMLResponse)
 async def review_networks(
     request: Request,
-    q: Optional[str] = None,
+    q: str | None = None,
     sort: str = "name",
     db: AsyncSession = Depends(get_db),
 ):
@@ -355,7 +354,7 @@ async def review_networks(
 @router.get("/locations", response_class=HTMLResponse)
 async def review_locations(
     request: Request,
-    q: Optional[str] = None,
+    q: str | None = None,
     sort: str = "name",
     db: AsyncSession = Depends(get_db),
 ):
@@ -521,10 +520,10 @@ async def review_edit_network(
     request: Request,
     db: AsyncSession = Depends(get_db),
     network_name: str = Form(...),
-    cost_per_kwh: Optional[float] = Form(None),
-    color: Optional[str] = Form(None),
-    is_free: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
+    cost_per_kwh: float | None = Form(None),
+    color: str | None = Form(None),
+    is_free: str | None = Form(None),
+    notes: str | None = Form(None),
 ):
     """Save edits for one network from the review page.
 
@@ -625,7 +624,7 @@ async def associate_location(
     if loc is None:
         raise HTTPException(status_code=404, detail="Location not found")
 
-    nid: Optional[int] = None
+    nid: int | None = None
     if network_id.strip():
         nid = int(network_id)
     elif network_name.strip():
@@ -1062,7 +1061,7 @@ async def merge_location(
 
     # Create GPS alias from source coordinates for future location memory
     if source.latitude is not None and source.longitude is not None:
-        from web.queries.locations import haversine_meters, LOCATION_MATCH_RADIUS_M
+        from web.queries.locations import LOCATION_MATCH_RADIUS_M, haversine_meters
         # Check if an existing alias for the same target is already within 100m
         existing_aliases_result = await db.execute(
             select(EVLocationGPSAlias).where(

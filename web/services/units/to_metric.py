@@ -16,7 +16,6 @@ Supported source units (target in parens):
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger("lightningrod.units")
 
@@ -30,7 +29,7 @@ _MILES_TO_KM = 1.609344
 # Wh -> kWh is exactly 1/1000 (no constant needed)
 
 
-def _safe_float(val) -> Optional[float]:
+def _safe_float(val) -> float | None:
     if val is None:
         return None
     try:
@@ -39,7 +38,7 @@ def _safe_float(val) -> Optional[float]:
         return None
 
 
-def to_metric(value, source_unit: str) -> Optional[float]:
+def to_metric(value, source_unit: str) -> float | None:
     """Convert `value` from `source_unit` to the canonical metric unit.
 
     Returns None when `value` is None or cannot be coerced to float.

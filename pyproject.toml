@@ -60,11 +60,12 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-# Ruff's default rule set: pycodestyle import/statement/runtime errors + pyflakes.
-# Intentionally excludes E501 (line-too-long) and other style rules — we want
-# dead-code and obvious-bug detection, not style enforcement. Add "I" (isort)
-# or "B" (bugbear) later if the simple set proves valuable.
-select = ["E4", "E7", "E9", "F"]
+# E4/E7/E9/F — pycodestyle errors + pyflakes (dead code, undefined names)
+# I           — isort (import ordering)
+# B           — bugbear (common gotchas; B008 excluded — FastAPI uses Depends/Form as defaults)
+# UP          — pyupgrade (modernise syntax for Python 3.11+: X|None, datetime.UTC, etc.)
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+ignore = ["B008"]
 
 [tool.mypy]
 python_version = "3.11"

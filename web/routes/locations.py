@@ -3,7 +3,6 @@ Sessions group-edit bar cascades from a selected network to a filtered location 
 `GET /locations/by-network` returns an `<option>` fragment for direct innerHTML swap.
 """
 
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
@@ -19,7 +18,7 @@ router = APIRouter()
 @router.get("/locations/by-network", response_class=HTMLResponse)
 async def locations_by_network(
     request: Request,
-    network_id: Optional[int] = None,
+    network_id: int | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
     """Return an `<option>` fragment of verified locations for a given network.

@@ -11,8 +11,8 @@ import pytest
 
 from web.services.sources.ha_fordpass.adapter import (  # noqa: F401
     FIELD_CONTRACTS,
-    process_event,
     _last_seen_raw,
+    process_event,
 )
 
 pytestmark = pytest.mark.unit

@@ -1,7 +1,7 @@
 """Query helpers for costs."""
 
-from datetime import datetime, timezone, timedelta
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pandas as pd
 import plotly.express as px
@@ -11,7 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
 from db.models.charging_session import EVChargingSession
-from db.models.reference import EVChargingNetwork, EVLocationLookup, EVNetworkSubscription
+from db.models.reference import (
+    EVChargingNetwork,
+    EVLocationLookup,
+    EVNetworkSubscription,
+)
 
 # km -> miles conversion factor for cost-per-mile display.
 # distance_added is stored in km; we divide cost by (distance_km * _KM_TO_MI)
@@ -42,7 +46,7 @@ def build_time_filter(range_str: str):
     if not range_str or range_str == "all":
         return None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if range_str == "7d":
         cutoff = now - timedelta(days=7)
@@ -51,7 +55,7 @@ def build_time_filter(range_str: str):
     elif range_str == "90d":
         cutoff = now - timedelta(days=90)
     elif range_str == "ytd":
-        cutoff = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+        cutoff = datetime(now.year, 1, 1, tzinfo=UTC)
     elif range_str == "1y":
         cutoff = now - timedelta(days=365)
     else:
@@ -63,7 +67,7 @@ def build_time_filter(range_str: str):
 def find_active_subscription(
     periods: list,
     session_date,
-) -> Optional[EVNetworkSubscription]:
+) -> EVNetworkSubscription | None:
     """Find the subscription period active on a given date, if any."""
     for period in periods:
         if period.start_date <= session_date:
@@ -246,13 +250,13 @@ async def get_locations_by_id(
 
 async def get_session_cost_context(
     db: AsyncSession, session
-) -> tuple[Optional[EVChargingNetwork], Optional[EVLocationLookup]]:
+) -> tuple[EVChargingNetwork | None, EVLocationLookup | None]:
     """Load the network and location objects for a session's cost calculation.
 
     Returns (network, location) tuple, either or both may be None.
     """
-    network: Optional[EVChargingNetwork] = None
-    location: Optional[EVLocationLookup] = None
+    network: EVChargingNetwork | None = None
+    location: EVLocationLookup | None = None
     if session.network_id:
         net_result = await db.execute(
             select(EVChargingNetwork).where(EVChargingNetwork.id == session.network_id)
@@ -266,7 +270,7 @@ async def get_session_cost_context(
     return network, location
 
 
-async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict:
+async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> dict:
     """Compute lifetime (or time-filtered) cost summary aggregated by network.
 
     Uses network_id FK lookup with location cost cascade.
@@ -405,7 +409,7 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
     }
 
 
-async def query_monthly_costs(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> list[dict]:
+async def query_monthly_costs(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> list[dict]:
     """Return monthly cost data grouped by month and network.
 
     Uses network_id FK lookup with location cost cascade.
@@ -490,7 +494,7 @@ def calculate_monthly_fees_in_range(
 
 
 async def query_subscription_savings(
-    db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None
+    db: AsyncSession, time_range: str = "all", device_id: str | None = None
 ) -> dict:
     """Return subscription savings card data.
 
@@ -501,6 +505,7 @@ async def query_subscription_savings(
     - by_network: list of dicts [{network, total_saved, total_fees, net_savings, session_count}, ...]
     """
     from datetime import date as date_type
+
     from web.queries.settings import get_all_subscriptions_by_network
 
     networks_by_id = await get_networks_by_id(db)
@@ -521,7 +526,7 @@ async def query_subscription_savings(
     locations_by_id = await get_locations_by_id(db, location_ids)
 
     # Determine time range boundaries for fee proration
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if not time_range or time_range == "all":
         # Use earliest session date to now
         range_start = date_type(2020, 1, 1)
@@ -631,9 +636,9 @@ async def query_subscription_savings(
 
 async def avg_cost_per_session(
     db: AsyncSession,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     time_range: str = "all",
-) -> Optional[float]:
+) -> float | None:
     """Mean `total_cost` over sessions that have a recorded cost in the range.
 
     Returns None when there are no cost-bearing sessions.
@@ -657,9 +662,9 @@ async def avg_cost_per_session(
 
 async def cost_per_mile(
     db: AsyncSession,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     time_range: str = "all",
-) -> Optional[float]:
+) -> float | None:
     """Sum(cost) / Sum(distance_added_km * 0.621371) over the range.
 
     Sessions with `distance_added IS NULL` are excluded from both the
@@ -689,9 +694,9 @@ async def cost_per_mile(
 
 async def cost_per_kwh(
     db: AsyncSession,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     time_range: str = "all",
-) -> Optional[float]:
+) -> float | None:
     """Sum(cost) / Sum(energy_kwh) over the range.
 
     Rows where either side is NULL or energy is zero are excluded from both
@@ -721,7 +726,7 @@ async def cost_per_kwh(
 
 async def free_charging_savings(
     db: AsyncSession,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     time_range: str = "all",
 ) -> float:
     """Total dollars saved via `is_free=True` sessions in the range.

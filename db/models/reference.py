@@ -1,9 +1,18 @@
 """Database models for reference."""
 
 from datetime import date, datetime
-from typing import Optional
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,15 +33,15 @@ class EVChargingNetwork(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     network_name: Mapped[str] = mapped_column(String, nullable=False)
-    cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    effective_date: Mapped[Optional[date]] = mapped_column(Date)
-    notes: Mapped[Optional[str]] = mapped_column(Text)
-    is_free: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
-    color: Mapped[Optional[str]] = mapped_column(String(7))  # hex color e.g. '#FF0000'
+    cost_per_kwh: Mapped[float | None] = mapped_column(Numeric)
+    effective_date: Mapped[date | None] = mapped_column(Date)
+    notes: Mapped[str | None] = mapped_column(Text)
+    is_free: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    color: Mapped[str | None] = mapped_column(String(7))  # hex color e.g. '#FF0000'
     is_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )
-    source_system: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    source_system: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class EVNetworkSubscription(Base):
@@ -51,8 +60,8 @@ class EVNetworkSubscription(Base):
     member_rate: Mapped[float] = mapped_column(Numeric, nullable=False)  # $/kWh with subscription
     monthly_fee: Mapped[float] = mapped_column(Numeric, nullable=False, server_default=text("0"))
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
-    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # null = still active
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # null = still active
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class EVLocationLookup(Base):
@@ -66,19 +75,19 @@ class EVLocationLookup(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     location_name: Mapped[str] = mapped_column(String, nullable=False)
-    address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    latitude: Mapped[Optional[float]] = mapped_column(Numeric)
-    longitude: Mapped[Optional[float]] = mapped_column(Numeric)
-    location_type: Mapped[Optional[str]] = mapped_column(String)
-    notes: Mapped[Optional[str]] = mapped_column(Text)
-    network_id: Mapped[Optional[int]] = mapped_column(
+    address: Mapped[str | None] = mapped_column(String, nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Numeric)
+    longitude: Mapped[float | None] = mapped_column(Numeric)
+    location_type: Mapped[str | None] = mapped_column(String)
+    notes: Mapped[str | None] = mapped_column(Text)
+    network_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ev_charging_networks.id", ondelete="SET NULL"), nullable=True
     )
-    cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+    cost_per_kwh: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     is_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )
-    source_system: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    source_system: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class EVLocationGPSAlias(Base):
@@ -134,12 +143,12 @@ class EVChargerStall(Base):
         Integer, ForeignKey("ev_location_lookup.id", ondelete="CASCADE"), nullable=False
     )
     stall_label: Mapped[str] = mapped_column(String, nullable=False)
-    charger_type: Mapped[Optional[str]] = mapped_column(String(10))  # 'L1', 'L2', 'DCFC'
-    rated_kw: Mapped[Optional[float]] = mapped_column(Numeric)
-    voltage: Mapped[Optional[float]] = mapped_column(Numeric)
-    amperage: Mapped[Optional[float]] = mapped_column(Numeric)
-    connector_type: Mapped[Optional[str]] = mapped_column(String(20))  # 'CCS', 'CHAdeMO', 'J1772', 'NACS', 'Tesla'
-    notes: Mapped[Optional[str]] = mapped_column(Text)
+    charger_type: Mapped[str | None] = mapped_column(String(10))  # 'L1', 'L2', 'DCFC'
+    rated_kw: Mapped[float | None] = mapped_column(Numeric)
+    voltage: Mapped[float | None] = mapped_column(Numeric)
+    amperage: Mapped[float | None] = mapped_column(Numeric)
+    connector_type: Mapped[str | None] = mapped_column(String(20))  # 'CCS', 'CHAdeMO', 'J1772', 'NACS', 'Tesla'
+    notes: Mapped[str | None] = mapped_column(Text)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
@@ -153,18 +162,18 @@ class EVStatistics(Base):
     __tablename__ = "ev_statistics"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    computed_at: Mapped[Optional[datetime]] = mapped_column(
+    computed_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMPTZ, server_default=text("NOW()")
     )
-    total_sessions: Mapped[Optional[int]] = mapped_column(Integer)
-    total_energy_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    total_cost: Mapped[Optional[float]] = mapped_column(Numeric)
-    total_distance_added: Mapped[Optional[float]] = mapped_column(Numeric)  # km
-    avg_session_duration_seconds: Mapped[Optional[float]] = mapped_column(Numeric)
-    avg_energy_per_session_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    avg_cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    avg_efficiency: Mapped[Optional[float]] = mapped_column(Numeric)  # km/kWh
-    notes: Mapped[Optional[str]] = mapped_column(Text)
+    total_sessions: Mapped[int | None] = mapped_column(Integer)
+    total_energy_kwh: Mapped[float | None] = mapped_column(Numeric)
+    total_cost: Mapped[float | None] = mapped_column(Numeric)
+    total_distance_added: Mapped[float | None] = mapped_column(Numeric)  # km
+    avg_session_duration_seconds: Mapped[float | None] = mapped_column(Numeric)
+    avg_energy_per_session_kwh: Mapped[float | None] = mapped_column(Numeric)
+    avg_cost_per_kwh: Mapped[float | None] = mapped_column(Numeric)
+    avg_efficiency: Mapped[float | None] = mapped_column(Numeric)  # km/kWh
+    notes: Mapped[str | None] = mapped_column(Text)
 
 
 class GasPriceHistory(Base):
@@ -179,9 +188,9 @@ class GasPriceHistory(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-12
-    station_price: Mapped[Optional[float]] = mapped_column(Numeric)
-    average_price: Mapped[Optional[float]] = mapped_column(Numeric)
-    source: Mapped[Optional[str]] = mapped_column(String(20))  # 'manual' or 'ha_sensor'
+    station_price: Mapped[float | None] = mapped_column(Numeric)
+    average_price: Mapped[float | None] = mapped_column(Numeric)
+    source: Mapped[str | None] = mapped_column(String(20))  # 'manual' or 'ha_sensor'
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
     )
@@ -215,7 +224,7 @@ class AppSettings(Base):
     __tablename__ = "app_settings"
 
     key: Mapped[str] = mapped_column(String, primary_key=True)
-    value: Mapped[Optional[str]] = mapped_column(Text)
+    value: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
     )

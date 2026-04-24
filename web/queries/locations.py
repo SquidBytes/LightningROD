@@ -8,12 +8,11 @@ CSV import, and manual session creation.
 import math
 import re
 from difflib import SequenceMatcher
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.reference import AppSettings, EVLocationLookup, EVLocationGPSAlias
+from db.models.reference import AppSettings, EVLocationGPSAlias, EVLocationLookup
 from web.queries.settings import resolve_network
 
 # Maximum distance (meters) for geo-proximity matching
@@ -55,7 +54,7 @@ def haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> floa
     return _EARTH_RADIUS_M * c
 
 
-def normalize_address(addr: Optional[str]) -> Optional[str]:
+def normalize_address(addr: str | None) -> str | None:
     """Normalize an address string for comparison.
 
     Lowercases, collapses whitespace, expands common abbreviations.
@@ -82,7 +81,7 @@ def normalize_address(addr: Optional[str]) -> Optional[str]:
 
 
 def _infer_location_type(
-    location_data: dict, network_name: Optional[str]
+    location_data: dict, network_name: str | None
 ) -> str:
     """Infer location type from HA signals.
 
@@ -104,7 +103,7 @@ def _infer_location_type(
 
 def _find_geo_match(
     locations: list[EVLocationLookup], latitude: float, longitude: float
-) -> Optional[EVLocationLookup]:
+) -> EVLocationLookup | None:
     """Find the first location within LOCATION_MATCH_RADIUS_M of the given coordinates."""
     for loc in locations:
         if loc.latitude is not None and loc.longitude is not None:
@@ -119,7 +118,7 @@ def _find_geo_match(
 
 def _find_address_match(
     locations: list[EVLocationLookup], address: str
-) -> Optional[EVLocationLookup]:
+) -> EVLocationLookup | None:
     """Find the first location whose normalized address matches."""
     norm_incoming = normalize_address(address)
     if not norm_incoming:
@@ -147,7 +146,7 @@ def _names_similar(name_a: str | None, name_b: str | None, threshold: float = 0.
 
 async def _find_gps_alias_match(
     db: AsyncSession, latitude: float, longitude: float
-) -> Optional[EVLocationGPSAlias]:
+) -> EVLocationGPSAlias | None:
     """Find a GPS alias within LOCATION_MATCH_RADIUS_M of the given coordinates."""
     result = await db.execute(select(EVLocationGPSAlias))
     aliases = result.scalars().all()
@@ -183,18 +182,18 @@ def _find_all_geo_matches(
 
 async def resolve_location(
     db: AsyncSession,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-    address: Optional[str] = None,
-    network_id: Optional[int] = None,
-    network_name: Optional[str] = None,
-    location_name: Optional[str] = None,
-    location_type: Optional[str] = None,
-    address_dict: Optional[dict] = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    address: str | None = None,
+    network_id: int | None = None,
+    network_name: str | None = None,
+    location_name: str | None = None,
+    location_type: str | None = None,
+    address_dict: dict | None = None,
     source_system: str = "home_assistant",
-    _location_data: Optional[dict] = None,
-    _network_name_raw: Optional[str] = None,
-) -> Optional[int]:
+    _location_data: dict | None = None,
+    _network_name_raw: str | None = None,
+) -> int | None:
     """Resolve an incoming location to an EVLocationLookup ID.
 
     Resolution priority:
@@ -233,7 +232,7 @@ async def resolve_location(
     # 1. Geo-proximity match with verified preference
     if latitude is not None and longitude is not None:
         geo_matches = _find_all_geo_matches(all_locations, latitude, longitude)
-        for loc, dist in geo_matches:
+        for loc, _ in geo_matches:
             if loc.is_verified:
                 if _names_similar(location_name, loc.location_name):
                     matched = loc
@@ -334,7 +333,7 @@ async def resolve_location(
     return new_loc.id
 
 
-async def _get_setting(db: AsyncSession, key: str) -> Optional[str]:
+async def _get_setting(db: AsyncSession, key: str) -> str | None:
     """Get a single app setting value."""
     result = await db.execute(
         select(AppSettings.value).where(AppSettings.key == key)

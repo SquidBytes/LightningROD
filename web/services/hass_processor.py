@@ -13,8 +13,9 @@ registry) plus `web.services.units.to_metric`.
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from web.services.sources.ha_fordpass import adapter as ha_fordpass
 from web.services.units import detection
@@ -27,7 +28,7 @@ logger = logging.getLogger("lightningrod.hass.processor")
 # Read-time unit_of_measurement helpers
 # ---------------------------------------------------------------------------
 
-def _read_time_uom(new_state: dict) -> Optional[str]:
+def _read_time_uom(new_state: dict) -> str | None:
     """Return the normalized source_unit from new_state.attributes.unit_of_measurement.
 
     Returns None when the event carries no UoM attribute. Callers use this
@@ -46,14 +47,14 @@ def _read_time_uom(new_state: dict) -> Optional[str]:
 
 def _convert_with_uom(
     raw_value: Any,
-    source_unit: Optional[str],
+    source_unit: str | None,
     field_name: str,
-    entity_id: Optional[str] = None,
+    entity_id: str | None = None,
     *,
-    entity_pattern: Optional[str] = None,
-    attribute: Optional[str] = None,
-    device_id: Optional[str] = None,
-) -> Optional[float]:
+    entity_pattern: str | None = None,
+    attribute: str | None = None,
+    device_id: str | None = None,
+) -> float | None:
     """Convert raw_value from source_unit to metric; log + return None on failure.
 
     Used by handlers for fields not represented in FIELD_CONTRACTS today.
@@ -147,7 +148,7 @@ def _convert_with_uom(
 # ---------------------------------------------------------------------------
 
 
-def extract_slug(entity_id: str) -> Optional[str]:
+def extract_slug(entity_id: str) -> str | None:
     """Extract sensor slug from entity_id pattern sensor.fordpass_{vin}_{slug}.
 
     Example: sensor.fordpass_1ftvw1el6pwg05841_soc -> soc
@@ -209,7 +210,7 @@ async def _flush_vehicle_status(device_id: str, db) -> None:
 
     record = EVVehicleStatus(
         device_id=device_id,
-        recorded_at=fields.pop("_recorded_at", datetime.now(timezone.utc)),
+        recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
         source_system="home_assistant",
         **fields,
     )
@@ -228,7 +229,7 @@ async def _flush_battery_status(device_id: str, db) -> None:
 
     record = EVBatteryStatus(
         device_id=device_id,
-        recorded_at=fields.pop("_recorded_at", datetime.now(timezone.utc)),
+        recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
         source_system="home_assistant",
         ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
         **fields,
@@ -237,7 +238,52 @@ async def _flush_battery_status(device_id: str, db) -> None:
     logger.debug("Flushed battery status for %s (%d fields)", device_id, len(fields))
 
 
-def _safe_float(val) -> Optional[float]:
+async def _find_matching_trip(
+    db,
+    device_id: str,
+    distance: float | None,
+    energy_consumed: float | None,
+):
+    """Query for an existing EVTripMetrics row matching this trip.
+
+    Match key: device_id + distance within ±0.01 km + energy_consumed within
+    ±0.01 kWh + end_time within the last 24 hours.  Returns the first matching
+    row or None.
+
+    Both the _elveh handler (handle_battery_status) and the _events handler
+    (adapter._handle_events_entity) call this before inserting so that when
+    both fire for the same physical trip only one row is written — the second
+    handler enriches the existing row instead of duplicating it.
+    """
+    if distance is None or energy_consumed is None:
+        return None
+
+    from datetime import timedelta
+
+    from sqlalchemy import and_, select
+
+    from db.models.trip_metrics import EVTripMetrics
+
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    result = await db.execute(
+        select(EVTripMetrics)
+        .where(
+            and_(
+                EVTripMetrics.device_id == device_id,
+                EVTripMetrics.distance.between(distance - 0.01, distance + 0.01),
+                EVTripMetrics.energy_consumed.between(
+                    energy_consumed - 0.01, energy_consumed + 0.01
+                ),
+                EVTripMetrics.end_time >= cutoff,
+            )
+        )
+        .order_by(EVTripMetrics.end_time.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+def _safe_float(val) -> float | None:
     """Safely convert a value to float, returning None on failure."""
     if val is None:
         return None
@@ -247,7 +293,7 @@ def _safe_float(val) -> Optional[float]:
         return None
 
 
-def _get_state_value(new_state: dict) -> Optional[str]:
+def _get_state_value(new_state: dict) -> str | None:
     """Extract state value from HA state object."""
     if not new_state:
         return None
@@ -291,8 +337,8 @@ def _resolve_and_convert(
     new_state: dict,
     ha_config: dict,
     field_type: str,
-    device_id: Optional[str],
-) -> Optional[float]:
+    device_id: str | None,
+) -> float | None:
     """Resolve the source unit via HA signals, then convert via to_metric.
 
     Convenience wrapper used by the legacy vehicle-status and battery-status
@@ -320,7 +366,7 @@ def _resolve_and_convert(
     )
 
 
-def _get_event_timestamp(new_state: dict) -> Optional[datetime]:
+def _get_event_timestamp(new_state: dict) -> datetime | None:
     """Extract event timestamp from HA state object.
 
     Tries last_changed, then last_updated, parsing ISO format with timezone.
@@ -387,7 +433,7 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
     # Initialize pending dict for this device if needed
     if device_id not in _pending_vehicle_status:
         _pending_vehicle_status[device_id] = {}
-        _pending_vehicle_status[device_id]["_recorded_at"] = datetime.now(timezone.utc)
+        _pending_vehicle_status[device_id]["_recorded_at"] = datetime.now(UTC)
 
     pending = _pending_vehicle_status[device_id]
 
@@ -487,7 +533,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
     # Initialize pending dict for this device if needed
     if device_id not in _pending_battery_status:
         _pending_battery_status[device_id] = {}
-        _pending_battery_status[device_id]["_recorded_at"] = datetime.now(timezone.utc)
+        _pending_battery_status[device_id]["_recorded_at"] = datetime.now(UTC)
 
     pending = _pending_battery_status[device_id]
 
@@ -666,35 +712,54 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             if is_new:
                 _last_trip_values[device_id] = trip_fields.copy()
                 event_ts = _get_event_timestamp(new_state)
-                end_time = event_ts or datetime.now(timezone.utc)
+                end_time = event_ts or datetime.now(UTC)
                 start_time = None
                 if trip_fields.get("duration") and end_time:
                     from datetime import timedelta
                     start_time = end_time - timedelta(minutes=float(trip_fields["duration"]))
 
-                # DB-level duplicate check
+                # Match-and-enrich: if an _events row already exists for this
+                # trip, enrich it with elveh-owned fields rather than inserting
+                # a duplicate.
                 from db.models.trip_metrics import EVTripMetrics
-                from sqlalchemy import select, desc
 
-                recent = await db.execute(
-                    select(EVTripMetrics)
-                    .where(EVTripMetrics.device_id == device_id)
-                    .order_by(desc(EVTripMetrics.end_time))
-                    .limit(1)
+                existing = await _find_matching_trip(
+                    db,
+                    device_id,
+                    trip_fields.get("distance"),
+                    trip_fields.get("energy_consumed"),
                 )
-                last_db_trip = recent.scalar_one_or_none()
-                if last_db_trip and (
-                    float(last_db_trip.distance or 0) == float(trip_fields.get("distance", -1))
-                    and float(last_db_trip.duration or 0) == float(trip_fields.get("duration", -1))
-                    and float(last_db_trip.efficiency or 0) == float(trip_fields.get("efficiency", -1))
-                ):
-                    logger.debug("Skipping duplicate trip for %s", device_id)
+                if existing is not None:
+                    # Enrich the existing row with elveh-owned fields.
+                    # Scores and regen always overwrite (elveh is canonical).
+                    # efficiency and duration only fill NULLs.
+                    # Do NOT overwrite temps — events values are canonical °C.
+                    for col in (
+                        "range_regenerated",
+                        "driving_score",
+                        "speed_score",
+                        "acceleration_score",
+                        "deceleration_score",
+                        "electrical_efficiency",
+                    ):
+                        val = trip_fields.get(col)
+                        if val is not None:
+                            setattr(existing, col, val)
+                    if existing.efficiency is None and trip_fields.get("efficiency") is not None:
+                        existing.efficiency = trip_fields["efficiency"]
+                    if existing.duration is None and trip_fields.get("duration") is not None:
+                        existing.duration = trip_fields["duration"]
+                    logger.info(
+                        "Enriched existing trip row %s for %s with elveh scores/regen",
+                        existing.id,
+                        device_id,
+                    )
                 else:
                     trip_record = EVTripMetrics(
                         device_id=device_id,
                         start_time=start_time,
                         end_time=end_time,
-                        recorded_at=datetime.now(timezone.utc),
+                        recorded_at=datetime.now(UTC),
                         is_complete=True,
                         source_system="homeassistant",
                         original_timestamp=event_ts,
@@ -804,7 +869,7 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
         )
         last_loc = last_result.scalar_one_or_none()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if last_loc is not None:
             time_diff = (now - last_loc.recorded_at).total_seconds()
@@ -854,7 +919,7 @@ async def handle_tire_pressure(slug, new_state, ha_config, device_id, db):
     # Store in pending vehicle status batch
     if device_id not in _pending_vehicle_status:
         _pending_vehicle_status[device_id] = {}
-        _pending_vehicle_status[device_id]["_recorded_at"] = datetime.now(timezone.utc)
+        _pending_vehicle_status[device_id]["_recorded_at"] = datetime.now(UTC)
 
     _pending_vehicle_status[device_id]["tire_pressure"] = tire_data
     _pending_vehicle_status_ts.setdefault(device_id, time.time())
@@ -898,7 +963,7 @@ _CHARGER_TYPE_MAP = {
 }
 
 
-def _normalize_charge_type(raw: Optional[str]) -> Optional[str]:
+def _normalize_charge_type(raw: str | None) -> str | None:
     """Normalize charger type string to 'AC' or 'DC'.
 
     Returns None for empty input. Unrecognized values fall back to the raw
@@ -912,7 +977,7 @@ def _normalize_charge_type(raw: Optional[str]) -> Optional[str]:
     return _CHARGER_TYPE_MAP.get(key, key)
 
 
-def _format_address(addr: Optional[dict]) -> Optional[str]:
+def _format_address(addr: dict | None) -> str | None:
     """Format address dict from energytransferlogentry location into a string."""
     if not addr or not isinstance(addr, dict):
         return None
@@ -926,7 +991,7 @@ def _format_address(addr: Optional[dict]) -> Optional[str]:
     return ", ".join(parts) if parts else None
 
 
-def _parse_iso_datetime(val: Optional[str]) -> Optional[datetime]:
+def _parse_iso_datetime(val: str | None) -> datetime | None:
     """Parse ISO 8601 datetime string, returning None on failure."""
     if not val:
         return None
@@ -948,8 +1013,9 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     duration, power stats, location, and plug times. Performs duplicate detection
     and network resolution.
     """
-    from db.models.charging_session import EVChargingSession
     from sqlalchemy import select
+
+    from db.models.charging_session import EVChargingSession
 
     attrs = _get_attributes(new_state)
 
@@ -1144,7 +1210,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         ambient_temp_end=ambient_temp_end,
         original_timestamp=original_timestamp,
         is_complete=True,  # energytransferlogentry fires after session completes
-        recorded_at=datetime.now(timezone.utc),
+        recorded_at=datetime.now(UTC),
         duplicate_of_id=duplicate_of_id,
         needs_review=duplicate_of_id is not None,
         review_type="duplicate" if duplicate_of_id is not None else None,
@@ -1172,7 +1238,7 @@ _gas_sensor_cache_ts: float = 0.0
 _GAS_SENSOR_CACHE_TTL = 300  # seconds (5 minutes)
 
 
-async def _get_gas_sensor_entity_ids(db) -> tuple[Optional[str], Optional[str]]:
+async def _get_gas_sensor_entity_ids(db) -> tuple[str | None, str | None]:
     """Return (station_entity_id, average_entity_id) from app_settings, cached.
 
     Cache is refreshed every 5 minutes to pick up configuration changes
@@ -1215,8 +1281,8 @@ def invalidate_gas_sensor_cache() -> None:
 async def _handle_gas_sensor_event(
     entity_id: str,
     new_state: dict,
-    station_entity: Optional[str],
-    average_entity: Optional[str],
+    station_entity: str | None,
+    average_entity: str | None,
     db,
 ) -> bool:
     """Handle a gas price sensor event if entity_id matches configured sensors.
@@ -1237,7 +1303,7 @@ async def _handle_gas_sensor_event(
         logger.debug("Gas sensor %s value not a valid price: '%s', skipping", entity_id, state_val)
         return True
 
-    recorded_at = _get_event_timestamp(new_state) or datetime.now(timezone.utc)
+    recorded_at = _get_event_timestamp(new_state) or datetime.now(UTC)
 
     from web.queries.gas_prices import (
         compute_monthly_averages,
@@ -1271,9 +1337,10 @@ async def _ensure_vehicle_exists(device_id: str, entity_id: str, db) -> None:
     source_system='home_assistant'. Auto-activates only when no active vehicle
     is currently set.
     """
-    from db.models.vehicle import EVVehicle
     from sqlalchemy import select
     from sqlalchemy.exc import IntegrityError
+
+    from db.models.vehicle import EVVehicle
     from web.queries.settings import get_app_setting, set_app_setting
 
     # Check if vehicle already exists

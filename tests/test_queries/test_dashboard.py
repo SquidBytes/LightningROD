@@ -3,10 +3,11 @@
 Tests dashboard summary aggregation including total sessions, kWh, and cost.
 """
 
+from datetime import UTC
+
 import pytest
 
 from web.queries.dashboard import query_dashboard_summary
-
 
 pytestmark = [pytest.mark.query, pytest.mark.db]
 
@@ -17,9 +18,10 @@ async def test_dashboard_stats(db_session):
     Dashboard uses old-style compute_session_cost(s, networks_by_name) which
     resolves network via session.location_name -> networks_by_name dict lookup.
     """
+    from datetime import datetime
+
     from db.models.charging_session import EVChargingSession
     from db.models.reference import EVChargingNetwork
-    from datetime import datetime, timezone
 
     db = db_session
 
@@ -37,7 +39,7 @@ async def test_dashboard_stats(db_session):
         device_id="DASH_VIN",
         energy_kwh=50.0,
         location_name="Dashboard Net",
-        session_start_utc=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        session_start_utc=datetime(2025, 6, 1, tzinfo=UTC),
         is_complete=True,
         source_system="test",
     )
@@ -45,7 +47,7 @@ async def test_dashboard_stats(db_session):
         device_id="DASH_VIN",
         energy_kwh=30.0,
         location_name="Dashboard Net",
-        session_start_utc=datetime(2025, 6, 2, tzinfo=timezone.utc),
+        session_start_utc=datetime(2025, 6, 2, tzinfo=UTC),
         is_complete=True,
         source_system="test",
     )
@@ -64,15 +66,16 @@ async def test_dashboard_stats(db_session):
 
 async def test_dashboard_with_device_filter(db_session):
     """Verify dashboard stats filter by device_id correctly."""
+    from datetime import datetime
+
     from db.models.charging_session import EVChargingSession
-    from datetime import datetime, timezone
 
     db = db_session
 
     s = EVChargingSession(
         device_id="FILTER_VIN",
         energy_kwh=25.0,
-        session_start_utc=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        session_start_utc=datetime(2025, 6, 1, tzinfo=UTC),
         is_complete=True,
         source_system="test",
     )

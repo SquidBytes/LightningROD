@@ -13,7 +13,6 @@ from web.queries.costs import (
     query_monthly_costs,
 )
 
-
 pytestmark = [pytest.mark.query, pytest.mark.db]
 
 

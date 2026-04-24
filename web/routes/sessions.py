@@ -3,8 +3,8 @@
 import json
 import math
 import uuid
-from datetime import date, datetime, timezone
-from typing import Annotated, Optional
+from datetime import UTC, date, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -16,10 +16,25 @@ from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargerStall, EVLocationLookup
 from web.dependencies import get_db
 from web.queries.battery import build_mini_charge_curve, load_reference_charge_curve
-from web.queries.costs import compute_session_cost, get_locations_by_id, get_session_cost_context
+from web.queries.costs import (
+    compute_session_cost,
+    get_locations_by_id,
+    get_session_cost_context,
+)
 from web.queries.sessions import get_most_recent_location, query_sessions
-from web.queries.settings import get_all_networks, get_app_setting, get_stalls_for_location, get_subscriptions_for_network, get_unit_context, resolve_network
-from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
+from web.queries.settings import (
+    get_all_networks,
+    get_app_setting,
+    get_stalls_for_location,
+    get_subscriptions_for_network,
+    get_unit_context,
+    resolve_network,
+)
+from web.queries.vehicles import (
+    get_active_device_id,
+    get_active_vehicle,
+    get_all_vehicles,
+)
 from web.unit_system import to_metric_distance
 
 router = APIRouter()
@@ -32,7 +47,7 @@ VALID_CHARGE_TYPES = {"AC", "DC"}
 VALID_PER_PAGE = {25, 50, 100}
 
 
-async def get_review_count(db: AsyncSession, device_id: Optional[str] = None) -> int:
+async def get_review_count(db: AsyncSession, device_id: str | None = None) -> int:
     """Count sessions needing review (duplicates + first-time auto-associations)."""
     stmt = select(func.count()).select_from(EVChargingSession).where(
         EVChargingSession.needs_review == True  # noqa: E712
@@ -44,7 +59,7 @@ async def get_review_count(db: AsyncSession, device_id: Optional[str] = None) ->
 
 
 async def _verified_locations_for_network(
-    db: AsyncSession, network_id: Optional[int]
+    db: AsyncSession, network_id: int | None
 ) -> list[EVLocationLookup]:
     """initial server-rendered options for the session-edit
     location <select>. Mirrors GET /locations/by-network's filter (verified
@@ -70,15 +85,15 @@ async def sessions(
     db: AsyncSession = Depends(get_db),
     page: int = 1,
     per_page: int = 25,
-    date_preset: Optional[str] = None,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-    charge_type: Optional[str] = None,
-    location_type: Optional[str] = None,
-    network_id: Optional[str] = None,
-    sort_by: Optional[str] = None,
-    sort_dir: Optional[str] = None,
-    hx_request: Annotated[Optional[str], Header()] = None,
+    date_preset: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    charge_type: str | None = None,
+    location_type: str | None = None,
+    network_id: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+    hx_request: Annotated[str | None, Header()] = None,
 ):
     # Vehicle scoping
     active_device_id = await get_active_device_id(db)
@@ -89,7 +104,7 @@ async def sessions(
         per_page = 25
 
     # Parse comma-separated network_id values (e.g. "1,3,5") into a list of ints
-    network_ids: Optional[list[int]] = None
+    network_ids: list[int] | None = None
     if network_id:
         try:
             network_ids = [int(v.strip()) for v in network_id.split(",") if v.strip()]
@@ -302,40 +317,40 @@ async def new_session_modal(
 async def create_session(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    session_date: Annotated[Optional[str], Form()] = None,
-    session_time: Annotated[Optional[str], Form()] = None,
-    energy_kwh: Annotated[Optional[float], Form()] = None,
-    cost: Annotated[Optional[float], Form()] = None,
-    location_name: Annotated[Optional[str], Form()] = None,
-    location_type: Annotated[Optional[str], Form()] = None,
-    charge_type: Annotated[Optional[str], Form()] = None,
-    duration_minutes: Annotated[Optional[float], Form()] = None,
-    charge_duration_minutes: Annotated[Optional[float], Form()] = None,
-    max_power: Annotated[Optional[float], Form()] = None,
-    min_power: Annotated[Optional[float], Form()] = None,
-    charging_kw: Annotated[Optional[float], Form()] = None,
-    charging_voltage: Annotated[Optional[float], Form()] = None,
-    charging_amperage: Annotated[Optional[float], Form()] = None,
-    start_soc: Annotated[Optional[float], Form()] = None,
-    end_soc: Annotated[Optional[float], Form()] = None,
-    distance_added: Annotated[Optional[float], Form()] = None,
-    end_date: Annotated[Optional[str], Form()] = None,
-    end_time: Annotated[Optional[str], Form()] = None,
-    plugged_in_duration_minutes: Annotated[Optional[float], Form()] = None,
-    location_id: Annotated[Optional[int], Form()] = None,
-    plug_status: Annotated[Optional[str], Form()] = None,
-    charging_status: Annotated[Optional[str], Form()] = None,
-    network_id: Annotated[Optional[int], Form()] = None,
-    network_name: Annotated[Optional[str], Form()] = None,
-    is_free_form: Annotated[Optional[str], Form(alias="is_free")] = None,
-    evse_voltage: Annotated[Optional[float], Form()] = None,
-    evse_amperage: Annotated[Optional[float], Form()] = None,
-    evse_kw: Annotated[Optional[float], Form()] = None,
-    evse_energy_kwh: Annotated[Optional[float], Form()] = None,
-    evse_max_power_kw: Annotated[Optional[float], Form()] = None,
-    charger_rated_kw: Annotated[Optional[float], Form()] = None,
-    stall_id: Annotated[Optional[int], Form()] = None,
-    evse_source: Annotated[Optional[str], Form()] = None,
+    session_date: Annotated[str | None, Form()] = None,
+    session_time: Annotated[str | None, Form()] = None,
+    energy_kwh: Annotated[float | None, Form()] = None,
+    cost: Annotated[float | None, Form()] = None,
+    location_name: Annotated[str | None, Form()] = None,
+    location_type: Annotated[str | None, Form()] = None,
+    charge_type: Annotated[str | None, Form()] = None,
+    duration_minutes: Annotated[float | None, Form()] = None,
+    charge_duration_minutes: Annotated[float | None, Form()] = None,
+    max_power: Annotated[float | None, Form()] = None,
+    min_power: Annotated[float | None, Form()] = None,
+    charging_kw: Annotated[float | None, Form()] = None,
+    charging_voltage: Annotated[float | None, Form()] = None,
+    charging_amperage: Annotated[float | None, Form()] = None,
+    start_soc: Annotated[float | None, Form()] = None,
+    end_soc: Annotated[float | None, Form()] = None,
+    distance_added: Annotated[float | None, Form()] = None,
+    end_date: Annotated[str | None, Form()] = None,
+    end_time: Annotated[str | None, Form()] = None,
+    plugged_in_duration_minutes: Annotated[float | None, Form()] = None,
+    location_id: Annotated[int | None, Form()] = None,
+    plug_status: Annotated[str | None, Form()] = None,
+    charging_status: Annotated[str | None, Form()] = None,
+    network_id: Annotated[int | None, Form()] = None,
+    network_name: Annotated[str | None, Form()] = None,
+    is_free_form: Annotated[str | None, Form(alias="is_free")] = None,
+    evse_voltage: Annotated[float | None, Form()] = None,
+    evse_amperage: Annotated[float | None, Form()] = None,
+    evse_kw: Annotated[float | None, Form()] = None,
+    evse_energy_kwh: Annotated[float | None, Form()] = None,
+    evse_max_power_kw: Annotated[float | None, Form()] = None,
+    charger_rated_kw: Annotated[float | None, Form()] = None,
+    stall_id: Annotated[int | None, Form()] = None,
+    evse_source: Annotated[str | None, Form()] = None,
 ):
     errors: dict[str, str] = {}
 
@@ -349,7 +364,7 @@ async def create_session(
     else:
         try:
             time_part = session_time or "00:00"
-            parsed_date = datetime.fromisoformat(f"{session_date}T{time_part}").replace(tzinfo=timezone.utc)
+            parsed_date = datetime.fromisoformat(f"{session_date}T{time_part}").replace(tzinfo=UTC)
         except ValueError:
             errors["session_date"] = "Invalid date format. Use YYYY-MM-DD."
 
@@ -371,7 +386,7 @@ async def create_session(
     network_id = await resolve_network(db, network_id=network_id, network_name=network_name)
 
     # Determine is_free: checkbox form value takes precedence; fall back to cost == 0
-    is_free: Optional[bool] = None
+    is_free: bool | None = None
     if is_free_form is not None:
         is_free = is_free_form in ('1', 'on', 'true')
     elif cost is not None:
@@ -385,7 +400,7 @@ async def create_session(
     if end_date:
         end_time_part = end_time or "00:00"
         try:
-            session_end_utc = datetime.fromisoformat(f"{end_date}T{end_time_part}").replace(tzinfo=timezone.utc)
+            session_end_utc = datetime.fromisoformat(f"{end_date}T{end_time_part}").replace(tzinfo=UTC)
         except ValueError:
             pass
 
@@ -522,39 +537,39 @@ async def update_session(
     request: Request,
     session_id: int,
     db: AsyncSession = Depends(get_db),
-    location_name: Annotated[Optional[str], Form()] = None,
-    location_type: Annotated[Optional[str], Form()] = None,
-    charge_type: Annotated[Optional[str], Form()] = None,
-    charge_duration_minutes: Annotated[Optional[float], Form()] = None,
-    energy_kwh: Annotated[Optional[float], Form()] = None,
-    session_date: Annotated[Optional[str], Form()] = None,
-    session_time: Annotated[Optional[str], Form()] = None,
-    max_power: Annotated[Optional[float], Form()] = None,
-    min_power: Annotated[Optional[float], Form()] = None,
-    charging_kw: Annotated[Optional[float], Form()] = None,
-    charging_voltage: Annotated[Optional[float], Form()] = None,
-    charging_amperage: Annotated[Optional[float], Form()] = None,
-    start_soc: Annotated[Optional[float], Form()] = None,
-    end_soc: Annotated[Optional[float], Form()] = None,
-    distance_added: Annotated[Optional[float], Form()] = None,
-    end_date: Annotated[Optional[str], Form()] = None,
-    end_time: Annotated[Optional[str], Form()] = None,
-    plugged_in_duration_minutes: Annotated[Optional[float], Form()] = None,
-    location_id: Annotated[Optional[int], Form()] = None,
-    plug_status: Annotated[Optional[str], Form()] = None,
-    charging_status: Annotated[Optional[str], Form()] = None,
-    network_id: Annotated[Optional[int], Form()] = None,
-    network_name: Annotated[Optional[str], Form()] = None,
-    is_free: Annotated[Optional[str], Form()] = None,
-    evse_voltage: Annotated[Optional[float], Form()] = None,
-    evse_amperage: Annotated[Optional[float], Form()] = None,
-    evse_kw: Annotated[Optional[float], Form()] = None,
-    evse_energy_kwh: Annotated[Optional[float], Form()] = None,
-    evse_max_power_kw: Annotated[Optional[float], Form()] = None,
-    charger_rated_kw: Annotated[Optional[float], Form()] = None,
-    stall_id: Annotated[Optional[int], Form()] = None,
-    evse_source: Annotated[Optional[str], Form()] = None,
-    vehicle_device_id: Annotated[Optional[str], Form()] = None,
+    location_name: Annotated[str | None, Form()] = None,
+    location_type: Annotated[str | None, Form()] = None,
+    charge_type: Annotated[str | None, Form()] = None,
+    charge_duration_minutes: Annotated[float | None, Form()] = None,
+    energy_kwh: Annotated[float | None, Form()] = None,
+    session_date: Annotated[str | None, Form()] = None,
+    session_time: Annotated[str | None, Form()] = None,
+    max_power: Annotated[float | None, Form()] = None,
+    min_power: Annotated[float | None, Form()] = None,
+    charging_kw: Annotated[float | None, Form()] = None,
+    charging_voltage: Annotated[float | None, Form()] = None,
+    charging_amperage: Annotated[float | None, Form()] = None,
+    start_soc: Annotated[float | None, Form()] = None,
+    end_soc: Annotated[float | None, Form()] = None,
+    distance_added: Annotated[float | None, Form()] = None,
+    end_date: Annotated[str | None, Form()] = None,
+    end_time: Annotated[str | None, Form()] = None,
+    plugged_in_duration_minutes: Annotated[float | None, Form()] = None,
+    location_id: Annotated[int | None, Form()] = None,
+    plug_status: Annotated[str | None, Form()] = None,
+    charging_status: Annotated[str | None, Form()] = None,
+    network_id: Annotated[int | None, Form()] = None,
+    network_name: Annotated[str | None, Form()] = None,
+    is_free: Annotated[str | None, Form()] = None,
+    evse_voltage: Annotated[float | None, Form()] = None,
+    evse_amperage: Annotated[float | None, Form()] = None,
+    evse_kw: Annotated[float | None, Form()] = None,
+    evse_energy_kwh: Annotated[float | None, Form()] = None,
+    evse_max_power_kw: Annotated[float | None, Form()] = None,
+    charger_rated_kw: Annotated[float | None, Form()] = None,
+    stall_id: Annotated[int | None, Form()] = None,
+    evse_source: Annotated[str | None, Form()] = None,
+    vehicle_device_id: Annotated[str | None, Form()] = None,
 ):
     # Validate enum fields
     errors: dict[str, str] = {}
@@ -606,14 +621,14 @@ async def update_session(
     if session_date:
         time_part = session_time or "00:00"
         try:
-            new_start = datetime.fromisoformat(f"{session_date}T{time_part}").replace(tzinfo=timezone.utc)
+            new_start = datetime.fromisoformat(f"{session_date}T{time_part}").replace(tzinfo=UTC)
             session.session_start_utc = new_start
         except ValueError:
             pass  # Keep existing value on parse error
     if end_date:
         end_time_part = end_time or "00:00"
         try:
-            new_end = datetime.fromisoformat(f"{end_date}T{end_time_part}").replace(tzinfo=timezone.utc)
+            new_end = datetime.fromisoformat(f"{end_date}T{end_time_part}").replace(tzinfo=UTC)
             session.session_end_utc = new_end
         except ValueError:
             pass
@@ -793,8 +808,8 @@ async def delete_session(
 async def session_detail(
     request: Request,
     session_id: int,
-    prev_id: Optional[int] = None,
-    next_id: Optional[int] = None,
+    prev_id: int | None = None,
+    next_id: int | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -901,14 +916,15 @@ async def session_modal(
 async def check_duplicate(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    session_date: Annotated[Optional[str], Form()] = None,
-    energy_kwh: Annotated[Optional[float], Form()] = None,
+    session_date: Annotated[str | None, Form()] = None,
+    energy_kwh: Annotated[float | None, Form()] = None,
 ):
     """Check for potential duplicates before manual session creation.
 
     Returns a warning banner HTML if potential duplicates found, empty otherwise.
     """
     from datetime import timedelta
+
     from dateutil.parser import parse as parse_date
 
     if not session_date:

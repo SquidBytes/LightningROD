@@ -15,15 +15,14 @@ Note: Chained after ``s33_phase27_vehicle_trim_split`` rather than branching fro
 The revision id keeps the ``s32_`` prefix for naming stability (it is an alembic
 revision id, not a sort key).
 """
-from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "s32_phase27_session_temps"
-down_revision: Union[str, None] = "s33_phase27_vehicle_trim_split"
-branch_labels: Union[str, None] = None
-depends_on: Union[str, None] = None
+down_revision: str | None = "s33_phase27_vehicle_trim_split"
+branch_labels: str | None = None
+depends_on: str | None = None
 
 
 def upgrade() -> None:

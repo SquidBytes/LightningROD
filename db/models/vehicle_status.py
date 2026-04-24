@@ -1,7 +1,6 @@
 """Database models for vehicle status."""
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Index, Numeric, String, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
@@ -30,46 +29,46 @@ class EVVehicleStatus(Base):
     recorded_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False)
 
     # Drivetrain
-    odometer: Mapped[Optional[float]] = mapped_column(Numeric)
-    speed: Mapped[Optional[float]] = mapped_column(Numeric)
-    accelerator_position: Mapped[Optional[float]] = mapped_column(Numeric)
+    odometer: Mapped[float | None] = mapped_column(Numeric)
+    speed: Mapped[float | None] = mapped_column(Numeric)
+    accelerator_position: Mapped[float | None] = mapped_column(Numeric)
 
     # Controls
-    brake_status: Mapped[Optional[str]] = mapped_column(String)
-    gear_position: Mapped[Optional[str]] = mapped_column(String)
-    parking_brake: Mapped[Optional[str]] = mapped_column(String)
-    ignition_status: Mapped[Optional[str]] = mapped_column(String)
-    remote_start_status: Mapped[Optional[str]] = mapped_column(String)
+    brake_status: Mapped[str | None] = mapped_column(String)
+    gear_position: Mapped[str | None] = mapped_column(String)
+    parking_brake: Mapped[str | None] = mapped_column(String)
+    ignition_status: Mapped[str | None] = mapped_column(String)
+    remote_start_status: Mapped[str | None] = mapped_column(String)
 
     # Temperatures and torque
-    coolant_temp: Mapped[Optional[float]] = mapped_column(Numeric)
-    torque_at_transmission: Mapped[Optional[float]] = mapped_column(Numeric)
+    coolant_temp: Mapped[float | None] = mapped_column(Numeric)
+    torque_at_transmission: Mapped[float | None] = mapped_column(Numeric)
 
     # Structured status (JSONB)
-    door_lock_status: Mapped[Optional[dict]] = mapped_column(JSONB)
-    tire_pressure: Mapped[Optional[dict]] = mapped_column(JSONB)
-    indicators: Mapped[Optional[dict]] = mapped_column(JSONB)
+    door_lock_status: Mapped[dict | None] = mapped_column(JSONB)
+    tire_pressure: Mapped[dict | None] = mapped_column(JSONB)
+    indicators: Mapped[dict | None] = mapped_column(JSONB)
 
     # Dynamics fields (new — from updated FordPass ha-fordpass integration, 2026-02)
-    brake_torque: Mapped[Optional[float]] = mapped_column(Numeric)
-    wheel_torque_status: Mapped[Optional[str]] = mapped_column(String)
-    yaw_rate: Mapped[Optional[float]] = mapped_column(Numeric)
-    acceleration: Mapped[Optional[float]] = mapped_column(Numeric)
-    engine_speed: Mapped[Optional[float]] = mapped_column(Numeric)
-    outside_temperature: Mapped[Optional[float]] = mapped_column(Numeric)
-    cabin_temperature: Mapped[Optional[float]] = mapped_column(Numeric)
-    deep_sleep_status: Mapped[Optional[str]] = mapped_column(String)
-    device_connectivity: Mapped[Optional[str]] = mapped_column(String)
-    evcc_status: Mapped[Optional[str]] = mapped_column(String)
-    seatbelt_status: Mapped[Optional[str]] = mapped_column(String)
-    remote_start_countdown: Mapped[Optional[float]] = mapped_column(Numeric)
+    brake_torque: Mapped[float | None] = mapped_column(Numeric)
+    wheel_torque_status: Mapped[str | None] = mapped_column(String)
+    yaw_rate: Mapped[float | None] = mapped_column(Numeric)
+    acceleration: Mapped[float | None] = mapped_column(Numeric)
+    engine_speed: Mapped[float | None] = mapped_column(Numeric)
+    outside_temperature: Mapped[float | None] = mapped_column(Numeric)
+    cabin_temperature: Mapped[float | None] = mapped_column(Numeric)
+    deep_sleep_status: Mapped[str | None] = mapped_column(String)
+    device_connectivity: Mapped[str | None] = mapped_column(String)
+    evcc_status: Mapped[str | None] = mapped_column(String)
+    seatbelt_status: Mapped[str | None] = mapped_column(String)
+    remote_start_countdown: Mapped[float | None] = mapped_column(Numeric)
 
     # Pipeline metadata
-    source_system: Mapped[Optional[str]] = mapped_column(String(100))
+    source_system: Mapped[str | None] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
     )
-    original_timestamp: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
+    original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
     __table_args__ = (
         Index("idx_ev_vehicle_status_recorded_at", "recorded_at"),

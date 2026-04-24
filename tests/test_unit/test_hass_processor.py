@@ -11,14 +11,13 @@ The 2026-03-21 auto-detect unit system logic is gone ; see
 import pytest
 
 from web.services.hass_processor import (
+    _format_address,
+    _normalize_charge_type,
+    _parse_iso_datetime,
+    _safe_float,
     extract_slug,
     get_device_id,
-    _safe_float,
-    _normalize_charge_type,
-    _format_address,
-    _parse_iso_datetime,
 )
-
 
 pytestmark = pytest.mark.unit
 

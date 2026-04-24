@@ -10,7 +10,6 @@ Returns metric-base values. The route handler applies distance_factor conversion
 before passing to templates / chart builders.
 """
 
-from typing import Optional
 
 import numpy as np
 import plotly.graph_objects as go
@@ -38,7 +37,7 @@ def _min_points_for_range(time_range: str) -> int:
 async def query_driving_performance_summary(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> dict:
     """Aggregate driving-side metrics for /driving/performance page.
 
@@ -108,7 +107,7 @@ async def query_driving_performance_summary(
 async def query_temperature_correlation(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[dict]:
     """Trips with populated ambient_temp + distance + energy_consumed in range window.
 
@@ -244,7 +243,7 @@ def build_temperature_correlation_chart(
 async def query_regen_per_trip(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[dict]:
     """Per-trip regen with derived regen_kwh and regen_pct.
 

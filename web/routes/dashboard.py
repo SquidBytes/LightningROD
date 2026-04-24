@@ -8,17 +8,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
 from web.dependencies import get_db
+from web.queries.costs import (
+    query_cost_summary,
+)
 from web.queries.dashboard import (
     build_energy_by_network_chart,
     build_monthly_energy_by_network_chart,
     query_charging_efficiency,
     query_dashboard_summary,
 )
-from web.queries.costs import (
-    query_cost_summary,
-)
 from web.queries.settings import get_all_networks, get_app_settings_dict
-from web.queries.vehicles import get_active_vehicle, get_all_vehicles, set_active_vehicle
+from web.queries.vehicles import (
+    get_active_vehicle,
+    get_all_vehicles,
+    set_active_vehicle,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")

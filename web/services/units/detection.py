@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 logger = logging.getLogger("lightningrod.units.detection")
 
@@ -62,14 +62,14 @@ class DetectionRecord:
 
     entity_pattern: str
     attribute: str
-    detected_unit: Optional[str]
+    detected_unit: str | None
     method: str
     confidence: str
-    sample_raw: Optional[float]
-    sample_canonical: Optional[float]
-    ratio: Optional[float]
+    sample_raw: float | None
+    sample_canonical: float | None
+    ratio: float | None
     last_seen: datetime
-    unknown_reason: Optional[str] = None
+    unknown_reason: str | None = None
     cross_ref_observations: int = 0
 
 
@@ -184,7 +184,7 @@ def _pairings_for_canonical(
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _prune_buffer(device_id: str) -> None:
@@ -275,7 +275,7 @@ def _insert_or_update(new: DetectionRecord) -> None:
     _records[key] = new
 
 
-def _safe_float(val: Any) -> Optional[float]:
+def _safe_float(val: Any) -> float | None:
     if val is None:
         return None
     try:
@@ -316,7 +316,7 @@ def record_read_time(
     attribute: str,
     unit: str,
     raw_value: Any,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> None:
     """Record a source whose unit came from new_state.attributes.unit_of_measurement.
 
@@ -345,7 +345,7 @@ def record_unknown(
     attribute: str,
     raw_value: Any,
     reason: str,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> None:
     """Record a source with no resolvable unit.
 
@@ -381,7 +381,7 @@ def record_device_class_inference(
     device_class: str,
     ha_unit_system: Any,
     raw_value: Any = None,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> None:
     """Record a source whose unit was inferred from device_class + unit_system.
 
@@ -499,7 +499,7 @@ def try_cross_reference(
     return updated
 
 
-def resolve_unit(entity_pattern: str, attribute: str) -> Optional[str]:
+def resolve_unit(entity_pattern: str, attribute: str) -> str | None:
     """Return the currently-known unit for a source, or None."""
     rec = _records.get(_key(entity_pattern, attribute))
     if rec is None:
@@ -517,7 +517,7 @@ _METRIC_TEMP_TOKENS = {"°c", "c", "degc", "celsius", "metric"}
 _IMPERIAL_TEMP_TOKENS = {"°f", "f", "degf", "fahrenheit", "imperial", "us", "us_customary"}
 
 
-def _coerce_unit_system_family(ha_unit_system: Any, field_type: str) -> Optional[str]:
+def _coerce_unit_system_family(ha_unit_system: Any, field_type: str) -> str | None:
     """Normalize HA unit_system to 'metric' or 'imperial' for a given field_type.
 
     Accepts:
@@ -586,7 +586,7 @@ _UNIT_FIELD_TYPES: dict[str, str] = {
 }
 
 
-def _unit_matches_field_type(unit: Optional[str], field_type: str) -> bool:
+def _unit_matches_field_type(unit: str | None, field_type: str) -> bool:
     """Return True when `unit` is the right kind of unit for `field_type`.
 
     A resolver answer like ("mi", read_time_uom) is only valid when the
@@ -605,10 +605,10 @@ def _unit_matches_field_type(unit: Optional[str], field_type: str) -> bool:
 
 
 def _unit_from_device_class(
-    device_class: Optional[str],
+    device_class: str | None,
     ha_unit_system: Any,
     field_type: str,
-) -> Optional[str]:
+) -> str | None:
     """Derive a source unit from HA's device_class + unit_system.
 
     Returns None when the combination is ambiguous or not supported.
@@ -647,9 +647,9 @@ def _unit_from_device_class(
 
 def _compose_unknown_reason(
     raw_uom: Any,
-    device_class: Optional[str],
+    device_class: str | None,
     unit_system: Any,
-    existing: Optional[DetectionRecord],
+    existing: DetectionRecord | None,
 ) -> str:
     """Build the pipe-separated bitstring reason for an unknown resolution."""
     bits: list[str] = []
@@ -673,8 +673,8 @@ def resolve_source_unit(
     field_type: str,
     record: bool = True,
     raw_value: Any = None,
-    device_id: Optional[str] = None,
-) -> tuple[Optional[str], str, str]:
+    device_id: str | None = None,
+) -> tuple[str | None, str, str]:
     """Resolve the source unit for an HA event, using only HA signals.
 
     Returns (unit, method, confidence).
@@ -740,7 +740,10 @@ def resolve_source_unit(
     device_class = attrs.get("device_class")
     unit_system = (ha_config or {}).get("unit_system") if isinstance(ha_config, dict) else None
     inferred = _unit_from_device_class(device_class, unit_system, field_type)
-    if inferred is not None:
+    # Reject the inference when the entity's device_class doesn't match the
+    # semantic type of the attribute being converted (e.g. elveh has
+    # device_class="distance" but tripCabinTemp is a temperature field).
+    if inferred is not None and _unit_matches_field_type(inferred, field_type):
         if record:
             record_device_class_inference(
                 entity_pattern,
@@ -786,12 +789,12 @@ def resolve_source_unit(
 def convert_with_resolved_unit(
     *,
     raw_value: Any,
-    resolved_unit: Optional[str],
+    resolved_unit: str | None,
     method: str,
     confidence: str,
-    entity_id: Optional[str],
+    entity_id: str | None,
     attribute: str,
-) -> Optional[float]:
+) -> float | None:
     """Thin wrapper over to_metric for handlers that already called resolve_source_unit.
 
     When `resolved_unit` is None (method='unknown') we return None — the caller
@@ -800,7 +803,7 @@ def convert_with_resolved_unit(
     """
     # Late import to avoid a circular dep with web.services.units.to_metric,
     # which is permitted here but keeps module import graph clean.
-    from web.services.units.to_metric import to_metric, UnknownSourceUnit
+    from web.services.units.to_metric import UnknownSourceUnit, to_metric
 
     if raw_value is None:
         return None
@@ -841,7 +844,7 @@ def _detect_from_observation(
     target_raw: float,
     canonical_value: float,
     canonical_unit: str,
-) -> tuple[Optional[str], Optional[float], Optional[str]]:
+) -> tuple[str | None, float | None, str | None]:
     """Given canonical + target reads, derive (detected_unit, ratio, reason).
 
     Returns (unit, ratio, None) when detection succeeded.
@@ -859,7 +862,7 @@ def _detect_distance(
     target_raw: float,
     canonical_value: float,
     canonical_unit: str,
-) -> tuple[Optional[str], Optional[float], Optional[str]]:
+) -> tuple[str | None, float | None, str | None]:
     """Distance cross-ref: compare target / canonical ratio.
 
     canonical_unit is expected to be 'km'. Anomaly-flag anything else since
@@ -902,7 +905,7 @@ def _detect_temperature(
     target_raw: float,
     canonical_value: float,
     canonical_unit: str,
-) -> tuple[Optional[str], Optional[float], Optional[str]]:
+) -> tuple[str | None, float | None, str | None]:
     """Temperature cross-ref: test both C and F interpretations directly.
 
     Ratio analysis doesn't work (F<->C is linear-with-offset, not

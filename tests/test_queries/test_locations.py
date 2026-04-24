@@ -10,7 +10,6 @@ from web.queries.locations import (
 )
 from web.queries.settings import get_locations_for_network
 
-
 pytestmark = [pytest.mark.query, pytest.mark.db]
 
 
@@ -98,6 +97,7 @@ async def test_resolve_location_creates_new(db_session):
     assert result_id is not None
     # Should be a new location
     from sqlalchemy import select
+
     from db.models.reference import EVLocationLookup
 
     loc = await db.execute(

@@ -3,7 +3,7 @@
 These tests cover key format, overwrite behavior, and cache clearing.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -46,7 +46,7 @@ def test_record_last_seen_writes_key():
     # seen_at is ISO8601 UTC and close to now.
     parsed = datetime.fromisoformat(entry["seen_at"])
     assert parsed.tzinfo is not None
-    delta = abs((datetime.now(timezone.utc) - parsed).total_seconds())
+    delta = abs((datetime.now(UTC) - parsed).total_seconds())
     assert delta < 5, f"seen_at should be within 5s of now, got delta={delta}s"
 
 

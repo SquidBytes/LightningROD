@@ -12,7 +12,6 @@ import websockets
 
 from tests.test_ha_sim.simulator import HASimulator
 
-
 pytestmark = pytest.mark.ha_sim
 
 
@@ -202,7 +201,7 @@ async def test_hass_client_auth_rejected():
             client.start(sim.ws_url, "bad-token", noop_handler),
             timeout=5.0,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         pytest.fail("HASSClient did not stop after auth rejection within 5s")
 
     assert not client.health["connected"]

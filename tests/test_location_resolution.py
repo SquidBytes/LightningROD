@@ -1,8 +1,8 @@
 """Tests for location resolution service (web/queries/locations.py)."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Pure function tests (no DB needed)

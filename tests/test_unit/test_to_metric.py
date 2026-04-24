@@ -10,7 +10,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from web.services.units.to_metric import to_metric, UnknownSourceUnit  # noqa: F401
+from web.services.units.to_metric import UnknownSourceUnit, to_metric  # noqa: F401
 
 pytestmark = pytest.mark.unit
 

@@ -1,7 +1,6 @@
 """Database models for location."""
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Index, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
@@ -29,22 +28,22 @@ class EVLocation(Base):
     recorded_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False)
 
     # GPS data
-    latitude: Mapped[Optional[float]] = mapped_column(Numeric)
-    longitude: Mapped[Optional[float]] = mapped_column(Numeric)
-    gps_accuracy: Mapped[Optional[float]] = mapped_column(Numeric)
-    altitude: Mapped[Optional[float]] = mapped_column(Numeric)
-    compass_direction: Mapped[Optional[str]] = mapped_column(String)
+    latitude: Mapped[float | None] = mapped_column(Numeric)
+    longitude: Mapped[float | None] = mapped_column(Numeric)
+    gps_accuracy: Mapped[float | None] = mapped_column(Numeric)
+    altitude: Mapped[float | None] = mapped_column(Numeric)
+    compass_direction: Mapped[str | None] = mapped_column(String)
 
     # Location metadata
-    address: Mapped[Optional[str]] = mapped_column(Text)
-    location_type: Mapped[Optional[str]] = mapped_column(String)
+    address: Mapped[str | None] = mapped_column(Text)
+    location_type: Mapped[str | None] = mapped_column(String)
 
     # Pipeline metadata
-    source_system: Mapped[Optional[str]] = mapped_column(String(100))
+    source_system: Mapped[str | None] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
     )
-    original_timestamp: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
+    original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
     __table_args__ = (
         Index("idx_ev_location_recorded_at", "recorded_at"),

@@ -1,8 +1,8 @@
 """Route handlers for trips."""
 
 import math
-from datetime import date, datetime, timezone
-from typing import Annotated, Optional
+from datetime import UTC, date, datetime
+from typing import Annotated
 
 import pandas as pd
 from fastapi import APIRouter, Depends, Form, Header, Request
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
 from web.dependencies import get_db
+from web.queries.settings import get_app_setting, get_unit_context
 from web.queries.trips import (
     build_drive_graph,
     build_driving_score_radar,
@@ -25,8 +26,11 @@ from web.queries.trips import (
     query_trip_vehicle_series,
     query_trips,
 )
-from web.queries.settings import get_app_setting, get_unit_context
-from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
+from web.queries.vehicles import (
+    get_active_device_id,
+    get_active_vehicle,
+    get_all_vehicles,
+)
 from web.unit_system import MI_PER_KM, to_metric_distance
 
 router = APIRouter()
@@ -39,11 +43,11 @@ PER_PAGE = 25
 async def trips(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    range: Optional[str] = "30d",
-    sort: Optional[str] = "date",
-    dir: Optional[str] = "desc",
+    range: str | None = "30d",
+    sort: str | None = "date",
+    dir: str | None = "desc",
     page: int = 1,
-    hx_request: Annotated[Optional[str], Header()] = None,
+    hx_request: Annotated[str | None, Header()] = None,
 ):
     time_range = range or "30d"
     sort_by = sort or "date"
@@ -296,13 +300,13 @@ async def new_trip_form(
 async def create_trip(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    trip_date: Annotated[Optional[str], Form()] = None,
-    distance: Annotated[Optional[float], Form()] = None,
-    duration_minutes: Annotated[Optional[float], Form()] = None,
-    energy_consumed: Annotated[Optional[float], Form()] = None,
-    efficiency: Annotated[Optional[float], Form()] = None,
-    notes: Annotated[Optional[str], Form()] = None,
-    hx_request: Annotated[Optional[str], Header()] = None,
+    trip_date: Annotated[str | None, Form()] = None,
+    distance: Annotated[float | None, Form()] = None,
+    duration_minutes: Annotated[float | None, Form()] = None,
+    energy_consumed: Annotated[float | None, Form()] = None,
+    efficiency: Annotated[float | None, Form()] = None,
+    notes: Annotated[str | None, Form()] = None,
+    hx_request: Annotated[str | None, Header()] = None,
 ):
     if not trip_date:
         return HTMLResponse(
@@ -311,7 +315,7 @@ async def create_trip(
         )
 
     try:
-        parsed_date = datetime.fromisoformat(f"{trip_date}T00:00:00").replace(tzinfo=timezone.utc)
+        parsed_date = datetime.fromisoformat(f"{trip_date}T00:00:00").replace(tzinfo=UTC)
     except ValueError:
         return HTMLResponse(
             content="<p class='text-error text-sm p-2'>Invalid date format.</p>",

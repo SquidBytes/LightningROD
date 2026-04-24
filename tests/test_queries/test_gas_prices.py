@@ -2,7 +2,7 @@
 had no direct test file. Covers upsert, nearest-earlier lookup, monthly
 averaging, and deduped reading storage.
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -128,7 +128,7 @@ async def test_store_gas_price_reading_inserts_row(db_session):
         db_session,
         entity_id="sensor.test_gas",
         price=3.99,
-        recorded_at=datetime(2025, 6, 1, 12, 0, tzinfo=timezone.utc),
+        recorded_at=datetime(2025, 6, 1, 12, 0, tzinfo=UTC),
     )
     result = await db_session.execute(
         GasPriceReading.__table__.select().where(
@@ -140,7 +140,7 @@ async def test_store_gas_price_reading_inserts_row(db_session):
 
 
 async def test_store_gas_price_reading_if_new_is_idempotent(db_session):
-    ts = datetime(2025, 6, 1, 12, 0, tzinfo=timezone.utc)
+    ts = datetime(2025, 6, 1, 12, 0, tzinfo=UTC)
     inserted_first = await store_gas_price_reading_if_new(
         db_session, entity_id="sensor.test_gas", price=3.99, recorded_at=ts
     )
@@ -154,9 +154,9 @@ async def test_store_gas_price_reading_if_new_is_idempotent(db_session):
 async def test_compute_monthly_averages_groups_by_year_month(db_session):
     entity = "sensor.test_gas_avg"
     readings = [
-        (datetime(2025, 6, 1, 10, 0, tzinfo=timezone.utc), 3.50),
-        (datetime(2025, 6, 15, 10, 0, tzinfo=timezone.utc), 3.60),  # avg June = 3.55
-        (datetime(2025, 7, 1, 10, 0, tzinfo=timezone.utc), 4.00),
+        (datetime(2025, 6, 1, 10, 0, tzinfo=UTC), 3.50),
+        (datetime(2025, 6, 15, 10, 0, tzinfo=UTC), 3.60),  # avg June = 3.55
+        (datetime(2025, 7, 1, 10, 0, tzinfo=UTC), 4.00),
     ]
     for ts, price in readings:
         await store_gas_price_reading(
@@ -169,7 +169,7 @@ async def test_compute_monthly_averages_groups_by_year_month(db_session):
 
 
 async def test_compute_monthly_averages_filters_by_entity_id(db_session):
-    ts = datetime(2025, 6, 1, 10, 0, tzinfo=timezone.utc)
+    ts = datetime(2025, 6, 1, 10, 0, tzinfo=UTC)
     await store_gas_price_reading(
         db_session, entity_id="sensor.other", price=2.00, recorded_at=ts
     )

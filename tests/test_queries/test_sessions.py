@@ -3,12 +3,12 @@
 Tests paginated session queries, filtering, and summary aggregation.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
 
 from db.models.charging_session import EVChargingSession
 from web.queries.sessions import query_sessions
-
 
 pytestmark = [pytest.mark.query, pytest.mark.db]
 
@@ -16,7 +16,7 @@ pytestmark = [pytest.mark.query, pytest.mark.db]
 async def _create_sessions(db, count=15, device_id="TEST_VIN_SESS"):
     """Helper: create N sessions with sequential dates and known energy."""
     sessions = []
-    base = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    base = datetime(2025, 6, 1, 12, 0, 0, tzinfo=UTC)
     for i in range(count):
         s = EVChargingSession(
             device_id=device_id,

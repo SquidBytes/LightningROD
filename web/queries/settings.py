@@ -1,13 +1,20 @@
 """Query helpers for settings."""
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.reference import AppSettings, EVChargerStall, EVChargingNetwork, EVLocationLookup, EVNetworkNameAlias, EVNetworkSubscription
+from db.models.reference import (
+    AppSettings,
+    EVChargerStall,
+    EVChargingNetwork,
+    EVLocationLookup,
+    EVNetworkNameAlias,
+    EVNetworkSubscription,
+)
 
 # Predefined EV charging networks with brand-accurate colors
 PREDEFINED_NETWORKS: list[dict[str, Any]] = [
@@ -42,10 +49,10 @@ async def get_all_networks(db: AsyncSession) -> list[EVChargingNetwork]:
 
 async def resolve_network(
     db: AsyncSession,
-    network_id: Optional[int] = None,
-    network_name: Optional[str] = None,
-    source_system: Optional[str] = None,
-) -> Optional[int]:
+    network_id: int | None = None,
+    network_name: str | None = None,
+    source_system: str | None = None,
+) -> int | None:
     """Resolve a network to its ID. Accepts ID directly or name for lookup/auto-create.
 
     Priority: network_id (if truthy) > network_name lookup > auto-create from name.
@@ -97,9 +104,9 @@ async def resolve_network(
 async def create_network(
     db: AsyncSession,
     name: str,
-    cost_per_kwh: Optional[float],
+    cost_per_kwh: float | None,
     is_free: bool,
-    color: Optional[str],
+    color: str | None,
 ) -> EVChargingNetwork:
     """Create a new charging network row.
 
@@ -125,10 +132,10 @@ async def update_network(
     db: AsyncSession,
     network_id: int,
     name: str,
-    cost_per_kwh: Optional[float],
+    cost_per_kwh: float | None,
     is_free: bool,
-    color: Optional[str],
-) -> Optional[EVChargingNetwork]:
+    color: str | None,
+) -> EVChargingNetwork | None:
     """Update all fields of an existing charging network.
 
     Returns the updated network or None if not found.
@@ -231,12 +238,12 @@ async def create_location(
     db: AsyncSession,
     network_id: int,
     name: str,
-    location_type: Optional[str] = None,
-    notes: Optional[str] = None,
-    address: Optional[str] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-    cost_per_kwh: Optional[float] = None,
+    location_type: str | None = None,
+    notes: str | None = None,
+    address: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    cost_per_kwh: float | None = None,
 ) -> EVLocationLookup:
     """Create a new location linked to a network."""
     loc = EVLocationLookup(
@@ -259,13 +266,13 @@ async def update_location(
     db: AsyncSession,
     location_id: int,
     name: str,
-    location_type: Optional[str] = None,
-    notes: Optional[str] = None,
-    address: Optional[str] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-    cost_per_kwh: Optional[float] = None,
-) -> Optional[EVLocationLookup]:
+    location_type: str | None = None,
+    notes: str | None = None,
+    address: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    cost_per_kwh: float | None = None,
+) -> EVLocationLookup | None:
     """Update a location row. Returns updated location or None if not found."""
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
@@ -401,7 +408,7 @@ async def update_subscription(
     start_date,
     end_date=None,
     notes: str | None = None,
-) -> Optional[EVNetworkSubscription]:
+) -> EVNetworkSubscription | None:
     """Update an existing subscription period. Validates no overlap (excluding self).
 
     Returns updated row or None if not found. Raises ValueError if overlap detected.
@@ -586,12 +593,12 @@ async def create_stall(
     db: AsyncSession,
     location_id: int,
     label: str,
-    charger_type: Optional[str] = None,
-    rated_kw: Optional[float] = None,
-    voltage: Optional[float] = None,
-    amperage: Optional[float] = None,
-    connector_type: Optional[str] = None,
-    notes: Optional[str] = None,
+    charger_type: str | None = None,
+    rated_kw: float | None = None,
+    voltage: float | None = None,
+    amperage: float | None = None,
+    connector_type: str | None = None,
+    notes: str | None = None,
     is_default: bool = False,
 ) -> EVChargerStall:
     """Create a new charger stall for a location."""
@@ -615,15 +622,15 @@ async def create_stall(
 async def update_stall(
     db: AsyncSession,
     stall_id: int,
-    label: Optional[str] = None,
-    charger_type: Optional[str] = None,
-    rated_kw: Optional[float] = None,
-    voltage: Optional[float] = None,
-    amperage: Optional[float] = None,
-    connector_type: Optional[str] = None,
-    notes: Optional[str] = None,
-    is_default: Optional[bool] = None,
-) -> Optional[EVChargerStall]:
+    label: str | None = None,
+    charger_type: str | None = None,
+    rated_kw: float | None = None,
+    voltage: float | None = None,
+    amperage: float | None = None,
+    connector_type: str | None = None,
+    notes: str | None = None,
+    is_default: bool | None = None,
+) -> EVChargerStall | None:
     """Update a charger stall. Returns updated stall or None if not found."""
     result = await db.execute(
         select(EVChargerStall).where(EVChargerStall.id == stall_id)

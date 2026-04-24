@@ -21,15 +21,14 @@ that forced to rename its migration (see STATE.md decision log).
 The filename keeps the ``s34_phase29_ingest_schema_version.py`` form the plan
 specified; only the internal revision id changed.
 """
-from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "s34_phase29_schema_version"
-down_revision: Union[str, None] = "s32_phase27_session_temps"
-branch_labels: Union[str, None] = None
-depends_on: Union[str, None] = None
+down_revision: str | None = "s32_phase27_session_temps"
+branch_labels: str | None = None
+depends_on: str | None = None
 
 
 def upgrade() -> None:

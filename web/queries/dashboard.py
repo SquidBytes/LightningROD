@@ -2,7 +2,7 @@
 
 Provides summary aggregation for the landing dashboard page.
 """
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -32,7 +32,7 @@ def _wrap_chart(html: str) -> str:
     return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
-async def query_dashboard_summary(db: AsyncSession, device_id: Optional[str] = None) -> dict:
+async def query_dashboard_summary(db: AsyncSession, device_id: str | None = None) -> dict:
     """Aggregate lifetime charging data for dashboard summary cards.
 
     Returns dict with:
@@ -102,7 +102,7 @@ async def query_dashboard_summary(db: AsyncSession, device_id: Optional[str] = N
     }
 
 
-async def query_charging_efficiency(db: AsyncSession, device_id: Optional[str] = None) -> dict:
+async def query_charging_efficiency(db: AsyncSession, device_id: str | None = None) -> dict:
     """Aggregate charging efficiency metrics from sessions with EVSE data.
 
     Returns dict with:

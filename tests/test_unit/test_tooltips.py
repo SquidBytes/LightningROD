@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from web.tooltips import TOOLTIPS
 
-
 # Phase 26-04 locked copy — MUST be verbatim.
 LOCKED_AVG_EFFICIENCY = (
     "Arithmetic mean of per-session mi/kWh, not total distance divided by total energy."
@@ -67,7 +66,6 @@ def test_tooltips_registered_as_jinja_global():
     # Importing the app triggers create_app(), which registers globals on each
     # route module's `templates.env`.
     from web.main import app  # noqa: F401 — import is the registration trigger
-
     from web.routes import battery, costs, performance
 
     for module in (costs, performance, battery):

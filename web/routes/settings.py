@@ -2,7 +2,6 @@
 
 import json
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse
@@ -13,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargerStall, EVChargingNetwork, EVLocationLookup
 from web.dependencies import get_db
+from web.queries.gas_prices import (
+    delete_gas_price,
+    get_all_gas_prices,
+    upsert_gas_price,
+)
 from web.queries.settings import (
     create_location,
     create_network,
@@ -26,10 +30,10 @@ from web.queries.settings import (
     get_app_setting,
     get_app_settings_dict,
     get_charger_templates,
-    get_unit_context,
     get_locations_for_network,
     get_stalls_for_location,
     get_subscriptions_for_network,
+    get_unit_context,
     set_app_setting,
     update_location,
     update_network,
@@ -46,7 +50,6 @@ from web.queries.vehicles import (
     set_active_vehicle,
     update_vehicle,
 )
-from web.queries.gas_prices import delete_gas_price, get_all_gas_prices, upsert_gas_price
 from web.services.csv_parser import get_db_field_options
 from web.unit_system import (
     convert_fuel_efficiency,
@@ -104,7 +107,7 @@ SETTINGS_KEYS = [
 async def settings_index(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tab: Optional[str] = Query(None),
+    tab: str | None = Query(None),
 ):
     net_ctx = await _network_management_context(db)
     veh_ctx = await _vehicle_management_context(db)
@@ -190,18 +193,18 @@ async def create_vehicle_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     display_name: str = Form(""),
-    make: Optional[str] = Form(None),
-    model: Optional[str] = Form(None),
-    year: Optional[int] = Form(None),
-    trim_level: Optional[str] = Form(None),
-    battery_option: Optional[str] = Form(None),
-    battery_capacity_kwh: Optional[float] = Form(None),
-    battery_gross_capacity_kwh: Optional[float] = Form(None),
-    vin: Optional[str] = Form(None),
-    device_id: Optional[str] = Form(None),
-    ice_fuel_efficiency: Optional[float] = Form(None),
-    ice_fuel_tank_capacity: Optional[float] = Form(None),
-    ice_label: Optional[str] = Form(None),
+    make: str | None = Form(None),
+    model: str | None = Form(None),
+    year: int | None = Form(None),
+    trim_level: str | None = Form(None),
+    battery_option: str | None = Form(None),
+    battery_capacity_kwh: float | None = Form(None),
+    battery_gross_capacity_kwh: float | None = Form(None),
+    vin: str | None = Form(None),
+    device_id: str | None = Form(None),
+    ice_fuel_efficiency: float | None = Form(None),
+    ice_fuel_tank_capacity: float | None = Form(None),
+    ice_label: str | None = Form(None),
 ):
     if not display_name or not display_name.strip():
         from fastapi.responses import JSONResponse
@@ -283,18 +286,18 @@ async def update_vehicle_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     display_name: str = Form(""),
-    make: Optional[str] = Form(None),
-    model: Optional[str] = Form(None),
-    year: Optional[int] = Form(None),
-    trim_level: Optional[str] = Form(None),
-    battery_option: Optional[str] = Form(None),
-    battery_capacity_kwh: Optional[float] = Form(None),
-    battery_gross_capacity_kwh: Optional[float] = Form(None),
-    vin: Optional[str] = Form(None),
-    device_id: Optional[str] = Form(None),
-    ice_fuel_efficiency: Optional[float] = Form(None),
-    ice_fuel_tank_capacity: Optional[float] = Form(None),
-    ice_label: Optional[str] = Form(None),
+    make: str | None = Form(None),
+    model: str | None = Form(None),
+    year: int | None = Form(None),
+    trim_level: str | None = Form(None),
+    battery_option: str | None = Form(None),
+    battery_capacity_kwh: float | None = Form(None),
+    battery_gross_capacity_kwh: float | None = Form(None),
+    vin: str | None = Form(None),
+    device_id: str | None = Form(None),
+    ice_fuel_efficiency: float | None = Form(None),
+    ice_fuel_tank_capacity: float | None = Form(None),
+    ice_label: str | None = Form(None),
 ):
     if not display_name or not display_name.strip():
         from fastapi.responses import JSONResponse
@@ -382,9 +385,9 @@ async def create_network_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     network_name: str = Form(...),
-    cost_per_kwh: Optional[float] = Form(None),
-    color: Optional[str] = Form(None),
-    is_free: Optional[str] = Form(None),
+    cost_per_kwh: float | None = Form(None),
+    color: str | None = Form(None),
+    is_free: str | None = Form(None),
 ):
     is_free_bool = is_free is not None
     await create_network(
@@ -457,9 +460,9 @@ async def update_network_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     network_name: str = Form(...),
-    cost_per_kwh: Optional[float] = Form(None),
-    color: Optional[str] = Form(None),
-    is_free: Optional[str] = Form(None),
+    cost_per_kwh: float | None = Form(None),
+    color: str | None = Form(None),
+    is_free: str | None = Form(None),
 ):
     is_free_bool = is_free is not None
     await update_network(
@@ -571,7 +574,7 @@ async def convert_network_to_location(
     db: AsyncSession = Depends(get_db),
     target_network_id: int = Form(...),
     location_name: str = Form(...),
-    location_type: Optional[str] = Form(None),
+    location_type: str | None = Form(None),
 ):
     """Convert a network into a location under another network.
 
@@ -688,12 +691,12 @@ async def create_location_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     location_name: str = Form(...),
-    location_type: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
-    address: Optional[str] = Form(None),
-    latitude: Optional[float] = Form(None),
-    longitude: Optional[float] = Form(None),
-    cost_per_kwh: Optional[float] = Form(None),
+    location_type: str | None = Form(None),
+    notes: str | None = Form(None),
+    address: str | None = Form(None),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
+    cost_per_kwh: float | None = Form(None),
 ):
     """Add a location under a network."""
     await create_location(
@@ -723,13 +726,13 @@ async def update_location_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     location_name: str = Form(...),
-    location_type: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
+    location_type: str | None = Form(None),
+    notes: str | None = Form(None),
     network_id: int = Form(...),
-    address: Optional[str] = Form(None),
-    latitude: Optional[float] = Form(None),
-    longitude: Optional[float] = Form(None),
-    cost_per_kwh: Optional[float] = Form(None),
+    address: str | None = Form(None),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
+    cost_per_kwh: float | None = Form(None),
 ):
     """Update a location and return the refreshed location list."""
     await update_location(
@@ -853,13 +856,13 @@ async def create_stall_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     stall_label: str = Form(...),
-    charger_type: Optional[str] = Form(None),
-    rated_kw: Optional[float] = Form(None),
-    voltage: Optional[float] = Form(None),
-    amperage: Optional[float] = Form(None),
-    connector_type: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
-    is_default: Optional[str] = Form(None),
+    charger_type: str | None = Form(None),
+    rated_kw: float | None = Form(None),
+    voltage: float | None = Form(None),
+    amperage: float | None = Form(None),
+    connector_type: str | None = Form(None),
+    notes: str | None = Form(None),
+    is_default: str | None = Form(None),
 ):
     """Create a stall for a location."""
     await create_stall(
@@ -889,13 +892,13 @@ async def update_stall_route(
     db: AsyncSession = Depends(get_db),
     location_id: int = Form(...),
     stall_label: str = Form(...),
-    charger_type: Optional[str] = Form(None),
-    rated_kw: Optional[float] = Form(None),
-    voltage: Optional[float] = Form(None),
-    amperage: Optional[float] = Form(None),
-    connector_type: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
-    is_default: Optional[str] = Form(None),
+    charger_type: str | None = Form(None),
+    rated_kw: float | None = Form(None),
+    voltage: float | None = Form(None),
+    amperage: float | None = Form(None),
+    connector_type: str | None = Form(None),
+    notes: str | None = Form(None),
+    is_default: str | None = Form(None),
 ):
     """Update a stall and return refreshed stall rows."""
     await update_stall(
@@ -1050,8 +1053,9 @@ async def edit_subscription_form(
     db: AsyncSession = Depends(get_db),
 ):
     """Return inline edit form for a subscription period."""
-    from db.models.reference import EVNetworkSubscription
     from sqlalchemy import select as sa_select
+
+    from db.models.reference import EVNetworkSubscription
 
     result = await db.execute(
         sa_select(EVNetworkSubscription).where(EVNetworkSubscription.id == subscription_id)
@@ -1171,7 +1175,7 @@ async def save_hass_settings(
     ha_token: str = Form(""),
     ha_vin_override: str = Form(""),
     ha_unit_system: str = Form("auto"),
-    ha_auto_connect: Optional[str] = Form(None),
+    ha_auto_connect: str | None = Form(None),
 ):
     """Save HASS configuration to app_settings."""
     if ha_url:
@@ -1430,8 +1434,8 @@ async def add_gas_price(
     db: AsyncSession = Depends(get_db),
     year: int = Form(...),
     month: int = Form(...),
-    station_price: Optional[float] = Form(None),
-    average_price: Optional[float] = Form(None),
+    station_price: float | None = Form(None),
+    average_price: float | None = Form(None),
 ):
     await upsert_gas_price(db, year, month, station_price=station_price, average_price=average_price)
     ctx = await _gas_price_history_context(db)
@@ -1469,6 +1473,7 @@ async def _hass_gas_sensors_context(
     template just reflects the stored config and DB stats.
     """
     from sqlalchemy import func as sa_func
+
     from db.models.reference import GasPriceHistory, GasPriceReading
     from web.services.hass_client import hass_service
 
@@ -1541,8 +1546,8 @@ async def hass_gas_sensors_partial(
 async def save_hass_gas_sensors(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    gas_sensor_station_entity_id: Optional[str] = Form(None),
-    gas_sensor_average_entity_id: Optional[str] = Form(None),
+    gas_sensor_station_entity_id: str | None = Form(None),
+    gas_sensor_average_entity_id: str | None = Form(None),
 ):
     """Save gas sensor config + trigger an immediate live check in the render."""
     await set_app_setting(
@@ -1566,8 +1571,8 @@ async def save_hass_gas_sensors(
 async def save_gas_sensors(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    gas_sensor_station_entity_id: Optional[str] = Form(None),
-    gas_sensor_average_entity_id: Optional[str] = Form(None),
+    gas_sensor_station_entity_id: str | None = Form(None),
+    gas_sensor_average_entity_id: str | None = Form(None),
 ):
     await set_app_setting(db, "gas_sensor_station_entity_id", gas_sensor_station_entity_id or "")
     await set_app_setting(db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or "")
@@ -1624,9 +1629,9 @@ async def update_timezone_setting(
 async def update_toggles(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    comparison_gas_enabled: Optional[str] = Form(None),
-    comparison_network_enabled: Optional[str] = Form(None),
-    comparison_section_visible: Optional[str] = Form(None),
+    comparison_gas_enabled: str | None = Form(None),
+    comparison_network_enabled: str | None = Form(None),
+    comparison_section_visible: str | None = Form(None),
 ):
     await set_app_setting(
         db,

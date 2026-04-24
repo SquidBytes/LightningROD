@@ -2,8 +2,9 @@
 
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version as pkg_version
+from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
@@ -31,7 +32,6 @@ APP_VERSION = _resolve_version()
 
 from db.engine import AsyncSessionLocal, engine
 from web.queries.settings import seed_charger_templates
-from web.tooltips import TOOLTIPS
 from web.routes import (
     battery,
     charging,
@@ -47,6 +47,7 @@ from web.routes import (
     trips,
 )
 from web.routes.admin import data_sources as admin_data_sources
+from web.tooltips import TOOLTIPS
 
 
 def localtime_filter(dt, tz_str: str = "UTC", fmt: str | None = None):
@@ -68,7 +69,7 @@ def localtime_filter(dt, tz_str: str = "UTC", fmt: str | None = None):
         return dt
     # Ensure the datetime is timezone-aware (assume UTC if naive)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     try:
         converted = dt.astimezone(ZoneInfo(tz_str))
     except (KeyError, Exception):

@@ -8,11 +8,10 @@ Supports event injection for end-to-end ingestion pipeline testing.
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import websockets
-from websockets.asyncio.server import serve, ServerConnection
+from websockets.asyncio.server import ServerConnection, serve
 
 logger = logging.getLogger("lightningrod.test.ha_sim")
 
@@ -37,12 +36,12 @@ class HASimulator:
         self._port = port  # 0 = OS-assigned free port
         self._valid_token = valid_token
         self._server = None
-        self._actual_port: Optional[int] = None
+        self._actual_port: int | None = None
 
         # Event injection queue and subscribed client tracking
         self._events_queue: asyncio.Queue = asyncio.Queue()
         self._subscribed_clients: list[_SubscribedClient] = []
-        self._dispatch_task: Optional[asyncio.Task] = None
+        self._dispatch_task: asyncio.Task | None = None
 
         # Pre-configured entity states returned by get_states
         self._entity_states: list[dict] = []
@@ -114,7 +113,7 @@ class HASimulator:
         self,
         entity_id: str,
         new_state: dict,
-        old_state: Optional[dict] = None,
+        old_state: dict | None = None,
     ) -> None:
         """Queue a state_changed event to send to all subscribed clients."""
         event = {
@@ -292,7 +291,7 @@ _DEFAULT_DEVICE_ID = "TESTVIN001"
 
 def _now_iso() -> str:
     """Return current UTC time as ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def make_charging_session_event(
@@ -303,14 +302,14 @@ def make_charging_session_event(
     start_soc: float = 20.0,
     end_soc: float = 80.0,
     duration_seconds: float = 1800.0,
-    latitude: Optional[float] = 38.9072,
-    longitude: Optional[float] = -77.0369,
-    address: Optional[str] = "123 Test St",
-    city: Optional[str] = "Washington",
-    state: Optional[str] = "DC",
+    latitude: float | None = 38.9072,
+    longitude: float | None = -77.0369,
+    address: str | None = "123 Test St",
+    city: str | None = "Washington",
+    state: str | None = "DC",
     max_power_w: float = 150000.0,
-    battery_temp_c: Optional[float] = None,
-    outside_temp_c: Optional[float] = None,
+    battery_temp_c: float | None = None,
+    outside_temp_c: float | None = None,
 ) -> tuple[str, dict]:
     """Generate an energytransferlogentry event.
     Returns (entity_id, new_state) tuple matching what hass_processor expects.

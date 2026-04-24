@@ -19,15 +19,14 @@ s32_phase27_charging_session_temps had not landed when this migration
 was authored, so we chain directly after s31.)
 Create Date: 2026-04-12
 """
-from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "s33_phase27_vehicle_trim_split"
-down_revision: Union[str, None] = "s31_battery_gross"
-branch_labels: Union[str, None] = None
-depends_on: Union[str, None] = None
+down_revision: str | None = "s31_battery_gross"
+branch_labels: str | None = None
+depends_on: str | None = None
 
 
 # (match_where_clause, trim_level_value_or_None, battery_option_value_or_None)

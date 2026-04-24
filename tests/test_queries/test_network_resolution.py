@@ -17,11 +17,10 @@ from db.models.reference import (
     EVLocationLookup,
     EVNetworkNameAlias,
 )
-from tests.factories.networks import NetworkFactory
 from tests.factories.locations import LocationLookupFactory
+from tests.factories.networks import NetworkFactory
 from web.queries.locations import resolve_location
 from web.queries.settings import resolve_network
-
 
 pytestmark = [pytest.mark.query, pytest.mark.db]
 

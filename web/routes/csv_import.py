@@ -322,8 +322,8 @@ def _deserialize_rows(rows: list[dict]) -> list[dict]:
     Converts ISO datetime strings back to aware datetime objects and UUID strings
     back to uuid.UUID instances.
     """
-    from datetime import datetime
     import uuid as _uuid
+    from datetime import datetime
 
     result = []
     for row in rows:
@@ -357,8 +357,8 @@ def _serialize_rows(rows: list[dict]) -> list[dict]:
 
     Converts datetime objects to ISO strings and UUIDs to strings.
     """
-    from datetime import datetime
     import uuid as _uuid
+    from datetime import datetime
 
     result = []
     for row in rows:

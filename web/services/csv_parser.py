@@ -8,8 +8,8 @@ import csv
 import hashlib
 import io
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
@@ -500,9 +500,9 @@ def auto_detect_mappings(
 
 
 def make_session_id(
-    start_time: Optional[datetime],
-    location_name: Optional[str],
-    energy_kwh: Optional[float],
+    start_time: datetime | None,
+    location_name: str | None,
+    energy_kwh: float | None,
 ) -> uuid.UUID:
     """Generate a deterministic UUID from session fields using MD5.
 
@@ -524,7 +524,7 @@ _WORK_LOCATIONS = {"Work"}
 _HOME_LOCATIONS = {"Home"}
 _NETWORK_NAMES = {"Tesla", "Supercharger", "Electrify America", "ElectrifyAmerica", "EA", "EVgo", "Charge Point", "ChargePoint"}
 
-def _int_or_none(v: str) -> Optional[int]:
+def _int_or_none(v: str) -> int | None:
     """Return int or None if empty/invalid."""
     v = v.strip() if v else ""
     if not v:
@@ -535,13 +535,13 @@ def _int_or_none(v: str) -> Optional[int]:
         return None
 
 
-def _str_or_none(v: str) -> Optional[str]:
+def _str_or_none(v: str) -> str | None:
     """Return stripped string or None if empty."""
     v = v.strip() if v else ""
     return v if v else None
 
 
-def _float_or_none(v: str) -> Optional[float]:
+def _float_or_none(v: str) -> float | None:
     """Return float or None if empty/invalid."""
     v = v.strip() if v else ""
     if not v:
@@ -557,7 +557,7 @@ def _parse_bool(v: str) -> bool:
     return v.strip().lower() in ("true", "1", "yes") if v else False
 
 
-def _parse_bool_or_none(v: str) -> Optional[bool]:
+def _parse_bool_or_none(v: str) -> bool | None:
     """Return True/False for explicit bool strings, None for empty/whitespace.
 
     Used for nullable boolean fields like ``is_free`` where an empty CSV value
@@ -574,7 +574,7 @@ def _parse_bool_or_none(v: str) -> Optional[bool]:
     return None
 
 
-def _parse_timestamp(v: str) -> Optional[datetime]:
+def _parse_timestamp(v: str) -> datetime | None:
     """Parse ISO timestamp string to timezone-aware datetime.
 
     If result is naive (no tzinfo), treats as UTC.
@@ -585,13 +585,13 @@ def _parse_timestamp(v: str) -> Optional[datetime]:
     try:
         dt = datetime.fromisoformat(v)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
     except (ValueError, TypeError):
         return None
 
 
-def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> Optional[datetime]:
+def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> datetime | None:
     """Parse ISO timestamp string to timezone-aware datetime using the given timezone.
 
     If the parsed datetime is naive (no tzinfo), treats it as being in ``import_tz``
@@ -605,17 +605,17 @@ def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> Optional[datetim
         dt = datetime.fromisoformat(v)
         if dt.tzinfo is None:
             # Treat naive timestamp as being in the user-selected import timezone
-            tz = ZoneInfo(import_tz) if import_tz and import_tz != "UTC" else timezone.utc
-            dt = dt.replace(tzinfo=tz).astimezone(timezone.utc)
+            tz = ZoneInfo(import_tz) if import_tz and import_tz != "UTC" else UTC
+            dt = dt.replace(tzinfo=tz).astimezone(UTC)
         else:
             # Already has timezone — convert to UTC
-            dt = dt.astimezone(timezone.utc)
+            dt = dt.astimezone(UTC)
         return dt
     except (ValueError, TypeError, KeyError):
         return None
 
 
-def _parse_uuid(v: str) -> Optional[uuid.UUID]:
+def _parse_uuid(v: str) -> uuid.UUID | None:
     """Parse a UUID string, returning None if empty or invalid."""
     v = v.strip() if v else ""
     if not v:
@@ -626,7 +626,7 @@ def _parse_uuid(v: str) -> Optional[uuid.UUID]:
         return None
 
 
-def _normalize_charge_type(charger_type: str, location_name: str) -> Optional[str]:
+def _normalize_charge_type(charger_type: str, location_name: str) -> str | None:
     """Normalize charger type to 'AC' or 'DC'."""
     ct = charger_type.strip().upper() if charger_type else ""
     if ct in ("AC", "AC LEVEL 2", "AC_BASIC", "LEVEL_2", "AC_CHARGING", "AC LEVEL 1", "L2", "LEVEL 2", "LEVEL 1"):

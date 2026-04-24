@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -26,5 +25,5 @@ class FieldContract:
     target_db_table: str
     target_db_column: str
     target_unit: str
-    notes: Optional[str] = None
+    notes: str | None = None
     ha_unit_system_converted: bool = False

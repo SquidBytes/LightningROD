@@ -6,11 +6,12 @@ automatically checked without editing a hard-coded list.
 
 import pytest
 
+import db.models.battery_status  # noqa: F401
+import db.models.charging_session  # noqa: F401
+import db.models.trip_metrics  # noqa: F401
+
 # Trigger model imports so Base.metadata is fully populated.
 from db.models import Base  # re-exported from db.models.__init__
-import db.models.trip_metrics  # noqa: F401
-import db.models.charging_session  # noqa: F401
-import db.models.battery_status  # noqa: F401
 
 pytestmark = pytest.mark.unit
 
