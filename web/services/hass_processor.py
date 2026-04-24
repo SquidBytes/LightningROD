@@ -355,7 +355,7 @@ async def handle_via_adapter(slug, new_state, ha_config, device_id, db):
     routing; this dispatcher simply hands off.
     """
     entity_id = f"sensor.fordpass_{device_id}_{slug}"
-    await ha_fordpass.process_event(entity_id, new_state, db)
+    await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
 
 
 # ---------------------------------------------------------------------------
@@ -617,12 +617,12 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         def _efficiency_conv(v):
             if _efficiency_contract is None:
                 return _d(v)
-            return ha_fordpass.convert(_efficiency_contract, v, new_state)
+            return ha_fordpass.convert(_efficiency_contract, v, new_state, ha_config)
 
         def _range_regen_conv(v):
             if _range_regen_contract is None:
                 return _d(v)
-            return ha_fordpass.convert(_range_regen_contract, v, new_state)
+            return ha_fordpass.convert(_range_regen_contract, v, new_state, ha_config)
 
         trip_attr_map = {
             "tripDistanceTraveled": ("distance", _d),
@@ -971,17 +971,19 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     plug_data = attrs.get("plugDetails", {}) or {}
     plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
     raw_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
-    # plugDetails.totalDistanceAdded is the canonical distance_added source and
-    # is reported in km (stable across all fixtures,
-    # independent of HA unit system). Route through adapter + to_metric
-    # to preserve schema traceability even though the conversion is a
-    # passthrough.
+    # plugDetails.totalDistanceAdded is HA-unit-system-converted by ha-fordpass
+    # (localize_distance in get_energy_transfer_log_attrs). The contract
+    # carries ha_unit_system_converted=True; the adapter resolves the
+    # effective source unit per-event from ha_config.unit_system before
+    # routing through to_metric.
     dist_contract = ha_fordpass.lookup_contract(
         "sensor.fordpass_{vin}_energytransferlogentry",
         "plugDetails.totalDistanceAdded",
     )
     if dist_contract is not None:
-        distance_added = ha_fordpass.convert(dist_contract, raw_distance_added, new_state)
+        distance_added = ha_fordpass.convert(
+            dist_contract, raw_distance_added, new_state, ha_config
+        )
     else:
         # Should never happen — contract is registered unconditionally.
         distance_added = _convert_with_uom(
@@ -1032,11 +1034,11 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     raw_batt = attrs.get("batteryTemperature")
     raw_amb = attrs.get("outsidetemp")
     if batt_contract is not None:
-        battery_temp = ha_fordpass.convert(batt_contract, raw_batt, new_state)
+        battery_temp = ha_fordpass.convert(batt_contract, raw_batt, new_state, ha_config)
     else:
         battery_temp = _convert_with_uom(raw_batt, "degC", "battery_temp", slug)
     if amb_contract is not None:
-        ambient_temp = ha_fordpass.convert(amb_contract, raw_amb, new_state)
+        ambient_temp = ha_fordpass.convert(amb_contract, raw_amb, new_state, ha_config)
     else:
         ambient_temp = _convert_with_uom(raw_amb, "degC", "ambient_temp", slug)
     battery_temp_start = battery_temp
