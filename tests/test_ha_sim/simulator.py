@@ -417,6 +417,47 @@ def make_trip_event(
     return entity_id, new_state
 
 
+def make_events_trip_event(
+    device_id: str = _DEFAULT_DEVICE_ID,
+    distance_km: float = 24.9,
+    energy_wh: float = 7200.0,
+    duration_seconds: float = 1500.0,
+    ambient_temp_c: float = 18.0,
+    cabin_temp_c: float = 21.0,
+    outside_air_temp_c: float = 17.0,
+) -> tuple[str, dict]:
+    """Generate a sensor.fordpass_{vin}_events event with trip segment data.
+
+    Returns (entity_id, new_state) matching adapter._handle_events_entity.
+    distance_km and energy_wh use the canonical units that the FIELD_CONTRACTS
+    specify (km passthrough, Wh -> kWh conversion).
+    """
+    entity_id = f"sensor.fordpass_{device_id}_events"
+    now = _now_iso()
+    new_state = {
+        "state": "key_off",
+        "last_changed": now,
+        "last_updated": now,
+        "attributes": {
+            "xev-key-off-trip-segment-data": {
+                "distance_traveled": distance_km,
+                "energy_consumed": energy_wh,
+                "trip_duration": duration_seconds,
+                # canonical field names per FIELD_CONTRACTS
+                "ambient_temperature": ambient_temp_c,
+                "cabin_temperature": cabin_temp_c,
+                "outside_air_ambient_temperature": outside_air_temp_c,
+                # also include the keys the _handle_events_entity code reads
+                # (lookup keys don't match contracts — kept for completeness)
+                "ambient_temp": ambient_temp_c,
+                "cabin_temp": cabin_temp_c,
+                "outside_air_temp": outside_air_temp_c,
+            }
+        },
+    }
+    return entity_id, new_state
+
+
 def make_battery_event(
     device_id: str = _DEFAULT_DEVICE_ID,
     soc: float = 80.0,
