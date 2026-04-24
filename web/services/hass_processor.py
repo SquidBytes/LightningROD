@@ -500,6 +500,9 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
         if state_val is not None and state_val not in ("unknown", "unavailable"):
             pending[field_name] = converter(state_val)
 
+    if slug == "outsidetemp":
+        await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
+
     # Check timeout-based flush
     _pending_vehicle_status_ts.setdefault(device_id, time.time())
     if time.time() - _pending_vehicle_status_ts[device_id] > _FLUSH_TIMEOUT:
@@ -822,6 +825,8 @@ async def handle_charging_live(slug, new_state, ha_config, device_id, db):
             attrs.get("chargingType"),
             attrs.get("chargingkW"),
         )
+        entity_id = f"sensor.fordpass_{device_id}_{slug}"
+        await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
     elif slug == "elvehplug":
         logger.info(
             "Plug state changed: %s (station=%s, type=%s)",

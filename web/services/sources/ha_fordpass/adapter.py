@@ -26,13 +26,20 @@ warning log. The adapter never silently assumes metric.
 
 ### Elveh attributes are not read for unit-bearing trip data
 Trip fields (distance, energy_consumed, ambient/cabin/outside_air temps, etc)
-come from `sensor.fordpass_{vin}_events.xev-key-off-trip-segment-data`, not
-from `sensor.fordpass_{vin}_elveh` attributes. The elveh attribute UoM
+come from `sensor.fordpass_{vin}_events.customEvents`, not from
+`sensor.fordpass_{vin}_elveh` attributes. The elveh attribute UoM
 semantics are unreliable (2026-03-21 bug, commit abd736b). Battery-related
 attributes (voltage/amperage/kW/capacity) ARE read from elveh because they are
 SI-already (V, A, kW) and need no conversion — they carry no FIELD_CONTRACTS
 entry for that reason (see `tests/test_unit/test_contract_coverage.py`
 `_EXEMPTIONS`).
+
+### elvehcharging and outsidetemp used for thermal caching
+`sensor.fordpass_{vin}_elvehcharging.batteryTemperature` is cached per-device
+in `_last_charging_battery_temp` and written to ev_battery_status on each
+charging-state event. `sensor.fordpass_{vin}_outsidetemp.ambientTemp` is cached
+in `_last_outsidetemp`. Both caches are consumed by `_handle_energy_transfer_entity`
+to populate ev_charging_session thermal fields at session-write time.
 
 ### Canonical source for ev_charging_session.distance_added
 Evidence (from `tests/fixtures/ha_payloads/*.json` — matches real ha-fordpass
@@ -62,6 +69,7 @@ ha_config.unit_system.** This kills the 2026-03-21 double-conversion bug
 which assumed the field was always km and produced 165.8 on imperial-HA events.
 """
 
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -316,6 +324,8 @@ FIELD_CONTRACTS: list[FieldContract] = [
 # Consumed by /admin/data-sources diagnostic page.
 
 _last_seen_raw: dict[str, dict[str, Any]] = {}
+_last_charging_battery_temp: dict[str, float | None] = {}
+_last_outsidetemp: dict[str, float | None] = {}
 
 
 def _record_last_seen(
@@ -680,6 +690,10 @@ async def process_event(
             await _handle_energy_transfer_entity(
                 entity_id, new_state, device_id, db, ha_config
             )
+        elif suffix == "elvehcharging":
+            await _handle_elvehcharging_entity(entity_id, new_state, device_id, db, ha_config)
+        elif suffix == "outsidetemp":
+            await _handle_outsidetemp_entity(entity_id, new_state, device_id, db, ha_config)
         else:
             # Not an adapter-owned entity. Silent return — hass_processor
             # handles legacy per-slug routing for vehicle status, GPS, etc.
@@ -804,8 +818,28 @@ async def _handle_events_entity(
     from db.models.trip_metrics import EVTripMetrics
 
     attrs = new_state.get("attributes") or {}
-    trip = attrs.get("xev-key-off-trip-segment-data")
-    if not isinstance(trip, dict):
+
+    # Trip data is nested: customEvents -> event_key -> oemData -> trip_data -> stringArrayValue.
+    # Each element of stringArrayValue is a JSON-encoded dict. Take the last valid one.
+    trip: dict | None = None
+    custom_events = attrs.get("customEvents") or {}
+    if isinstance(custom_events, dict):
+        xev = custom_events.get("xev-key-off-trip-segment-data") or {}
+        if isinstance(xev, dict):
+            raw_array = (
+                ((xev.get("oemData") or {}).get("trip_data") or {})
+                .get("stringArrayValue") or []
+            )
+            for raw_item in reversed(raw_array):
+                try:
+                    parsed = json.loads(raw_item) if isinstance(raw_item, str) else raw_item
+                    if isinstance(parsed, dict):
+                        trip = parsed
+                        break
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+    if trip is None:
         return
 
     pattern = _entity_pattern(entity_id)
@@ -817,15 +851,15 @@ async def _handle_events_entity(
 
     distance_c = _lookup("distance_traveled")
     energy_c = _lookup("energy_consumed")
-    ambient_c = _lookup("ambient_temp")
-    cabin_c = _lookup("cabin_temp")
-    outside_c = _lookup("outside_air_temp")
+    ambient_c = _lookup("ambient_temperature")
+    cabin_c = _lookup("cabin_temperature")
+    outside_c = _lookup("outside_air_ambient_temperature")
 
     distance = convert(distance_c, trip.get("distance_traveled"), new_state, ha_config) if distance_c else None
     energy = convert(energy_c, trip.get("energy_consumed"), new_state, ha_config) if energy_c else None
-    ambient = convert(ambient_c, trip.get("ambient_temp"), new_state, ha_config) if ambient_c else None
-    cabin = convert(cabin_c, trip.get("cabin_temp"), new_state, ha_config) if cabin_c else None
-    outside_air = convert(outside_c, trip.get("outside_air_temp"), new_state, ha_config) if outside_c else None
+    ambient = convert(ambient_c, trip.get("ambient_temperature"), new_state, ha_config) if ambient_c else None
+    cabin = convert(cabin_c, trip.get("cabin_temperature"), new_state, ha_config) if cabin_c else None
+    outside_air = convert(outside_c, trip.get("outside_air_ambient_temperature"), new_state, ha_config) if outside_c else None
 
     # Cross-reference: events trip fields are always metric. Let the detection
     # layer use them as the canonical reference for paired elveh attributes.
@@ -841,7 +875,7 @@ async def _handle_events_entity(
         detection.try_cross_reference(
             device_id,
             "sensor.fordpass_{vin}_events",
-            "xev-key-off-trip-segment-data.ambient_temp",
+            "xev-key-off-trip-segment-data.ambient_temperature",
             ambient,
             "degC",
         )
@@ -849,7 +883,7 @@ async def _handle_events_entity(
         detection.try_cross_reference(
             device_id,
             "sensor.fordpass_{vin}_events",
-            "xev-key-off-trip-segment-data.cabin_temp",
+            "xev-key-off-trip-segment-data.cabin_temperature",
             cabin,
             "degC",
         )
@@ -857,7 +891,7 @@ async def _handle_events_entity(
         detection.try_cross_reference(
             device_id,
             "sensor.fordpass_{vin}_events",
-            "xev-key-off-trip-segment-data.outside_air_temp",
+            "xev-key-off-trip-segment-data.outside_air_ambient_temperature",
             outside_air,
             "degC",
         )
@@ -910,6 +944,65 @@ async def _handle_events_entity(
         distance,
         energy,
     )
+
+
+async def _handle_elvehcharging_entity(
+    entity_id: str,
+    new_state: dict,
+    device_id: str,
+    db: AsyncSession,
+    ha_config: dict | None = None,
+) -> None:
+    """sensor.fordpass_{vin}_elvehcharging -> cache battery temp + write EVBatteryStatus row."""
+    from db.models.battery_status import EVBatteryStatus
+
+    attrs = new_state.get("attributes") or {}
+    pattern = _entity_pattern(entity_id)
+
+    batt_c = lookup_contract(pattern, "batteryTemperature")
+    battery_temp = (
+        convert(batt_c, attrs.get("batteryTemperature"), new_state, ha_config)
+        if batt_c
+        else None
+    )
+    _last_charging_battery_temp[device_id] = battery_temp
+
+    if battery_temp is None:
+        return
+
+    record = EVBatteryStatus(
+        device_id=device_id,
+        recorded_at=_parse_event_ts(new_state) or datetime.now(UTC),
+        source_system="home_assistant",
+        hv_battery_temperature=battery_temp,
+        ingest_schema_version=INGEST_SCHEMA_VERSION,
+    )
+    db.add(record)
+    logger.debug(
+        "ha_fordpass: wrote ev_battery_status (hv_battery_temperature=%.1f) for %s",
+        battery_temp,
+        device_id,
+    )
+
+
+async def _handle_outsidetemp_entity(
+    entity_id: str,
+    new_state: dict,
+    device_id: str,
+    db: AsyncSession,
+    ha_config: dict | None = None,
+) -> None:
+    """sensor.fordpass_{vin}_outsidetemp -> cache ambient temp (no DB write)."""
+    attrs = new_state.get("attributes") or {}
+    pattern = _entity_pattern(entity_id)
+
+    amb_c = lookup_contract(pattern, "ambientTemp")
+    ambient_temp = (
+        convert(amb_c, attrs.get("ambientTemp"), new_state, ha_config)
+        if amb_c
+        else None
+    )
+    _last_outsidetemp[device_id] = ambient_temp
 
 
 async def _handle_energy_transfer_entity(
@@ -981,20 +1074,12 @@ async def _handle_energy_transfer_entity(
         addr_dict.get("city") if addr_dict else None
     )
 
-    # Thermal via FIELD_CONTRACTS (both start+end contracts point at the same
-    # raw attribute; we convert once and mirror)
-    batt_start_c = lookup_contract(pattern, "batteryTemperature")  # first match == battery_temp_start
-    battery_temp = (
-        convert(batt_start_c, attrs.get("batteryTemperature"), new_state, ha_config)
-        if batt_start_c
-        else None
-    )
-    amb_start_c = lookup_contract(pattern, "outsidetemp")
-    ambient_temp = (
-        convert(amb_start_c, attrs.get("outsidetemp"), new_state, ha_config)
-        if amb_start_c
-        else None
-    )
+    # Thermal: sourced from per-device caches populated by elvehcharging and outsidetemp
+    # events before the session record is written. FIELD_CONTRACTS for these fields
+    # are on the elvehcharging/outsidetemp patterns, so lookup against energytransferlogentry
+    # returns None by design.
+    battery_temp = _last_charging_battery_temp.get(device_id)
+    ambient_temp = _last_outsidetemp.get(device_id)
 
     original_timestamp = _parse_iso(attrs.get("timeStamp"))
 
