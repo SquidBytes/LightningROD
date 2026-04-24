@@ -36,10 +36,18 @@ Filenames follow `{ha_unit_system}_ha_{vehicle_display}_vehicle.json`:
 ### Invariants applied across every fixture (D-B1 / D-B4)
 
 - `sensor.fordpass_YOUR_VIN_metrics` — **always metric**. `xevBatteryRange` and
-  `xevBatteryMaximumRange` are km regardless of HA or vehicle config.
+  `xevBatteryMaximumRange` are km regardless of HA or vehicle config (raw API
+  passthrough — ha-fordpass does not HA-convert metrics-entity attributes).
 - `sensor.fordpass_YOUR_VIN_events` — **always metric**. `xev-key-off-trip-segment-data`
   exposes `distance_traveled` (km), `energy_consumed` (Wh), `trip_duration` (s),
-  `ambient_temp` / `cabin_temp` / `outside_air_temp` (°C).
+  `ambient_temp` / `cabin_temp` / `outside_air_temp` (°C). Raw API passthrough.
+- `sensor.fordpass_YOUR_VIN_energytransferlogentry.plugDetails.totalDistanceAdded`
+  — **HA-system-converted**. ha-fordpass calls `localize_distance` on this
+  field inside `get_energy_transfer_log_attrs`, so the fixture value reflects
+  HA's configured unit system: **metric HA → km (103), imperial HA → mi (64)**.
+  Every other attribute on the energytransferlogentry payload (batteryTemperature,
+  outsidetemp, stateOfCharge, power, energyConsumed, chargerType) is raw
+  passthrough and stays in its native SI unit across HA unit systems.
 - `sensor.fordpass_YOUR_VIN_elveh` **attributes** — per D-B4 (see 29-CONTEXT.md)
   these are **not read** by the new adapter. Attribute values (e.g.
   `tripDistanceTraveled=19`) stay labeled in source units (km) across fixtures
@@ -54,7 +62,10 @@ The 2026-04-19 reporter scenario is encoded in
 `metric_ha_imperial_vehicle.json`:
 
 - 19 km trip — `events.xev-key-off-trip-segment-data.distance_traveled = 19`
-- 64 mi / 103 km charge added — `energytransferlogentry.plugDetails.totalDistanceAdded = 103`
+- 64 mi / 103 km charge added —
+  `energytransferlogentry.plugDetails.totalDistanceAdded`:
+  - metric-HA fixtures → `103` (km, ha-fordpass left it as km)
+  - imperial-HA fixtures → `64` (mi, ha-fordpass converted via `localize_distance`)
 - 260 mi / ~418 km max range — `metrics.xevBatteryMaximumRange = 418`
 
 Failure to store each of these as its documented metric value is what the

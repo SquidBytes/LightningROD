@@ -29,10 +29,10 @@ REGRESSION_MESSAGE = (
 )
 
 
-async def _run_fixture(payload: dict, db_session) -> None:
+async def _run_fixture(payload: dict, db_session, ha_config: dict | None = None) -> None:
     """Feed every entity in the payload through the adapter."""
     for entity_id, state_dict in payload.items():
-        await process_event(entity_id, state_dict, db_session)
+        await process_event(entity_id, state_dict, db_session, ha_config)
     await db_session.flush()
 
 
@@ -42,7 +42,7 @@ async def test_reporter_19km_trip_not_multiplied(db_session):
     Reporter setup: 2026 F-150 Lightning, metric HA + imperial vehicle display.
     """
     payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
-    await _run_fixture(payload, db_session)
+    await _run_fixture(payload, db_session, {"unit_system": "metric"})
 
     trip = (
         await db_session.execute(
@@ -70,7 +70,7 @@ async def test_reporter_19km_trip_not_multiplied(db_session):
 async def test_reporter_64mi_103km_charge_added(db_session):
     """Lock: charge-added 103 km must store as 103 km distance_added, NOT 165.8 km."""
     payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
-    await _run_fixture(payload, db_session)
+    await _run_fixture(payload, db_session, {"unit_system": "metric"})
 
     session = (
         await db_session.execute(
@@ -103,7 +103,7 @@ async def test_reporter_260mi_418km_max_range(db_session):
     instead of the correct 260 mi.
     """
     payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
-    await _run_fixture(payload, db_session)
+    await _run_fixture(payload, db_session, {"unit_system": "metric"})
 
     battery = (
         await db_session.execute(

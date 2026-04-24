@@ -92,6 +92,73 @@ def test_clear_cache_empties():
     assert adapter._last_seen_raw == {}
 
 
+def test_ha_unit_system_converted_imperial_resolves_to_mi():
+    """A contract flagged `ha_unit_system_converted=True` on imperial HA
+    must resolve the effective source unit to `mi` and convert 64 -> ~103 km.
+    """
+    c = FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_energytransferlogentry",
+        source_attribute="plugDetails.totalDistanceAdded",
+        source_unit="km",  # declared default only — ha_config wins
+        target_db_table="ev_charging_session",
+        target_db_column="distance_added",
+        target_unit="km",
+        ha_unit_system_converted=True,
+    )
+    unit, method = adapter._resolve_source_unit(
+        c, new_state=None, ha_config={"unit_system": "imperial"}
+    )
+    assert unit == "mi"
+    assert method == "ha_unit_system_converted"
+
+    converted = adapter.convert(
+        c, raw_value=64, new_state=None, ha_config={"unit_system": "imperial"}
+    )
+    assert converted == pytest.approx(103.0, abs=0.5)
+
+
+def test_ha_unit_system_converted_metric_stays_km():
+    """Same contract on metric HA resolves to km and passes the value through."""
+    c = FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_energytransferlogentry",
+        source_attribute="plugDetails.totalDistanceAdded",
+        source_unit="km",
+        target_db_table="ev_charging_session",
+        target_db_column="distance_added",
+        target_unit="km",
+        ha_unit_system_converted=True,
+    )
+    unit, method = adapter._resolve_source_unit(
+        c, new_state=None, ha_config={"unit_system": "metric"}
+    )
+    assert unit == "km"
+    assert method == "ha_unit_system_converted"
+
+    converted = adapter.convert(
+        c, raw_value=103, new_state=None, ha_config={"unit_system": "metric"}
+    )
+    assert converted == pytest.approx(103.0, abs=0.5)
+
+
+def test_ha_unit_system_converted_missing_config_falls_back():
+    """Contract flagged ha_unit_system_converted but ha_config is absent —
+    resolver must emit method='declared_fallback' using the declared unit,
+    so ingestion still produces a value instead of dropping the field.
+    """
+    c = FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_energytransferlogentry",
+        source_attribute="plugDetails.totalDistanceAdded",
+        source_unit="km",
+        target_db_table="ev_charging_session",
+        target_db_column="distance_added",
+        target_unit="km",
+        ha_unit_system_converted=True,
+    )
+    unit, method = adapter._resolve_source_unit(c, new_state=None, ha_config=None)
+    assert unit == "km"
+    assert method == "declared_fallback"
+
+
 def test_key_convention_matches_contract():
     """Key format must be f'{entity_pattern}|{attribute}'.
 

@@ -9,6 +9,25 @@
         current registry and the last raw value observed for each contract.
         Per Phase 29 D-C1, the registry is the single source of truth for unit handling.
     </p>
+    <div class="alert alert-info mb-6 text-sm">
+        <div>
+            <strong>Column legend:</strong>
+            <ul class="list-disc pl-4 mt-1 space-y-0.5">
+                <li><strong>Declared Unit</strong> — the <code>source_unit</code> literal
+                    on the contract. A <span class="badge badge-warning badge-xs">HA-conv</span>
+                    badge means ha-fordpass itself converts this field via
+                    <code>localize_distance</code> / <code>localize_temperature</code> /
+                    <code>units.pressure()</code> — so the effective per-event source
+                    unit is derived from <code>ha_config.unit_system</code>.</li>
+                <li><strong>Effective Unit</strong> — the unit actually used on the most
+                    recent event. May differ from the declared unit when HA-conversion or
+                    read-time UoM resolution fired.</li>
+                <li><strong>Resolution Method</strong> — how the adapter picked the
+                    effective unit: <code>declared</code>, <code>ha_unit_system_converted</code>,
+                    <code>read_time_uom</code>, or <code>declared_fallback</code>.</li>
+            </ul>
+        </div>
+    </div>
 
     {% for group in groups %}
     <section class="mb-8">
@@ -21,12 +40,14 @@
                     <tr>
                         <th>Source Entity</th>
                         <th>Source Attribute</th>
-                        <th>Source Unit</th>
+                        <th>Declared Unit</th>
+                        <th>Effective Unit</th>
+                        <th>Resolution Method</th>
                         <th>DB Table</th>
                         <th>DB Column</th>
                         <th>Target Unit</th>
                         <th>Detected Unit</th>
-                        <th>Method</th>
+                        <th>Detection Method</th>
                         <th>Confidence</th>
                         <th>Cross-Ref</th>
                         <th>Last Raw Value</th>
@@ -39,7 +60,42 @@
                     <tr>
                         <td><code class="text-xs">{{ row.contract.source_entity_pattern if row.contract else row.detection.entity_pattern }}</code></td>
                         <td><code class="text-xs">{{ row.contract.source_attribute if row.contract else row.detection.attribute }}</code></td>
-                        <td><code class="text-xs">{{ row.contract.source_unit if row.contract else '' }}</code></td>
+                        <td>
+                            <code class="text-xs">{{ row.contract.source_unit if row.contract else '' }}</code>
+                            {% if row.contract and row.contract.ha_unit_system_converted %}
+                                <br>
+                                <span class="badge badge-warning badge-xs" title="ha-fordpass converts this field via localize_* calls before emitting; effective unit resolved from HA unit_system.">HA-conv</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.last_seen and row.last_seen.unit %}
+                                <code class="text-xs">{{ row.last_seen.unit }}</code>
+                                {% if row.last_seen.declared_unit and row.last_seen.unit != row.last_seen.declared_unit %}
+                                    <br>
+                                    <span class="text-base-content/50 text-xs">(declared: {{ row.last_seen.declared_unit }})</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-base-content/40 text-xs">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.last_seen and row.last_seen.method %}
+                                {% set _am = row.last_seen.method %}
+                                {% if _am == 'declared' %}
+                                    <span class="badge badge-success badge-xs">declared</span>
+                                {% elif _am == 'ha_unit_system_converted' %}
+                                    <span class="badge badge-warning badge-xs">ha_unit_system</span>
+                                {% elif _am == 'read_time_uom' %}
+                                    <span class="badge badge-info badge-xs">read_time_uom</span>
+                                {% elif _am == 'declared_fallback' %}
+                                    <span class="badge badge-error badge-xs" title="ha_unit_system_converted contract received no usable ha_config.unit_system; fell back to declared source_unit">declared_fallback</span>
+                                {% else %}
+                                    <span class="text-xs">{{ _am }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-base-content/40 text-xs">&mdash;</span>
+                            {% endif %}
+                        </td>
                         <td><code class="text-xs">{{ row.contract.target_db_table if row.contract else '' }}</code></td>
                         <td><code class="text-xs">{{ row.contract.target_db_column if row.contract else '' }}</code></td>
                         <td><code class="text-xs">{{ row.contract.target_unit if row.contract else '' }}</code></td>

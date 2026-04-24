@@ -21,8 +21,19 @@ async def test_data_sources_page_lists_ha_fordpass_source(client: AsyncClient):
 
 async def test_data_sources_page_contains_table_headers(client: AsyncClient):
     r = await client.get("/admin/data-sources")
-    # Required column headers per D-C3
-    for header in ["Source Entity", "Source Attribute", "Source Unit", "DB Column", "Last Raw Value"]:
+    # "Declared Unit" + "Effective Unit" + "Resolution Method" 
+    # replace the prior "Source Unit" column to surface
+    # the adapter's per-event unit resolution (declared / ha_unit_system /
+    # read_time_uom / declared_fallback).
+    for header in [
+        "Source Entity",
+        "Source Attribute",
+        "Declared Unit",
+        "Effective Unit",
+        "Resolution Method",
+        "DB Column",
+        "Last Raw Value",
+    ]:
         assert header in r.text, f"Missing column header '{header}'"
 
 

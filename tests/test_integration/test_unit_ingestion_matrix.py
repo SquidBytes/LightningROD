@@ -77,15 +77,28 @@ MATRIX_DISPLAY = {
 }
 
 
+def _ha_config_for_fixture(fixture_name: str) -> dict:
+    """Derive the HA ha_config blob the adapter expects from a fixture name.
+
+    Fixture naming convention: `{ha_unit_system}_ha_{vehicle_display}_vehicle.json`.
+    The adapter's `ha_unit_system_converted` path reads `ha_config.unit_system`
+    to resolve per-event source units for fields ha-fordpass localizes
+    (plugDetails.totalDistanceAdded, etc.).
+    """
+    ha_system = "imperial" if fixture_name.startswith("imperial_ha_") else "metric"
+    return {"unit_system": ha_system}
+
+
 @pytest.mark.parametrize("fixture_name,expected", list(MATRIX.items()))
 async def test_matrix_fixture_yields_metric_storage(fixture_name, expected, db_session):
     """For each fixture, run every entity through process_event and assert
     the stored metric-canonical values match the oracle.
     """
     payload = json.loads((FIXTURES_DIR / fixture_name).read_text())
+    ha_config = _ha_config_for_fixture(fixture_name)
 
     for entity_id, state_dict in payload.items():
-        await process_event(entity_id, state_dict, db_session)
+        await process_event(entity_id, state_dict, db_session, ha_config)
     await db_session.flush()
 
     # --- ev_battery_status (from sensor.*_metrics) ---
