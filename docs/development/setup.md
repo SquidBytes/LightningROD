@@ -98,6 +98,16 @@ uv run ruff check .
 uv run ruff format .
 ```
 
+The active ruff ruleset covers `E4/E7/E9/F` (pycodestyle + pyflakes), `I` (isort), `B` (bugbear), and `UP` (pyupgrade for Python 3.11+ idioms). `B008` is excluded to allow FastAPI's `Depends`/`Form` as default-argument patterns.
+
+## Type Checking
+
+```bash
+uv run mypy .
+```
+
+mypy is configured in `pyproject.toml` with the `pydantic.mypy` plugin. `ignore_missing_imports = true` is set so third-party stubs gaps don't block the check. Generated migration files and `.venv` are excluded.
+
 ## Connecting to the Database
 
 With the dev compose stack running, PostgreSQL is available at `localhost:5432`:
