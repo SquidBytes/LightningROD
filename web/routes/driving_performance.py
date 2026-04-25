@@ -68,8 +68,6 @@ async def driving_performance(
         )
     if summary.get("total_regen") is not None:
         summary["total_regen"] = summary["total_regen"] * range_factor
-    if summary.get("range_recovered") is not None:
-        summary["range_recovered"] = summary["range_recovered"] * range_factor
 
     # Driving Efficiency chart (moved from /trips)
     driving_efficiency_chart = build_efficiency_trend_chart(
@@ -93,6 +91,13 @@ async def driving_performance(
         db, time_range=time_range, device_id=active_device_id
     )
     regen_bar_chart = build_regen_recovery_chart(regen_trips)
+
+    # Total energy regenerated (kWh) — sum of per-trip derived regen_kwh.
+    # Lives alongside total_regen (range) so the two headline cards show
+    # genuinely distinct metrics rather than the same value twice.
+    summary["total_energy_regenerated"] = (
+        sum(t["regen_kwh"] for t in regen_trips) if regen_trips else None
+    )
 
     context = {
         **unit_ctx,

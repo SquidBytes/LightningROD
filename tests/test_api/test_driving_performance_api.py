@@ -31,11 +31,11 @@ async def test_phase_25_driving_performance_driving_efficiency_title(client):
     assert "Driving Efficiency" in response.text
 
 
-async def test_phase_25_driving_performance_range_recovered_tile_present(client):
-    """Response body contains the 'Range Recovered' summary tile (moved from charging)."""
+async def test_phase_25_driving_performance_energy_regenerated_tile_present(client):
+    """Response body contains the 'Total Energy Regenerated' summary tile (kWh)."""
     response = await client.get("/driving/performance")
     assert response.status_code == 200
-    assert "Range Recovered" in response.text
+    assert "Total Energy Regenerated" in response.text
 
 
 async def test_phase_25_driving_performance_temperature_scatter_card(client):

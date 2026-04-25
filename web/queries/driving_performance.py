@@ -48,8 +48,8 @@ async def query_driving_performance_summary(
     - total_distance (km, metric base)
     - total_energy (kWh)
     - avg_driving_efficiency (km/kWh, metric base) — None when total_energy is 0/None
-    - total_regen (km, metric base — from query_regen_summary)
-    - range_recovered (km, metric base — alias of total_regen for the tile)
+    - total_regen (km, metric base — from query_regen_summary; rendered as
+      "Range Regenerated" tile)
     - trip_count (prefer regen trip_count, fall back to EVTripMetrics count)
     - efficiency_trend (passthrough from query_efficiency_trend)
     - temperature_correlation_data (reserved key, currently None)
@@ -95,7 +95,6 @@ async def query_driving_performance_summary(
         "total_energy": total_energy,
         "avg_driving_efficiency": avg_eff,
         "total_regen": regen.get("regen_total") if regen else None,
-        "range_recovered": regen.get("regen_total") if regen else None,
         "trip_count": (regen.get("trip_count") if regen else 0) or trip_count_trips or 0,
         "efficiency_trend": trend_data,
         # Reserved keys so callers can rely on stable response shape.

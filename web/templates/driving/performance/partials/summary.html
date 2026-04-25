@@ -37,17 +37,16 @@
         </div>
     </div>
 
-    <!-- Card 3: Total Regen -->
+    <!-- Card 3: Range Regenerated -->
     <div class="card bg-base-200">
         <div class="card-body p-4">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Regen
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Range Regenerated
             <span class="cursor-help tooltip tooltip-bottom"
-                data-tip="{{ tooltips.driving_performance_total_regen }}"
-                aria-label="{{ tooltips.driving_performance_total_regen }}">ⓘ</span>
+                data-tip="{{ tooltips.driving_performance_range_regenerated }}"
+                aria-label="{{ tooltips.driving_performance_range_regenerated }}">ⓘ</span>
             {% if summary.total_regen is not none %}
                 <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_regen) }} <span class="text-xl font-normal text-base-content/60">{{ units.range_label }}</span></p>
                 <p class="text-sm text-base-content/60 mt-1">from {{ summary.trip_count }} trips</p>
-                {# <p class="text-[11px] text-base-content/40 leading-tight mt-1">Sum of range recovered via regenerative braking across all trips.</p> #}
             {% else %}
                 <p class="text-2xl font-semibold text-base-content/30">No data available</p>
                 <p class="text-xs text-base-content/30 mt-1">Populates when trip data is ingested</p>
@@ -55,16 +54,16 @@
         </div>
     </div>
 
-    <!-- Card 4: Range Recovered (moved from charging) -->
+    <!-- Card 4: Total Energy Regenerated -->
     <div class="card bg-base-200">
         <div class="card-body p-4">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Range Recovered
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Energy Regenerated
             <span class="cursor-help tooltip tooltip-bottom"
-                data-tip="{{ tooltips.driving_performance_range_recovered }}"
-                aria-label="{{ tooltips.driving_performance_range_recovered }}">ⓘ</span>
+                data-tip="{{ tooltips.driving_performance_energy_regenerated }}"
+                aria-label="{{ tooltips.driving_performance_energy_regenerated }}">ⓘ</span>
 
-            {% if summary.range_recovered is not none %}
-                <p class="text-3xl font-bold text-green-400">{{ "%.1f"|format(summary.range_recovered) }} <span class="text-xl font-normal text-base-content/60">{{ units.range_label }}</span></p>
+            {% if summary.total_energy_regenerated is not none %}
+                <p class="text-3xl font-bold text-green-400">{{ "%.1f"|format(summary.total_energy_regenerated) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
                 <p class="text-sm text-base-content/60 mt-1">via regenerative braking</p>
             {% else %}
                 <p class="text-2xl font-semibold text-base-content/30">No data available</p>
