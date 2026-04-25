@@ -8,6 +8,28 @@ LightningROD can be deployed two ways:
 !!! tip "Unraid?"
     Dedicated [Unraid Setup guide](unraid.md) for Docker Compose Manager-specific steps.
 
+## Which Docker file do I use?
+
+Only `docker-compose.yml` lives at the repo root -- it's the default stack you get from `docker compose up`. Everything else lives under `docker/` and is opted into with an explicit `-f` flag (or by building from a non-default `Dockerfile`).
+
+### For users (deploying the app)
+
+| File | What it is | Command |
+|------|------------|---------|
+| `docker-compose.yml` *(repo root)* | The default two-container stack: web app + PostgreSQL. **Start here.** | `docker compose up --build -d` |
+| `docker/Dockerfile` | Multi-stage image for the web container (Node builds CSS, Python runs the app). Referenced by `docker-compose.yml` -- you don't invoke it directly. | *(built automatically)* |
+| `docker/Dockerfile.standalone` | All-in-one image: app **and** PostgreSQL in a single container. For users who don't want a separate db container. | `docker build -f docker/Dockerfile.standalone -t lightningrod:standalone .` |
+| `docker/docker-compose.standalone.yml` | Compose wrapper that builds and runs the standalone image with a named volume. Easier than `docker run` if you prefer Compose. | `docker compose -f docker/docker-compose.standalone.yml up --build -d` |
+
+### For contributors (development & tests)
+
+| File | What it is | Command |
+|------|------------|---------|
+| `docker/docker-compose.dev.yml` | Overlay applied **on top of** `docker-compose.yml`. Exposes PostgreSQL on `localhost:5432` so you can run the FastAPI app on your host with hot-reload. | `docker compose -f docker-compose.yml -f docker/docker-compose.dev.yml up db -d` (see [Development Setup](../development/setup.md)) |
+| `docker/docker-compose.test.yml` | Standalone test PostgreSQL on port `5433`, isolated from your dev database. Used by `./run-tests.sh`. | `docker compose -f docker/docker-compose.test.yml up -d test-db` |
+| `docker/entrypoint.sh` | Web container startup script: runs Alembic migrations, then uvicorn. Baked into `docker/Dockerfile`. | *(internal)* |
+| `docker/entrypoint.standalone.sh` | Standalone container startup: bootstraps PostgreSQL, creates the role/db, runs migrations, starts the app. Baked into `docker/Dockerfile.standalone`. | *(internal)* |
+
 ## Requirements
 
 - Docker (and Docker Compose for the two-container setup)
