@@ -45,9 +45,9 @@ updates:
           - minor
           - patch
 
-  # ----- Docker base images (Dockerfile / Dockerfile.standalone) -----
+  # ----- Docker base images (docker/Dockerfile / docker/Dockerfile.standalone) -----
   - package-ecosystem: docker
-    directory: "/"
+    directory: "/docker"
     schedule:
       interval: weekly
       day: monday

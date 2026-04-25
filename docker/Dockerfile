@@ -41,8 +41,8 @@ COPY --from=css-builder /build/web/static/css/output.css web/static/css/output.c
 # Remove old static directory if present (pre-migration artifact)
 RUN rm -rf static/css
 
-RUN chmod +x entrypoint.sh
+RUN chmod +x docker/entrypoint.sh
 
 EXPOSE 8000
 
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["./docker/entrypoint.sh"]

@@ -22,11 +22,11 @@ jobs:
       matrix:
         include:
           - variant: standalone
-            dockerfile: Dockerfile.standalone
+            dockerfile: docker/Dockerfile.standalone
             image_name: lightningrod
             tag_suffix: -standalone
           - variant: web
-            dockerfile: Dockerfile
+            dockerfile: docker/Dockerfile
             image_name: lightningrod-web
             tag_suffix: ""
 
@@ -106,7 +106,7 @@ jobs:
           mkdir -p "${STAGE}"
 
           cp docker-compose.yml "${STAGE}/docker-compose.yml"
-          cp docker-compose.standalone.yml "${STAGE}/docker-compose.standalone.yml"
+          cp docker/docker-compose.standalone.yml "${STAGE}/docker-compose.standalone.yml"
           cp .env.example "${STAGE}/.env.example"
 
           # Pin the image tag inside the bundled compose files to the

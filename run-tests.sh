@@ -17,13 +17,13 @@ cd "$SCRIPT_DIR"
 
 # Start test DB container
 echo "Starting test database..."
-docker compose -f docker-compose.test.yml up -d test-db
+docker compose -f docker/docker-compose.test.yml up -d test-db
 
 # Wait for healthcheck
 echo "Waiting for test DB to be ready..."
 retries=0
 max_retries=30
-until docker compose -f docker-compose.test.yml exec test-db pg_isready -U lightningrod_test -d lightningrod_test 2>/dev/null; do
+until docker compose -f docker/docker-compose.test.yml exec test-db pg_isready -U lightningrod_test -d lightningrod_test 2>/dev/null; do
     retries=$((retries + 1))
     if [ "$retries" -ge "$max_retries" ]; then
         echo "ERROR: Test DB failed to start after ${max_retries} attempts"

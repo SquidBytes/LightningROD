@@ -19,7 +19,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
       args:
         # Stamp the version into the image at build time so `docker inspect`
         # and the running app can both report what's running.

@@ -93,4 +93,4 @@ echo
 echo "Done. Rebuild images with:"
 echo "  docker compose build"
 echo "  # or:"
-echo "  docker compose -f docker-compose.standalone.yml build"
+echo "  docker compose -f docker/docker-compose.standalone.yml build"
