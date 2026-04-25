@@ -12,7 +12,8 @@ For feature documentation, see the docs site at
 - `ha_fordpass` adapter with `FIELD_CONTRACTS` — single ingestion entry point replacing scattered `hass_processor` / `hass_client` logic.
 - Unit-detection layer: resolves HA signal units at ingestion time via a pure `to_metric()` conversion function and `UnknownSourceUnit` sentinel.
 - `ingest_schema_version` column on `ev_session`, `ev_trip_metrics`, and related models.
-- `/admin/data-sources` page listing all HA signal sources with contract details; Data Sources link added to sidebar System group.
+- `/admin/data-sources` page listing all HA signal sources with contract details, contract/detection coverage, and raw last-seen values.
+- Developer Tools toggle in Settings → General; Data Sources sidebar link is hidden unless developer mode is enabled.
 - `gen_data_sources_doc.py` generator and committed `data-sources.md` reference doc.
 - `FieldContract` module for observable-contract validation and display-layer assertions.
 - mypy static type checking added to the dev toolchain.

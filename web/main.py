@@ -31,7 +31,8 @@ def _resolve_version() -> str:
 APP_VERSION = _resolve_version()
 
 from db.engine import AsyncSessionLocal, engine
-from web.queries.settings import seed_charger_templates
+from web import developer_mode
+from web.queries.settings import get_app_setting, seed_charger_templates
 from web.routes import (
     battery,
     charging,
@@ -81,9 +82,11 @@ def localtime_filter(dt, tz_str: str = "UTC", fmt: str | None = None):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: seed charger templates (idempotent)
+    # Startup: seed charger templates (idempotent) + restore developer mode flag
     async with AsyncSessionLocal() as session:
         await seed_charger_templates(session)
+        val = await get_app_setting(session, "developer_mode", "false")
+        developer_mode.set_enabled(val == "true")
     # Start HASS service (if configured)
     from web.services.hass_client import start_hass_service
     await start_hass_service()
@@ -137,6 +140,7 @@ def create_app() -> FastAPI:
         if hasattr(route_module, "templates"):
             env = route_module.templates.env
             env.globals["tooltips"] = TOOLTIPS
+            env.globals["developer_mode"] = developer_mode.is_enabled
             env.filters["localtime"] = localtime_filter
             env.filters["cvt_dist"] = _cvt(convert_distance)
             env.filters["cvt_temp"] = _cvt(convert_temp)

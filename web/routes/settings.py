@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargerStall, EVChargingNetwork, EVLocationLookup
+from web import developer_mode as dev_mode_module
 from web.dependencies import get_db
 from web.queries.gas_prices import (
     delete_gas_price,
@@ -95,6 +96,7 @@ SETTINGS_KEYS = [
     "comparison_gas_enabled",
     "comparison_network_enabled",
     "comparison_section_visible",
+    "developer_mode",
     "distance_unit",
     "temp_unit",
     "user_timezone",
@@ -1652,5 +1654,22 @@ async def update_toggles(
     return templates.TemplateResponse(
         request,
         "settings/partials/gas_settings.html",
+        {"settings": settings, "saved": True},
+    )
+
+
+@router.post("/settings/developer-mode", response_class=HTMLResponse)
+async def update_developer_mode(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    developer_mode: str | None = Form(None),
+):
+    enabled = developer_mode is not None
+    await set_app_setting(db, "developer_mode", "true" if enabled else "false")
+    dev_mode_module.set_enabled(enabled)
+    settings = await get_app_settings_dict(db, SETTINGS_KEYS)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/developer_settings.html",
         {"settings": settings, "saved": True},
     )
