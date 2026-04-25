@@ -107,6 +107,14 @@ Subscription data powers member-vs-non-member savings on the Costs page.
 
 ## General Tab
 
+### Developer Tools
+
+The **Enable developer tools** checkbox unlocks diagnostic features that are hidden by default. When enabled, a **Data Sources** link appears in the System section of the sidebar.
+
+**Data Sources** (`/admin/data-sources`) shows every Home Assistant signal source that the ingestion layer knows about — the HA entity pattern, attribute, contract-declared unit, detection method and confidence, coverage status, and the last raw value seen. Use it to diagnose unit detection issues or verify that a new sensor is being ingested with the right unit.
+
+The toggle is persisted in `app_settings` and takes effect immediately (no restart needed). It is off by default; there is no user-visible harm in leaving it on, but the page is clutter for day-to-day use.
+
 ### Comparison Display Options
 
 Toggle which comparison sections appear on the Costs page:
