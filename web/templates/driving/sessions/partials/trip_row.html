@@ -8,7 +8,9 @@
     <td>{% if trip.distance is not none %}{{ "%.1f"|format(trip.distance|cvt_dist(distance_unit)) }} {{ units.distance_label }}{% else %}--{% endif %}</td>
     <td>
         {% if trip.duration is not none %}
-            {{ (trip.duration | int) // 60 }}h {{ (trip.duration | int) % 60 }}m
+            {% set _hrs = (trip.duration | int) // 60 %}
+            {% set _mins = (trip.duration | int) % 60 %}
+            {% if _hrs > 0 %}{{ _hrs }}h {{ _mins }}m{% else %}{{ _mins }}m{% endif %}
         {% else %}
             --
         {% endif %}
