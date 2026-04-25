@@ -103,7 +103,7 @@ def test_read_time_uom_rejected_when_field_type_mismatches():
     state = _state({"unit_of_measurement": "mi"})  # distance UoM
     unit, method, _ = detection.resolve_source_unit(
         entity_id="sensor.fordpass_ABC_elveh",
-        attribute="tripAmbientTemp",
+        attribute="tripHumidity",  # not in FIELD_CONTRACTS; exercises non-declared path
         new_state=state,
         ha_config=_IMPERIAL_CONFIG,
         field_type="temperature",
@@ -123,7 +123,7 @@ def test_device_class_temperature_metric_config_resolves_degC():
     state = _state({"device_class": "temperature"})
     unit, method, confidence = detection.resolve_source_unit(
         entity_id="sensor.fordpass_ABC_elveh",
-        attribute="tripAmbientTemp",
+        attribute="tripHumidity",  # not in FIELD_CONTRACTS; exercises device_class path
         new_state=state,
         ha_config=_METRIC_CONFIG,
         field_type="temperature",
@@ -137,7 +137,7 @@ def test_device_class_temperature_imperial_config_resolves_degF():
     state = _state({"device_class": "temperature"})
     unit, method, _ = detection.resolve_source_unit(
         entity_id="sensor.fordpass_ABC_elveh",
-        attribute="tripAmbientTemp",
+        attribute="tripHumidity",  # not in FIELD_CONTRACTS; exercises device_class path
         new_state=state,
         ha_config=_IMPERIAL_CONFIG,
         field_type="temperature",
@@ -362,7 +362,7 @@ def test_missing_ha_config_produces_unknown():
     state = _state({"device_class": "temperature"})  # no UoM
     unit, method, _ = detection.resolve_source_unit(
         entity_id="sensor.fordpass_ABC_elveh",
-        attribute="tripAmbientTemp",
+        attribute="tripHumidity",  # not in FIELD_CONTRACTS; exercises unknown path
         new_state=state,
         ha_config={},  # no unit_system key
         field_type="temperature",

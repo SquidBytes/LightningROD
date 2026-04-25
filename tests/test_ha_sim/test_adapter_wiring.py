@@ -88,6 +88,7 @@ def _make_metrics_event(device_id: str) -> tuple[str, dict]:
 
 def _make_events_event(device_id: str) -> tuple[str, dict]:
     """Build a sensor.fordpass_{vin}_events state payload with trip data."""
+    import json
     entity_id = f"sensor.fordpass_{device_id}_events"
     new_state = {
         "entity_id": entity_id,
@@ -95,13 +96,23 @@ def _make_events_event(device_id: str) -> tuple[str, dict]:
         "last_changed": "2026-04-19T12:00:00+00:00",
         "last_updated": "2026-04-19T12:00:00+00:00",
         "attributes": {
-            "xev-key-off-trip-segment-data": {
-                "distance_traveled": 19,
-                "energy_consumed": 7600,
-                "trip_duration": 1800,
-                "ambient_temp": 15,
-                "cabin_temp": 20,
-                "outside_air_temp": 15,
+            "customEvents": {
+                "xev-key-off-trip-segment-data": {
+                    "oemData": {
+                        "trip_data": {
+                            "stringArrayValue": [
+                                json.dumps({
+                                    "distance_traveled": 19,
+                                    "energy_consumed": 7600,
+                                    "trip_duration": 1800,
+                                    "ambient_temperature": 15,
+                                    "cabin_temperature": 20,
+                                    "outside_air_ambient_temperature": 15,
+                                })
+                            ]
+                        }
+                    }
+                }
             }
         },
     }

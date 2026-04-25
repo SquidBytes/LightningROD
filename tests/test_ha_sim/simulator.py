@@ -439,19 +439,23 @@ def make_events_trip_event(
         "last_changed": now,
         "last_updated": now,
         "attributes": {
-            "xev-key-off-trip-segment-data": {
-                "distance_traveled": distance_km,
-                "energy_consumed": energy_wh,
-                "trip_duration": duration_seconds,
-                # canonical field names per FIELD_CONTRACTS
-                "ambient_temperature": ambient_temp_c,
-                "cabin_temperature": cabin_temp_c,
-                "outside_air_ambient_temperature": outside_air_temp_c,
-                # also include the keys the _handle_events_entity code reads
-                # (lookup keys don't match contracts — kept for completeness)
-                "ambient_temp": ambient_temp_c,
-                "cabin_temp": cabin_temp_c,
-                "outside_air_temp": outside_air_temp_c,
+            "customEvents": {
+                "xev-key-off-trip-segment-data": {
+                    "oemData": {
+                        "trip_data": {
+                            "stringArrayValue": [
+                                json.dumps({
+                                    "distance_traveled": distance_km,
+                                    "energy_consumed": energy_wh,
+                                    "trip_duration": duration_seconds,
+                                    "ambient_temperature": ambient_temp_c,
+                                    "cabin_temperature": cabin_temp_c,
+                                    "outside_air_ambient_temperature": outside_air_temp_c,
+                                })
+                            ]
+                        }
+                    }
+                }
             }
         },
     }

@@ -819,7 +819,7 @@ async def _handle_events_entity(
 
     attrs = new_state.get("attributes") or {}
 
-    # Trip data is nested: customEvents -> event_key -> oemData -> trip_data -> stringArrayValue.
+    # Trip data is in attrs["customEvents"]["xev-key-off-trip-segment-data"]["oemData"]["trip_data"]["stringArrayValue"].
     # Each element of stringArrayValue is a JSON-encoded dict. Take the last valid one.
     trip: dict | None = None
     custom_events = attrs.get("customEvents") or {}
