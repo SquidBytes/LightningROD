@@ -112,7 +112,7 @@ Runs both the application and PostgreSQL in a single container.
     Edit `.env` to set a real password, then build and run:
 
     ```bash
-    docker build -f Dockerfile.standalone -t lightningrod:standalone .
+    docker build -f docker/Dockerfile.standalone -t lightningrod:standalone .
     docker run -d \
       -p 8000:8000 \
       -v lightningrod-data:/var/lib/postgresql/data \
@@ -132,7 +132,7 @@ Runs both the application and PostgreSQL in a single container.
     Edit `.env` to set a real password, then start:
 
     ```bash
-    docker compose -f docker-compose.standalone.yml up --build -d
+    docker compose -f docker/docker-compose.standalone.yml up --build -d
     ```
 
 The app will be available at `http://localhost:8000` (or your configured `APP_PORT`).
@@ -157,15 +157,15 @@ The standalone entrypoint handles everything in a single container:
 docker stop lightningrod && docker start lightningrod
 
 # docker compose
-docker compose -f docker-compose.standalone.yml down
-docker compose -f docker-compose.standalone.yml up -d
+docker compose -f docker/docker-compose.standalone.yml down
+docker compose -f docker/docker-compose.standalone.yml up -d
 ```
 
 ### Updating (Standalone)
 
 ```bash
 git pull
-docker build -f Dockerfile.standalone -t lightningrod:standalone .
+docker build -f docker/Dockerfile.standalone -t lightningrod:standalone .
 docker stop lightningrod && docker rm lightningrod
 docker run -d \
   -p 8000:8000 \
@@ -179,5 +179,5 @@ Or with compose:
 
 ```bash
 git pull
-docker compose -f docker-compose.standalone.yml up --build -d
+docker compose -f docker/docker-compose.standalone.yml up --build -d
 ```

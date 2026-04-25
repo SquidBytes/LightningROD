@@ -23,10 +23,15 @@ PostgreSQL 16
 ```
 LightningROD/
 ├── config.py                # Application settings (reads .env)
-├── docker-compose.yml       # Production stack (web + db)
-├── docker-compose.dev.yml   # Dev override (exposes db port)
-├── Dockerfile               # Multi-stage build (Node CSS + Python app)
-├── entrypoint.sh            # Migrations + uvicorn startup
+├── docker-compose.yml       # Production stack (web + db) — invoked from repo root
+├── docker/                  # All other docker artifacts
+│   ├── Dockerfile           # Multi-stage build (Node CSS + Python app)
+│   ├── Dockerfile.standalone  # All-in-one image with embedded PostgreSQL
+│   ├── docker-compose.dev.yml       # Dev override (exposes db port)
+│   ├── docker-compose.test.yml      # Dedicated test postgres on 5433
+│   ├── docker-compose.standalone.yml # Standalone build/run
+│   ├── entrypoint.sh                # Migrations + uvicorn startup
+│   └── entrypoint.standalone.sh     # PostgreSQL bootstrap + migrations + uvicorn
 ├── input.css                # Tailwind v4 + DaisyUI source styles
 ├── package.json             # Node deps (tailwindcss, daisyui)
 │
@@ -59,7 +64,7 @@ The FastAPI app is created by the factory function in `web/main.py`. On startup:
 3. Static files are mounted from `web/static/`
 4. Route modules are included from `web/routes/`
 
-In Docker, `entrypoint.sh` runs Alembic migrations before starting uvicorn.
+In Docker, `docker/entrypoint.sh` runs Alembic migrations before starting uvicorn.
 
 ## Request Flow
 

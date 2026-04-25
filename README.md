@@ -118,7 +118,7 @@ Runs both the app and PostgreSQL in a single container -- no Compose required.
 git clone https://github.com/SquidBytes/LightningROD.git
 cd LightningROD
 cp .env.example .env
-docker build -f Dockerfile.standalone -t lightningrod:standalone .
+docker build -f docker/Dockerfile.standalone -t lightningrod:standalone .
 docker run -d \
   -p 8000:8000 \
   -v lightningrod-data:/var/lib/postgresql/data \
@@ -130,7 +130,7 @@ docker run -d \
 Or using the standalone compose file:
 
 ```bash
-docker compose -f docker-compose.standalone.yml up --build -d
+docker compose -f docker/docker-compose.standalone.yml up --build -d
 ```
 
 Reference the full [documentation site](https://SquidBytes.github.io/LightningROD/).

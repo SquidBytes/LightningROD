@@ -71,7 +71,7 @@ services:
   web:
     build:
       context: /mnt/user/appdata/LightningROD
-      dockerfile: /mnt/user/appdata/LightningROD/Dockerfile
+      dockerfile: /mnt/user/appdata/LightningROD/docker/Dockerfile
     ports:
       - "8000:8000"
     env_file: .env

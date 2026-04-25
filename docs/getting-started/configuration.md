@@ -38,7 +38,7 @@ When running with Docker Compose, the `POSTGRES_HOST` is automatically set to `d
   web:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
     env_file: .env
     environment:
       - POSTGRES_HOST=db

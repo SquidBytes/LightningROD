@@ -59,7 +59,7 @@ tests/
 
 ## Test Database
 
-Tests use a dedicated Postgres 16 container defined in `docker-compose.test.yml`:
+Tests use a dedicated Postgres 16 container defined in `docker/docker-compose.test.yml`:
 
 | Setting        | Value                |
 |----------------|----------------------|
@@ -70,7 +70,7 @@ Tests use a dedicated Postgres 16 container defined in `docker-compose.test.yml`
 | Storage        | tmpfs (in-memory)    |
 
 The `run-tests.sh` script handles the full lifecycle:
-1. Starts the container (`docker compose -f docker-compose.test.yml up -d`)
+1. Starts the container (`docker compose -f docker/docker-compose.test.yml up -d`)
 2. Waits for the healthcheck to pass (up to 30s)
 3. Runs pytest with `-x --tb=short` (stop on first failure)
 4. Passes through any extra arguments to pytest
@@ -81,13 +81,13 @@ The container persists between runs. Data is ephemeral (tmpfs) but survives unti
 
 ```bash
 # Start
-docker compose -f docker-compose.test.yml up -d test-db
+docker compose -f docker/docker-compose.test.yml up -d test-db
 
 # Stop
-docker compose -f docker-compose.test.yml down
+docker compose -f docker/docker-compose.test.yml down
 
 # Stop and wipe volume
-docker compose -f docker-compose.test.yml down -v
+docker compose -f docker/docker-compose.test.yml down -v
 ```
 
 ## Test Isolation: Transaction Rollback
@@ -324,7 +324,7 @@ These cover:
 
 ```bash
 # Start DB manually
-docker compose -f docker-compose.test.yml up -d test-db
+docker compose -f docker/docker-compose.test.yml up -d test-db
 
 # Run pytest directly
 pytest tests/ -x --tb=short
@@ -391,7 +391,7 @@ POSTGRES_DB=lightningrod_test alembic upgrade head
 If a test passes alone but fails in a suite, check for module-level state that isn't being reset. Add cleanup to the relevant conftest.
 
 **Port 5433 already in use**
-Another test-db container is running: `docker compose -f docker-compose.test.yml down` then retry.
+Another test-db container is running: `docker compose -f docker/docker-compose.test.yml down` then retry.
 
 **"Event loop is closed" errors**
 Usually means a fixture scope mismatch. All DB fixtures should be function-scoped (the default).

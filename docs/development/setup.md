@@ -33,7 +33,7 @@ The defaults work for local development. No changes needed unless you want diffe
 The dev compose override exposes PostgreSQL on port 5432 so you can connect with local tools:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up db -d
+docker compose -f docker-compose.yml -f docker/docker-compose.dev.yml up db -d
 ```
 
 ### 4. Run migrations
