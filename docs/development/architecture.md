@@ -93,6 +93,42 @@ Browser                   FastAPI
    (HTMX swaps into page)
 ```
 
+## Home Assistant Ingestion Architecture
+
+HA data flows through a layered pipeline. The entry point is the `ha_fordpass` adapter (`web/services/sources/ha_fordpass/adapter.py`), which owns `FIELD_CONTRACTS` — a registry of every known HA entity/attribute pair with its declared source unit, target field name, and conversion rule. `hass_processor.py` dispatches raw `state_changed` events to this adapter; it no longer contains any unit-conversion logic of its own.
+
+```
+HA WebSocket
+    |
+hass_client.py   (WebSocket connection, reconnect, backfill)
+    |
+hass_processor.py  (event dispatch)
+    |
+ha_fordpass adapter (FIELD_CONTRACTS, field extraction)
+    |
+Unit Detection Layer (web/services/units/)
+    |
+to_metric()    (pure unit conversion)
+    |
+SQLAlchemy ORM  (ev_charging_session, ev_trip_metrics, ev_battery_status, ...)
+```
+
+### Unit Detection Layer
+
+`web/services/units/detection.py` resolves the source unit for every HA signal at ingestion time using a five-method priority chain:
+
+1. **`declared`** — the signal appears in `FIELD_CONTRACTS` with an explicit `source_unit`.
+2. **`read_time_uom`** — the event's `new_state.attributes.unit_of_measurement` is present and type-compatible.
+3. **`device_class_ha_config`** — inferred from the entity's `device_class` combined with the HA instance's `unit_system` setting.
+4. **`cross_reference`** — ratio-matched against a known-metric canonical value from a paired source seen within the last 5 minutes (e.g. `xev-key-off-trip-segment-data.distance_traveled` in km cross-referenced with `tripDistanceTraveled`).
+5. **`unknown`** — no signal resolved; the field is skipped and the reason is recorded for the Data Sources diagnostic page.
+
+Results are stored in an in-memory module-level cache (no DB persistence). The cache survives for the process lifetime and is visible at `/admin/data-sources`.
+
+### `to_metric()` Conversion
+
+`web/services/units/to_metric.py` is a pure function that converts a raw value from a declared `source_unit` to the canonical metric unit. It raises `UnknownSourceUnit` rather than silently guessing, so bad inputs surface immediately in logs. Supported conversions: `mi → km`, `mph → km/h`, `degF → degC`, `Wh → kWh`; metric inputs (`km`, `kmh`, `degC`, `kWh`, `s`) pass through unchanged.
+
 ## Key Patterns
 
 ### Query Layer Separation
