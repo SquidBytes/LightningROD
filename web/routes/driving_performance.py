@@ -5,7 +5,7 @@ Mirrors web/routes/performance.py structure. Mounted via
 so the handler path `/performance` becomes the external `/driving/performance`.
 """
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import HTMLResponse
@@ -38,8 +38,8 @@ templates = Jinja2Templates(directory="web/templates")
 async def driving_performance(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    range: Optional[str] = "30d",
-    hx_request: Annotated[Optional[str], Header()] = None,
+    range: str | None = "30d",
+    hx_request: Annotated[str | None, Header()] = None,
 ):
     time_range = range or "30d"
 

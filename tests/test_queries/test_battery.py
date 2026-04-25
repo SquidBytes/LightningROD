@@ -4,8 +4,9 @@ Tests SOC timeline, charge curve, degradation trend, downsampling,
 and charging region detection.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
 
 from web.queries.battery import (
     detect_charging_regions,
@@ -13,7 +14,6 @@ from web.queries.battery import (
     query_degradation_data,
     query_soc_timeline,
 )
-
 
 pytestmark = [pytest.mark.query, pytest.mark.db]
 
@@ -59,8 +59,8 @@ async def test_charging_region_detection(battery_scenario):
 
 async def test_charge_curve_for_session(db_session):
     """Create a session + battery records during charging -> verify charge curve data."""
-    from db.models.charging_session import EVChargingSession
     from db.models.battery_status import EVBatteryStatus
+    from db.models.charging_session import EVChargingSession
     from db.models.vehicle import EVVehicle
 
     db = db_session
@@ -72,7 +72,7 @@ async def test_charge_curve_for_session(db_session):
     db.add(v)
     await db.flush()
 
-    start = datetime(2025, 6, 10, 10, 0, 0, tzinfo=timezone.utc)
+    start = datetime(2025, 6, 10, 10, 0, 0, tzinfo=UTC)
     end = start + timedelta(hours=1)
 
     session = EVChargingSession(
@@ -159,8 +159,8 @@ async def test_charge_curve_fallback_when_few_points(db_session):
 
     session = EVChargingSession(
         device_id="FALLBACK_VIN",
-        session_start_utc=datetime(2025, 6, 10, 10, 0, 0, tzinfo=timezone.utc),
-        session_end_utc=datetime(2025, 6, 10, 11, 0, 0, tzinfo=timezone.utc),
+        session_start_utc=datetime(2025, 6, 10, 10, 0, 0, tzinfo=UTC),
+        session_end_utc=datetime(2025, 6, 10, 11, 0, 0, tzinfo=UTC),
         energy_kwh=20.0,
         start_soc=30.0,
         end_soc=60.0,

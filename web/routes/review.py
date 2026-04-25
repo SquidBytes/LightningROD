@@ -1,4 +1,5 @@
-from typing import Optional
+"""Route handlers for review."""
+
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -30,7 +31,7 @@ templates = Jinja2Templates(directory="web/templates")
 
 async def _networks_context(
     db: AsyncSession,
-    q: Optional[str] = None,
+    q: str | None = None,
     filter: str = "all",
     sort: str = "name",
 ) -> dict:
@@ -110,7 +111,7 @@ async def _networks_context(
 
 async def _locations_context(
     db: AsyncSession,
-    q: Optional[str] = None,
+    q: str | None = None,
     filter: str = "all",
     sort: str = "name",
 ) -> dict:
@@ -259,7 +260,7 @@ async def review_queue(
     request: Request,
     tab: str = "pending",
     sub: str = "networks",
-    q: Optional[str] = None,
+    q: str | None = None,
     sort: str = "name",
     db: AsyncSession = Depends(get_db),
 ):
@@ -337,7 +338,7 @@ async def review_queue(
 @router.get("/networks", response_class=HTMLResponse)
 async def review_networks(
     request: Request,
-    q: Optional[str] = None,
+    q: str | None = None,
     sort: str = "name",
     db: AsyncSession = Depends(get_db),
 ):
@@ -353,7 +354,7 @@ async def review_networks(
 @router.get("/locations", response_class=HTMLResponse)
 async def review_locations(
     request: Request,
-    q: Optional[str] = None,
+    q: str | None = None,
     sort: str = "name",
     db: AsyncSession = Depends(get_db),
 ):
@@ -437,16 +438,10 @@ async def unverify_network(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """D-D1 / D-D2: flag-flip only.
+    """Mark a network as unverified and refresh the Approved tab tree.
 
-    Flips ``is_verified`` from ``True`` to ``False`` so a mis-verified network
-    reappears on the Pending tab. Explicitly does NOT touch ``source_system``
-    (the row keeps its provenance marker) and writes no audit record. This is
-    the recovery path for the one-click verify button; without it, reversing
-    a bad verification requires DB surgery.
-
-    Returns the refreshed approved-tree partial because the Unverify click
-    originates on the Approved tab.
+    This flips ``is_verified`` to ``False`` and keeps the existing
+    ``source_system`` value unchanged.
     """
     result = await db.execute(
         select(EVChargingNetwork).where(EVChargingNetwork.id == network_id)
@@ -469,10 +464,10 @@ async def unverify_location(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """D-D1 / D-D2: flag-flip only.
+    """Mark a location as unverified and refresh the Approved tab tree.
 
-    Symmetric to ``unverify_network``. Flips ``loc.is_verified`` back to
-    ``False`` without touching ``source_system`` or writing an audit row.
+    This flips ``is_verified`` to ``False`` and keeps the existing
+    ``source_system`` value unchanged.
     """
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
@@ -495,13 +490,10 @@ async def review_edit_network_modal(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Return the network_edit_modal template rendered in review context
-    (D-A1, D-A3):
+    """Render the shared network edit modal in review-page mode.
 
-    - ``save_url``       -> ``/review/networks/{id}``
-    - ``save_target``    -> ``#review-inner``
-    - ``save_swap``      -> ``innerHTML``
-    - ``caller_context`` -> ``'review'`` (hides Locations + Subscription tabs)
+    The template is configured to post back to review routes and target
+    the review content container.
     """
     result = await db.execute(
         select(EVChargingNetwork).where(EVChargingNetwork.id == network_id)
@@ -528,20 +520,15 @@ async def review_edit_network(
     request: Request,
     db: AsyncSession = Depends(get_db),
     network_name: str = Form(...),
-    cost_per_kwh: Optional[float] = Form(None),
-    color: Optional[str] = Form(None),
-    is_free: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
+    cost_per_kwh: float | None = Form(None),
+    color: str | None = Form(None),
+    is_free: str | None = Form(None),
+    notes: str | None = Form(None),
 ):
-    """Review-scoped network edit (D-A1).
+    """Save edits for one network from the review page.
 
-    Persists changes and returns the review networks partial plus
-    ``HX-Trigger: closeNetworkModal`` so the page-scope dialog listener in
-    review_queue.html dismisses the modal on success.
-
-    Form signature mirrors ``PUT /settings/networks/{network_id}`` so the
-    shared network_edit_modal template can submit to either endpoint
-    identically.
+    Returns the refreshed pending-networks table and sets
+    ``HX-Trigger: closeNetworkModal`` so the client closes the modal.
     """
     result = await db.execute(
         select(EVChargingNetwork).where(EVChargingNetwork.id == network_id)
@@ -569,22 +556,13 @@ async def review_edit_network(
 async def review_location_edit_form(
     location_id: int,
     request: Request,
-    return_to: str = "pending",  # Phase 28.1 G2 — pending|approved
+    return_to: str = "pending",  # Caller tab context: pending or approved.
     db: AsyncSession = Depends(get_db),
 ):
-    """Return the location-edit form markup for the page-scope
-    #edit-loc-modal dialog (Phase 28 / D-A2).
+    """Render the location edit form used by the shared page-level modal.
 
-    Replaces the per-row <dialog id="edit-loc-{id}"> elements that used
-    to live inside #review-inner — those dialogs were destroyed by the
-    HTMX swap that refreshed the locations table on save, which is the
-    Thread A save-bug symptom.
-
-    Phase 28.1 G2 extension: accept a `return_to` query param and pass
-    it into the template context so the rendered form carries the
-    caller's tab context through to the POST /review/location/{id}/edit
-    submission. Ensures Approved-tab saves return the approved-tree
-    partial rather than the pending locations table (resolves MA-02).
+    ``return_to`` preserves the caller tab so the save endpoint can return
+    the correct partial for either Pending or Approved views.
     """
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
@@ -599,7 +577,7 @@ async def review_location_edit_form(
         {
             "loc": loc,
             "all_networks": all_networks,
-            "return_to": return_to,  # Phase 28.1 G2
+            "return_to": return_to,
         },
     )
 
@@ -611,11 +589,10 @@ async def associate_location_modal(
     db: AsyncSession = Depends(get_db),
 ):
     """Return the Associate picker form for the page-scope #edit-loc-modal
-    dialog (Phase 28 / D-C1).
-
+    dialog.
     The picker is a lightweight alternative to the full location edit modal —
     just a network <datalist> combobox + submit. Associating from here does
-    NOT change ``loc.is_verified`` (D-C5); it only sets ``network_id``.
+    not change ``loc.is_verified``; it only sets ``network_id``.
     """
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
@@ -639,24 +616,7 @@ async def associate_location(
     network_id: str = Form(""),
     network_name: str = Form(""),
 ):
-    """Associate an unverified location with a network (Phase 28 / D-C1).
-
-    Resolution order:
-
-    1. If ``network_id`` is provided and non-empty, use it verbatim
-       (datalist match path — the client resolver populated the hidden
-       input because the typed text matched an existing network).
-    2. Else if ``network_name`` (case-insensitive) matches an existing
-       network, use that id (user typed a known name without triggering
-       the datalist match, or submitted via a non-datalist flow).
-    3. Else create a brand-new ``EVChargingNetwork`` with
-       ``is_verified=False`` and ``source_system="manual"`` and
-       associate.
-
-    **D-C5:** ``loc.is_verified`` is NEVER touched here. Association and
-    verification are separate actions so a user can tentatively associate
-    without vouching for the name/slug.
-    """
+    """Associate location."""
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
     )
@@ -664,7 +624,7 @@ async def associate_location(
     if loc is None:
         raise HTTPException(status_code=404, detail="Location not found")
 
-    nid: Optional[int] = None
+    nid: int | None = None
     if network_id.strip():
         nid = int(network_id)
     elif network_name.strip():
@@ -692,8 +652,7 @@ async def associate_location(
 
     if nid is not None:
         loc.network_id = nid
-        # D-C5: explicit no-op on is_verified. Kept as a comment-anchor so
-        # a future 'helpful' refactor cannot silently add an auto-verify.
+        # Association is intentionally separate from verification.
     await db.commit()
 
     ctx = await _locations_context(db, filter="unverified")
@@ -712,21 +671,10 @@ async def promote_location(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Promote-to-own-Network: one-click create+associate+verify (Phase 28 /
-    D-C3).
+    """Create a new network from this location and mark both as verified.
 
-    Intended for the one-off-charger case — a campground plug, a small
-    business, a non-branded public charger — where the location IS the
-    'network'. In one click:
-
-    - Creates a new ``EVChargingNetwork`` named after the location with
-      ``is_verified=True`` and ``source_system="manual"``.
-    - Sets ``loc.network_id`` to the new network.
-    - Flips ``loc.is_verified=True`` and ``loc.source_system="manual"``.
-
-    Valid for any unverified location regardless of current ``network_id``
-    — a mis-auto-associated location can be Promote'd to its own network
-    in one click; the new network replaces the prior ``network_id``.
+    This is the one-click path for places that should be treated as their
+    own network.
     """
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
@@ -768,21 +716,13 @@ async def edit_location(
     latitude: str = Form(""),
     longitude: str = Form(""),
     cost_per_kwh: str = Form(""),
-    return_to: str = Form("pending"),  # Phase 28.1 G2 — pending|approved
+    return_to: str = Form("pending"),  # Caller tab context: pending or approved.
 ):
-    """Edit a location. Accepts optional numeric fields as strings so empty
-    form values coerce cleanly to None instead of tripping FastAPI's 422
-    validation on `Optional[int/float]`.
+    """Save edits for one location and return the matching review partial.
 
-    Fires ``HX-Trigger: closeEditLocModal`` so the page-scope dialog
-    listener in review_queue.html dismisses the modal on success
-    (Phase 28 / D-A2, Pattern S1).
-
-    Phase 28.1 G2: `return_to` selects the response partial. `approved`
-    returns the approved-tree partial into #review-content so the
-    Approved-tab caller's tree refreshes; anything else returns the
-    pending locations table into #review-inner. Strict-equality compare
-    (T-28.1-01).
+    Numeric form fields are accepted as strings so blank values can be saved
+    as ``None`` without a validation error. ``return_to`` chooses whether the
+    response refreshes the Pending table or the Approved tree.
     """
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
@@ -797,9 +737,7 @@ async def edit_location(
         loc.longitude = float(longitude) if longitude.strip() else None
         loc.cost_per_kwh = float(cost_per_kwh) if cost_per_kwh.strip() else None
         await db.commit()
-    # Phase 28.1 G2 / MA-02: branch on caller tab so the approved tree
-    # refreshes in place rather than the wrong (pending) partial being
-    # swapped into #review-content.
+    # Refresh the partial that matches the caller tab.
     if return_to == "approved":
         ctx = await _approved_tree_context(db)
         response = templates.TemplateResponse(
@@ -883,11 +821,8 @@ async def network_merge_preview(
     """Show merge preview modal for a network with counts of affected items.
 
     `return_to` plumbs the caller's active tab through to the POST handler
-    so the response partial lands in the correct swap zone. Value is echoed
-    verbatim into a hidden input inside the rendered form (T-28.1-02 — only
-    compared via `== "approved"` in handler/template; all other values fall
-    through to the pending branch, so no validation beyond string equality
-    is required).
+    so the response partial lands in the correct swap zone. The value is
+    echoed into a hidden input and compared as ``== "approved"``.
     """
     result = await db.execute(
         select(EVChargingNetwork).where(EVChargingNetwork.id == source_id)
@@ -952,7 +887,7 @@ async def merge_network(
     `return_to` selects the response partial so the caller's active tab
     sees its own swap zone refresh. `approved` -> approved-tree partial
     into #review-content; anything else -> networks table into
-    #review-inner. Compared via strict equality (T-28.1-01).
+    #review-inner.
     """
     if source_id == target_id:
         raise HTTPException(status_code=400, detail="Cannot merge a network into itself")
@@ -1035,8 +970,7 @@ async def location_merge_preview(
     """Show merge preview modal for a location with counts of affected items.
 
     `return_to` is echoed into a hidden input inside the rendered form so
-    the subsequent POST carries the caller's tab context. See
-    `network_merge_preview` for the shared rationale (T-28.1-02).
+    the subsequent POST carries the caller's tab context.
     """
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == source_id)
@@ -1095,7 +1029,7 @@ async def merge_location(
     `return_to` selects the response partial — `approved` returns the
     approved-tree into #review-content so an Approved-tab user sees their
     tree refresh; anything else returns the locations table into
-    #review-inner. Strict-equality compare (T-28.1-01).
+    #review-inner.
     """
     if source_id == target_id:
         raise HTTPException(status_code=400, detail="Cannot merge a location into itself")
@@ -1127,7 +1061,7 @@ async def merge_location(
 
     # Create GPS alias from source coordinates for future location memory
     if source.latitude is not None and source.longitude is not None:
-        from web.queries.locations import haversine_meters, LOCATION_MATCH_RADIUS_M
+        from web.queries.locations import LOCATION_MATCH_RADIUS_M, haversine_meters
         # Check if an existing alias for the same target is already within 100m
         existing_aliases_result = await db.execute(
             select(EVLocationGPSAlias).where(

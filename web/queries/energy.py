@@ -1,6 +1,7 @@
+"""Query helpers for energy."""
+
 import statistics
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 import plotly.express as px
@@ -54,7 +55,7 @@ def build_time_filter_trip(range_str: str):
     if not range_str or range_str == "all":
         return None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if range_str == "7d":
         cutoff = now - timedelta(days=7)
@@ -63,7 +64,7 @@ def build_time_filter_trip(range_str: str):
     elif range_str == "90d":
         cutoff = now - timedelta(days=90)
     elif range_str == "ytd":
-        cutoff = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+        cutoff = datetime(now.year, 1, 1, tzinfo=UTC)
     elif range_str == "1y":
         cutoff = now - timedelta(days=365)
     else:
@@ -72,7 +73,7 @@ def build_time_filter_trip(range_str: str):
     return EVTripMetrics.start_time >= cutoff
 
 
-async def query_energy_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict:
+async def query_energy_summary(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> dict:
     """Compute energy summary from EVChargingSession rows.
 
     Returns dict with:
@@ -109,7 +110,7 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
 
     for s in sessions:
         total_sessions += 1
-        kwh = float(s.energy_kwh)
+        kwh = float(s.energy_kwh or 0)
         total_kwh += kwh
 
         # Group by charge type — AC, DC, or Unknown (anything else/NULL)
@@ -151,14 +152,14 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
     if len(sessions_for_chart) > 200 and time_range in ("all", "1y"):
         df = pd.DataFrame(sessions_for_chart)
         df["date"] = pd.to_datetime(df["date"], utc=True)
-        sessions_for_chart = (
+        df_chart = (
             df.groupby([df["date"].dt.date, "charge_type"])
             .agg(efficiency=("efficiency", "mean"))
             .reset_index()
         )
         # Convert date back to datetime for chart compatibility
-        sessions_for_chart["date"] = pd.to_datetime(sessions_for_chart["date"])
-        sessions_for_chart = sessions_for_chart.to_dict("records")
+        df_chart["date"] = pd.to_datetime(df_chart["date"])
+        sessions_for_chart = df_chart.to_dict("records")
 
     return {
         "total_kwh": total_kwh,
@@ -174,7 +175,7 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
 async def monthly_energy_series(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[tuple[datetime, float]]:
     """Return (month_start, total_energy_kwh) per month in the filter range.
 
@@ -206,7 +207,7 @@ async def monthly_energy_series(
 async def efficiency_over_time_series(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[tuple[datetime, float]]:
     """Return (session_start, km_per_kwh) per session with usable energy+distance.
 
@@ -243,21 +244,17 @@ async def efficiency_over_time_series(
     ]
 
 
-async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict | None:
+async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> dict | None:
     """Compute regen braking summary from EVTripMetrics.
-
     Returns None when ev_trip_metrics has no rows with range_regenerated data
     (triggers "No data available" card state in the template).
-
     Returns dict with:
-    - regen_total: float
-    - trip_count: int
-
+    regen_total: float
+    trip_count: int
     NOTE: range_regenerated units are ambiguous — likely "miles of range recovered"
     but not confirmed. Template uses generic "range units" label.
     TODO: Validate range_regenerated units against raw fordpass API response.
-
-    PITFALL: SUM() on empty/null data returns NULL not 0. Count-first guard prevents
+    PITFALL: SUM on empty/null data returns NULL not 0. Count-first guard prevents
     TypeError: float(None).
     """
     trip_filter = build_time_filter_trip(time_range)
@@ -298,7 +295,7 @@ async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_
 
 
 async def query_regen_for_chart(
-    db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None,
+    db: AsyncSession, time_range: str = "all", device_id: str | None = None,
 ) -> list[dict] | None:
     """Return per-trip regen data for chart secondary y-axis overlay.
 
@@ -324,7 +321,7 @@ async def query_regen_for_chart(
     chart_data = [
         {
             "date": r.start_time,
-            "range_regenerated": float(r.range_regenerated),
+            "range_regenerated": float(r.range_regenerated or 0),
         }
         for r in rows
     ]
@@ -344,7 +341,7 @@ async def query_regen_for_chart(
     return chart_data
 
 
-async def query_monthly_energy(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> list[dict]:
+async def query_monthly_energy(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> list[dict]:
     """Return monthly kWh grouped by charge type for stacked area chart.
 
     Returns list of dicts: [{"month": "2025-01", "charge_type": "AC", "kwh": 45.2}, ...]
@@ -721,7 +718,7 @@ def build_synthetic_charge_curve_chart(
 async def query_synthetic_curve_inputs(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> dict:
     """Collect DC-session peak kW values for synthetic curve aggregation.
 
@@ -764,13 +761,12 @@ async def query_synthetic_curve_inputs(
 async def has_real_charge_curve_data(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> bool:
     """True iff any DC session in window has >= 3 EVBatteryStatus rows within its
     [session_start_utc, session_end_utc] span.
-
-    Reuses Phase 17.1's "< 3 detailed points" threshold for fallback trigger:
-    when True the synthetic curve is hidden and the real Phase 17.1 charge curve
+    Reuses 's "< 3 detailed points" threshold for fallback trigger:
+    when True the synthetic curve is hidden and the real charge curve
     chart is rendered instead.
     """
     sess_stmt = select(

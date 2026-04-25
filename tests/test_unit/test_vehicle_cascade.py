@@ -1,17 +1,14 @@
-"""Unit tests for the split trim_level + battery_option cascade lookup (Plan 27-04).
-
-Phase 27 Plan 3 split EVVehicle.trim into trim_level + battery_option and
-seeded a 65-row preset matrix. Plan 27-04 rewires the vehicle edit modal and
+"""Unit tests for the split trim_level + battery_option cascade lookup.
+split EVVehicle.trim into trim_level + battery_option and
+seeded a 65-row preset matrix. rewires the vehicle edit modal and
 filter bar to use both fields and makes the cascade auto-fill re-resolve on
 any upstream change. The root cause of the pre-27 cascade bug was that the
 single `trim` input conflated "Lariat SR" and "Lariat ER" -- selecting either
 one returned an ambiguous match and the battery fields never populated.
-
 This file is the regression surface for that bug: each test below would have
 been impossible to satisfy with the single-field cascade.
-
-See: .planning/phases/27-analytics-polish-and-vehicle-preset-overhaul/27-04-PLAN.md
-     app-public/web/queries/vehicles.py::lookup_battery_values
+See:
+app-public/web/queries/vehicles.py::lookup_battery_values
 """
 from web.queries.vehicles import lookup_battery_values
 
@@ -37,8 +34,7 @@ def test_cascade_rejects_partial_match():
 
 def test_cascade_lariat_sr_vs_er_distinguishable():
     """Same year/trim_level, different battery_option -> different pack values.
-
-    This is the explicit regression test for the Phase 27 cascade bug: 2024
+    This is the explicit regression test for the cascade bug: 2024
     Lariat SR (98/108) must differ from 2024 Lariat ER (131/143).
     """
     sr = lookup_battery_values(
@@ -54,8 +50,7 @@ def test_cascade_lariat_sr_vs_er_distinguishable():
 
 def test_cascade_flash_2025_collapsed_single_row():
     """2025 Flash uses the ER-123 pack (123/135), not the full ER pack.
-
-    RESEARCH.md §5 Q1: MY2025 Flash swaps to the 123 kWh usable pack while the
+    §5 Q1: MY2025 Flash swaps to the 123 kWh usable pack while the
     rest of the 2025 lineup keeps the 131 kWh pack. The cascade must honor
     that single-row swap.
     """
@@ -66,8 +61,7 @@ def test_cascade_flash_2025_collapsed_single_row():
 
 def test_cascade_stx_alias_to_xlt():
     """MY2026 XLT ER resolves to the 123/135 ER-123 pack.
-
-    RESEARCH.md §5 Q3 noted the "STX" marketing name is treated as an alias
+    §5 Q3 noted the "STX" marketing name is treated as an alias
     for XLT in our catalog -- the catalog stores XLT and the user enters XLT
     via the trim_level datalist (populated from VEHICLE_PRESETS). This test
     pins the post-alias lookup so future edits cannot accidentally split XLT

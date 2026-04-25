@@ -1,7 +1,7 @@
 """Base factory class with seeded RNG and counter for deterministic test data."""
 
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 
 class BaseFactory:
@@ -33,7 +33,7 @@ class BaseFactory:
         days_forward: int = 0,
     ) -> datetime:
         """Generate a random datetime within a range relative to now (UTC)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start = now - timedelta(days=days_back)
         end = now + timedelta(days=days_forward) if days_forward else now
         delta = (end - start).total_seconds()

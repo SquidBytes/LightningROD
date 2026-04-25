@@ -1,4 +1,6 @@
-from typing import Annotated, Optional
+"""Route handlers for battery."""
+
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import HTMLResponse
@@ -23,7 +25,11 @@ from web.queries.battery import (
     query_soc_timeline,
 )
 from web.queries.settings import get_app_setting, get_unit_context
-from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
+from web.queries.vehicles import (
+    get_active_device_id,
+    get_active_vehicle,
+    get_all_vehicles,
+)
 from web.unit_system import MI_PER_KM
 
 router = APIRouter()
@@ -34,10 +40,10 @@ templates = Jinja2Templates(directory="web/templates")
 async def battery(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    range: Optional[str] = "7d",
-    session: Optional[int] = None,
-    section: Optional[str] = None,
-    hx_request: Annotated[Optional[str], Header()] = None,
+    range: str | None = "7d",
+    session: int | None = None,
+    section: str | None = None,
+    hx_request: Annotated[str | None, Header()] = None,
 ):
     time_range = range or "7d"
 

@@ -3,14 +3,14 @@
 Tests gas comparison and network rate comparison calculations.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
 
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargingNetwork, GasPriceHistory
 from db.models.vehicle import EVVehicle
 from web.queries.comparisons import query_gas_comparison, query_network_comparison
-
 
 pytestmark = [pytest.mark.query, pytest.mark.db]
 
@@ -71,7 +71,7 @@ async def _setup_comparison_data(db):
             distance_added=miles * KM_PER_MI,
             network_id=net.id,
             location_name="Comparison Net",
-            session_start_utc=datetime(2025, 6, 1, tzinfo=timezone.utc) + timedelta(days=i),
+            session_start_utc=datetime(2025, 6, 1, tzinfo=UTC) + timedelta(days=i),
             is_complete=True,
             source_system="test",
         )

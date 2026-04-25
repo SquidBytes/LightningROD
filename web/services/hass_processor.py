@@ -6,31 +6,33 @@ energytransferlogentry, vehicle status snapshots, battery status updates,
 and trip metrics. Also handles gas price sensor events from arbitrary
 entity_ids configured in app_settings.
 
-Phase 29 D-A4: unit conversion logic has been removed from this module.
-Every conversion now routes through web.services.sources.ha_fordpass.adapter
-(FIELD_CONTRACTS registry) + web.services.units.to_metric (pure dispatch).
+Unit conversion logic has been removed from this module. Conversion now
+routes through `web.services.sources.ha_fordpass.adapter` (FIELD_CONTRACTS
+registry) plus `web.services.units.to_metric`.
 """
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from web.services.sources.ha_fordpass import adapter as ha_fordpass
+from web.services.units import detection
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
 
 logger = logging.getLogger("lightningrod.hass.processor")
 
 
 # ---------------------------------------------------------------------------
-# Read-time unit_of_measurement helpers (D-B3 per-event)
+# Read-time unit_of_measurement helpers
 # ---------------------------------------------------------------------------
 
-def _read_time_uom(new_state: dict) -> Optional[str]:
+def _read_time_uom(new_state: dict) -> str | None:
     """Return the normalized source_unit from new_state.attributes.unit_of_measurement.
 
-    Returns None when the event carries no UoM attribute. D-B3 mandates that
-    callers use this per-event, never a process-global flag. When the result
+    Returns None when the event carries no UoM attribute. Callers use this
+    per-event value, never a process-global flag. When the result
     is None the caller must decide whether to skip (preferred for unit-ful
     fields) or passthrough (only for fields it knows are already metric).
     """
@@ -45,31 +47,81 @@ def _read_time_uom(new_state: dict) -> Optional[str]:
 
 def _convert_with_uom(
     raw_value: Any,
-    source_unit: Optional[str],
+    source_unit: str | None,
     field_name: str,
-    entity_id: Optional[str] = None,
-) -> Optional[float]:
+    entity_id: str | None = None,
+    *,
+    entity_pattern: str | None = None,
+    attribute: str | None = None,
+    device_id: str | None = None,
+) -> float | None:
     """Convert raw_value from source_unit to metric; log + return None on failure.
 
-    Used by handlers for fields NOT represented in FIELD_CONTRACTS today
-    (legacy elveh-state reads retained as a D-B4 fallback until downstream
-    consumers migrate to the events entity). When `source_unit` is None the
-    event carries no UoM attribute — per D-B3 we must NOT silently
-    passthrough, so we warn-log and return None.
+    Used by handlers for fields not represented in FIELD_CONTRACTS today.
+    When `source_unit` is None, the event carries no UoM attribute. In that
+    case we first consult the unit-detection layer (which may have
+    cross-referenced a unit from a sibling entity), and if that also has no
+    answer we warn-log and return None.
+
+    `entity_pattern` / `attribute` are passed through to the detection layer
+    so unit-of-measurement observations for this source get recorded. If a
+    caller omits them we derive `entity_pattern` from `entity_id`, and fall
+    back to using `field_name` as the attribute key.
     """
     if raw_value is None:
         return None
+
+    # Derive detection keys. Callers may pass entity_pattern/attribute
+    # explicitly; if not, derive them from entity_id + field_name.
+    if entity_pattern is None and entity_id is not None:
+        entity_pattern = ha_fordpass._entity_pattern(entity_id)
+    if attribute is None:
+        attribute = field_name or ""
+
     if source_unit is None:
+        # Try the detection layer as a last-resort fallback.
+        resolved = None
+        if entity_pattern is not None:
+            resolved = detection.resolve_unit(entity_pattern, attribute or "")
+        if resolved is not None:
+            try:
+                converted = to_metric(raw_value, resolved)
+            except UnknownSourceUnit:
+                logger.warning(
+                    "detection.resolve_unit returned %r but to_metric rejected it "
+                    "on %s.%s (value=%r); skipping",
+                    resolved,
+                    entity_id or "<unknown>",
+                    field_name,
+                    raw_value,
+                )
+                return None
+            logger.debug(
+                "read-time UoM absent on %s.%s; detection layer resolved %r",
+                entity_id or "<unknown>",
+                field_name,
+                resolved,
+            )
+            return converted
         logger.warning(
             "read-time UoM missing on %s for field %s; skipping value %r "
-            "(D-B3: adapter will not assume metric)",
+            "(adapter will not assume metric)",
             entity_id or "<unknown>",
             field_name,
             raw_value,
         )
+        if entity_pattern is not None:
+            detection.record_unknown(
+                entity_pattern,
+                attribute or "",
+                raw_value,
+                reason="no unit_of_measurement on event",
+                device_id=device_id,
+            )
         return None
+
     try:
-        return to_metric(raw_value, source_unit)
+        converted = to_metric(raw_value, source_unit)
     except UnknownSourceUnit:
         logger.warning(
             "UnknownSourceUnit on %s.%s: value=%r source_unit=%r; skipping",
@@ -80,13 +132,23 @@ def _convert_with_uom(
         )
         return None
 
+    if entity_pattern is not None:
+        detection.record_read_time(
+            entity_pattern,
+            attribute or "",
+            source_unit,
+            raw_value,
+            device_id=device_id,
+        )
+    return converted
+
 
 # ---------------------------------------------------------------------------
 # Slug extractor
 # ---------------------------------------------------------------------------
 
 
-def extract_slug(entity_id: str) -> Optional[str]:
+def extract_slug(entity_id: str) -> str | None:
     """Extract sensor slug from entity_id pattern sensor.fordpass_{vin}_{slug}.
 
     Example: sensor.fordpass_1ftvw1el6pwg05841_soc -> soc
@@ -148,7 +210,7 @@ async def _flush_vehicle_status(device_id: str, db) -> None:
 
     record = EVVehicleStatus(
         device_id=device_id,
-        recorded_at=fields.pop("_recorded_at", datetime.now(timezone.utc)),
+        recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
         source_system="home_assistant",
         **fields,
     )
@@ -167,16 +229,61 @@ async def _flush_battery_status(device_id: str, db) -> None:
 
     record = EVBatteryStatus(
         device_id=device_id,
-        recorded_at=fields.pop("_recorded_at", datetime.now(timezone.utc)),
+        recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
         source_system="home_assistant",
-        ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,  # D-D1
+        ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
         **fields,
     )
     db.add(record)
     logger.debug("Flushed battery status for %s (%d fields)", device_id, len(fields))
 
 
-def _safe_float(val) -> Optional[float]:
+async def _find_matching_trip(
+    db,
+    device_id: str,
+    distance: float | None,
+    energy_consumed: float | None,
+):
+    """Query for an existing EVTripMetrics row matching this trip.
+
+    Match key: device_id + distance within ±0.01 km + energy_consumed within
+    ±0.01 kWh + end_time within the last 24 hours.  Returns the first matching
+    row or None.
+
+    Both the _elveh handler (handle_battery_status) and the _events handler
+    (adapter._handle_events_entity) call this before inserting so that when
+    both fire for the same physical trip only one row is written — the second
+    handler enriches the existing row instead of duplicating it.
+    """
+    if distance is None or energy_consumed is None:
+        return None
+
+    from datetime import timedelta
+
+    from sqlalchemy import and_, select
+
+    from db.models.trip_metrics import EVTripMetrics
+
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    result = await db.execute(
+        select(EVTripMetrics)
+        .where(
+            and_(
+                EVTripMetrics.device_id == device_id,
+                EVTripMetrics.distance.between(distance - 0.01, distance + 0.01),
+                EVTripMetrics.energy_consumed.between(
+                    energy_consumed - 0.01, energy_consumed + 0.01
+                ),
+                EVTripMetrics.end_time >= cutoff,
+            )
+        )
+        .order_by(EVTripMetrics.end_time.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+def _safe_float(val) -> float | None:
     """Safely convert a value to float, returning None on failure."""
     if val is None:
         return None
@@ -186,7 +293,7 @@ def _safe_float(val) -> Optional[float]:
         return None
 
 
-def _get_state_value(new_state: dict) -> Optional[str]:
+def _get_state_value(new_state: dict) -> str | None:
     """Extract state value from HA state object."""
     if not new_state:
         return None
@@ -201,18 +308,65 @@ def _get_attributes(new_state: dict) -> dict:
 
 
 def _get_unit_system(ha_config: dict) -> dict:
-    """Extract HA unit system from config.
+    """Extract HA unit system dict from config.
 
-    Phase 29 D-A4: no longer forwards FordPass-specific override keys — those
-    have been deleted. Callers that need per-event unit handling must now use
-    `_read_time_uom(new_state)` to pull unit_of_measurement from the event
-    itself (D-B3), or route through
-    `web.services.sources.ha_fordpass.adapter`.
+    Returns a dict shaped {"length": ..., "temperature": ..., "volume": ...,
+    "mass": ...} when HA provides one, or an empty dict otherwise.
+
+    Consumers: `detection.resolve_source_unit()` uses this dict (plus
+    device_class) to infer a source unit when the event itself carries no
+    unit_of_measurement attribute.
     """
-    return dict(ha_config.get("unit_system", {}))
+    if not isinstance(ha_config, dict):
+        return {}
+    us = ha_config.get("unit_system")
+    if isinstance(us, dict):
+        return dict(us)
+    # Older HA ships a flat "metric"/"imperial" string. Keep it addressable
+    # as a dict with a synthetic marker so the resolver can still see it.
+    if isinstance(us, str):
+        return {"_flat": us}
+    return {}
 
 
-def _get_event_timestamp(new_state: dict) -> Optional[datetime]:
+def _resolve_and_convert(
+    *,
+    raw_value: Any,
+    entity_id: str,
+    attribute: str,
+    new_state: dict,
+    ha_config: dict,
+    field_type: str,
+    device_id: str | None,
+) -> float | None:
+    """Resolve the source unit via HA signals, then convert via to_metric.
+
+    Convenience wrapper used by the legacy vehicle-status and battery-status
+    handlers. Hides the resolve -> convert -> record chain so handler code
+    stays readable.
+    """
+    if raw_value is None:
+        return None
+    resolved_unit, method, confidence = detection.resolve_source_unit(
+        entity_id=entity_id,
+        attribute=attribute,
+        new_state=new_state,
+        ha_config=ha_config,
+        field_type=field_type,
+        raw_value=raw_value,
+        device_id=device_id,
+    )
+    return detection.convert_with_resolved_unit(
+        raw_value=raw_value,
+        resolved_unit=resolved_unit,
+        method=method,
+        confidence=confidence,
+        entity_id=entity_id,
+        attribute=attribute,
+    )
+
+
+def _get_event_timestamp(new_state: dict) -> datetime | None:
     """Extract event timestamp from HA state object.
 
     Tries last_changed, then last_updated, parsing ISO format with timezone.
@@ -234,6 +388,23 @@ def _get_event_timestamp(new_state: dict) -> Optional[datetime]:
 
 
 # ---------------------------------------------------------------------------
+# Adapter-delegated handler (metrics + events entities)
+# ---------------------------------------------------------------------------
+
+@handles("metrics", "events")
+async def handle_via_adapter(slug, new_state, ha_config, device_id, db):
+    """Delegate _metrics and _events entities to ha_fordpass.process_event.
+
+    These slugs are the metric-canonical sources for battery status
+    (xevBatteryRange / xevBatteryMaximumRange) and trip metrics
+    (xev-key-off-trip-segment-data). The adapter owns the FIELD_CONTRACTS
+    routing; this dispatcher simply hands off.
+    """
+    entity_id = f"sensor.fordpass_{device_id}_{slug}"
+    await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
+
+
+# ---------------------------------------------------------------------------
 # Vehicle status handler
 # ---------------------------------------------------------------------------
 
@@ -250,31 +421,43 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
     Accumulates fields in a pending dict and flushes on 'lastrefresh'
     or after a timeout to produce one EVVehicleStatus row per batch.
 
-    D-B3: distance + temperature conversions read `unit_of_measurement` from
-    the event itself (per-event), never from a process-global flag.
+    Distance and temperature conversions resolve the source unit per-event
+    via `detection.resolve_source_unit` (read-time UoM -> device_class +
+    ha_config.unit_system -> cross-reference cache -> unknown). No hardcoded
+    default unit is ever assumed; values with no resolvable unit are
+    dropped from the pending dict and surfaced on /admin/data-sources.
     """
     state_val = _get_state_value(new_state)
-    _get_unit_system(ha_config)  # kept for side-effect parity; unit system no longer carries flags
     entity_id = f"sensor.fordpass_{device_id}_{slug}"
 
     # Initialize pending dict for this device if needed
     if device_id not in _pending_vehicle_status:
         _pending_vehicle_status[device_id] = {}
-        _pending_vehicle_status[device_id]["_recorded_at"] = datetime.now(timezone.utc)
+        _pending_vehicle_status[device_id]["_recorded_at"] = datetime.now(UTC)
 
     pending = _pending_vehicle_status[device_id]
 
-    # Read-time UoM lookup (D-B3) — used by distance + temp converters below.
-    uom_for_event = _read_time_uom(new_state)
-
     def _distance_converter(v):
-        # Fall back to declared HA vehicle-status sensor default ("mi") when
-        # the event carries no unit_of_measurement attribute. Simulator +
-        # test fixtures populate a UoM; production HA events do too.
-        return _convert_with_uom(v, uom_for_event or "mi", slug, entity_id)
+        return _resolve_and_convert(
+            raw_value=v,
+            entity_id=entity_id,
+            attribute="",
+            new_state=new_state,
+            ha_config=ha_config,
+            field_type="distance",
+            device_id=device_id,
+        )
 
     def _temp_converter(v):
-        return _convert_with_uom(v, uom_for_event or "degF", slug, entity_id)
+        return _resolve_and_convert(
+            raw_value=v,
+            entity_id=entity_id,
+            attribute="",
+            new_state=new_state,
+            ha_config=ha_config,
+            field_type="temperature",
+            device_id=device_id,
+        )
 
     # Map slug to field. Numeric + distance/temp converters route through
     # web.services.units.to_metric via _convert_with_uom; string / _safe_float
@@ -317,6 +500,9 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
         if state_val is not None and state_val not in ("unknown", "unavailable"):
             pending[field_name] = converter(state_val)
 
+    if slug == "outsidetemp":
+        await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
+
     # Check timeout-based flush
     _pending_vehicle_status_ts.setdefault(device_id, time.time())
     if time.time() - _pending_vehicle_status_ts[device_id] > _FLUSH_TIMEOUT:
@@ -333,47 +519,68 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
 
     Accumulates fields similar to vehicle status batching.
 
-    D-B1/D-B4 note: in the legacy adapter path this handler also ingested
-    trip data from `elveh.trip*` attributes. Phase 29 rules forbid reading
-    unit-ful trip fields from elveh (D-B4). For production deployments with
-    a sensor.fordpass_{vin}_events entity, trip ingestion now flows through
-    ha_fordpass.adapter.process_event against the events entity. This
-    handler retains an elveh-state trip-ingest fallback for HA installs
-    without the events entity, but every unit-ful read now uses a read-time
-    `unit_of_measurement` lookup (D-B3) rather than a process-global flag.
+    In the legacy adapter path this handler also ingested trip data from
+    `elveh.trip*` attributes. Production ingestion now prefers events-entity
+    trip data through `ha_fordpass.adapter.process_event`. This handler keeps
+    an elveh fallback for installations without that entity.
+
+    Unit resolution for every unit-bearing field goes through
+    `detection.resolve_source_unit` — no hardcoded fallback units. When
+    resolution fails (no UoM, no device_class, no unit_system, no cross-ref),
+    the field is dropped and surfaced on /admin/data-sources.
     """
     state_val = _get_state_value(new_state)
     attrs = _get_attributes(new_state)
-    _get_unit_system(ha_config)  # kept for side-effect parity
     entity_id = f"sensor.fordpass_{device_id}_{slug}"
-
-    # D-B3 read-time UoM (may be None if event carries no attribute).
-    uom_for_event = _read_time_uom(new_state)
 
     # Initialize pending dict for this device if needed
     if device_id not in _pending_battery_status:
         _pending_battery_status[device_id] = {}
-        _pending_battery_status[device_id]["_recorded_at"] = datetime.now(timezone.utc)
+        _pending_battery_status[device_id]["_recorded_at"] = datetime.now(UTC)
 
     pending = _pending_battery_status[device_id]
 
     if slug == "soc":
         # HV battery state of charge (%)
         pending["hv_battery_soc"] = _safe_float(state_val)
-        # batteryRange is an elveh-shaped fallback attribute on the soc entity
-        # (same family as elveh state; D-B3 per-event UoM resolution).
+        # batteryRange is an elveh-shaped fallback attribute on the soc entity.
+        # The soc state UoM is "%", which is NOT the batteryRange attribute's
+        # unit. Fall through to the detection-layer cross-reference path:
+        # metrics.xevBatteryRange provides the canonical km value that will
+        # back-fill the unit for this source. If detection has no prior
+        # signal the value is dropped, not silently defaulted to "mi".
         battery_range = attrs.get("batteryRange")
         if battery_range is not None:
-            pending["hv_battery_range"] = _convert_with_uom(
-                battery_range, uom_for_event or "mi", "batteryRange", entity_id
+            # The soc entity's unit_of_measurement is "%", which isn't a
+            # distance unit. _normalize_uom_string("%") returns None, so the
+            # resolver falls through to device_class + ha_config -> cross-ref
+            # against metrics.xevBatteryRange -> unknown. No silent "mi" default.
+            converted = _resolve_and_convert(
+                raw_value=battery_range,
+                entity_id=entity_id,
+                attribute="batteryRange",
+                new_state=new_state,
+                ha_config=ha_config,
+                field_type="distance",
+                device_id=device_id,
             )
+            if converted is not None:
+                pending["hv_battery_range"] = converted
 
     elif slug == "elveh":
-        # EV range (state value). D-B3 read-time UoM from the event itself.
+        # EV range (state value) — resolver reads read-time UoM from the event.
         if state_val not in (None, "unknown", "unavailable"):
-            pending["hv_battery_range"] = _convert_with_uom(
-                state_val, uom_for_event or "mi", "elveh.state", entity_id
+            converted = _resolve_and_convert(
+                raw_value=state_val,
+                entity_id=entity_id,
+                attribute="",
+                new_state=new_state,
+                ha_config=ha_config,
+                field_type="distance",
+                device_id=device_id,
             )
+            if converted is not None:
+                pending["hv_battery_range"] = converted
         # Rich battery attributes (SI-already — no conversion needed, no
         # FIELD_CONTRACTS entry per _EXEMPTIONS in test_contract_coverage).
         hv_voltage = _safe_float(attrs.get("batteryVoltage"))
@@ -403,32 +610,74 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             pending["motor_amperage"] = motor_amperage
         if motor_kw is not None:
             pending["motor_kw"] = motor_kw
-        # Max range from attributes — unit-ful, D-B3 read-time UoM.
+        # Max range from attributes — unit-bearing, resolved via HA signals.
         max_range = _safe_float(attrs.get("maximumBatteryRange"))
         if max_range is not None:
-            pending["hv_battery_max_range"] = _convert_with_uom(
-                max_range, uom_for_event or "mi", "maximumBatteryRange", entity_id
+            converted = _resolve_and_convert(
+                raw_value=max_range,
+                entity_id=entity_id,
+                attribute="maximumBatteryRange",
+                new_state=new_state,
+                ha_config=ha_config,
+                field_type="distance",
+                device_id=device_id,
+            )
+            if converted is not None:
+                pending["hv_battery_max_range"] = converted
+
+        # --- Trip attributes from elveh entity (legacy fallback) ---
+        # Distance + temperature converters resolve per-attribute via the
+        # detection layer so each attribute can independently benefit from
+        # device_class + unit_system + cross-reference signals. No hardcoded
+        # defaults; attributes without resolvable units are dropped.
+
+        def _d(v, _attr: str = ""):
+            return _resolve_and_convert(
+                raw_value=v,
+                entity_id=entity_id,
+                attribute=_attr,
+                new_state=new_state,
+                ha_config=ha_config,
+                field_type="distance",
+                device_id=device_id,
             )
 
-        # --- Trip attributes from elveh entity (D-B4 legacy fallback) ---
-        # Distance + temperature converters use D-B3 read-time UoM. Temp
-        # attributes typically share the elveh state UoM (°F/°C); when they
-        # don't, production HA events carry a per-attribute uom which would
-        # need attribute-specific resolution (tracked in 29-03).
-        distance_uom = uom_for_event or "mi"
-        temp_uom_default = "degF" if (uom_for_event or "").lower() in ("mi", "mph") else "degC"
+        def _t(v, _attr: str = ""):
+            return _resolve_and_convert(
+                raw_value=v,
+                entity_id=entity_id,
+                attribute=_attr,
+                new_state=new_state,
+                ha_config=ha_config,
+                field_type="temperature",
+                device_id=device_id,
+            )
 
-        def _d(v):
-            return _convert_with_uom(v, distance_uom, "elveh.trip_distance", entity_id)
+        # Adapter-routed converters for elveh-sourced fields that DO have a
+        # FIELD_CONTRACTS entry. Routing through ha_fordpass.convert records
+        # the conversion in adapter._last_seen_raw so /admin/data-sources
+        # shows elveh observations alongside metrics/events ones. Contracts
+        # for elveh state-unit distance fields use read-time UoM resolution
+        # internally via adapter._resolve_source_unit.
+        _elveh_pattern = "sensor.fordpass_{vin}_elveh"
+        _efficiency_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripEfficiency")
+        _range_regen_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripRangeRegenerated")
 
-        def _t(v):
-            return _convert_with_uom(v, temp_uom_default, "elveh.trip_temp", entity_id)
+        def _efficiency_conv(v):
+            if _efficiency_contract is None:
+                return _d(v)
+            return ha_fordpass.convert(_efficiency_contract, v, new_state, ha_config)
+
+        def _range_regen_conv(v):
+            if _range_regen_contract is None:
+                return _d(v)
+            return ha_fordpass.convert(_range_regen_contract, v, new_state, ha_config)
 
         trip_attr_map = {
             "tripDistanceTraveled": ("distance", _d),
             "tripDuration": ("duration", _safe_float),
             "tripEnergyConsumed": ("energy_consumed", _safe_float),
-            "tripEfficiency": ("efficiency", _d),
+            "tripEfficiency": ("efficiency", _efficiency_conv),
             "tripDrivingScore": ("driving_score", _safe_float),
             "tripSpeed": ("speed_score", _safe_float),
             "tripAcceleration": ("acceleration_score", _safe_float),
@@ -436,15 +685,21 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             "tripAmbientTemp": ("ambient_temp", _t),
             "tripOutsideAirAmbientTemp": ("outside_air_temp", _t),
             "tripCabinTemp": ("cabin_temp", _t),
-            "tripRangeRegeneration": ("range_regenerated", _d),
+            "tripRangeRegenerated": ("range_regenerated", _range_regen_conv),
             "tripElectricalEfficiency": ("electrical_efficiency", _safe_float),
         }
 
         trip_fields = {}
+        # Converters that want the HA attribute name (for detection-layer
+        # bookkeeping) are _d and _t. Others accept just the value.
+        _attribute_aware = {_d, _t}
         for attr_key, (field_name, converter) in trip_attr_map.items():
             val = attrs.get(attr_key)
             if val is not None:
-                converted = converter(val)
+                if converter in _attribute_aware:
+                    converted = converter(val, attr_key)
+                else:
+                    converted = converter(val)
                 if converted is not None:
                     trip_fields[field_name] = converted
 
@@ -460,35 +715,54 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             if is_new:
                 _last_trip_values[device_id] = trip_fields.copy()
                 event_ts = _get_event_timestamp(new_state)
-                end_time = event_ts or datetime.now(timezone.utc)
+                end_time = event_ts or datetime.now(UTC)
                 start_time = None
                 if trip_fields.get("duration") and end_time:
                     from datetime import timedelta
                     start_time = end_time - timedelta(minutes=float(trip_fields["duration"]))
 
-                # DB-level duplicate check
+                # Match-and-enrich: if an _events row already exists for this
+                # trip, enrich it with elveh-owned fields rather than inserting
+                # a duplicate.
                 from db.models.trip_metrics import EVTripMetrics
-                from sqlalchemy import select, desc
 
-                recent = await db.execute(
-                    select(EVTripMetrics)
-                    .where(EVTripMetrics.device_id == device_id)
-                    .order_by(desc(EVTripMetrics.end_time))
-                    .limit(1)
+                existing = await _find_matching_trip(
+                    db,
+                    device_id,
+                    trip_fields.get("distance"),
+                    trip_fields.get("energy_consumed"),
                 )
-                last_db_trip = recent.scalar_one_or_none()
-                if last_db_trip and (
-                    float(last_db_trip.distance or 0) == float(trip_fields.get("distance", -1))
-                    and float(last_db_trip.duration or 0) == float(trip_fields.get("duration", -1))
-                    and float(last_db_trip.efficiency or 0) == float(trip_fields.get("efficiency", -1))
-                ):
-                    logger.debug("Skipping duplicate trip for %s", device_id)
+                if existing is not None:
+                    # Enrich the existing row with elveh-owned fields.
+                    # Scores and regen always overwrite (elveh is canonical).
+                    # efficiency and duration only fill NULLs.
+                    # Do NOT overwrite temps — events values are canonical °C.
+                    for col in (
+                        "range_regenerated",
+                        "driving_score",
+                        "speed_score",
+                        "acceleration_score",
+                        "deceleration_score",
+                        "electrical_efficiency",
+                    ):
+                        val = trip_fields.get(col)
+                        if val is not None:
+                            setattr(existing, col, val)
+                    if existing.efficiency is None and trip_fields.get("efficiency") is not None:
+                        existing.efficiency = trip_fields["efficiency"]
+                    if existing.duration is None and trip_fields.get("duration") is not None:
+                        existing.duration = trip_fields["duration"]
+                    logger.info(
+                        "Enriched existing trip row %s for %s with elveh scores/regen",
+                        existing.id,
+                        device_id,
+                    )
                 else:
                     trip_record = EVTripMetrics(
                         device_id=device_id,
                         start_time=start_time,
                         end_time=end_time,
-                        recorded_at=datetime.now(timezone.utc),
+                        recorded_at=datetime.now(UTC),
                         is_complete=True,
                         source_system="homeassistant",
                         original_timestamp=event_ts,
@@ -551,6 +825,8 @@ async def handle_charging_live(slug, new_state, ha_config, device_id, db):
             attrs.get("chargingType"),
             attrs.get("chargingkW"),
         )
+        entity_id = f"sensor.fordpass_{device_id}_{slug}"
+        await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
     elif slug == "elvehplug":
         logger.info(
             "Plug state changed: %s (station=%s, type=%s)",
@@ -598,7 +874,7 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
         )
         last_loc = last_result.scalar_one_or_none()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if last_loc is not None:
             time_diff = (now - last_loc.recorded_at).total_seconds()
@@ -648,7 +924,7 @@ async def handle_tire_pressure(slug, new_state, ha_config, device_id, db):
     # Store in pending vehicle status batch
     if device_id not in _pending_vehicle_status:
         _pending_vehicle_status[device_id] = {}
-        _pending_vehicle_status[device_id]["_recorded_at"] = datetime.now(timezone.utc)
+        _pending_vehicle_status[device_id]["_recorded_at"] = datetime.now(UTC)
 
     _pending_vehicle_status[device_id]["tire_pressure"] = tire_data
     _pending_vehicle_status_ts.setdefault(device_id, time.time())
@@ -692,7 +968,7 @@ _CHARGER_TYPE_MAP = {
 }
 
 
-def _normalize_charge_type(raw: Optional[str]) -> Optional[str]:
+def _normalize_charge_type(raw: str | None) -> str | None:
     """Normalize charger type string to 'AC' or 'DC'.
 
     Returns None for empty input. Unrecognized values fall back to the raw
@@ -706,7 +982,7 @@ def _normalize_charge_type(raw: Optional[str]) -> Optional[str]:
     return _CHARGER_TYPE_MAP.get(key, key)
 
 
-def _format_address(addr: Optional[dict]) -> Optional[str]:
+def _format_address(addr: dict | None) -> str | None:
     """Format address dict from energytransferlogentry location into a string."""
     if not addr or not isinstance(addr, dict):
         return None
@@ -720,7 +996,7 @@ def _format_address(addr: Optional[dict]) -> Optional[str]:
     return ", ".join(parts) if parts else None
 
 
-def _parse_iso_datetime(val: Optional[str]) -> Optional[datetime]:
+def _parse_iso_datetime(val: str | None) -> datetime | None:
     """Parse ISO 8601 datetime string, returning None on failure."""
     if not val:
         return None
@@ -742,8 +1018,9 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     duration, power stats, location, and plug times. Performs duplicate detection
     and network resolution.
     """
-    from db.models.charging_session import EVChargingSession
     from sqlalchemy import select
+
+    from db.models.charging_session import EVChargingSession
 
     attrs = _get_attributes(new_state)
 
@@ -765,17 +1042,19 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     plug_data = attrs.get("plugDetails", {}) or {}
     plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
     raw_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
-    # Phase 29 D-B2 audit: plugDetails.totalDistanceAdded is the canonical
-    # source and is always reported in km (stable across all fixtures,
-    # independent of HA unit system). Route through adapter + to_metric
-    # to preserve schema traceability even though the conversion is a
-    # passthrough.
+    # plugDetails.totalDistanceAdded is HA-unit-system-converted by ha-fordpass
+    # (localize_distance in get_energy_transfer_log_attrs). The contract
+    # carries ha_unit_system_converted=True; the adapter resolves the
+    # effective source unit per-event from ha_config.unit_system before
+    # routing through to_metric.
     dist_contract = ha_fordpass.lookup_contract(
         "sensor.fordpass_{vin}_energytransferlogentry",
         "plugDetails.totalDistanceAdded",
     )
     if dist_contract is not None:
-        distance_added = ha_fordpass.convert(dist_contract, raw_distance_added, new_state)
+        distance_added = ha_fordpass.convert(
+            dist_contract, raw_distance_added, new_state, ha_config
+        )
     else:
         # Should never happen — contract is registered unconditionally.
         distance_added = _convert_with_uom(
@@ -810,7 +1089,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # Timestamp
     original_timestamp = _parse_iso_datetime(attrs.get("timeStamp"))
 
-    # Thermal context (Phase 27-01, updated by Phase 29 D-A4).
+    # Thermal context.
     # ha-fordpass reports batteryTemperature + outsidetemp on the
     # energytransferlogentry payload in °C (fixture-audited). Route through
     # adapter contracts so to_metric is the single conversion path.
@@ -826,11 +1105,11 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     raw_batt = attrs.get("batteryTemperature")
     raw_amb = attrs.get("outsidetemp")
     if batt_contract is not None:
-        battery_temp = ha_fordpass.convert(batt_contract, raw_batt, new_state)
+        battery_temp = ha_fordpass.convert(batt_contract, raw_batt, new_state, ha_config)
     else:
         battery_temp = _convert_with_uom(raw_batt, "degC", "battery_temp", slug)
     if amb_contract is not None:
-        ambient_temp = ha_fordpass.convert(amb_contract, raw_amb, new_state)
+        ambient_temp = ha_fordpass.convert(amb_contract, raw_amb, new_state, ha_config)
     else:
         ambient_temp = _convert_with_uom(raw_amb, "degC", "ambient_temp", slug)
     battery_temp_start = battery_temp
@@ -936,11 +1215,11 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         ambient_temp_end=ambient_temp_end,
         original_timestamp=original_timestamp,
         is_complete=True,  # energytransferlogentry fires after session completes
-        recorded_at=datetime.now(timezone.utc),
+        recorded_at=datetime.now(UTC),
         duplicate_of_id=duplicate_of_id,
         needs_review=duplicate_of_id is not None,
         review_type="duplicate" if duplicate_of_id is not None else None,
-        ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,  # D-D1
+        ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
     )
     db.add(session)
 
@@ -959,12 +1238,12 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
 # ---------------------------------------------------------------------------
 
 # Cache for gas sensor entity_ids from app_settings to avoid per-event DB query
-_gas_sensor_cache: dict[str, Optional[str]] = {}
+_gas_sensor_cache: dict[str, str] = {}
 _gas_sensor_cache_ts: float = 0.0
 _GAS_SENSOR_CACHE_TTL = 300  # seconds (5 minutes)
 
 
-async def _get_gas_sensor_entity_ids(db) -> tuple[Optional[str], Optional[str]]:
+async def _get_gas_sensor_entity_ids(db) -> tuple[str | None, str | None]:
     """Return (station_entity_id, average_entity_id) from app_settings, cached.
 
     Cache is refreshed every 5 minutes to pick up configuration changes
@@ -1007,8 +1286,8 @@ def invalidate_gas_sensor_cache() -> None:
 async def _handle_gas_sensor_event(
     entity_id: str,
     new_state: dict,
-    station_entity: Optional[str],
-    average_entity: Optional[str],
+    station_entity: str | None,
+    average_entity: str | None,
     db,
 ) -> bool:
     """Handle a gas price sensor event if entity_id matches configured sensors.
@@ -1029,7 +1308,7 @@ async def _handle_gas_sensor_event(
         logger.debug("Gas sensor %s value not a valid price: '%s', skipping", entity_id, state_val)
         return True
 
-    recorded_at = _get_event_timestamp(new_state) or datetime.now(timezone.utc)
+    recorded_at = _get_event_timestamp(new_state) or datetime.now(UTC)
 
     from web.queries.gas_prices import (
         compute_monthly_averages,
@@ -1063,9 +1342,10 @@ async def _ensure_vehicle_exists(device_id: str, entity_id: str, db) -> None:
     source_system='home_assistant'. Auto-activates only when no active vehicle
     is currently set.
     """
-    from db.models.vehicle import EVVehicle
     from sqlalchemy import select
     from sqlalchemy.exc import IntegrityError
+
+    from db.models.vehicle import EVVehicle
     from web.queries.settings import get_app_setting, set_app_setting
 
     # Check if vehicle already exists

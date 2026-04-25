@@ -9,8 +9,9 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import websockets
 from websockets.exceptions import (
@@ -29,14 +30,14 @@ class HASSClient:
     """WebSocket client for Home Assistant state_changed event streaming."""
 
     def __init__(self) -> None:
-        self._ws: Optional[Any] = None
+        self._ws: Any | None = None
         self._running: bool = False
         self._msg_id: int = 0
-        self._ha_config: Optional[dict] = None
+        self._ha_config: dict | None = None
         self._entity_states: dict[str, dict] = {}
-        self._event_handler: Optional[Callable] = None
-        self._task: Optional[asyncio.Task] = None
-        self.detected_vin: Optional[str] = None
+        self._event_handler: Callable | None = None
+        self._task: asyncio.Task | None = None
+        self.detected_vin: str | None = None
         self._health: dict[str, Any] = {
             "connected": False,
             "last_event_at": None,
@@ -83,14 +84,7 @@ class HASSClient:
                 self._health["connected"] = False
                 self._running = False
                 break
-            except (
-                ConnectionClosed,
-                ConnectionClosedError,
-                ConnectionError,
-                OSError,
-                WebSocketException,
-                asyncio.TimeoutError,
-            ) as exc:
+            except (TimeoutError, ConnectionClosed, ConnectionClosedError, ConnectionError, OSError, WebSocketException) as exc:
                 self._health["connected"] = False
                 self._health["connection_state"] = "reconnecting"
                 self._health["errors"] += 1
@@ -253,7 +247,7 @@ class HASSClient:
                         self._entity_states[entity_id] = new_state
 
                     self._health["events_processed"] += 1
-                    self._health["last_event_at"] = datetime.now(timezone.utc).isoformat()
+                    self._health["last_event_at"] = datetime.now(UTC).isoformat()
 
                     # Dispatch to handler
                     if self._event_handler is not None:
@@ -311,10 +305,12 @@ class HASSClient:
 
     async def _send_json(self, data: dict) -> None:
         """Send a JSON message over the websocket."""
+        assert self._ws is not None
         await self._ws.send(json.dumps(data))
 
     async def _recv_json(self) -> dict:
         """Receive and parse a JSON message from the websocket."""
+        assert self._ws is not None
         raw = await self._ws.recv()
         return json.loads(raw)
 
@@ -376,7 +372,7 @@ class HASSClient:
             )
         return applied
 
-    async def _ha_rest_headers(self) -> Optional[dict]:
+    async def _ha_rest_headers(self) -> tuple[str, dict[str, str]] | None:
         """Load ha_url and ha_token from settings and return request headers+base.
 
         Returns (ha_url, headers) tuple or None when credentials are missing.
@@ -393,7 +389,7 @@ class HASSClient:
             return None
         return (ha_url, {"Authorization": f"Bearer {ha_token}"})
 
-    async def fetch_entity_state(self, entity_id: str) -> Optional[dict]:
+    async def fetch_entity_state(self, entity_id: str) -> dict | None:
         """Fetch the current state object for a single HA entity via REST.
 
         Returns the state dict as HA would return from /api/states/<entity_id>,
@@ -424,7 +420,7 @@ class HASSClient:
     async def _fetch_entity_history(
         self,
         entity_id: str,
-        start_time_iso: Optional[str] = None,
+        start_time_iso: str | None = None,
     ) -> list[dict]:
         """Fetch HA history for a single entity_id.
 
@@ -445,7 +441,7 @@ class HASSClient:
         if start_time_iso is None:
             # Default to ~10 years ago — HA will cap at its own recorder retention.
             start_time_iso = (
-                datetime.now(timezone.utc) - timedelta(days=365 * 10)
+                datetime.now(UTC) - timedelta(days=365 * 10)
             ).isoformat()
 
         try:
@@ -467,7 +463,7 @@ class HASSClient:
         # history_data is [[state, state, ...]] — one list per filter_entity_id
         return history_data[0]
 
-    async def backfill_history(self, days: Optional[int] = None) -> dict:
+    async def backfill_history(self, days: int | None = None) -> dict:
         """Backfill historical data from HA REST for both charging and gas sensors.
 
         Pulls past state changes for:
@@ -496,10 +492,10 @@ class HASSClient:
                 "gas": {},
             }
 
-        start_time_iso: Optional[str] = None
+        start_time_iso: str | None = None
         if days is not None:
             start_time_iso = (
-                datetime.now(timezone.utc) - timedelta(days=days)
+                datetime.now(UTC) - timedelta(days=days)
             ).isoformat()
 
         result: dict = {
@@ -519,9 +515,10 @@ class HASSClient:
             if not state_obj.get("attributes"):
                 continue
             try:
-                await self._event_handler(
-                    energy_entity, {}, state_obj, self._ha_config or {}
-                )
+                if self._event_handler is not None:
+                    await self._event_handler(
+                        energy_entity, {}, state_obj, self._ha_config or {}
+                    )
                 result["sessions"]["processed"] += 1
             except Exception as exc:
                 logger.error("Backfill: session state error: %s", exc)
@@ -657,7 +654,7 @@ hass_service = HASSClient()
 async def _noop_handler(
     entity_id: str, old_state: dict, new_state: dict, ha_config: dict
 ) -> None:
-    """Placeholder event handler. Replaced by sensor processor in Plan 03."""
+    """Placeholder event handler. Replaced by sensor processor in."""
     pass
 
 

@@ -1,5 +1,6 @@
+"""Database models for battery status."""
+
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Index, Numeric, SmallInteger, String, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
@@ -27,40 +28,39 @@ class EVBatteryStatus(Base):
     recorded_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False)
 
     # HV battery metrics
-    hv_battery_soc: Mapped[Optional[float]] = mapped_column(Numeric)
-    hv_battery_actual_soc: Mapped[Optional[float]] = mapped_column(Numeric)
-    hv_battery_voltage: Mapped[Optional[float]] = mapped_column(Numeric)
-    hv_battery_amperage: Mapped[Optional[float]] = mapped_column(Numeric)
-    hv_battery_kw: Mapped[Optional[float]] = mapped_column(Numeric)
-    hv_battery_capacity: Mapped[Optional[float]] = mapped_column(Numeric)
-    hv_battery_range: Mapped[Optional[float]] = mapped_column(Numeric)
-    hv_battery_max_range: Mapped[Optional[float]] = mapped_column(Numeric)
-    hv_battery_temperature: Mapped[Optional[float]] = mapped_column(Numeric)
+    hv_battery_soc: Mapped[float | None] = mapped_column(Numeric)
+    hv_battery_actual_soc: Mapped[float | None] = mapped_column(Numeric)
+    hv_battery_voltage: Mapped[float | None] = mapped_column(Numeric)
+    hv_battery_amperage: Mapped[float | None] = mapped_column(Numeric)
+    hv_battery_kw: Mapped[float | None] = mapped_column(Numeric)
+    hv_battery_capacity: Mapped[float | None] = mapped_column(Numeric)
+    hv_battery_range: Mapped[float | None] = mapped_column(Numeric)
+    hv_battery_max_range: Mapped[float | None] = mapped_column(Numeric)
+    hv_battery_temperature: Mapped[float | None] = mapped_column(Numeric)
 
     # LV (12V) battery
-    lv_battery_level: Mapped[Optional[float]] = mapped_column(Numeric)
-    lv_battery_voltage: Mapped[Optional[float]] = mapped_column(Numeric)
+    lv_battery_level: Mapped[float | None] = mapped_column(Numeric)
+    lv_battery_voltage: Mapped[float | None] = mapped_column(Numeric)
 
     # Motor metrics
-    motor_voltage: Mapped[Optional[float]] = mapped_column(Numeric)
-    motor_amperage: Mapped[Optional[float]] = mapped_column(Numeric)
-    motor_kw: Mapped[Optional[float]] = mapped_column(Numeric)
+    motor_voltage: Mapped[float | None] = mapped_column(Numeric)
+    motor_amperage: Mapped[float | None] = mapped_column(Numeric)
+    motor_kw: Mapped[float | None] = mapped_column(Numeric)
 
     # Status
-    performance_status: Mapped[Optional[str]] = mapped_column(String)
+    performance_status: Mapped[str | None] = mapped_column(String)
 
     # Pipeline metadata
-    source_system: Mapped[Optional[str]] = mapped_column(String(100))
+    source_system: Mapped[str | None] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
     )
-    original_timestamp: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
+    original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
-    # Pipeline schema version (Phase 29, D-D1). NULL = pre-v2 / suspect era
-    # spanning 2026-03-21 onward (commit abd736b double-conversion bug).
-    # 2 = ingested via adapter-driven pipeline with declared source units.
-    # See .planning/phases/29-unit-ingestion-overhaul/29-CONTEXT.md D-D1/D-D3.
-    ingest_schema_version: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    # Pipeline schema version. NULL = legacy rows from the suspect conversion
+    # era around 2026-03-21 (commit abd736b). Value 2 = adapter-driven ingest
+    # with declared source units.
+    ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (
         Index("idx_ev_battery_status_recorded_at", "recorded_at"),

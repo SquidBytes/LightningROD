@@ -3,7 +3,6 @@
 import pytest
 
 
-
 @pytest.mark.db
 async def test_settings_index_returns_200(client, db_session):
     """GET /settings returns 200 with settings page."""

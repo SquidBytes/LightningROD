@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -53,7 +54,7 @@ async def upload_csv(
     db: AsyncSession = Depends(get_db),
     file: UploadFile = File(...),
     import_timezone: str = Form("UTC"),
-) -> HTMLResponse:
+) -> Response:
     """Accept a CSV file upload, auto-detect columns, and render preview directly.
 
     Skips the column mapper step entirely.  Reads file bytes, parses CSV,
@@ -150,13 +151,13 @@ async def verify_row(
     """
     form = await request.form()
 
-    row_index = int(form.get("row_index", "0"))
+    row_index = int(str(form.get("row_index", "0")))
     import_timezone = str(form.get("import_timezone", "UTC"))
     editor_open = bool(form.get("editor_open", ""))
 
     # Resolve network: combobox sends network_id (hidden) and network_name (visible)
-    form_network_id = form.get("network_id", "")
-    form_network_name = form.get("network_name", "")
+    form_network_id = str(form.get("network_id", ""))
+    form_network_name = str(form.get("network_name", ""))
     resolved_network_id = await resolve_network(
         db,
         network_id=int(form_network_id) if form_network_id else None,
@@ -211,7 +212,7 @@ async def verify_row(
 async def execute_import(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> HTMLResponse:
+) -> Response:
     """Accept the confirmed import form, commit selected rows, and return summary.
 
     Reads import_data (JSON string of all transformed rows), selected_rows (list of
@@ -223,7 +224,7 @@ async def execute_import(
     # Parse the full rows payload from the hidden import_data field
     import_data_raw = form.get("import_data", "")
     try:
-        rows: list[dict] = json.loads(import_data_raw) if import_data_raw else []
+        rows: list[dict] = json.loads(str(import_data_raw)) if import_data_raw else []
     except (json.JSONDecodeError, ValueError):
         return JSONResponse(
             status_code=422,
@@ -235,7 +236,7 @@ async def execute_import(
     selected_indices: set[int] = set()
     for val in selected_rows_raw:
         try:
-            selected_indices.add(int(val))
+            selected_indices.add(int(str(val)))
         except (ValueError, TypeError):
             pass
 
@@ -254,7 +255,7 @@ async def execute_import(
     import_device_id = None
     if import_vehicle_id:
         try:
-            vehicle = await get_vehicle_by_id(db, int(import_vehicle_id))
+            vehicle = await get_vehicle_by_id(db, int(str(import_vehicle_id)))
             if vehicle:
                 import_device_id = vehicle.device_id
         except (ValueError, TypeError):
@@ -321,12 +322,12 @@ def _deserialize_rows(rows: list[dict]) -> list[dict]:
     Converts ISO datetime strings back to aware datetime objects and UUID strings
     back to uuid.UUID instances.
     """
-    from datetime import datetime
     import uuid as _uuid
+    from datetime import datetime
 
     result = []
     for row in rows:
-        deserialized = {}
+        deserialized: dict[str, Any] = {}
         for k, v in row.items():
             if isinstance(v, str) and k in (
                 "session_start_utc",
@@ -356,8 +357,8 @@ def _serialize_rows(rows: list[dict]) -> list[dict]:
 
     Converts datetime objects to ISO strings and UUIDs to strings.
     """
-    from datetime import datetime
     import uuid as _uuid
+    from datetime import datetime
 
     result = []
     for row in rows:

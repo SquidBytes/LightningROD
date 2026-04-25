@@ -1,3 +1,5 @@
+"""Database models for base."""
+
 from sqlalchemy.orm import DeclarativeBase
 
 

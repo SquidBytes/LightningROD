@@ -1,16 +1,14 @@
 """Tests for web/tooltips.py — single source of truth for tooltip copy.
-
 Covers:
-  - Phase 26-04 locked Avg Efficiency copy is preserved verbatim.
-  - Every tooltip is one sentence and ≤15 words.
-  - Slug convention is `<page>_<metric>` with known page prefixes.
-  - Tooltips dict is registered as a Jinja global on every route templates env.
+- locked Avg Efficiency copy is preserved verbatim.
+- Every tooltip is one sentence and ≤15 words.
+- Slug convention is `<page>_<metric>` with known page prefixes.
+- Tooltips dict is registered as a Jinja global on every route templates env.
 """
 
 from __future__ import annotations
 
 from web.tooltips import TOOLTIPS
-
 
 # Phase 26-04 locked copy — MUST be verbatim.
 LOCKED_AVG_EFFICIENCY = (
@@ -21,7 +19,7 @@ ALLOWED_PAGE_PREFIXES = {"performance", "costs", "battery", "driving", "home"}
 
 
 def test_avg_efficiency_copy_locked():
-    """Phase 26-04 locked Avg Efficiency tooltip is present verbatim."""
+    """locked Avg Efficiency tooltip is present verbatim."""
     assert TOOLTIPS["performance_avg_efficiency"] == LOCKED_AVG_EFFICIENCY
 
 
@@ -50,7 +48,7 @@ def test_slug_convention_page_underscore_metric():
 
 
 def test_seed_slugs_present():
-    """At least the six seed slugs required by Phase 27-02 scope exist."""
+    """At least the six seed slugs required by scope exist."""
     required = {
         "performance_avg_efficiency",
         "performance_total_energy",
@@ -68,7 +66,6 @@ def test_tooltips_registered_as_jinja_global():
     # Importing the app triggers create_app(), which registers globals on each
     # route module's `templates.env`.
     from web.main import app  # noqa: F401 — import is the registration trigger
-
     from web.routes import battery, costs, performance
 
     for module in (costs, performance, battery):

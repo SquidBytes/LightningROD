@@ -10,7 +10,7 @@
       "tripDuration": 30,
       "tripEnergyConsumed": 7.6,
       "tripEfficiency": 2.5,
-      "tripRangeRegeneration": 2.1,
+      "tripRangeRegenerated": 2.1,
       "tripAmbientTemp": 15,
       "tripOutsideAirAmbientTemp": 15,
       "tripCabinTemp": 20,
@@ -44,6 +44,17 @@
     "last_changed": "2026-04-19T12:00:00+00:00",
     "last_updated": "2026-04-19T12:00:00+00:00"
   },
+  "sensor.fordpass_YOUR_VIN_elvehcharging": {
+    "entity_id": "sensor.fordpass_YOUR_VIN_elvehcharging",
+    "state": "CHARGING",
+    "last_changed": "2026-04-19T12:00:00+00:00",
+    "last_updated": "2026-04-19T12:00:00+00:00",
+    "attributes": {
+      "friendly_name": "fordpass YOUR_VIN EV Charging",
+      "batteryTemperature": 77.0,
+      "unit_of_measurement": "°F"
+    }
+  },
   "sensor.fordpass_YOUR_VIN_metrics": {
     "entity_id": "sensor.fordpass_YOUR_VIN_metrics",
     "state": "ok",
@@ -67,13 +78,16 @@
     "state": "ok",
     "attributes": {
       "friendly_name": "fordpass YOUR_VIN Events",
-      "xev-key-off-trip-segment-data": {
-        "distance_traveled": 19,
-        "energy_consumed": 7600,
-        "trip_duration": 1800,
-        "ambient_temp": 15,
-        "cabin_temp": 20,
-        "outside_air_temp": 15
+      "customEvents": {
+        "xev-key-off-trip-segment-data": {
+          "oemData": {
+            "trip_data": {
+              "stringArrayValue": [
+                "{\"ambient_temperature\": 15, \"outside_air_ambient_temperature\": 15, \"cabin_temperature\": 20, \"energy_consumed\": 7600, \"distance_traveled\": 19, \"trip_duration\": 1800}"
+              ]
+            }
+          }
+        }
       }
     },
     "last_changed": "2026-04-19T12:00:00+00:00",
@@ -93,7 +107,7 @@
       },
       "plugDetails": {
         "totalPluggedInTime": 1920,
-        "totalDistanceAdded": 103
+        "totalDistanceAdded": 64
       },
       "stateOfCharge": {
         "firstSOC": 25,
@@ -125,9 +139,10 @@
     "entity_id": "sensor.fordpass_YOUR_VIN_outsidetemp",
     "state": "60",
     "attributes": {
-      "unit_of_measurement": "\u00b0F",
+      "unit_of_measurement": "°F",
       "friendly_name": "fordpass YOUR_VIN Outside Temp",
-      "icon": "mdi:thermometer"
+      "icon": "mdi:thermometer",
+      "ambientTemp": 60
     },
     "last_changed": "2026-04-19T12:00:00+00:00",
     "last_updated": "2026-04-19T12:00:00+00:00"

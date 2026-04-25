@@ -1,11 +1,10 @@
-"""Tests for Phase 18.1 trip time-series query functions and chart builders.
-
+"""Tests for trip time-series query functions and chart builders.
 Covers: query_trip_battery_series, query_trip_vehicle_series,
 _interpolate_series, build_drive_graph, build_environment_chart,
 and the expanded chart builders.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 import pytest
@@ -26,7 +25,7 @@ from web.queries.trips import (
 pytestmark = [pytest.mark.query, pytest.mark.db]
 
 DEVICE_ID = "TEST_VIN_TS"
-BASE_TIME = datetime(2025, 7, 1, 10, 0, 0, tzinfo=timezone.utc)
+BASE_TIME = datetime(2025, 7, 1, 10, 0, 0, tzinfo=UTC)
 
 
 # ---------------------------------------------------------------------------

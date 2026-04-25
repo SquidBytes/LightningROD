@@ -1,24 +1,29 @@
-"""FieldContract — the observable unit contract primitive (D-C1).
+"""Unit-contract datatypes shared by source adapters and diagnostics."""
 
-Every source adapter owns a `FIELD_CONTRACTS: list[FieldContract]` registry
-mapping ingested fields to their declared source entity, attribute, and unit,
-plus the DB target. The registry is the single source of truth for:
-- Adapter unit conversion (source_unit feeds to_metric)
-- Auto-generated docs (scripts/gen_data_sources_doc.py, Plan 29-03)
-- Runtime diagnostic endpoint (/admin/data-sources, Plan 29-03)
-- Contract-coverage invariant test (tests/test_unit/test_contract_coverage.py)
-- Future data-recovery phase lookup table (D-F3)
-"""
+from __future__ import annotations
 
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class FieldContract:
-    source_entity_pattern: str   # e.g. "sensor.fordpass_{vin}_metrics"
-    source_attribute: str        # e.g. "xevBatteryRange"
-    source_unit: str             # e.g. "km" — must be recognized by to_metric()
-    target_db_table: str         # e.g. "ev_battery_status"
-    target_db_column: str        # e.g. "hv_battery_range"
-    target_unit: str             # canonical metric unit, e.g. "km"
-    notes: str = ""              # human-readable provenance / caveats
+    """Mapping from one source attribute to one target DB column in metric units.
+
+    `ha_unit_system_converted` flags fields that Home Assistant itself converts
+    before emitting — i.e. fields where ha-fordpass calls `localize_distance` /
+    `localize_temperature` / `units.pressure()` inside its `attrs_fn`. For
+    those fields the effective source unit at read-time depends on
+    `ha_config.unit_system` (imperial -> mi/°F, metric -> km/°C), and the
+    adapter's `_resolve_source_unit` derives it per-event. Leave False for
+    raw-API passthrough fields (metrics/events entities, raw attributes on
+    energytransferlogentry, etc.).
+    """
+
+    source_entity_pattern: str
+    source_attribute: str
+    source_unit: str
+    target_db_table: str
+    target_db_column: str
+    target_unit: str
+    notes: str | None = None
+    ha_unit_system_converted: bool = False

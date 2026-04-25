@@ -4,16 +4,15 @@ Revision ID: g1h2i3j4k5l6
 Revises: 208b4ddefdd2
 Create Date: 2026-03-08
 """
-from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'g1h2i3j4k5l6'
-down_revision: Union[str, None] = '208b4ddefdd2'
-branch_labels: Union[str, None] = None
-depends_on: Union[str, None] = None
+down_revision: str | None = '208b4ddefdd2'
+branch_labels: str | None = None
+depends_on: str | None = None
 
 
 def upgrade() -> None:

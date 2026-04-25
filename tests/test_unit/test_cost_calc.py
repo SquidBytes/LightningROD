@@ -5,16 +5,16 @@ without any database dependency. Uses mock objects to simulate sessions,
 networks, and locations.
 """
 
-import pytest
-from datetime import date
+from datetime import UTC, date
 from types import SimpleNamespace
+
+import pytest
 
 from web.queries.costs import (
     calculate_monthly_fees_in_range,
     compute_session_cost,
     find_active_subscription,
 )
-
 
 pytestmark = pytest.mark.unit
 
@@ -143,11 +143,11 @@ def test_location_override_takes_precedence():
 
 def test_subscription_member_rate():
     """Active subscription applies member_rate instead of network base rate."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     session = _mock_session(
         energy_kwh=40.0,
-        session_start_utc=datetime(2025, 6, 15, tzinfo=timezone.utc),
+        session_start_utc=datetime(2025, 6, 15, tzinfo=UTC),
     )
     network = _mock_network(cost_per_kwh=0.45)
     sub = _mock_subscription(member_rate=0.25)
@@ -164,11 +164,11 @@ def test_subscription_member_rate():
 
 def test_subscription_savings_formula():
     """Savings = non_member_cost - display_cost."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     session = _mock_session(
         energy_kwh=40.0,
-        session_start_utc=datetime(2025, 6, 15, tzinfo=timezone.utc),
+        session_start_utc=datetime(2025, 6, 15, tzinfo=UTC),
     )
     network = _mock_network(cost_per_kwh=0.45)
     sub = _mock_subscription(member_rate=0.25)

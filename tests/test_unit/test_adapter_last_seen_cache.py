@@ -1,15 +1,9 @@
-"""Cache-behavior tests for ha_fordpass.adapter._last_seen_raw (D-C3).
+"""Cache behavior tests for ``ha_fordpass.adapter._last_seen_raw``.
 
-Plan 29-04 Task 2. Covers:
-- Record writes key using the f"{entity_pattern}|{attribute}" convention
-- Record overwrites an existing key
-- Clear empties the cache
-- Key convention matches what /admin/data-sources builds when displaying
-  cached values (must stay in lockstep with
-  web/routes/admin/data_sources.py)
+These tests cover key format, overwrite behavior, and cache clearing.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -52,7 +46,7 @@ def test_record_last_seen_writes_key():
     # seen_at is ISO8601 UTC and close to now.
     parsed = datetime.fromisoformat(entry["seen_at"])
     assert parsed.tzinfo is not None
-    delta = abs((datetime.now(timezone.utc) - parsed).total_seconds())
+    delta = abs((datetime.now(UTC) - parsed).total_seconds())
     assert delta < 5, f"seen_at should be within 5s of now, got delta={delta}s"
 
 
@@ -69,7 +63,7 @@ def test_record_last_seen_updates_existing_key():
 
 
 def test_record_last_seen_effective_unit_overrides_contract_unit():
-    """D-B3 read-time fallback must record the effective unit, not the
+    """read-time fallback must record the effective unit, not the
     contract default. This keeps /admin/data-sources honest for
     elveh-shaped contracts that resolve UoM per event.
     """
@@ -96,6 +90,73 @@ def test_clear_cache_empties():
     assert adapter._last_seen_raw  # populated
     adapter._last_seen_raw.clear()
     assert adapter._last_seen_raw == {}
+
+
+def test_ha_unit_system_converted_imperial_resolves_to_mi():
+    """A contract flagged `ha_unit_system_converted=True` on imperial HA
+    must resolve the effective source unit to `mi` and convert 64 -> ~103 km.
+    """
+    c = FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_energytransferlogentry",
+        source_attribute="plugDetails.totalDistanceAdded",
+        source_unit="km",  # declared default only — ha_config wins
+        target_db_table="ev_charging_session",
+        target_db_column="distance_added",
+        target_unit="km",
+        ha_unit_system_converted=True,
+    )
+    unit, method = adapter._resolve_source_unit(
+        c, new_state=None, ha_config={"unit_system": "imperial"}
+    )
+    assert unit == "mi"
+    assert method == "ha_unit_system_converted"
+
+    converted = adapter.convert(
+        c, raw_value=64, new_state=None, ha_config={"unit_system": "imperial"}
+    )
+    assert converted == pytest.approx(103.0, abs=0.5)
+
+
+def test_ha_unit_system_converted_metric_stays_km():
+    """Same contract on metric HA resolves to km and passes the value through."""
+    c = FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_energytransferlogentry",
+        source_attribute="plugDetails.totalDistanceAdded",
+        source_unit="km",
+        target_db_table="ev_charging_session",
+        target_db_column="distance_added",
+        target_unit="km",
+        ha_unit_system_converted=True,
+    )
+    unit, method = adapter._resolve_source_unit(
+        c, new_state=None, ha_config={"unit_system": "metric"}
+    )
+    assert unit == "km"
+    assert method == "ha_unit_system_converted"
+
+    converted = adapter.convert(
+        c, raw_value=103, new_state=None, ha_config={"unit_system": "metric"}
+    )
+    assert converted == pytest.approx(103.0, abs=0.5)
+
+
+def test_ha_unit_system_converted_missing_config_falls_back():
+    """Contract flagged ha_unit_system_converted but ha_config is absent —
+    resolver must emit method='declared_fallback' using the declared unit,
+    so ingestion still produces a value instead of dropping the field.
+    """
+    c = FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_energytransferlogentry",
+        source_attribute="plugDetails.totalDistanceAdded",
+        source_unit="km",
+        target_db_table="ev_charging_session",
+        target_db_column="distance_added",
+        target_unit="km",
+        ha_unit_system_converted=True,
+    )
+    unit, method = adapter._resolve_source_unit(c, new_state=None, ha_config=None)
+    assert unit == "km"
+    assert method == "declared_fallback"
 
 
 def test_key_convention_matches_contract():

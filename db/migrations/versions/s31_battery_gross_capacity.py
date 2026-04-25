@@ -16,15 +16,14 @@ Revision ID: s31_battery_gross
 Revises: s30_metric_canonical
 Create Date: 2026-04-11
 """
-from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "s31_battery_gross"
-down_revision: Union[str, None] = "s30_metric_canonical_storage"
-branch_labels: Union[str, None] = None
-depends_on: Union[str, None] = None
+down_revision: str | None = "s30_metric_canonical_storage"
+branch_labels: str | None = None
+depends_on: str | None = None
 
 
 def upgrade() -> None:

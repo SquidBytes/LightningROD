@@ -1,18 +1,16 @@
 """Pure-function unit tests for to_metric.
-
 Locks the public API of web.services.units.to_metric. All tests in this file
-MUST ImportError today and MUST pass after Plan 29-01 lands the module.
-
-Covers every supported source_unit (D-E1), edge cases (None, NaN, negative,
+MUST ImportError today and MUST pass after it lands the module.
+Covers every supported source_unit , edge cases (None, NaN, negative,
 zero, extreme values), and the UnknownSourceUnit exception. Property tests
-use Hypothesis for round-trip identity (D-E5).
+use Hypothesis for round-trip identity.
 """
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from web.services.units.to_metric import to_metric, UnknownSourceUnit  # noqa: F401
+from web.services.units.to_metric import UnknownSourceUnit, to_metric  # noqa: F401
 
 pytestmark = pytest.mark.unit
 

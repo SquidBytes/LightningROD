@@ -4,13 +4,12 @@ Aggregates trip-side metrics for the /driving/performance page:
 - Total distance, average driving efficiency, trip count (from EVTripMetrics)
 - Regen recovery total (delegated to energy.query_regen_summary)
 - Efficiency trend data (passthrough of trips.query_efficiency_trend)
-- Phase 25: temperature-vs-efficiency correlation + per-trip regen.
+- Temperature-vs-efficiency correlation + per-trip regen support.
 
 Returns metric-base values. The route handler applies distance_factor conversion
 before passing to templates / chart builders.
 """
 
-from typing import Optional
 
 import numpy as np
 import plotly.graph_objects as go
@@ -27,7 +26,7 @@ from web.unit_system import MI_PER_KM
 
 
 def _min_points_for_range(time_range: str) -> int:
-    """Phase 25 locked decision: small windows tolerate fewer data points.
+    """Use a lower point threshold for short windows.
 
     - 7d / 30d  → 5 points minimum (recent data is sparser).
     - 90d / ytd / 1y / all → 10 points minimum (larger window should have more data).
@@ -38,7 +37,7 @@ def _min_points_for_range(time_range: str) -> int:
 async def query_driving_performance_summary(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> dict:
     """Aggregate driving-side metrics for /driving/performance page.
 
@@ -53,8 +52,8 @@ async def query_driving_performance_summary(
     - range_recovered (km, metric base — alias of total_regen for the tile)
     - trip_count (prefer regen trip_count, fall back to EVTripMetrics count)
     - efficiency_trend (passthrough from query_efficiency_trend)
-    - temperature_correlation_data (Wave 2 placeholder, None)
-    - regen_per_trip_data (Wave 2 placeholder, None)
+    - temperature_correlation_data (reserved key, currently None)
+    - regen_per_trip_data (reserved key, currently None)
     """
     # 1. Regen summary (can return None when no regen data exists)
     regen = await query_regen_summary(
@@ -99,7 +98,7 @@ async def query_driving_performance_summary(
         "range_recovered": regen.get("regen_total") if regen else None,
         "trip_count": (regen.get("trip_count") if regen else 0) or trip_count_trips or 0,
         "efficiency_trend": trend_data,
-        # Wave 2 placeholders — filled by Plan 25-03
+        # Reserved keys so callers can rely on stable response shape.
         "temperature_correlation_data": None,
         "regen_per_trip_data": None,
     }
@@ -108,7 +107,7 @@ async def query_driving_performance_summary(
 async def query_temperature_correlation(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[dict]:
     """Trips with populated ambient_temp + distance + energy_consumed in range window.
 
@@ -206,7 +205,7 @@ def build_temperature_correlation_chart(
         )
     )
 
-    # Linear trendline via np.polyfit(deg=1) — Phase 25 decision (RESEARCH.md).
+    # Linear trendline via np.polyfit(deg=1).
     x_arr = np.array(temps, dtype=float)
     y_arr = np.array(effs, dtype=float)
     slope, intercept = np.polyfit(x_arr, y_arr, 1)
@@ -244,12 +243,12 @@ def build_temperature_correlation_chart(
 async def query_regen_per_trip(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[dict]:
     """Per-trip regen with derived regen_kwh and regen_pct.
 
-    Phase 25 decision (RESEARCH.md Pitfall 1): range_regenerated is stored in
-    range units (metric base km). Derive kWh-equivalent as:
+    ``range_regenerated`` is stored in range units (metric base km).
+    Derive kWh-equivalent as:
 
         efficiency = distance / energy_consumed   # km/kWh
         regen_kwh  = range_regenerated / efficiency

@@ -1,4 +1,6 @@
-from typing import Annotated, Optional
+"""Route handlers for performance."""
+
+from typing import Annotated
 
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -23,7 +25,11 @@ from web.queries.energy import (
     query_synthetic_curve_inputs,
 )
 from web.queries.settings import get_unit_context
-from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
+from web.queries.vehicles import (
+    get_active_device_id,
+    get_active_vehicle,
+    get_all_vehicles,
+)
 from web.unit_system import MI_PER_KM
 
 router = APIRouter()
@@ -82,8 +88,8 @@ def _build_sparkline(xs, ys, line_color: str = "#47A8E5") -> str:
 async def performance(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    range: Optional[str] = "all",
-    hx_request: Annotated[Optional[str], Header()] = None,
+    range: str | None = "all",
+    hx_request: Annotated[str | None, Header()] = None,
 ):
     time_range = range or "all"
 
@@ -126,7 +132,7 @@ async def performance(
         )
         synthetic_curve_chart = build_synthetic_charge_curve_chart(
             max_kw=synthetic_meta["median_peak_kw"] or 0,
-            dc_session_count=synthetic_meta["dc_session_count"],
+            dc_session_count=int(synthetic_meta["dc_session_count"] or 0),
         )
 
     # Build efficiency scatter chart (chart builder applies factors internally)

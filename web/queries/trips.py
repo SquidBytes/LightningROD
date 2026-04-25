@@ -4,8 +4,7 @@ Provides paginated trip queries with filtering/sorting, efficiency trend
 data with 7-day rolling average chart, and driving score radar chart.
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -41,7 +40,7 @@ SORTABLE_COLUMNS = {
 # ---------------------------------------------------------------------------
 
 
-def build_trip_time_filter(time_range: str) -> Optional[datetime]:
+def build_trip_time_filter(time_range: str) -> datetime | None:
     """Return a cutoff datetime for trip queries.
 
     Maps preset strings to a UTC cutoff datetime.
@@ -51,7 +50,7 @@ def build_trip_time_filter(time_range: str) -> Optional[datetime]:
     if not time_range or time_range == "all":
         return None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if time_range == "7d":
         return now - timedelta(days=7)
@@ -79,7 +78,7 @@ async def query_trips(
     date_preset: str = "30d",
     sort_by: str = "date",
     sort_dir: str = "desc",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> tuple[list, int, dict]:
     """Query trip metrics with optional filters, sorting, and pagination.
 
@@ -119,7 +118,7 @@ async def query_trips(
     # Summary query
     summary_subq = stmt.subquery()
     summary_stmt = select(
-        func.count().label("count"),
+        func.count().label("trip_count"),
         func.sum(summary_subq.c.distance).label("total_distance"),
         func.sum(summary_subq.c.energy_consumed).label("total_energy"),
         func.avg(summary_subq.c.efficiency).label("avg_efficiency"),
@@ -127,7 +126,7 @@ async def query_trips(
     summary_result = await db.execute(summary_stmt)
     summary_row = summary_result.one()
     summary = {
-        "count": summary_row.count or 0,
+        "count": summary_row.trip_count or 0,
         "total_distance": float(summary_row.total_distance) if summary_row.total_distance else 0.0,
         "total_energy": float(summary_row.total_energy) if summary_row.total_energy else 0.0,
         "avg_efficiency": float(summary_row.avg_efficiency) if summary_row.avg_efficiency else None,
@@ -146,7 +145,7 @@ async def query_trips(
 async def query_efficiency_trend(
     db: AsyncSession,
     time_range: str = "30d",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[dict]:
     """Query trip efficiency data for the trend chart.
 
@@ -492,7 +491,7 @@ async def detect_trip_locations(
     device_id: str,
     start_time: datetime,
     end_time: datetime,
-) -> tuple[Optional[str], Optional[str]]:
+) -> tuple[str | None, str | None]:
     """Detect start and end locations for a trip from GPS data.
 
     Finds the closest GPS point to start_time and end_time (within 30 min),
@@ -502,7 +501,7 @@ async def detect_trip_locations(
     """
     tolerance_seconds = 30 * 60  # 30 minutes
 
-    async def _find_nearest_gps(target_time: datetime) -> Optional[tuple[float, float]]:
+    async def _find_nearest_gps(target_time: datetime) -> tuple[float, float] | None:
         stmt = (
             select(EVLocation.latitude, EVLocation.longitude)
             .where(
@@ -524,7 +523,7 @@ async def detect_trip_locations(
     loc_result = await db.execute(select(EVLocationLookup))
     all_locations = list(loc_result.scalars().all())
 
-    def _resolve_name(coords: Optional[tuple[float, float]]) -> Optional[str]:
+    def _resolve_name(coords: tuple[float, float] | None) -> str | None:
         if coords is None:
             return None
         lat, lon = coords

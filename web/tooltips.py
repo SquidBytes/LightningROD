@@ -1,22 +1,14 @@
 """Tooltip copy — single source of truth for analytics metric explanations.
-
 Slug convention: `<page>_<metric>` where `<page>` matches the route group
 (home, performance, costs, battery, driving_sessions, driving_performance)
 and `<metric>` is the metric identifier (snake_case). Example:
 `performance_avg_efficiency`.
-
 Rules (locked):
-  - Exactly one sentence per tooltip.
-  - ≤15 words per tooltip (whitespace-separated tokens).
-  - No formulas, no units-of-measurement reasoning — use plain English.
-  - Copy changes MUST be made here; templates reference `{{ tooltips.<slug> }}`.
+- Exactly one sentence per tooltip.
+- ≤15 words per tooltip (whitespace-separated tokens).
+- No formulas, no units-of-measurement reasoning — use plain English.
+- Copy changes MUST be made here; templates reference `{{ tooltips.<slug> }}`.
 
-The Avg Efficiency copy (`performance_avg_efficiency`) is locked verbatim
-from Phase 26-04 and must not be altered without an explicit CONTEXT decision.
-
-Phase 27-07 expanded the dict to cover every analytics surface; see
-`.planning/phases/27-analytics-polish-and-vehicle-preset-overhaul/27-07-TOOLTIP-INVENTORY.md`
-for the authoritative inventory.
 """
 
 from __future__ import annotations

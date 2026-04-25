@@ -1,22 +1,19 @@
 """Unit tests for VEHICLE_PRESETS catalog shape and lookup_battery_values helper.
-
-Plan 27-03 seeds 34 Lightning + 29 Mach-E rows from RESEARCH.md §2-3 and
+seeds 34 Lightning + 29 Mach-E rows from §2-3 and
 exposes `lookup_battery_values(make, model, year, trim_level, battery_option)`
-for plan 27-07's cascade auto-fill. These tests pin:
-
-    - row counts per model (drift detector for RESEARCH.md changes),
-    - schema (no legacy `trim` key),
-    - representative cascade lookups covering the two pack-swap edges
-      (Flash 2024 full ER vs 2025 ER-123, Mach-E 2023 LFP transition),
-    - miss returns None.
+for 's cascade auto-fill. These tests pin:
+- row counts per model (drift detector for changes),
+- schema (no legacy `trim` key),
+- representative cascade lookups covering the two pack-swap edges
+(Flash 2024 full ER vs 2025 ER-123, Mach-E 2023 LFP transition),
+- miss returns None.
 """
 from web.queries.vehicles import VEHICLE_PRESETS, lookup_battery_values
 
 
 def test_lightning_row_count():
-    """RESEARCH.md §2 seeds 35 Lightning rows across MY2022-MY2026.
-
-    Plan 27-03 must_haves.truths said 34, but RESEARCH.md §2's authoritative
+    """§2 seeds 35 Lightning rows across MY2022-MY2026.
+    must_haves.truths said 34, but §2's authoritative
     table has 35 rows (MY2022-MY2025 each have 7 SR/ER + Flash-or-Platinum
     rows summing to 7, 7, 8, 8, plus MY2026's 5). The plan's Action step 1
     says "copy every row" from RESEARCH — so RESEARCH wins, count is 35.
@@ -25,9 +22,8 @@ def test_lightning_row_count():
 
 
 def test_mache_row_count():
-    """RESEARCH.md §3 seeds 30 Mach-E rows across MY2021-MY2026.
-
-    Plan 27-03 must_haves and RESEARCH §6 both said 29, but the RESEARCH §3
+    """§3 seeds 30 Mach-E rows across MY2021-MY2026.
+    must_haves and RESEARCH §6 both said 29, but the RESEARCH §3
     row-by-row table has 30 entries (5 per MY × 6 MYs). RESEARCH §3's table
     wins per Action step 1 ("copy every row"), so count is 30.
     """

@@ -1,6 +1,7 @@
+"""Database models for trip metrics."""
+
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, Index, Integer, Numeric, SmallInteger, String, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
@@ -29,55 +30,60 @@ class EVTripMetrics(Base):
     device_id: Mapped[str] = mapped_column(String, nullable=False)
 
     # Timestamps (all TIMESTAMPTZ)
-    start_time: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
-    end_time: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
-    recorded_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
+    start_time: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
+    end_time: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
+    recorded_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
     # Distance and time
-    distance: Mapped[Optional[float]] = mapped_column(Numeric)
-    duration: Mapped[Optional[float]] = mapped_column(Numeric)
+    distance: Mapped[float | None] = mapped_column(Numeric)
+    duration: Mapped[float | None] = mapped_column(Numeric)
 
     # Energy
-    energy_consumed: Mapped[Optional[float]] = mapped_column(Numeric)
-    efficiency: Mapped[Optional[float]] = mapped_column(Numeric)
-    range_regenerated: Mapped[Optional[float]] = mapped_column(Numeric)
+    energy_consumed: Mapped[float | None] = mapped_column(Numeric)
+    efficiency: Mapped[float | None] = mapped_column(Numeric)
+    range_regenerated: Mapped[float | None] = mapped_column(Numeric)
 
     # Environmental conditions
-    ambient_temp: Mapped[Optional[float]] = mapped_column(Numeric)
-    cabin_temp: Mapped[Optional[float]] = mapped_column(Numeric)
-    outside_air_temp: Mapped[Optional[float]] = mapped_column(Numeric)
+    ambient_temp: Mapped[float | None] = mapped_column(Numeric)
+    cabin_temp: Mapped[float | None] = mapped_column(Numeric)
+    outside_air_temp: Mapped[float | None] = mapped_column(Numeric)
 
     # Driving scores
-    driving_score: Mapped[Optional[float]] = mapped_column(Numeric)
-    speed_score: Mapped[Optional[float]] = mapped_column(Numeric)
-    acceleration_score: Mapped[Optional[float]] = mapped_column(Numeric)
-    deceleration_score: Mapped[Optional[float]] = mapped_column(Numeric)
+    driving_score: Mapped[float | None] = mapped_column(Numeric)
+    speed_score: Mapped[float | None] = mapped_column(Numeric)
+    acceleration_score: Mapped[float | None] = mapped_column(Numeric)
+    deceleration_score: Mapped[float | None] = mapped_column(Numeric)
 
     # Location references
-    start_location_id: Mapped[Optional[int]] = mapped_column(Integer)
-    end_location_id: Mapped[Optional[int]] = mapped_column(Integer)
+    start_location_id: Mapped[int | None] = mapped_column(Integer)
+    end_location_id: Mapped[int | None] = mapped_column(Integer)
 
     # Efficiency
-    electrical_efficiency: Mapped[Optional[float]] = mapped_column(Numeric)
+    electrical_efficiency: Mapped[float | None] = mapped_column(Numeric)
 
     # Mechanical
-    brake_torque: Mapped[Optional[float]] = mapped_column(Numeric)
+    brake_torque: Mapped[float | None] = mapped_column(Numeric)
 
     # Session flags
     is_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Pipeline metadata
-    source_system: Mapped[Optional[str]] = mapped_column(String(100))
+    source_system: Mapped[str | None] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
     )
-    original_timestamp: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
+    original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
+
+    # Pipeline schema version. NULL = legacy rows from the suspect conversion
+    # era around 2026-03-21 (commit abd736b). Value 2 = adapter-driven ingest
+    # with declared source units.
+    ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     # Pipeline schema version (Phase 29, D-D1). NULL = pre-v2 / suspect era
     # spanning 2026-03-21 onward (commit abd736b double-conversion bug).
     # 2 = ingested via adapter-driven pipeline with declared source units.
     # See .planning/phases/29-unit-ingestion-overhaul/29-CONTEXT.md D-D1/D-D3.
-    ingest_schema_version: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (
         Index("idx_ev_trip_metrics_start_time", "start_time"),

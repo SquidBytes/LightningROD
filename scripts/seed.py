@@ -13,9 +13,9 @@ import hashlib
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Ensure project root is on path so db/config imports work
 project_root = Path(__file__).parent.parent
@@ -85,7 +85,7 @@ UPDATABLE_COLUMNS = [
 # ---------------------------------------------------------------------------
 
 
-def parse_uuid(v: str) -> Optional[uuid.UUID]:
+def parse_uuid(v: str) -> uuid.UUID | None:
     """Parse a UUID string, returning None if empty or invalid."""
     v = v.strip() if v else ""
     if not v:
@@ -96,13 +96,13 @@ def parse_uuid(v: str) -> Optional[uuid.UUID]:
         return None
 
 
-def str_or_none(v: str) -> Optional[str]:
+def str_or_none(v: str) -> str | None:
     """Return stripped string or None if empty."""
     v = v.strip() if v else ""
     return v if v else None
 
 
-def float_or_none(v: str) -> Optional[float]:
+def float_or_none(v: str) -> float | None:
     """Return float or None if empty/invalid."""
     v = v.strip() if v else ""
     if not v:
@@ -113,7 +113,7 @@ def float_or_none(v: str) -> Optional[float]:
         return None
 
 
-def int_or_none(v: str) -> Optional[int]:
+def int_or_none(v: str) -> int | None:
     """Return int or None if empty/invalid."""
     v = v.strip() if v else ""
     if not v:
@@ -129,7 +129,7 @@ def parse_bool(v: str) -> bool:
     return v.strip().lower() in ("true", "1", "yes") if v else False
 
 
-def parse_bool_or_none(v: str) -> Optional[bool]:
+def parse_bool_or_none(v: str) -> bool | None:
     """Return True/False for explicit values, None if empty."""
     v = v.strip() if v else ""
     if not v:
@@ -137,7 +137,7 @@ def parse_bool_or_none(v: str) -> Optional[bool]:
     return v.lower() in ("true", "1", "yes")
 
 
-def parse_timestamp(v: str) -> Optional[datetime]:
+def parse_timestamp(v: str) -> datetime | None:
     """Parse ISO timestamp string to timezone-aware datetime.
 
     Python 3.11+ fromisoformat handles both offset-aware and naive formats.
@@ -149,13 +149,13 @@ def parse_timestamp(v: str) -> Optional[datetime]:
     try:
         dt = datetime.fromisoformat(v)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
     except (ValueError, TypeError):
         return None
 
 
-def normalize_charge_type(charger_type: str, location_name: str) -> Optional[str]:
+def normalize_charge_type(charger_type: str, location_name: str) -> str | None:
     """Normalize charger type to 'AC' or 'DC'.
 
     Handles canonical values (AC, DC), legacy FordPass values (AC Level 2,
@@ -190,9 +190,9 @@ def classify_is_free(location_name: str) -> bool:
 
 
 def make_session_id(
-    start_time: Optional[datetime],
-    location_name: Optional[str],
-    energy_kwh: Optional[float],
+    start_time: datetime | None,
+    location_name: str | None,
+    energy_kwh: float | None,
 ) -> uuid.UUID:
     """Generate a deterministic UUID from session fields using MD5."""
     start_str = start_time.isoformat() if start_time else ""
@@ -357,8 +357,8 @@ def transform_row(
     csv_row: dict,
     vin: str,
     ll_lookup: dict,
-    network_lookup: Optional[dict[str, Optional[int]]] = None,
-) -> Optional[dict]:
+    network_lookup: dict[str, int | None] | None = None,
+) -> dict | None:
     """Transform a single CSV row into a DB-ready dict.
 
     Returns None if the row should be skipped (missing core fields after gap-fill).
@@ -491,7 +491,7 @@ async def seed(args: argparse.Namespace) -> None:
                 network_names.add(val)
                 break  # first non-empty wins per row
 
-    network_lookup: dict[str, Optional[int]] = {}
+    network_lookup: dict[str, int | None] = {}
     if network_names:
         from web.queries.settings import resolve_network
 

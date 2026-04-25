@@ -4,27 +4,26 @@ Each fixture creates KNOWN data with EXACT values for deterministic assertions.
 All fixtures return a dict with created objects and pre-computed expected values.
 """
 
-from datetime import datetime, date, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest_asyncio
 
-from db.models.charging_session import EVChargingSession
 from db.models.battery_status import EVBatteryStatus
-from db.models.trip_metrics import EVTripMetrics
+from db.models.charging_session import EVChargingSession
 from db.models.reference import (
     EVChargingNetwork,
     EVLocationLookup,
     EVNetworkSubscription,
 )
+from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle import EVVehicle
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 DEVICE_ID = "TEST_VIN_QUERY"
-BASE_DATE = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+BASE_DATE = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
 
 
 async def _create_vehicle(db, device_id=DEVICE_ID):
@@ -138,7 +137,7 @@ async def cost_scenario(db_session):
         device_id=DEVICE_ID,
         energy_kwh=40.0,
         network_id=net_b.id,
-        session_start_utc=datetime(2025, 6, 1, 10, 0, 0, tzinfo=timezone.utc),
+        session_start_utc=datetime(2025, 6, 1, 10, 0, 0, tzinfo=UTC),
         is_complete=True,
         source_system="test_fixture",
     )
@@ -149,7 +148,7 @@ async def cost_scenario(db_session):
         device_id=DEVICE_ID,
         energy_kwh=20.0,
         network_id=net_b.id,
-        session_start_utc=datetime(2025, 4, 15, 10, 0, 0, tzinfo=timezone.utc),
+        session_start_utc=datetime(2025, 4, 15, 10, 0, 0, tzinfo=UTC),
         is_complete=True,
         source_system="test_fixture",
     )
@@ -224,7 +223,7 @@ async def battery_scenario(db_session):
     vehicle = await _create_vehicle(db)
 
     records = []
-    start = datetime(2025, 6, 10, 0, 0, 0, tzinfo=timezone.utc)
+    start = datetime(2025, 6, 10, 0, 0, 0, tzinfo=UTC)
 
     # SOC progression: idle -> charge -> idle -> discharge
     soc_values = [
@@ -299,7 +298,7 @@ async def energy_scenario(db_session):
     ac_distance = [45.0, 60.0, 36.0, 54.0, 75.0]
     dc_distance = [112.5, 137.5, 100.0, 125.0, 150.0]
 
-    for i, (kwh, dist) in enumerate(zip(ac_energy, ac_distance)):
+    for i, (kwh, dist) in enumerate(zip(ac_energy, ac_distance, strict=True)):
         s = EVChargingSession(
             device_id=DEVICE_ID,
             energy_kwh=kwh,
@@ -311,7 +310,7 @@ async def energy_scenario(db_session):
         )
         sessions.append(s)
 
-    for i, (kwh, dist) in enumerate(zip(dc_energy, dc_distance)):
+    for i, (kwh, dist) in enumerate(zip(dc_energy, dc_distance, strict=True)):
         s = EVChargingSession(
             device_id=DEVICE_ID,
             energy_kwh=kwh,
@@ -412,13 +411,11 @@ async def trip_scenario(db_session):
 
 @pytest_asyncio.fixture
 async def sessions_with_battery_status(db_session):
-    """Phase 25 (Plan 25-02): DC session with >=3 battery_status points.
-
+    """DC session with >=3 battery_status points.
     Creates:
-    - 1 vehicle (device_id 'charge_p25_real_vin')
-    - 1 DC session spanning 1 hour
-    - 5 EVBatteryStatus rows with recorded_at inside the session window
-
+    1 vehicle (device_id 'charge_p25_real_vin')
+    1 DC session spanning 1 hour
+    5 EVBatteryStatus rows with recorded_at inside the session window
     has_real_charge_curve_data should return True against this.
     """
     device_id = "charge_p25_real_vin"
@@ -462,13 +459,11 @@ async def sessions_with_battery_status(db_session):
 
 @pytest_asyncio.fixture
 async def sessions_without_battery_status(db_session):
-    """Phase 25 (Plan 25-02): DC-only sessions with no battery_status rows.
-
+    """DC-only sessions with no battery_status rows.
     Creates:
-    - 1 vehicle (device_id 'charge_p25_synth_vin')
-    - 3 DC sessions with peak kW [100.0, 150.0, 200.0] → median 150.0
-    - 0 battery_status rows (synthetic fallback path)
-
+    1 vehicle (device_id 'charge_p25_synth_vin')
+    3 DC sessions with peak kW [100.0, 150.0, 200.0] → median 150.0
+    0 battery_status rows (synthetic fallback path)
     Returned dict includes expected.median_peak_kw / dc_session_count for
     deterministic assertions.
     """
@@ -519,7 +514,7 @@ async def trips_with_ambient_temp(db_session):
     db = db_session
     await _create_vehicle(db)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     temps = [-10.0, -5.0, 0.0, 5.0, 10.0, 15.0, 20.0, 22.0, 25.0, 30.0]
     trips = []
     for i, ambient_c in enumerate(temps):
@@ -558,7 +553,7 @@ async def trips_minimal_count(db_session):
     db = db_session
     await _create_vehicle(db)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     trips = []
     for i in range(3):
         end_time = now - timedelta(days=(3 - i))
@@ -593,7 +588,7 @@ async def trips_with_regen(db_session):
     db = db_session
     await _create_vehicle(db)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     specs = [
         {"distance": 100.0, "energy": 20.0, "regen": 10.0},
         {"distance": 50.0, "energy": 10.0, "regen": 5.0},

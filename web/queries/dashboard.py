@@ -2,7 +2,7 @@
 
 Provides summary aggregation for the landing dashboard page.
 """
-from typing import Optional
+from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -32,7 +32,7 @@ def _wrap_chart(html: str) -> str:
     return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
-async def query_dashboard_summary(db: AsyncSession, device_id: Optional[str] = None) -> dict:
+async def query_dashboard_summary(db: AsyncSession, device_id: str | None = None) -> dict:
     """Aggregate lifetime charging data for dashboard summary cards.
 
     Returns dict with:
@@ -102,7 +102,7 @@ async def query_dashboard_summary(db: AsyncSession, device_id: Optional[str] = N
     }
 
 
-async def query_charging_efficiency(db: AsyncSession, device_id: Optional[str] = None) -> dict:
+async def query_charging_efficiency(db: AsyncSession, device_id: str | None = None) -> dict:
     """Aggregate charging efficiency metrics from sessions with EVSE data.
 
     Returns dict with:
@@ -136,8 +136,8 @@ async def query_charging_efficiency(db: AsyncSession, device_id: Optional[str] =
     loss_pct_sum = 0.0
 
     for s in loss_sessions:
-        evse_e = float(s.evse_energy_kwh)
-        veh_e = float(s.energy_kwh)
+        evse_e = float(s.evse_energy_kwh or 0)
+        veh_e = float(s.energy_kwh or 0)
         loss = evse_e - veh_e
         total_loss_kwh += loss
         loss_pct_sum += (loss / evse_e) * 100
@@ -171,7 +171,7 @@ async def query_charging_efficiency(db: AsyncSession, device_id: Optional[str] =
             float(s.max_power) if s.max_power is not None else None
         )
         if max_pwr is not None:
-            util_pct_sum += (max_pwr / float(s.charger_rated_kw)) * 100
+            util_pct_sum += (max_pwr / float(s.charger_rated_kw or 1)) * 100
             util_count += 1
 
     avg_utilization_pct = util_pct_sum / util_count if util_count > 0 else None
@@ -285,7 +285,7 @@ def build_monthly_energy_by_network_chart(
     df = df.groupby(["month", "network"], as_index=False)["kwh"].sum()
     df = df.sort_values("month")
 
-    kwargs = dict(x="month", y="kwh", color="network", barmode="stack")
+    kwargs: dict[str, Any] = dict(x="month", y="kwh", color="network", barmode="stack")
     if network_colors:
         kwargs["color_discrete_map"] = network_colors
     fig = px.bar(df, **kwargs)

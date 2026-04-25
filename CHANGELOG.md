@@ -9,11 +9,26 @@ For feature documentation, see the docs site at
 
 ### Added
 
+- `ha_fordpass` adapter with `FIELD_CONTRACTS` — single ingestion entry point replacing scattered `hass_processor` / `hass_client` logic.
+- Unit-detection layer: resolves HA signal units at ingestion time via a pure `to_metric()` conversion function and `UnknownSourceUnit` sentinel.
+- `ingest_schema_version` column on `ev_session`, `ev_trip_metrics`, and related models.
+- `/admin/data-sources` page listing all HA signal sources with contract details; Data Sources link added to sidebar System group.
+- `gen_data_sources_doc.py` generator and committed `data-sources.md` reference doc.
+- `FieldContract` module for observable-contract validation and display-layer assertions.
+- mypy static type checking added to the dev toolchain.
+- Ruff ruleset expanded (I, B, UP) with pre-commit hook.
+- Cross-source match-and-enrich tests for `ev_trip_metrics` dedup.
+
 ### Changed
+
+- `hass_processor` and `hass_client` migrated into `ha_fordpass` adapter; legacy `_fordpass_*` feature flags removed.
+- Action buttons on review location rows clustered per row (UX polish).
+- Approved-tab edit dialog hoisted to page-scope modal (reuses shared `edit-loc-modal`).
 
 ### Fixed
 
-### Removed
+- Review queue D-B3 filter dropped on POST-merge Pending branches (WR-01 regression).
+- `tripRangeRegeneration` field name corrected to `tripRangeRegenerated`.
 
 ## [0.2.13] - 2026-03-07
 

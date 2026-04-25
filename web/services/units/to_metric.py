@@ -1,11 +1,11 @@
-"""Pure unit-to-metric conversion (D-A3).
+"""Pure unit-to-metric conversion.
 
 Replaces web/services/hass_processor.normalize_value. The key difference:
 `to_metric` dispatches on an explicit, declared `source_unit` string supplied
 by the caller (typically an adapter's FIELD_CONTRACTS entry). There is no
-process-global flag, no runtime unit detection, no silent fallback. Unknown
-source_unit raises UnknownSourceUnit so the adapter boundary can log full
-context and fail loudly.
+process-global flag, no runtime unit detection, and no silent fallback.
+Unknown source_unit raises UnknownSourceUnit so callers can log full context
+and fail loudly.
 
 Supported source units (target in parens):
     km, mi          -> km
@@ -16,7 +16,6 @@ Supported source units (target in parens):
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger("lightningrod.units")
 
@@ -30,7 +29,7 @@ _MILES_TO_KM = 1.609344
 # Wh -> kWh is exactly 1/1000 (no constant needed)
 
 
-def _safe_float(val) -> Optional[float]:
+def _safe_float(val) -> float | None:
     if val is None:
         return None
     try:
@@ -39,7 +38,7 @@ def _safe_float(val) -> Optional[float]:
         return None
 
 
-def to_metric(value, source_unit: str) -> Optional[float]:
+def to_metric(value, source_unit: str) -> float | None:
     """Convert `value` from `source_unit` to the canonical metric unit.
 
     Returns None when `value` is None or cannot be coerced to float.

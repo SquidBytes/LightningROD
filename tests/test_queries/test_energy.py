@@ -3,10 +3,11 @@
 Tests energy summary aggregation, charge type breakdown, and efficiency calculations.
 """
 
+from datetime import UTC
+
 import pytest
 
 from web.queries.energy import query_energy_summary, query_monthly_energy
-
 
 pytestmark = [pytest.mark.query, pytest.mark.db]
 
@@ -85,8 +86,9 @@ async def test_energy_summary_empty(db_session):
 
 
 async def test_phase_25_by_charge_type_includes_cost(db_session):
-    """Phase 25: by_charge_type entries include a total_cost field summed from session.cost."""
-    from datetime import datetime, timezone
+    """by_charge_type entries include a total_cost field summed from session.cost."""
+    from datetime import datetime
+
     from db.models.charging_session import EVChargingSession
     from db.models.vehicle import EVVehicle
 
@@ -105,7 +107,7 @@ async def test_phase_25_by_charge_type_includes_cost(db_session):
     )
     await db_session.flush()
 
-    base = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+    base = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
     db_session.add_all(
         [
             EVChargingSession(

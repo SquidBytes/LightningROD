@@ -1,5 +1,7 @@
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+"""Query helpers for costs."""
+
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pandas as pd
 import plotly.express as px
@@ -9,11 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
 from db.models.charging_session import EVChargingSession
-from db.models.reference import EVChargingNetwork, EVLocationLookup, EVNetworkSubscription
+from db.models.reference import (
+    EVChargingNetwork,
+    EVLocationLookup,
+    EVNetworkSubscription,
+)
 
 # km -> miles conversion factor for cost-per-mile display.
 # distance_added is stored in km; we divide cost by (distance_km * _KM_TO_MI)
-# to get $/mi. Decision D2 in phase 27 CONTEXT.md.
+# to get $/mi.
 _KM_TO_MI = 0.621371
 
 # Shared Plotly modebar config — show minimal controls, hide logo
@@ -40,7 +46,7 @@ def build_time_filter(range_str: str):
     if not range_str or range_str == "all":
         return None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if range_str == "7d":
         cutoff = now - timedelta(days=7)
@@ -49,7 +55,7 @@ def build_time_filter(range_str: str):
     elif range_str == "90d":
         cutoff = now - timedelta(days=90)
     elif range_str == "ytd":
-        cutoff = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+        cutoff = datetime(now.year, 1, 1, tzinfo=UTC)
     elif range_str == "1y":
         cutoff = now - timedelta(days=365)
     else:
@@ -61,7 +67,7 @@ def build_time_filter(range_str: str):
 def find_active_subscription(
     periods: list,
     session_date,
-) -> Optional[EVNetworkSubscription]:
+) -> EVNetworkSubscription | None:
     """Find the subscription period active on a given date, if any."""
     for period in periods:
         if period.start_date <= session_date:
@@ -75,35 +81,31 @@ def compute_session_cost(
     network=None,
     location=None,
     *,
-    networks_by_name: dict = None,
-    subscription_periods: list = None,
+    networks_by_name: dict | None = None,
+    subscription_periods: list | None = None,
 ) -> dict:
     """Compute display cost for a session using the cost hierarchy cascade.
-
     Supports both new-style and old-style call signatures:
     - New: compute_session_cost(session, network=net_obj, location=loc_obj)
-    - Old: compute_session_cost(session, networks_by_name)  (positional dict)
-    - Old: compute_session_cost(session, networks_by_name=name_dict)  (keyword)
-
+    - Old: compute_session_cost(session, networks_by_name) (positional dict)
+    - Old: compute_session_cost(session, networks_by_name=name_dict) (keyword)
     Cost cascade order:
     1. Session is_free flag
     2. Stored user cost (cost_source='manual' or 'imported')
     3. Location cost_per_kwh override (if location has cost_per_kwh set)
     4. Network cost_per_kwh (from network FK)
     5. No cost data available
-
     NOTE: Callers in sessions.py, comparisons.py, dashboard.py still use
-    old positional dict signature. Plan 03 will update them.
-
+    old positional dict signature. will update them.
     Returns dict with keys:
     - display_cost: float|None
     - cost_source: str|None
     - is_free: bool
     - cost_per_kwh: float|None
     - calculation: str|None
-    - estimated_cost: float|None  (always calculated from hierarchy)
-    - actual_cost_per_kwh: float|None  (session.cost / energy_kwh when both exist)
-    - cost_difference: float|None  (session.cost - estimated_cost when both exist)
+    - estimated_cost: float|None (always calculated from hierarchy)
+    - actual_cost_per_kwh: float|None (session.cost / energy_kwh when both exist)
+    - cost_difference: float|None (session.cost - estimated_cost when both exist)
     """
     # Backward compat: if network arg is actually a dict, treat as networks_by_name
     if isinstance(network, dict):
@@ -115,7 +117,7 @@ def compute_session_cost(
         if session.location_name and session.location_name in networks_by_name:
             network = networks_by_name[session.location_name]
 
-    result = {
+    result: dict[str, Any] = {
         "display_cost": None,
         "cost_source": None,
         "is_free": False,
@@ -248,27 +250,27 @@ async def get_locations_by_id(
 
 async def get_session_cost_context(
     db: AsyncSession, session
-) -> tuple[Optional[EVChargingNetwork], Optional[EVLocationLookup]]:
+) -> tuple[EVChargingNetwork | None, EVLocationLookup | None]:
     """Load the network and location objects for a session's cost calculation.
 
     Returns (network, location) tuple, either or both may be None.
     """
-    network = None
-    location = None
+    network: EVChargingNetwork | None = None
+    location: EVLocationLookup | None = None
     if session.network_id:
-        result = await db.execute(
+        net_result = await db.execute(
             select(EVChargingNetwork).where(EVChargingNetwork.id == session.network_id)
         )
-        network = result.scalar_one_or_none()
+        network = net_result.scalar_one_or_none()
     if session.location_id:
-        result = await db.execute(
+        loc_result = await db.execute(
             select(EVLocationLookup).where(EVLocationLookup.id == session.location_id)
         )
-        location = result.scalar_one_or_none()
+        location = loc_result.scalar_one_or_none()
     return network, location
 
 
-async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> dict:
+async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> dict:
     """Compute lifetime (or time-filtered) cost summary aggregated by network.
 
     Uses network_id FK lookup with location cost cascade.
@@ -407,7 +409,7 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
     }
 
 
-async def query_monthly_costs(db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None) -> list[dict]:
+async def query_monthly_costs(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> list[dict]:
     """Return monthly cost data grouped by month and network.
 
     Uses network_id FK lookup with location cost cascade.
@@ -492,7 +494,7 @@ def calculate_monthly_fees_in_range(
 
 
 async def query_subscription_savings(
-    db: AsyncSession, time_range: str = "all", device_id: Optional[str] = None
+    db: AsyncSession, time_range: str = "all", device_id: str | None = None
 ) -> dict:
     """Return subscription savings card data.
 
@@ -503,6 +505,7 @@ async def query_subscription_savings(
     - by_network: list of dicts [{network, total_saved, total_fees, net_savings, session_count}, ...]
     """
     from datetime import date as date_type
+
     from web.queries.settings import get_all_subscriptions_by_network
 
     networks_by_id = await get_networks_by_id(db)
@@ -523,7 +526,7 @@ async def query_subscription_savings(
     locations_by_id = await get_locations_by_id(db, location_ids)
 
     # Determine time range boundaries for fee proration
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if not time_range or time_range == "all":
         # Use earliest session date to now
         range_start = date_type(2020, 1, 1)
@@ -562,6 +565,8 @@ async def query_subscription_savings(
             continue
 
         net_id = s.network_id
+        if net_id is None:
+            continue
         if net_id not in savings_by_network:
             net_name = network.network_name if network else "Unknown"
             savings_by_network[net_id] = {
@@ -617,23 +622,23 @@ async def query_subscription_savings(
 
 
 # ---------------------------------------------------------------------------
-# Phase 27-06: summary-row ratio helpers (avg/session, $/mi, $/kWh, free savings)
+# Summary-row ratio helpers (avg/session, $/mi, $/kWh, free savings)
 # ---------------------------------------------------------------------------
 #
 # Each helper accepts (db, device_id, time_range) and returns Optional[float].
 # Ratios return None when the denominator is zero OR no usable rows exist —
 # the template renders `—` in that case rather than `$0.00`/NaN.
 #
-# Critical rule (Decision D2): cost_per_mile excludes rows with
-# `distance_added IS NULL` from BOTH numerator and denominator. Enforced at
-# the SQL WHERE clause so aggregation sees only complete rows.
+# Cost-per-mile excludes rows with `distance_added IS NULL` from both
+# numerator and denominator. Enforced at the SQL WHERE clause so aggregation
+# only sees complete rows.
 
 
 async def avg_cost_per_session(
     db: AsyncSession,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     time_range: str = "all",
-) -> Optional[float]:
+) -> float | None:
     """Mean `total_cost` over sessions that have a recorded cost in the range.
 
     Returns None when there are no cost-bearing sessions.
@@ -657,13 +662,13 @@ async def avg_cost_per_session(
 
 async def cost_per_mile(
     db: AsyncSession,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     time_range: str = "all",
-) -> Optional[float]:
+) -> float | None:
     """Sum(cost) / Sum(distance_added_km * 0.621371) over the range.
 
-    Sessions with `distance_added IS NULL` are excluded from BOTH the
-    numerator and the denominator (D2). Returns None when denominator is 0.
+    Sessions with `distance_added IS NULL` are excluded from both the
+    numerator and denominator. Returns None when denominator is 0.
     """
     stmt = (
         select(
@@ -689,9 +694,9 @@ async def cost_per_mile(
 
 async def cost_per_kwh(
     db: AsyncSession,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     time_range: str = "all",
-) -> Optional[float]:
+) -> float | None:
     """Sum(cost) / Sum(energy_kwh) over the range.
 
     Rows where either side is NULL or energy is zero are excluded from both
@@ -721,7 +726,7 @@ async def cost_per_kwh(
 
 async def free_charging_savings(
     db: AsyncSession,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     time_range: str = "all",
 ) -> float:
     """Total dollars saved via `is_free=True` sessions in the range.
@@ -747,7 +752,7 @@ async def free_charging_savings(
     return float(total) if total is not None else 0.0
 
 
-def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, str] = None) -> str:
+def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, str] | None = None) -> str:
     """Build a Plotly horizontal bar chart of cost by network, returning HTML div string.
 
     Args:
@@ -760,7 +765,7 @@ def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, s
     pio.templates.default = "plotly_dark"
 
     df = pd.DataFrame(by_network)
-    kwargs = dict(x="total_cost", y="network", color="network", orientation="h")
+    kwargs: dict[str, Any] = dict(x="total_cost", y="network", color="network", orientation="h")
     if network_colors:
         kwargs["color_discrete_map"] = network_colors
     fig = px.bar(df, **kwargs)
@@ -778,7 +783,7 @@ def build_network_cost_chart(by_network: list[dict], network_colors: dict[str, s
     return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))
 
 
-def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str, str] = None) -> str:
+def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str, str] | None = None) -> str:
     """Build a Plotly stacked bar chart of cost by month and network.
 
     Args:
@@ -791,7 +796,7 @@ def build_monthly_cost_chart(monthly_data: list[dict], network_colors: dict[str,
     pio.templates.default = "plotly_dark"
 
     df = pd.DataFrame(monthly_data)
-    kwargs = dict(x="month", y="cost", color="network", barmode="stack")
+    kwargs: dict[str, Any] = dict(x="month", y="cost", color="network", barmode="stack")
     if network_colors:
         kwargs["color_discrete_map"] = network_colors
     fig = px.bar(df, **kwargs)

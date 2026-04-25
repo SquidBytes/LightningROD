@@ -4,7 +4,6 @@ Provides operations for managing monthly gas prices with two tracks
 (station-specific and regional average), plus HA sensor reading staging.
 """
 
-from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,8 +25,8 @@ async def upsert_gas_price(
     db: AsyncSession,
     year: int,
     month: int,
-    station_price: Optional[float] = None,
-    average_price: Optional[float] = None,
+    station_price: float | None = None,
+    average_price: float | None = None,
     source: str = "manual",
 ) -> GasPriceHistory:
     """Insert or update a gas price entry for the given year/month.
@@ -84,7 +83,7 @@ async def delete_gas_price(db: AsyncSession, price_id: int) -> bool:
 
 async def get_gas_price_for_date(
     db: AsyncSession, year: int, month: int
-) -> tuple[Optional[float], Optional[float]]:
+) -> tuple[float | None, float | None]:
     """Return (station_price, average_price) for the matching or nearest earlier month.
 
     Uses a simple strategy: find the entry where (year, month) <= the given date,
@@ -114,8 +113,7 @@ async def compute_monthly_averages(
     db: AsyncSession, entity_id: str
 ) -> dict[tuple[int, int], float]:
     """Query GasPriceReading for given entity_id, group by year+month.
-
-    Returns {(year, month): avg_price}. Used by Plan 03 for HA sensor integration.
+    Returns {(year, month): avg_price}. Used for HA sensor integration.
     """
     result = await db.execute(
         select(
@@ -133,7 +131,7 @@ async def compute_monthly_averages(
 async def store_gas_price_reading(
     db: AsyncSession, entity_id: str, price: float, recorded_at
 ) -> None:
-    """Insert a GasPriceReading row. Used by Plan 03 for HA sensor integration."""
+    """Insert a GasPriceReading row. Used for HA sensor integration."""
     reading = GasPriceReading(
         entity_id=entity_id,
         price=price,

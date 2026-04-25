@@ -1,4 +1,6 @@
-from typing import Optional
+"""Query helpers for vehicles."""
+
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -28,7 +30,7 @@ from web.queries.settings import get_app_setting, set_app_setting
 #
 # Authoritative source: RESEARCH.md §2 (Lightning, 34 rows) + §3 (Mach-E,
 # 29 rows). Keep this list synced with that table when battery specs shift.
-VEHICLE_PRESETS = [
+VEHICLE_PRESETS: list[dict[str, Any]] = [
     # -----------------------------------------------------------------
     # Ford F-150 Lightning — 34 rows, MY2022-MY2026 (RESEARCH.md §2)
     # -----------------------------------------------------------------
@@ -121,11 +123,10 @@ def lookup_battery_values(
     year: int,
     trim_level: str,
     battery_option: str,
-) -> Optional[tuple[float, float]]:
+) -> tuple[float, float] | None:
     """Return (battery_usable_kwh, battery_gross_kwh) for a preset match or None.
-
     Match rule: exact equality on make/model/trim_level/battery_option, and
-    year_min <= year <= year_max. Consumed by plan 27-07's cascade auto-fill.
+    year_min <= year <= year_max. Consumed by cascade auto-fill.
     """
     for row in VEHICLE_PRESETS:
         if (
@@ -149,7 +150,7 @@ async def get_all_vehicles(db: AsyncSession) -> list[EVVehicle]:
 
 async def get_vehicle_by_id(
     db: AsyncSession, vehicle_id: int
-) -> Optional[EVVehicle]:
+) -> EVVehicle | None:
     """Return a single vehicle by ID, or None if not found."""
     result = await db.execute(
         select(EVVehicle).where(EVVehicle.id == vehicle_id)
@@ -160,20 +161,20 @@ async def get_vehicle_by_id(
 async def create_vehicle(
     db: AsyncSession,
     display_name: str,
-    make: Optional[str] = None,
-    model: Optional[str] = None,
-    year: Optional[int] = None,
-    trim_level: Optional[str] = None,
-    battery_option: Optional[str] = None,
-    battery_capacity_kwh: Optional[float] = None,
-    battery_gross_capacity_kwh: Optional[float] = None,
-    vin: Optional[str] = None,
-    device_id: Optional[str] = None,
-    source_system: Optional[str] = None,
-    ice_fuel_efficiency: Optional[float] = None,  # L/100km (metric)
-    ice_fuel_tank_capacity: Optional[float] = None,  # liters (metric)
-    ice_label: Optional[str] = None,
-) -> Optional[EVVehicle]:
+    make: str | None = None,
+    model: str | None = None,
+    year: int | None = None,
+    trim_level: str | None = None,
+    battery_option: str | None = None,
+    battery_capacity_kwh: float | None = None,
+    battery_gross_capacity_kwh: float | None = None,
+    vin: str | None = None,
+    device_id: str | None = None,
+    source_system: str | None = None,
+    ice_fuel_efficiency: float | None = None,  # L/100km (metric)
+    ice_fuel_tank_capacity: float | None = None,  # liters (metric)
+    ice_label: str | None = None,
+) -> EVVehicle | None:
     """Create a new vehicle record.
 
     If device_id is not provided, generates one from the display_name.
@@ -213,7 +214,7 @@ async def update_vehicle(
     db: AsyncSession,
     vehicle_id: int,
     **kwargs,
-) -> Optional[EVVehicle]:
+) -> EVVehicle | None:
     """Update specified fields on a vehicle. Returns updated vehicle or None."""
     result = await db.execute(
         select(EVVehicle).where(EVVehicle.id == vehicle_id)
@@ -268,7 +269,7 @@ async def delete_vehicle(db: AsyncSession, vehicle_id: int) -> bool:
     return True
 
 
-async def get_active_vehicle(db: AsyncSession) -> Optional[EVVehicle]:
+async def get_active_vehicle(db: AsyncSession) -> EVVehicle | None:
     """Return the active vehicle, or None if no vehicle is set active."""
     vehicle_id_str = await get_app_setting(db, "active_vehicle_id", "")
     if not vehicle_id_str:
@@ -283,7 +284,7 @@ async def get_active_vehicle(db: AsyncSession) -> Optional[EVVehicle]:
     return result.scalar_one_or_none()
 
 
-async def get_active_device_id(db: AsyncSession) -> Optional[str]:
+async def get_active_device_id(db: AsyncSession) -> str | None:
     """Return the active vehicle's device_id, or None (show all data).
 
     This is the key helper used by ALL route handlers for query scoping.

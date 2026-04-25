@@ -1,18 +1,18 @@
 """Tests for csv_parser transform_rows and detect_duplicates."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
 def stub_unit_context():
     """Patch get_unit_context so import_rows doesn't need a fully-wired mock DB.
-
     import_rows looks up user unit preferences via get_unit_context → this would
     otherwise require the caller to wire a mock db.execute(...) result chain.
     These unit tests only care about row counting, so stubbing the unit-context
     lookup with "us" defaults keeps the mocks focused and avoids leaking
-    un-awaited coroutines when AsyncMock auto-generates .all() as a coroutine.
+    un-awaited coroutines when AsyncMock auto-generates.all as a coroutine.
     """
     stub = {
         "distance_unit": "us",
@@ -118,7 +118,7 @@ def test_transform_rows_error_status_when_missing_core_fields():
 
 def test_transform_rows_generates_session_id():
     """transform_rows generates deterministic session_id via make_session_id."""
-    from web.services.csv_parser import transform_rows, make_session_id
+    from web.services.csv_parser import make_session_id, transform_rows
 
     raw_rows = [
         {
@@ -210,8 +210,9 @@ def test_transform_rows_duration_minutes_converts_to_seconds():
 @pytest.mark.asyncio
 async def test_detect_duplicates_marks_exact_match():
     """detect_duplicates marks rows whose session_id exists in DB as 'duplicate'."""
-    from web.services.csv_parser import detect_duplicates
     import uuid
+
+    from web.services.csv_parser import detect_duplicates
 
     existing_session_id = uuid.uuid4()
 
@@ -241,8 +242,9 @@ async def test_detect_duplicates_marks_exact_match():
 @pytest.mark.asyncio
 async def test_detect_duplicates_new_row_stays_new():
     """detect_duplicates leaves rows without DB match as 'new'."""
-    from web.services.csv_parser import detect_duplicates
     import uuid
+
+    from web.services.csv_parser import detect_duplicates
 
     rows = [
         {
@@ -301,8 +303,9 @@ async def test_detect_duplicates_error_rows_unchanged():
 @pytest.mark.asyncio
 async def test_import_rows_skip_action_does_not_insert(stub_unit_context):
     """import_rows with action 'skip' for a row does not insert and increments skipped."""
-    from web.services.csv_parser import import_rows
     import uuid
+
+    from web.services.csv_parser import import_rows
 
     rows = [
         {
@@ -332,8 +335,9 @@ async def test_import_rows_skip_action_does_not_insert(stub_unit_context):
 @pytest.mark.asyncio
 async def test_import_rows_unselected_row_is_skipped(stub_unit_context):
     """import_rows skips rows not in selected_indices and increments skipped."""
-    from web.services.csv_parser import import_rows
     import uuid
+
+    from web.services.csv_parser import import_rows
 
     rows = [
         {
@@ -388,8 +392,9 @@ async def test_import_rows_error_row_counted_as_failed(stub_unit_context):
 @pytest.mark.asyncio
 async def test_import_rows_insert_new_row(stub_unit_context):
     """import_rows with action 'insert' adds an EVChargingSession and increments added."""
-    from web.services.csv_parser import import_rows
     import uuid
+
+    from web.services.csv_parser import import_rows
 
     rows = [
         {

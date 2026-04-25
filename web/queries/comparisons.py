@@ -1,4 +1,5 @@
-from typing import Optional
+"""Query helpers for comparisons."""
+
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,13 +7,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.charging_session import EVChargingSession
 from db.models.reference import GasPriceHistory
 from db.models.vehicle import EVVehicle
-from web.queries.costs import build_time_filter, compute_session_cost, get_networks_by_name
+from web.queries.costs import (
+    build_time_filter,
+    compute_session_cost,
+    get_networks_by_name,
+)
 from web.unit_system import GAL_PER_LITER, MI_PER_KM
 
 
 def _find_gas_price(
     prices: list[GasPriceHistory], year: int, month: int
-) -> tuple[Optional[float], Optional[float]]:
+) -> tuple[float | None, float | None]:
     """Find the gas price entry for (year, month) or nearest earlier month.
 
     Prices must be sorted by (year DESC, month DESC).
@@ -46,8 +51,8 @@ def _empty_gas_result() -> dict:
 
 async def query_gas_comparison(
     db: AsyncSession,
-    device_id: Optional[str] = None,
-    vehicle: Optional[EVVehicle] = None,
+    device_id: str | None = None,
+    vehicle: EVVehicle | None = None,
     time_range: str = "all",
 ) -> dict:
     """Compare actual EV charging cost to equivalent gasoline cost.
@@ -231,7 +236,7 @@ async def query_network_comparison(
         if cost_info["display_cost"] is None:
             continue
 
-        kwh = float(s.energy_kwh)
+        kwh = float(s.energy_kwh or 0)
         hypothetical_cost = kwh * reference_rate
 
         ev_total += cost_info["display_cost"]

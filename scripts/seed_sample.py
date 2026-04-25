@@ -19,17 +19,14 @@ import csv
 import hashlib
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from db.engine import AsyncSessionLocal
@@ -60,7 +57,7 @@ SAMPLE_VEHICLE = {
 # Helpers
 # ---------------------------------------------------------------------------
 
-def float_or_none(v: str) -> Optional[float]:
+def float_or_none(v: str) -> float | None:
     v = v.strip() if v else ""
     if not v:
         return None
@@ -70,12 +67,12 @@ def float_or_none(v: str) -> Optional[float]:
         return None
 
 
-def str_or_none(v: str) -> Optional[str]:
+def str_or_none(v: str) -> str | None:
     v = v.strip() if v else ""
     return v if v else None
 
 
-def int_or_none(v: str) -> Optional[int]:
+def int_or_none(v: str) -> int | None:
     v = v.strip() if v else ""
     if not v:
         return None
@@ -85,20 +82,20 @@ def int_or_none(v: str) -> Optional[int]:
         return None
 
 
-def parse_timestamp(v: str) -> Optional[datetime]:
+def parse_timestamp(v: str) -> datetime | None:
     v = v.strip() if v else ""
     if not v:
         return None
     try:
         dt = datetime.fromisoformat(v)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
     except (ValueError, TypeError):
         return None
 
 
-def parse_uuid(v: str) -> Optional[uuid.UUID]:
+def parse_uuid(v: str) -> uuid.UUID | None:
     v = v.strip() if v else ""
     if not v:
         return None
@@ -123,11 +120,11 @@ def parse_bool(v: str) -> bool:
 _MI_TO_KM = 1.60934
 
 
-def _mi_to_km(v: Optional[float]) -> Optional[float]:
+def _mi_to_km(v: float | None) -> float | None:
     return None if v is None else round(v * _MI_TO_KM, 4)
 
 
-def _f_to_c(v: Optional[float]) -> Optional[float]:
+def _f_to_c(v: float | None) -> float | None:
     return None if v is None else round((v - 32.0) * 5.0 / 9.0, 3)
 
 
@@ -135,7 +132,7 @@ def _f_to_c(v: Optional[float]) -> Optional[float]:
 # Battery status transform
 # ---------------------------------------------------------------------------
 
-def transform_battery_row(csv_row: dict, device_id: str) -> Optional[dict]:
+def transform_battery_row(csv_row: dict, device_id: str) -> dict | None:
     db_row = {
         "recorded_at": parse_timestamp(csv_row.get("recorded_at", "")),
         "hv_battery_soc": float_or_none(csv_row.get("hv_battery_soc", "")),
@@ -169,9 +166,9 @@ def transform_battery_row(csv_row: dict, device_id: str) -> Optional[dict]:
 def transform_session_row(
     csv_row: dict,
     device_id: str,
-    network_lookup: Optional[dict] = None,
-    location_id_map: Optional[dict] = None,
-) -> Optional[dict]:
+    network_lookup: dict | None = None,
+    location_id_map: dict | None = None,
+) -> dict | None:
     """Transform a session CSV row to a DB row ready for cost testing.
 
     Populates cost, is_free, location_type, network_id, and location_id so
@@ -263,7 +260,7 @@ def transform_session_row(
 # Trip metrics transform
 # ---------------------------------------------------------------------------
 
-def transform_trip_row(csv_row: dict, device_id: str) -> Optional[dict]:
+def transform_trip_row(csv_row: dict, device_id: str) -> dict | None:
     """Transform a trip CSV row to metric-base DB row.
 
     Seed CSV is generated in US units (mi, °F, mi/kWh); the schema stores
@@ -549,7 +546,7 @@ async def seed_sessions(
         if name:
             network_names.add(name)
 
-    network_lookup: dict[str, Optional[int]] = {}
+    network_lookup: dict[str, int | None] = {}
     if network_names and not dry_run:
         async with AsyncSessionLocal() as db:
             for name in sorted(network_names):

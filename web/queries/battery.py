@@ -5,9 +5,8 @@ with adaptive downsampling, plus Plotly chart builders for each.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -39,7 +38,7 @@ def build_battery_time_filter(range_str: str):
     if not range_str or range_str == "all":
         return None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if range_str == "7d":
         cutoff = now - timedelta(days=7)
@@ -65,7 +64,7 @@ def build_battery_time_filter(range_str: str):
 async def query_soc_timeline(
     db: AsyncSession,
     time_range: str = "7d",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[dict]:
     """Query SOC timeline data with adaptive time-bucket downsampling.
 
@@ -260,7 +259,7 @@ async def query_charge_curve(
 async def query_degradation_data(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[dict]:
     """Query daily max battery capacity for degradation trend.
 
@@ -293,7 +292,7 @@ async def query_degradation_data(
 
 async def query_recent_sessions_for_picker(
     db: AsyncSession,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     limit: int = 50,
 ) -> list[dict]:
     """Query recent charging sessions for the charge curve session dropdown.
@@ -378,7 +377,7 @@ def load_reference_charge_curve(vehicle) -> dict | None:
 async def query_degradation_by_mileage(
     db: AsyncSession,
     time_range: str = "all",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[dict]:
     """Query daily max battery capacity correlated with odometer mileage.
 
@@ -481,7 +480,7 @@ async def query_degradation_by_mileage(
 async def query_lv_battery_timeline(
     db: AsyncSession,
     time_range: str = "7d",
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[dict]:
     """Query 12v battery voltage and level timeline with adaptive downsampling.
 
@@ -539,7 +538,7 @@ async def query_lv_battery_timeline(
 
 async def query_average_charge_curve(
     db: AsyncSession,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
 ) -> list[dict]:
     """Compute average kW per 2% SOC bucket across all charging sessions.
 
@@ -606,7 +605,7 @@ def build_soc_timeline_chart(
 
     # Build rich tooltip text
     hover_texts = []
-    for i, row in enumerate(data):
+    for row in data:
         ts = row["recorded_at"]
         ts_str = ts.strftime("%b %d, %Y %H:%M") if hasattr(ts, "strftime") else str(ts)
         soc = row.get("soc")
@@ -974,7 +973,7 @@ def build_degradation_chart(
     hover_texts = []
     for i, row in enumerate(data):
         d = row.get("date")
-        d_str = d.strftime("%b %d, %Y") if hasattr(d, "strftime") else str(d)
+        d_str = d.strftime("%b %d, %Y") if d is not None else str(d)
         odo = odometers[i]
         cap = float(row["max_capacity"])
         hover_texts.append(
@@ -1156,7 +1155,7 @@ def build_mini_charge_curve(session, ref_curve: list[dict] | None = None) -> str
     start_soc = float(session.start_soc or 0)
     end_soc = float(session.end_soc or 0)
     # Estimate kW as flat line from session data
-    est_kw = 0
+    est_kw: float = 0.0
     if getattr(session, "charging_kw", None):
         est_kw = abs(float(session.charging_kw))
     elif getattr(session, "max_power", None):

@@ -7,7 +7,7 @@ Usage:
 
 CI: run with --check on every PR. Exits 1 with a diff if the committed
 docs/data-sources.md does not match what the current registries would
-generate. See Phase 29 CONTEXT.md D-C2.
+generate.
 """
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from web.services.units.contracts import FieldContract  # noqa: E402
 
 # Explicit manifest of known adapters. Append a tuple here when a new adapter
-# lands. The D-C1 invariant (registry is source-of-truth) is preserved — this
-# list just enumerates which modules to read.
+# lands. The registry remains the source of truth; this list only enumerates
+# which modules to read.
 _ADAPTER_MODULES: list[tuple[str, str]] = [
     ("ha_fordpass", "web.services.sources.ha_fordpass.adapter"),
 ]
@@ -54,8 +54,7 @@ def render_markdown(groups: list[tuple[str, list[FieldContract]]]) -> str:
         "",
         "Every field ingested by LightningROD is declared in a source adapter's",
         "`FIELD_CONTRACTS` registry. This page is a reflection of that registry at",
-        "commit time. Phase 29 (CONTEXT.md D-C2) locks this as the observable unit",
-        "contract.",
+        "commit time and serves as the observable unit contract.",
         "",
     ]
     for source_name, contracts in groups:

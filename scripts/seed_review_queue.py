@@ -19,9 +19,8 @@ import argparse
 import asyncio
 import logging
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -232,7 +231,7 @@ def build_energy_transfer_payload(
 # Overlap timestamp picker — aligns to a real sample session for dedup match
 # ---------------------------------------------------------------------------
 
-async def pick_overlap_target(db, overlap_filter: dict) -> Optional[tuple[datetime, float]]:
+async def pick_overlap_target(db, overlap_filter: dict) -> tuple[datetime, float] | None:
     """Return (session_start_utc, energy_kwh) of a sample session matching filter."""
     query = select(
         EVChargingSession.session_start_utc,
@@ -344,12 +343,10 @@ async def retag_after_scenario(scenario: dict, session_start_utc: datetime) -> N
 
 async def backfill_sample_locations(db) -> int:
     """Insert unverified ev_location_lookup rows for distinct sample session locations.
-
     seed_sample.py seeds only Home and Work into ev_location_lookup but the
     sample sessions reference ~13 other location_names (public chargers). This
-    mirrors what resolve_location() would have produced during live HA
+    mirrors what resolve_location would have produced during live HA
     ingestion, so the Locations review tab is populated.
-
     Idempotent: skips location names already present (case-insensitive).
     Never touches Home/Work — those are verified and owned by seed_sample.py.
     """
@@ -432,7 +429,7 @@ async def backfill_sample_locations(db) -> int:
 # Post-commit patch: flip one session to review_type='auto_association'
 # ---------------------------------------------------------------------------
 
-async def patch_auto_association(db, scenario_a_start: Optional[datetime]) -> None:
+async def patch_auto_association(db, scenario_a_start: datetime | None) -> None:
     """Flip scenario A's session to review_type='auto_association' for UI coverage.
 
     No live code path produces this state today (only the schema and template
@@ -630,7 +627,7 @@ async def run(dry_run: bool) -> None:
     print("  REPLAY HASS EVENTS")
     print(f"{'=' * 60}")
 
-    scenario_a_start: Optional[datetime] = None
+    scenario_a_start: datetime | None = None
 
     for sc in SCENARIOS:
         # Resolve timestamp + energy
@@ -649,7 +646,7 @@ async def run(dry_run: bool) -> None:
         else:
             start_utc = datetime.fromisoformat(sc["fixed_start_utc"])
             if start_utc.tzinfo is None:
-                start_utc = start_utc.replace(tzinfo=timezone.utc)
+                start_utc = start_utc.replace(tzinfo=UTC)
             energy_kwh = sc["energy_kwh"]
 
         entity_id, new_state = build_energy_transfer_payload(

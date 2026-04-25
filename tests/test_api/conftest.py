@@ -17,12 +17,22 @@ async def client(db_session):
     """
     from fastapi import FastAPI
     from fastapi.staticfiles import StaticFiles
+    from web.main import localtime_filter
     from web.routes import (
-        battery, charging, costs, csv_import, dashboard, driving_performance,
-        locations, performance, review, sessions, settings, trips,
+        battery,
+        charging,
+        costs,
+        csv_import,
+        dashboard,
+        driving_performance,
+        locations,
+        performance,
+        review,
+        sessions,
+        settings,
+        trips,
     )
     from web.routes.admin import data_sources as admin_data_sources
-    from web.main import localtime_filter
 
     app = FastAPI(title="LightningROD-Test")
     app.mount("/static", StaticFiles(directory="web/static"), name="static")

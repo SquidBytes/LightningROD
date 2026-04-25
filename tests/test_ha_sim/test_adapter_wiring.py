@@ -1,0 +1,164 @@
+"""Tests for `_metrics` / `_events` dispatcher wiring.
+
+These tests exercise the dispatcher path: `_metrics` and `_events` entities
+must route through `ha_fordpass.process_event`.
+
+Covers:
+  - `_metrics` event -> ev_battery_status row (via adapter)
+  - `_events` event -> ev_trip_metrics row (via adapter)
+"""
+
+import pytest
+from sqlalchemy import select
+
+from db.models.battery_status import EVBatteryStatus
+from db.models.trip_metrics import EVTripMetrics
+from tests.factories.vehicles import VehicleFactory
+from web.services import hass_processor
+from web.services.hass_processor import (
+    SENSOR_HANDLERS,
+    extract_slug,
+)
+
+pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
+
+_HA_CONFIG = {
+    "location_name": "Test Home",
+    "time_zone": "America/New_York",
+    "unit_system": {
+        "length": "mi",
+        "mass": "lb",
+        "temperature": "\u00b0F",
+        "volume": "gal",
+    },
+}
+
+_TEST_DEVICE_ID = "TESTVIN29"
+
+
+async def _dispatch_event(entity_id: str, new_state: dict, db) -> None:
+    """Invoke the handler registered for entity_id's slug."""
+    slug = extract_slug(entity_id)
+    assert slug is not None, f"Could not extract slug from {entity_id}"
+    handler = SENSOR_HANDLERS.get(slug)
+    assert handler is not None, f"No handler registered for slug: {slug}"
+    parts = entity_id[len("sensor.fordpass_"):].split("_", 1)
+    device_id = parts[0]
+    await handler(slug, new_state, _HA_CONFIG, device_id, db)
+
+
+@pytest.fixture(autouse=True)
+def _clear_state():
+    """Clear pending batches so tests don't bleed into each other."""
+    hass_processor._pending_battery_status.clear()
+    hass_processor._pending_battery_status_ts.clear()
+    hass_processor._last_trip_values.clear()
+    yield
+    hass_processor._pending_battery_status.clear()
+    hass_processor._pending_battery_status_ts.clear()
+    hass_processor._last_trip_values.clear()
+
+
+def _make_metrics_event(device_id: str) -> tuple[str, dict]:
+    """Build a sensor.fordpass_{vin}_metrics state payload.
+
+    Values match the existing metric HA fixtures: xevBatteryRange=260 (km),
+    xevBatteryMaximumRange=418 (km). Both are already metric per
+    ha-fordpass integration contract.
+    """
+    entity_id = f"sensor.fordpass_{device_id}_metrics"
+    new_state = {
+        "entity_id": entity_id,
+        "state": "ok",
+        "last_changed": "2026-04-19T12:00:00+00:00",
+        "last_updated": "2026-04-19T12:00:00+00:00",
+        "attributes": {
+            "xevBatteryRange": 260,
+            "xevBatteryMaximumRange": 418,
+            "xevBatteryStateOfCharge": 80,
+            "xevBatteryActualStateOfCharge": 77,
+            "xevBatteryCapacity": 131000,
+            "xevBatteryVoltage": 390.0,
+            "xevBatteryAmperage": 5.0,
+            "xevBatteryPower": 1950,
+        },
+    }
+    return entity_id, new_state
+
+
+def _make_events_event(device_id: str) -> tuple[str, dict]:
+    """Build a sensor.fordpass_{vin}_events state payload with trip data."""
+    import json
+    entity_id = f"sensor.fordpass_{device_id}_events"
+    new_state = {
+        "entity_id": entity_id,
+        "state": "ok",
+        "last_changed": "2026-04-19T12:00:00+00:00",
+        "last_updated": "2026-04-19T12:00:00+00:00",
+        "attributes": {
+            "customEvents": {
+                "xev-key-off-trip-segment-data": {
+                    "oemData": {
+                        "trip_data": {
+                            "stringArrayValue": [
+                                json.dumps({
+                                    "distance_traveled": 19,
+                                    "energy_consumed": 7600,
+                                    "trip_duration": 1800,
+                                    "ambient_temperature": 15,
+                                    "cabin_temperature": 20,
+                                    "outside_air_ambient_temperature": 15,
+                                })
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+    }
+    return entity_id, new_state
+
+
+@pytest.mark.asyncio
+async def test_metrics_event_writes_battery_status(db_session):
+    """A `_metrics` event must write a metric-canonical ev_battery_status row."""
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+
+    entity_id, new_state = _make_metrics_event(_TEST_DEVICE_ID)
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    result = await db_session.execute(
+        select(EVBatteryStatus)
+        .where(EVBatteryStatus.device_id == _TEST_DEVICE_ID)
+        .order_by(EVBatteryStatus.id.desc())
+        .limit(1)
+    )
+    battery = result.scalar_one_or_none()
+    assert battery is not None, "adapter did not write ev_battery_status row"
+    assert float(battery.hv_battery_range) == pytest.approx(260.0, abs=0.5)
+    assert float(battery.hv_battery_max_range) == pytest.approx(418.0, abs=0.5)
+    assert battery.ingest_schema_version == 2
+
+
+@pytest.mark.asyncio
+async def test_events_event_writes_trip_metrics(db_session):
+    """An `_events` event must write a metric-canonical ev_trip_metrics row."""
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+
+    entity_id, new_state = _make_events_event(_TEST_DEVICE_ID)
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    result = await db_session.execute(
+        select(EVTripMetrics)
+        .where(EVTripMetrics.device_id == _TEST_DEVICE_ID)
+        .order_by(EVTripMetrics.id.desc())
+        .limit(1)
+    )
+    trip = result.scalar_one_or_none()
+    assert trip is not None, "adapter did not write ev_trip_metrics row"
+    assert float(trip.distance) == pytest.approx(19.0, abs=0.1)
+    # energy_consumed: 7600 Wh -> 7.6 kWh
+    assert float(trip.energy_consumed) == pytest.approx(7.6, abs=0.05)
+    assert trip.ingest_schema_version == 2

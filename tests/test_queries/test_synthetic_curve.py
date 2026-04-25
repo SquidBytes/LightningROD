@@ -1,5 +1,5 @@
 """Query-layer tests for synthetic charge curve aggregation. phase_25 Wave 2."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -63,8 +63,8 @@ async def test_phase_25_dc_only_excludes_ac_sessions(
         charge_type="AC",
         energy_kwh=10.0,
         max_power=999.0,  # would skew median/count if included
-        session_start_utc=datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
-        session_end_utc=datetime(2025, 6, 1, 13, 0, 0, tzinfo=timezone.utc),
+        session_start_utc=datetime(2025, 6, 1, 12, 0, 0, tzinfo=UTC),
+        session_end_utc=datetime(2025, 6, 1, 13, 0, 0, tzinfo=UTC),
         is_complete=True,
         source_system="test_fixture",
     )

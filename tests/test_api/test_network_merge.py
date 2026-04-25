@@ -1,11 +1,9 @@
-"""Tests for network and location merge endpoints (Phase 19 backfill).
-
+"""Tests for network and location merge endpoints ( backfill).
 These cover the POST /review/network/{id}/merge and /review/location/{id}/merge
 endpoints that:
-
-- Reassign all FK references (sessions, subscriptions, locations) to target
-- Create an EVNetworkNameAlias / EVLocationGPSAlias preserving history
-- Delete the source row
+Reassign all FK references (sessions, subscriptions, locations) to target
+Create an EVNetworkNameAlias / EVLocationGPSAlias preserving history
+Delete the source row
 """
 
 import pytest
@@ -19,11 +17,10 @@ from db.models.reference import (
     EVNetworkNameAlias,
     EVNetworkSubscription,
 )
-from tests.factories.networks import NetworkFactory, SubscriptionFactory
 from tests.factories.locations import LocationLookupFactory
+from tests.factories.networks import NetworkFactory, SubscriptionFactory
 from tests.factories.sessions import ChargingSessionFactory
 from tests.factories.vehicles import VehicleFactory
-
 
 pytestmark = pytest.mark.db
 
@@ -137,7 +134,7 @@ async def test_network_merge_creates_name_alias(client, db_session):
 
 
 async def test_network_merge_alias_enables_future_resolution(client, db_session):
-    """Once merged, subsequent resolve_network() on the old name returns target."""
+    """Once merged, subsequent resolve_network on the old name returns target."""
     from web.queries.settings import resolve_network
 
     src = await NetworkFactory.create(db_session, network_name="LegacyName")

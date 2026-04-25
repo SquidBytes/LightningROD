@@ -40,7 +40,7 @@ def test_phase_25_synthesize_curve_monotonic_non_increasing():
     """Curve never increases as SOC increases (plateau then decay)."""
     points = synthesize_curve(max_kw=150.0)
     kws = [p["kw"] for p in points]
-    for a, b in zip(kws, kws[1:]):
+    for a, b in zip(kws, kws[1:]):  # noqa: B905 — intentional sliding window, lengths differ by design
         assert b <= a + 1e-9
 
 

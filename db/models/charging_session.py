@@ -1,8 +1,20 @@
+"""Database models for charging session."""
+
 import uuid
 from datetime import datetime
-from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -29,99 +41,104 @@ class EVChargingSession(Base):
     device_id: Mapped[str] = mapped_column(String, nullable=False)
 
     # Session type and location
-    charge_type: Mapped[Optional[str]] = mapped_column(String)
-    location_name: Mapped[Optional[str]] = mapped_column(String)
-    location_type: Mapped[Optional[str]] = mapped_column(String(20))  # 'home', 'work', 'public'
-    network_id: Mapped[Optional[int]] = mapped_column(
+    charge_type: Mapped[str | None] = mapped_column(String)
+    location_name: Mapped[str | None] = mapped_column(String)
+    location_type: Mapped[str | None] = mapped_column(String(20))  # 'home', 'work', 'public'
+    network_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ev_charging_networks.id", ondelete="SET NULL"), nullable=True
     )
-    is_free: Mapped[Optional[bool]] = mapped_column(Boolean)  # whether session was free charging
-    plug_status: Mapped[Optional[str]] = mapped_column(String)
-    charging_status: Mapped[Optional[str]] = mapped_column(String)
-    station_status: Mapped[Optional[str]] = mapped_column(String)
+    is_free: Mapped[bool | None] = mapped_column(Boolean)  # whether session was free charging
+    plug_status: Mapped[str | None] = mapped_column(String)
+    charging_status: Mapped[str | None] = mapped_column(String)
+    station_status: Mapped[str | None] = mapped_column(String)
 
     # Power metrics
-    charging_voltage: Mapped[Optional[float]] = mapped_column(Numeric)
-    charging_amperage: Mapped[Optional[float]] = mapped_column(Numeric)
-    charging_kw: Mapped[Optional[float]] = mapped_column(Numeric)
+    charging_voltage: Mapped[float | None] = mapped_column(Numeric)
+    charging_amperage: Mapped[float | None] = mapped_column(Numeric)
+    charging_kw: Mapped[float | None] = mapped_column(Numeric)
 
     # Timestamps (all TIMESTAMPTZ)
-    session_start_utc: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
-    session_end_utc: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
-    estimated_end_utc: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
-    recorded_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
+    session_start_utc: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
+    session_end_utc: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
+    estimated_end_utc: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
+    recorded_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
     # Duration columns
-    charge_duration_seconds: Mapped[Optional[float]] = mapped_column(Numeric)
-    plugged_in_duration_seconds: Mapped[Optional[float]] = mapped_column(Numeric)
+    charge_duration_seconds: Mapped[float | None] = mapped_column(Numeric)
+    plugged_in_duration_seconds: Mapped[float | None] = mapped_column(Numeric)
 
     # SOC and energy
-    start_soc: Mapped[Optional[float]] = mapped_column(Numeric)
-    end_soc: Mapped[Optional[float]] = mapped_column(Numeric)
-    energy_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
+    start_soc: Mapped[float | None] = mapped_column(Numeric)
+    end_soc: Mapped[float | None] = mapped_column(Numeric)
+    energy_kwh: Mapped[float | None] = mapped_column(Numeric)
 
     # Cost
-    cost: Mapped[Optional[float]] = mapped_column(Numeric)
-    cost_without_overrides: Mapped[Optional[float]] = mapped_column(Numeric)
-    cost_source: Mapped[Optional[str]] = mapped_column(String(20))  # 'imported', 'manual', 'calculated', None
-    estimated_cost: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+    cost: Mapped[float | None] = mapped_column(Numeric)
+    cost_without_overrides: Mapped[float | None] = mapped_column(Numeric)
+    cost_source: Mapped[str | None] = mapped_column(String(20))  # 'imported', 'manual', 'calculated', None
+    estimated_cost: Mapped[float | None] = mapped_column(Numeric, nullable=True)
 
     # Session flags
     is_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Location and power range
-    location_id: Mapped[Optional[int]] = mapped_column(Integer)
+    location_id: Mapped[int | None] = mapped_column(Integer)
 
     # HASS-sourced location data
-    address: Mapped[Optional[str]] = mapped_column(Text)
-    latitude: Mapped[Optional[float]] = mapped_column(Numeric)
-    longitude: Mapped[Optional[float]] = mapped_column(Numeric)
-    max_power: Mapped[Optional[float]] = mapped_column(Numeric)
-    min_power: Mapped[Optional[float]] = mapped_column(Numeric)
-    distance_added: Mapped[Optional[float]] = mapped_column(Numeric)  # km
+    address: Mapped[str | None] = mapped_column(Text)
+    latitude: Mapped[float | None] = mapped_column(Numeric)
+    longitude: Mapped[float | None] = mapped_column(Numeric)
+    max_power: Mapped[float | None] = mapped_column(Numeric)
+    min_power: Mapped[float | None] = mapped_column(Numeric)
+    distance_added: Mapped[float | None] = mapped_column(Numeric)  # km
 
     # EVSE data (charger-side measurements)
-    evse_voltage: Mapped[Optional[float]] = mapped_column(Numeric)
-    evse_amperage: Mapped[Optional[float]] = mapped_column(Numeric)
-    evse_kw: Mapped[Optional[float]] = mapped_column(Numeric)
-    evse_energy_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    evse_max_power_kw: Mapped[Optional[float]] = mapped_column(Numeric)
-    charger_rated_kw: Mapped[Optional[float]] = mapped_column(Numeric)
-    evse_source: Mapped[Optional[str]] = mapped_column(String(20))  # 'smart_evse', 'energy_monitor', 'manual', 'estimated', 'stall_default'
-    stall_id: Mapped[Optional[int]] = mapped_column(
+    evse_voltage: Mapped[float | None] = mapped_column(Numeric)
+    evse_amperage: Mapped[float | None] = mapped_column(Numeric)
+    evse_kw: Mapped[float | None] = mapped_column(Numeric)
+    evse_energy_kwh: Mapped[float | None] = mapped_column(Numeric)
+    evse_max_power_kw: Mapped[float | None] = mapped_column(Numeric)
+    charger_rated_kw: Mapped[float | None] = mapped_column(Numeric)
+    evse_source: Mapped[str | None] = mapped_column(String(20))  # 'smart_evse', 'energy_monitor', 'manual', 'estimated', 'stall_default'
+    stall_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ev_charger_stalls.id", ondelete="SET NULL"), nullable=True
     )
 
     # Duplicate detection and review
-    duplicate_of_id: Mapped[Optional[int]] = mapped_column(
+    duplicate_of_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ev_charging_session.id", ondelete="SET NULL"), nullable=True
     )
     needs_review: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )
-    review_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # 'duplicate', 'auto_association', NULL
+    review_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # 'duplicate', 'auto_association', NULL
 
-    # Charging-session thermal context (Phase 27-01)
+    # Charging-session thermal context
     # °C, NULL when the HA payload doesn't carry a temp reading. Start/end mirror
     # the same value today because HA exposes single-value snapshots — see
     # hass_processor.handle_energy_transfer for the mirroring comment.
-    battery_temp_start: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
-    battery_temp_end: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
-    ambient_temp_start: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
-    ambient_temp_end: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+    battery_temp_start: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    battery_temp_end: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    ambient_temp_start: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    ambient_temp_end: Mapped[float | None] = mapped_column(Numeric, nullable=True)
 
     # Pipeline metadata
-    source_system: Mapped[Optional[str]] = mapped_column(String(100))
+    source_system: Mapped[str | None] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
     )
-    original_timestamp: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
+    original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
+
+    # Pipeline schema version. NULL = legacy rows from the suspect conversion
+    # era around 2026-03-21 (commit abd736b). Value 2 = adapter-driven ingest
+    # with declared source units.
+    ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     # Pipeline schema version (Phase 29, D-D1). NULL = pre-v2 / suspect era
     # spanning 2026-03-21 onward (commit abd736b double-conversion bug).
     # 2 = ingested via adapter-driven pipeline with declared source units.
     # See .planning/phases/29-unit-ingestion-overhaul/29-CONTEXT.md D-D1/D-D3.
-    ingest_schema_version: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("session_id", name="uq_ev_charging_session_session_id"),

@@ -1,37 +1,32 @@
 """Split ev_vehicles.trim into trim_level + battery_option.
-
-Phase 27 plan 27-03 (Thread 4a). The existing single `trim` column conflated
+(Thread 4a). The existing single `trim` column conflated
 trim_level (e.g. Lariat, XLT, Premium) with battery_option (Standard Range
 vs Extended Range). That conflation blocked correct (make, model, year, trim)
--> battery cascade auto-fill because a single trim could map to multiple
+> battery cascade auto-fill because a single trim could map to multiple
 battery values (e.g. "Lariat" exists with both SR and ER packs).
-
 This migration:
-    1. Adds trim_level VARCHAR NULL.
-    2. Adds battery_option VARCHAR NULL.
-    3. Tokenizes every existing ev_vehicles.trim value per the heuristic
-       table in .planning/phases/27-analytics-polish-and-vehicle-preset-overhaul/RESEARCH.md §4.
-    4. Drops the old trim column. No backwards-compat shim (per CLAUDE.md).
-
+1. Adds trim_level VARCHAR NULL.
+2. Adds battery_option VARCHAR NULL.
+3. Tokenizes every existing ev_vehicles.trim value per the heuristic
+table in §4.
+4. Drops the old trim column. No backwards-compat shim (per CLAUDE.md).
 Downgrade recombines trim_level + battery_option into a single trim string
 via COALESCE. Drivetrain suffixes (e.g. "RWD"/"AWD") that were stripped on
 upgrade are NOT recovered — downgrade is a best-effort recombination.
-
 Revision ID: s33_phase27_vehicle_trim_split
-Revises: s31_battery_gross (chains after current head; plan 27-01's
-    s32_phase27_charging_session_temps had not landed when this migration
-    was authored, so we chain directly after s31.)
+Revises: s31_battery_gross (chains after current head; 's
+s32_phase27_charging_session_temps had not landed when this migration
+was authored, so we chain directly after s31.)
 Create Date: 2026-04-12
 """
-from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "s33_phase27_vehicle_trim_split"
-down_revision: Union[str, None] = "s31_battery_gross"
-branch_labels: Union[str, None] = None
-depends_on: Union[str, None] = None
+down_revision: str | None = "s31_battery_gross"
+branch_labels: str | None = None
+depends_on: str | None = None
 
 
 # (match_where_clause, trim_level_value_or_None, battery_option_value_or_None)

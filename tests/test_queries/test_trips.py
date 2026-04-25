@@ -5,8 +5,7 @@ Tests trip listing, pagination, efficiency trends, and summary aggregation.
 
 import pytest
 
-from web.queries.trips import query_trips, query_efficiency_trend
-
+from web.queries.trips import query_efficiency_trend, query_trips
 
 pytestmark = [pytest.mark.query, pytest.mark.db]
 

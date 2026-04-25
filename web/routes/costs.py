@@ -1,4 +1,6 @@
-from typing import Annotated, Optional
+"""Route handlers for costs."""
+
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import HTMLResponse
@@ -18,8 +20,16 @@ from web.queries.costs import (
     query_monthly_costs,
     query_subscription_savings,
 )
-from web.queries.settings import get_all_networks, get_app_settings_dict, get_unit_context
-from web.queries.vehicles import get_active_device_id, get_active_vehicle, get_all_vehicles
+from web.queries.settings import (
+    get_all_networks,
+    get_app_settings_dict,
+    get_unit_context,
+)
+from web.queries.vehicles import (
+    get_active_device_id,
+    get_active_vehicle,
+    get_all_vehicles,
+)
 from web.unit_system import MI_PER_KM
 
 router = APIRouter()
@@ -30,8 +40,8 @@ templates = Jinja2Templates(directory="web/templates")
 async def costs(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    range: Optional[str] = "all",
-    hx_request: Annotated[Optional[str], Header()] = None,
+    range: str | None = "all",
+    hx_request: Annotated[str | None, Header()] = None,
 ):
     # Vehicle scoping
     active_device_id = await get_active_device_id(db)
@@ -93,7 +103,7 @@ async def costs(
                 reference_rate = float(ref_rate_param)
             else:
                 non_free_networks = [n for n in networks if not n.is_free and n.cost_per_kwh]
-                reference_rate = float(non_free_networks[0].cost_per_kwh) if non_free_networks else 0.48
+                reference_rate = float(non_free_networks[0].cost_per_kwh or 0) if non_free_networks else 0.48
             network_comparison = await query_network_comparison(db, reference_rate, time_range=range or "all")
 
     all_vehicles = await get_all_vehicles(db)

@@ -8,25 +8,22 @@ Supports event injection for end-to-end ingestion pipeline testing.
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import websockets
-from websockets.asyncio.server import serve, ServerConnection
+from websockets.asyncio.server import ServerConnection, serve
 
 logger = logging.getLogger("lightningrod.test.ha_sim")
 
 
 class HASimulator:
     """Standalone asyncio WebSocket server speaking the HA protocol.
-
     Usage::
-
-        sim = HASimulator()
-        await sim.start()
-        print(f"ws://localhost:{sim.port}")
-        await sim.inject_event("sensor.fordpass_TESTVIN_soc", {"state": "80"})
-        await sim.stop()
+    sim = HASimulator
+    await sim.start
+    print(f"ws://localhost:{sim.port}")
+    await sim.inject_event("sensor.fordpass_TESTVIN_soc", {"state": "80"})
+    await sim.stop
     """
 
     def __init__(
@@ -39,12 +36,12 @@ class HASimulator:
         self._port = port  # 0 = OS-assigned free port
         self._valid_token = valid_token
         self._server = None
-        self._actual_port: Optional[int] = None
+        self._actual_port: int | None = None
 
         # Event injection queue and subscribed client tracking
         self._events_queue: asyncio.Queue = asyncio.Queue()
         self._subscribed_clients: list[_SubscribedClient] = []
-        self._dispatch_task: Optional[asyncio.Task] = None
+        self._dispatch_task: asyncio.Task | None = None
 
         # Pre-configured entity states returned by get_states
         self._entity_states: list[dict] = []
@@ -116,7 +113,7 @@ class HASimulator:
         self,
         entity_id: str,
         new_state: dict,
-        old_state: Optional[dict] = None,
+        old_state: dict | None = None,
     ) -> None:
         """Queue a state_changed event to send to all subscribed clients."""
         event = {
@@ -294,7 +291,7 @@ _DEFAULT_DEVICE_ID = "TESTVIN001"
 
 def _now_iso() -> str:
     """Return current UTC time as ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def make_charging_session_event(
@@ -305,22 +302,20 @@ def make_charging_session_event(
     start_soc: float = 20.0,
     end_soc: float = 80.0,
     duration_seconds: float = 1800.0,
-    latitude: Optional[float] = 38.9072,
-    longitude: Optional[float] = -77.0369,
-    address: Optional[str] = "123 Test St",
-    city: Optional[str] = "Washington",
-    state: Optional[str] = "DC",
+    latitude: float | None = 38.9072,
+    longitude: float | None = -77.0369,
+    address: str | None = "123 Test St",
+    city: str | None = "Washington",
+    state: str | None = "DC",
     max_power_w: float = 150000.0,
-    battery_temp_c: Optional[float] = None,
-    outside_temp_c: Optional[float] = None,
+    battery_temp_c: float | None = None,
+    outside_temp_c: float | None = None,
 ) -> tuple[str, dict]:
     """Generate an energytransferlogentry event.
-
     Returns (entity_id, new_state) tuple matching what hass_processor expects.
-
-    ``battery_temp_c`` / ``outside_temp_c`` inject the Phase 27-01 thermal
+    ``battery_temp_c`` / ``outside_temp_c`` inject the thermal
     context fields (°C — matches real ha-fordpass payload semantics per
-    Phase 29 D-B2 audit) at the top of the attrs dict. Omit them to test
+    audit) at the top of the attrs dict. Omit them to test
     the "payload without temp keys" path.
     """
     entity_id = f"sensor.fordpass_{device_id}_energytransferlogentry"
@@ -391,6 +386,9 @@ def make_trip_event(
         "last_changed": now,
         "last_updated": now,
         "attributes": {
+            # Production HA emits unit_of_measurement for the elveh state.
+            # Detection resolver requires a signal; no more silent "mi" default.
+            "unit_of_measurement": "mi",
             "batteryVoltage": 390.0,
             "batteryAmperage": 5.0,
             "batterykW": 1.95,
@@ -412,8 +410,53 @@ def make_trip_event(
             "tripAmbientTemp": 72.0,
             "tripOutsideAirAmbientTemp": 68.0,
             "tripCabinTemp": 70.0,
-            "tripRangeRegeneration": 2.5,
+            "tripRangeRegenerated": 2.5,
             "tripElectricalEfficiency": 3.1,
+        },
+    }
+    return entity_id, new_state
+
+
+def make_events_trip_event(
+    device_id: str = _DEFAULT_DEVICE_ID,
+    distance_km: float = 24.9,
+    energy_wh: float = 7200.0,
+    duration_seconds: float = 1500.0,
+    ambient_temp_c: float = 18.0,
+    cabin_temp_c: float = 21.0,
+    outside_air_temp_c: float = 17.0,
+) -> tuple[str, dict]:
+    """Generate a sensor.fordpass_{vin}_events event with trip segment data.
+
+    Returns (entity_id, new_state) matching adapter._handle_events_entity.
+    distance_km and energy_wh use the canonical units that the FIELD_CONTRACTS
+    specify (km passthrough, Wh -> kWh conversion).
+    """
+    entity_id = f"sensor.fordpass_{device_id}_events"
+    now = _now_iso()
+    new_state = {
+        "state": "key_off",
+        "last_changed": now,
+        "last_updated": now,
+        "attributes": {
+            "customEvents": {
+                "xev-key-off-trip-segment-data": {
+                    "oemData": {
+                        "trip_data": {
+                            "stringArrayValue": [
+                                json.dumps({
+                                    "distance_traveled": distance_km,
+                                    "energy_consumed": energy_wh,
+                                    "trip_duration": duration_seconds,
+                                    "ambient_temperature": ambient_temp_c,
+                                    "cabin_temperature": cabin_temp_c,
+                                    "outside_air_ambient_temperature": outside_air_temp_c,
+                                })
+                            ]
+                        }
+                    }
+                }
+            }
         },
     }
     return entity_id, new_state

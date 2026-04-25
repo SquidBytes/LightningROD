@@ -63,8 +63,7 @@ def test_phase_25_regen_bar_uses_secondary_y_axis():
 
 def test_phase_25_regen_bar_regen_pct_derivation():
     """regen_pct == regen_kwh / energy_consumed * 100 for each trip input row.
-
-    Sanity test — validates the _rows() fixture is consistent with the locked
+    Sanity test — validates the _rows fixture is consistent with the locked
     derivation formula (range_regenerated / (distance / energy_consumed) → kWh,
     then kWh / energy_consumed * 100 → pct).
     """
