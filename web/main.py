@@ -8,7 +8,9 @@ from importlib.metadata import version as pkg_version
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 
 def _resolve_version() -> str:
@@ -106,6 +108,28 @@ def create_app() -> FastAPI:
     @app.get("/version", include_in_schema=False)
     async def _version_endpoint() -> dict:
         return {"name": "LightningROD", "version": APP_VERSION}
+
+    # Liveness + readiness probe. 200 if the app is up and the DB responds;
+    # 503 if the DB ping fails. Suitable for Docker HEALTHCHECK,
+    # uptime-kuma, and reverse-proxy health probes.
+    @app.get("/healthz", include_in_schema=False)
+    async def _healthz_endpoint() -> JSONResponse:
+        try:
+            async with AsyncSessionLocal() as session:
+                await session.execute(text("SELECT 1"))
+            db_status = "ok"
+            status_code = 200
+        except Exception:
+            db_status = "error"
+            status_code = 503
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "status": "ok" if db_status == "ok" else "degraded",
+                "version": APP_VERSION,
+                "db": db_status,
+            },
+        )
     app.include_router(dashboard.router)
     app.include_router(sessions.router, prefix="/charging")
     app.include_router(costs.router, prefix="/charging")
@@ -141,6 +165,7 @@ def create_app() -> FastAPI:
             env = route_module.templates.env
             env.globals["tooltips"] = TOOLTIPS
             env.globals["developer_mode"] = developer_mode.is_enabled
+            env.globals["app_version"] = APP_VERSION
             env.filters["localtime"] = localtime_filter
             env.filters["cvt_dist"] = _cvt(convert_distance)
             env.filters["cvt_temp"] = _cvt(convert_temp)
