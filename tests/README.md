@@ -3,8 +3,6 @@
 ## Quick Start
 
 ```bash
-cd app-public
-
 # Run all tests (starts test DB automatically)
 ./run-tests.sh
 

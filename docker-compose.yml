@@ -1,5 +1,4 @@
 # Compose project name — forces container/network naming to "lightningrod-*"
-# regardless of the host folder name (defaults to "app-public" on your machine).
 name: lightningrod
 
 services:

@@ -76,9 +76,9 @@ Phase 29 regression tests lock against (commit `abd736b`).
 1. Capture a real HA `get_states` payload from your install.
 2. **Scrub PII**: replace the 17-char VIN with `YOUR_VIN` in every entity id
    and friendly name. Zero GPS (`0.0`/`0.0`). Generic address.
-3. Place the new file under `app-public/tests/fixtures/ha_payloads/`.
+3. Place the new file under `tests/fixtures/ha_payloads/`.
 4. Add a row to the matrix table above with unit-system + vehicle-display config.
-5. Run `grep -rE '[0-9][A-HJ-NPR-Z0-9]{16}' app-public/tests/fixtures/` — must
+5. Run `grep -rE '[0-9][A-HJ-NPR-Z0-9]{16}' tests/fixtures/` — must
    return zero matches before committing.
 6. Update any matrix-tests that enumerate fixtures (`test_unit_ingestion_matrix.py`).
 

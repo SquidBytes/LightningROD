@@ -1,7 +1,6 @@
 """Auto-generate docs/data-sources.md from adapter FIELD_CONTRACTS registries.
 
 Usage:
-    cd app-public
     uv run python scripts/gen_data_sources_doc.py          # write file
     uv run python scripts/gen_data_sources_doc.py --check  # fail if out of sync
 
@@ -17,7 +16,7 @@ import sys
 from pathlib import Path
 
 # Make the project root importable so `from web.services...` works when this
-# script is run from the app-public/ working dir.
+# script is run from the repository root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from web.services.units.contracts import FieldContract  # noqa: E402

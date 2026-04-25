@@ -33,7 +33,7 @@ Mixing the two will give you nonsense health percentages (a fresh pack can read 
 
 The Edit Vehicle modal offers cascading combo-box fields for **Make → Model → Trim → Capacity**. Typing or selecting a Make narrows the Model options, selecting a Model narrows the Trim options, and picking a Trim auto-fills **both** the usable and gross capacity fields from the preset table. Ford is auto-selected since it's the only preset make today, and you can free-type any value for non-preset vehicles.
 
-Presets cover the F-150 Lightning and Mustang Mach-E lineups (E-Transit is not currently in the preset table). If you have a FordPass sensor showing a different gross value than the preset, you can edit the preset table in `app-public/web/queries/vehicles.py` and file an issue with the reported value.
+Presets cover the F-150 Lightning and Mustang Mach-E lineups (E-Transit is not currently in the preset table). If you have a FordPass sensor showing a different gross value than the preset, you can edit the preset table in `web/queries/vehicles.py` and file an issue with the reported value.
 
 !!! info "Lariat / trim packages"
     The preset table currently treats "trim" as a battery variant (SR / ER / Flash). Marketing trim packages (Pro / XLT / Lariat / Platinum) are planned for a future release — for now, leave the trim blank or type your package name manually.

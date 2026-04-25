@@ -4,7 +4,7 @@ Analyzes gaps between charging sessions to derive realistic trips.
 Trips happen BETWEEN charges — SOC drops indicate driving happened.
 
 Usage:
-    cd app-public && python scripts/generate_trip_csv.py
+    python scripts/generate_trip_csv.py
     Output: data/trip_metrics_sample.csv
 """
 

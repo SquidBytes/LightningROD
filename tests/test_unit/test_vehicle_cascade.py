@@ -8,7 +8,7 @@ one returned an ambiguous match and the battery fields never populated.
 This file is the regression surface for that bug: each test below would have
 been impossible to satisfy with the single-field cascade.
 See:
-app-public/web/queries/vehicles.py::lookup_battery_values
+web/queries/vehicles.py::lookup_battery_values
 """
 from web.queries.vehicles import lookup_battery_values
 

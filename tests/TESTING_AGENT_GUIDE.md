@@ -11,7 +11,7 @@ Instructions for AI agents working on LightningROD tests. Read this before writi
 ## Running Tests
 
 ```bash
-# From app-public/
+# From the repository root
 ./run-tests.sh                     # All tests
 ./run-tests.sh -m unit             # No DB needed, fast
 ./run-tests.sh -m query            # Query layer only
