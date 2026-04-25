@@ -47,12 +47,23 @@ async def test_data_sources_page_renders_every_contract(client: AsyncClient):
         )
 
 
-async def test_data_sources_page_highlights_sidebar_link(client: AsyncClient):
-    """base.html sidebar link for Data Sources uses active_page='data_sources'."""
+async def test_data_sources_sidebar_link_shown_when_dev_mode_enabled(client: AsyncClient):
+    """Nav link appears in base.html only when developer mode is on."""
+    import web.developer_mode as dm
+    dm.set_enabled(True)
+    try:
+        r = await client.get("/admin/data-sources")
+        assert 'href="/admin/data-sources"' in r.text
+    finally:
+        dm.set_enabled(False)
+
+
+async def test_data_sources_sidebar_link_hidden_when_dev_mode_disabled(client: AsyncClient):
+    """Nav link is absent from base.html when developer mode is off."""
+    import web.developer_mode as dm
+    dm.set_enabled(False)
     r = await client.get("/admin/data-sources")
-    # The sidebar <a> receives the 'active' class when active_page == 'data_sources'
-    # (see Task 3's base.html edit). Smoke-check the link href renders.
-    assert 'href="/admin/data-sources"' in r.text
+    assert 'href="/admin/data-sources"' not in r.text
 
 
 async def test_data_sources_page_handles_empty_last_seen(client: AsyncClient):
