@@ -2,7 +2,32 @@
 
 All notable changes to LightningROD are documented here.
 
-## v0.2 -- In Progress
+## v0.3 -- In Progress
+
+Ingestion overhaul, unit-detection layer, developer tools, and data model hardening.
+
+### Added
+
+- **`ha_fordpass` adapter + `FIELD_CONTRACTS`** -- Single ingestion entry point for all Home Assistant FordPass signals. Replaces scattered unit-conversion logic that previously lived in `hass_processor` / `hass_client`. Every known HA entity/attribute pair is declared with its source unit and target field.
+- **Unit-detection layer** -- Resolves HA signal units at ingestion time via a five-method priority chain: `declared` → `read_time_uom` → `device_class_ha_config` → `cross_reference` → `unknown`. Results are held in an in-memory cache for the process lifetime; no DB persistence required.
+- **`/admin/data-sources` page** -- Lists every HA signal source with contract details, detection method/confidence, coverage status, and last raw value seen. Useful for diagnosing unit detection issues without reading logs.
+- **Developer Tools toggle** -- Settings → General now has an "Enable developer tools" checkbox. When off (default), the Data Sources nav link is hidden. When on, it appears under the System group in the sidebar.
+- **`ingest_schema_version` column** -- Added to `ev_charging_session`, `ev_trip_metrics`, and `ev_battery_status` tables. Lets ingestion contracts be versioned independently of the app release.
+- **mypy static type checking** -- Added to the dev toolchain (`uv run mypy .`).
+- **Ruff ruleset expanded** -- Now covers `I` (isort), `B` (bugbear), and `UP` (pyupgrade) in addition to the base `E`/`F` rules. Pre-commit hook enforces ruff on commit.
+
+### Changed
+
+- `hass_processor` and `hass_client` migrated into the `ha_fordpass` adapter; legacy `_fordpass_*` feature flags removed.
+- Action buttons on review-location rows clustered per row (UX polish).
+- Approved-tab edit dialog hoisted to page-scope modal (reuses shared `edit-loc-modal`).
+
+### Fixed
+
+- Review queue D-B3 filter dropped on POST-merge Pending branches (WR-01 regression).
+- `tripRangeRegeneration` field name corrected to `tripRangeRegenerated` (typo in upstream contract).
+
+## v0.2 -- 2026-03-07
 
 Session management, CSV import, UI overhaul, and data model expansion.
 
