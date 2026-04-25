@@ -69,28 +69,39 @@ async def driving_performance(
     if summary.get("total_regen") is not None:
         summary["total_regen"] = summary["total_regen"] * range_factor
 
-    # Driving Efficiency chart (moved from /trips)
-    driving_efficiency_chart = build_efficiency_trend_chart(
-        summary.get("efficiency_trend") or [],
-        efficiency_factor=efficiency_factor,
-        efficiency_label=unit_ctx["units"]["efficiency_label"],
+    # Driving Efficiency — split into per-trip scatter (main) + 7-day rolling
+    # average (mini) so each card has a single, labelled chart.
+    eff_trend = summary.get("efficiency_trend") or []
+    eff_label = unit_ctx["units"]["efficiency_label"]
+    driving_efficiency_scatter_chart = build_efficiency_trend_chart(
+        eff_trend, efficiency_factor=efficiency_factor,
+        efficiency_label=eff_label, mode="scatter",
+    )
+    driving_efficiency_rolling_chart = build_efficiency_trend_chart(
+        eff_trend, efficiency_factor=efficiency_factor,
+        efficiency_label=eff_label, mode="rolling",
     )
 
-    # Temperature vs efficiency scatter (Phase 25 Plan 25-03).
+    # Temperature vs efficiency — scatter (main) + regression line (mini).
     temp_data = await query_temperature_correlation(
         db, time_range=time_range, device_id=active_device_id
     )
+    temp_min_points = _min_points_for_range(time_range)
     temperature_scatter_chart = build_temperature_correlation_chart(
-        temp_data,
-        distance_unit=distance_unit,
-        min_points=_min_points_for_range(time_range),
+        temp_data, distance_unit=distance_unit,
+        min_points=temp_min_points, mode="scatter",
+    )
+    temperature_trend_chart = build_temperature_correlation_chart(
+        temp_data, distance_unit=distance_unit,
+        min_points=temp_min_points, mode="trend",
     )
 
-    # Regen recovery dual-axis bar chart (Phase 25 Plan 25-03).
+    # Regen recovery — kWh bars (main) + regen-% line (mini).
     regen_trips = await query_regen_per_trip(
         db, time_range=time_range, device_id=active_device_id
     )
-    regen_bar_chart = build_regen_recovery_chart(regen_trips)
+    regen_kwh_chart = build_regen_recovery_chart(regen_trips, mode="kwh")
+    regen_pct_chart = build_regen_recovery_chart(regen_trips, mode="pct")
 
     # Total energy regenerated (kWh) — sum of per-trip derived regen_kwh.
     # Lives alongside total_regen (range) so the two headline cards show
@@ -102,9 +113,12 @@ async def driving_performance(
     context = {
         **unit_ctx,
         "summary": summary,
-        "driving_efficiency_chart": driving_efficiency_chart,
+        "driving_efficiency_scatter_chart": driving_efficiency_scatter_chart,
+        "driving_efficiency_rolling_chart": driving_efficiency_rolling_chart,
         "temperature_scatter_chart": temperature_scatter_chart,
-        "regen_bar_chart": regen_bar_chart,
+        "temperature_trend_chart": temperature_trend_chart,
+        "regen_kwh_chart": regen_kwh_chart,
+        "regen_pct_chart": regen_pct_chart,
         "active_range": time_range,
         "active_page": "driving_performance",
         "page_title": "Driving Analytics",

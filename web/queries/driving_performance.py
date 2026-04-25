@@ -152,8 +152,13 @@ def build_temperature_correlation_chart(
     data: list[dict],
     distance_unit: str = "metric",
     min_points: int = 5,
+    mode: str = "full",
 ) -> str:
     """Scatter of ambient temp vs derived mi/kWh (or km/kWh) with linear trendline.
+
+    mode="full" (default): scatter + linear regression trendline.
+    mode="scatter": scatter only.
+    mode="trend": just the regression line (smaller height + slope annotation).
 
     Args:
         data: rows from query_temperature_correlation (metric base — °C, km, kWh).
@@ -190,38 +195,46 @@ def build_temperature_correlation_chart(
 
     pio.templates.default = "plotly_dark"
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=temps,
-            y=effs,
-            mode="markers",
-            name="Trips",
-            marker=dict(color="#47A8E5", size=7, opacity=0.75),
-            hovertemplate=(
-                "<b>%{x:.1f} " + temp_label + "</b><br>"
-                "%{y:.2f} " + eff_label + "<extra></extra>"
-            ),
-        )
-    )
 
-    # Linear trendline via np.polyfit(deg=1).
+    if mode in ("full", "scatter"):
+        fig.add_trace(
+            go.Scatter(
+                x=temps,
+                y=effs,
+                mode="markers",
+                name="Trips",
+                marker=dict(color="#47A8E5", size=7, opacity=0.75),
+                hovertemplate=(
+                    "<b>%{x:.1f} " + temp_label + "</b><br>"
+                    "%{y:.2f} " + eff_label + "<extra></extra>"
+                ),
+            )
+        )
+
+    # Trendline always computed — referenced both in "full" and "trend" modes,
+    # and used to compose the slope annotation in "trend".
     x_arr = np.array(temps, dtype=float)
     y_arr = np.array(effs, dtype=float)
     slope, intercept = np.polyfit(x_arr, y_arr, 1)
     x_sorted = np.sort(x_arr)
     trend_y = slope * x_sorted + intercept
-    fig.add_trace(
-        go.Scatter(
-            x=x_sorted.tolist(),
-            y=trend_y.tolist(),
-            mode="lines",
-            name="Trend",
-            line=dict(color="#facc15", width=2, dash="dash"),
-            hoverinfo="skip",
-        )
-    )
 
-    fig.update_layout(
+    if mode in ("full", "trend"):
+        fig.add_trace(
+            go.Scatter(
+                x=x_sorted.tolist(),
+                y=trend_y.tolist(),
+                mode="lines",
+                name="Trend",
+                line=dict(color="#facc15", width=2, dash="dash"),
+                hoverinfo="skip",
+            )
+        )
+
+    chart_height = 220 if mode in ("scatter", "trend") else None
+    show_legend = mode == "full"
+
+    layout_kwargs: dict = dict(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font_color="#e5e7eb",
@@ -232,8 +245,23 @@ def build_temperature_correlation_chart(
             orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
         ),
         hoverlabel=_HOVER_LABEL,
-        showlegend=True,
+        showlegend=show_legend,
     )
+    if chart_height is not None:
+        layout_kwargs["height"] = chart_height
+
+    if mode == "trend":
+        layout_kwargs["annotations"] = [
+            dict(
+                x=0.02, y=0.98, xref="paper", yref="paper",
+                text=f"slope: {slope:+.4f} {eff_label}/{temp_label}",
+                showarrow=False, align="left",
+                font=dict(color="#e5e7eb", size=12),
+                bgcolor="rgba(0,0,0,0.4)", borderpad=4,
+            )
+        ]
+
+    fig.update_layout(**layout_kwargs)
     return _wrap_chart(
         fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
     )
@@ -307,11 +335,12 @@ async def query_regen_per_trip(
     return results
 
 
-def build_regen_recovery_chart(trips: list[dict]) -> str:
-    """Dual-axis per-trip regen chart.
+def build_regen_recovery_chart(trips: list[dict], mode: str = "full") -> str:
+    """Per-trip regen chart.
 
-    Primary y-axis: regen kWh (bars).
-    Secondary y-axis: regen % (line+markers).
+    mode="full" (default): bars (kWh, primary axis) + line (%, secondary axis).
+    mode="kwh": bars only on a single axis.
+    mode="pct": line only on a single axis (smaller height for mini card).
 
     Args:
         trips: rows from query_regen_per_trip (already has trip_num, regen_kwh,
@@ -324,48 +353,83 @@ def build_regen_recovery_chart(trips: list[dict]) -> str:
         return ""
 
     pio.templates.default = "plotly_dark"
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
 
     labels = [f"#{t['trip_num']}" for t in trips]
     regen_kwh_values = [t["regen_kwh"] for t in trips]
     regen_pct_values = [t["regen_pct"] for t in trips]
 
-    fig.add_trace(
-        go.Bar(
-            x=labels,
-            y=regen_kwh_values,
-            name="Regen kWh",
-            marker_color="#4ade80",
-            hovertemplate=(
-                "<b>Trip %{x}</b><br>"
-                "Regen: %{y:.2f} kWh<extra></extra>"
+    if mode == "full":
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(
+            go.Bar(
+                x=labels,
+                y=regen_kwh_values,
+                name="Regen kWh",
+                marker_color="#4ade80",
+                hovertemplate=(
+                    "<b>Trip %{x}</b><br>"
+                    "Regen: %{y:.2f} kWh<extra></extra>"
+                ),
             ),
-        ),
-        secondary_y=False,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=labels,
-            y=regen_pct_values,
-            mode="lines+markers",
-            name="Regen %",
-            line=dict(color="#facc15", width=2),
-            marker=dict(size=6),
-            hovertemplate="<b>Trip %{x}</b><br>%{y:.1f}%<extra></extra>",
-        ),
-        secondary_y=True,
-    )
-    fig.update_yaxes(
-        title_text="Regen (kWh)", secondary_y=False, rangemode="tozero"
-    )
-    fig.update_yaxes(
-        title_text="Regen %",
-        secondary_y=True,
-        showgrid=False,
-        rangemode="tozero",
-    )
+            secondary_y=False,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=labels,
+                y=regen_pct_values,
+                mode="lines+markers",
+                name="Regen %",
+                line=dict(color="#facc15", width=2),
+                marker=dict(size=6),
+                hovertemplate="<b>Trip %{x}</b><br>%{y:.1f}%<extra></extra>",
+            ),
+            secondary_y=True,
+        )
+        fig.update_yaxes(
+            title_text="Regen (kWh)", secondary_y=False, rangemode="tozero"
+        )
+        fig.update_yaxes(
+            title_text="Regen %",
+            secondary_y=True,
+            showgrid=False,
+            rangemode="tozero",
+        )
+        chart_height = None
+        show_legend = True
+    else:
+        fig = go.Figure()
+        if mode == "kwh":
+            fig.add_trace(
+                go.Bar(
+                    x=labels,
+                    y=regen_kwh_values,
+                    name="Regen kWh",
+                    marker_color="#4ade80",
+                    hovertemplate=(
+                        "<b>Trip %{x}</b><br>"
+                        "Regen: %{y:.2f} kWh<extra></extra>"
+                    ),
+                )
+            )
+            fig.update_yaxes(title_text="Regen (kWh)", rangemode="tozero")
+        else:  # pct
+            fig.add_trace(
+                go.Scatter(
+                    x=labels,
+                    y=regen_pct_values,
+                    mode="lines+markers",
+                    name="Regen %",
+                    line=dict(color="#facc15", width=2),
+                    marker=dict(size=6),
+                    hovertemplate="<b>Trip %{x}</b><br>%{y:.1f}%<extra></extra>",
+                )
+            )
+            fig.update_yaxes(title_text="Regen %", rangemode="tozero")
+        chart_height = 220
+        show_legend = False
+
     fig.update_xaxes(title_text="Trip (most recent first)")
-    fig.update_layout(
+    layout_kwargs: dict = dict(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font_color="#e5e7eb",
@@ -374,7 +438,11 @@ def build_regen_recovery_chart(trips: list[dict]) -> str:
             orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
         ),
         hoverlabel=_HOVER_LABEL,
+        showlegend=show_legend,
     )
+    if chart_height is not None:
+        layout_kwargs["height"] = chart_height
+    fig.update_layout(**layout_kwargs)
     return _wrap_chart(
         fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
     )

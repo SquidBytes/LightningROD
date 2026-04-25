@@ -74,32 +74,46 @@
 
 </div>
 
-<!-- Driving Efficiency Chart (moved from the old trips page) -->
+<!-- Driving Efficiency: per-trip scatter (main) -->
 <div class="card bg-base-200 mb-4">
     <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Driving Efficiency</h3>
-        {% if driving_efficiency_chart %}
-            <div class="plotly-chart-wrap">{{ driving_efficiency_chart | safe }}</div>
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-1">Driving Efficiency</h3>
+        <p class="text-xs text-base-content/40 mb-3">Per-trip efficiency points.</p>
+        {% if driving_efficiency_scatter_chart %}
+            <div class="plotly-chart-wrap">{{ driving_efficiency_scatter_chart | safe }}</div>
         {% else %}
             <p class="text-base-content/40 text-sm py-8 text-center">No efficiency data available for this time range.</p>
         {% endif %}
     </div>
 </div>
 
-<!-- Temperature Correlation (Phase 25 Plan 25-03) -->
+<!-- Driving Efficiency: 7-day rolling average (mini) -->
+<div class="card bg-base-200 mb-4">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-1">7-Day Rolling Average</h3>
+        <p class="text-xs text-base-content/40 mb-3">Smoothed efficiency trend over a trailing 7-day window.</p>
+        {% if driving_efficiency_rolling_chart %}
+            <div class="plotly-chart-wrap">{{ driving_efficiency_rolling_chart | safe }}</div>
+        {% else %}
+            <p class="text-base-content/40 text-sm py-8 text-center">No efficiency data available for this time range.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Efficiency vs Temperature: scatter (main) -->
 <div class="card bg-base-200 mb-4" id="driving-temperature-scatter-card">
     <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-1 flex items-center gap-1">
             <span>Efficiency vs Temperature</span>
             <span class="cursor-help tooltip tooltip-bottom"
                   data-tip="{{ tooltips.driving_performance_temp_scatter }}"
                   aria-label="{{ tooltips.driving_performance_temp_scatter }}">ⓘ</span>
         </h3>
+        <p class="text-xs text-base-content/40 mb-3">Each trip's efficiency vs ambient temperature.</p>
         {% if temperature_scatter_chart %}
             <div class="plotly-chart-wrap">{{ temperature_scatter_chart | safe }}</div>
             <p class="text-xs text-base-content/40 mt-2">
                 Efficiency derived from trip distance &divide; energy consumed.
-                Trendline via linear regression (np.polyfit).
             </p>
         {% else %}
             <div class="text-center py-8">
@@ -116,26 +130,52 @@
     </div>
 </div>
 
-<!-- Regen Recovery (Phase 25 Plan 25-03) -->
-<div class="card bg-base-200" id="driving-regen-bar-card">
+<!-- Efficiency vs Temperature: regression line (mini) -->
+<div class="card bg-base-200 mb-4" id="driving-temperature-trend-card">
     <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-1">Temperature Regression</h3>
+        <p class="text-xs text-base-content/40 mb-3">Linear fit (np.polyfit) of trip efficiency on ambient temperature.</p>
+        {% if temperature_trend_chart %}
+            <div class="plotly-chart-wrap">{{ temperature_trend_chart | safe }}</div>
+        {% else %}
+            <p class="text-base-content/40 text-sm py-4 text-center">Not enough trips with temperature data to fit a regression.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Regen Recovery: kWh bars (main) -->
+<div class="card bg-base-200 mb-4" id="driving-regen-bar-card">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-1 flex items-center gap-1">
             <span>Regen Recovery</span>
             <span class="cursor-help tooltip tooltip-bottom"
                   data-tip="{{ tooltips.driving_performance_regen }}"
                   aria-label="{{ tooltips.driving_performance_regen }}">ⓘ</span>
         </h3>
-        {% if regen_bar_chart %}
-            <div class="plotly-chart-wrap">{{ regen_bar_chart | safe }}</div>
+        <p class="text-xs text-base-content/40 mb-3">Per-trip kWh recovered via regenerative braking.</p>
+        {% if regen_kwh_chart %}
+            <div class="plotly-chart-wrap">{{ regen_kwh_chart | safe }}</div>
             <p class="text-xs text-base-content/40 mt-2">
                 Regen kWh derived from range recovered &divide; trip efficiency.
-                Regen % is regen kWh as a share of trip energy consumed.
             </p>
         {% else %}
             <div class="text-center py-8">
                 <p class="text-base-content/60 text-sm">No regen data for this range.</p>
                 <p class="text-base-content/40 text-xs mt-1">Populates when trips with range_regenerated are ingested.</p>
             </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Regen Recovery: % per trip (mini) -->
+<div class="card bg-base-200" id="driving-regen-pct-card">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-1">Regen %</h3>
+        <p class="text-xs text-base-content/40 mb-3">Regen kWh as a share of trip energy consumed.</p>
+        {% if regen_pct_chart %}
+            <div class="plotly-chart-wrap">{{ regen_pct_chart | safe }}</div>
+        {% else %}
+            <p class="text-base-content/40 text-sm py-4 text-center">No regen data for this range.</p>
         {% endif %}
     </div>
 </div>

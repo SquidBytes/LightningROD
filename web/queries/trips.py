@@ -202,8 +202,13 @@ def build_efficiency_trend_chart(
     data: list[dict],
     efficiency_factor: float = 1.0,
     efficiency_label: str = "km/kWh",
+    mode: str = "full",
 ) -> str:
-    """Build efficiency trend Plotly chart with scatter points and 7-day rolling average.
+    """Build efficiency trend Plotly chart.
+
+    mode="full" (default): per-trip scatter + 7-day rolling average overlay.
+    mode="scatter": per-trip scatter only.
+    mode="rolling": 7-day rolling average line only (smaller height for mini card).
 
     Input efficiency values are metric (km/kWh). Apply `efficiency_factor` to
     convert to display unit (MI_PER_KM for US, 1.0 for metric).
@@ -220,7 +225,6 @@ def build_efficiency_trend_chart(
     df["date"] = pd.to_datetime(df["date"], utc=True)
     df["efficiency"] = df["efficiency"] * efficiency_factor
 
-    # Calculate 7-day rolling average
     rolling = (
         df.set_index("date")["efficiency"]
         .rolling("7D", min_periods=1)
@@ -230,39 +234,42 @@ def build_efficiency_trend_chart(
 
     fig = go.Figure()
 
-    # Individual trip points (markers only)
-    fig.add_trace(
-        go.Scatter(
-            x=df["date"],
-            y=df["efficiency"],
-            mode="markers",
-            name="Trip Efficiency",
-            marker=dict(color="#47A8E5", size=6),
-            hovertemplate="<b>%{x|%b %d, %Y}</b><br>Efficiency: %{y:.2f} " + efficiency_label + "<extra></extra>",
+    if mode in ("full", "scatter"):
+        fig.add_trace(
+            go.Scatter(
+                x=df["date"],
+                y=df["efficiency"],
+                mode="markers",
+                name="Trip Efficiency",
+                marker=dict(color="#47A8E5", size=6),
+                hovertemplate="<b>%{x|%b %d, %Y}</b><br>Efficiency: %{y:.2f} " + efficiency_label + "<extra></extra>",
+            )
         )
-    )
 
-    # 7-day rolling average (line only)
-    fig.add_trace(
-        go.Scatter(
-            x=rolling["date"],
-            y=rolling["efficiency"],
-            mode="lines",
-            name="7-Day Avg",
-            line=dict(color="#f97316", width=2),
-            hovertemplate="<b>%{x|%b %d, %Y}</b><br>7-Day Avg: %{y:.2f} " + efficiency_label + "<extra></extra>",
+    if mode in ("full", "rolling"):
+        fig.add_trace(
+            go.Scatter(
+                x=rolling["date"],
+                y=rolling["efficiency"],
+                mode="lines",
+                name="7-Day Avg",
+                line=dict(color="#f97316", width=2),
+                hovertemplate="<b>%{x|%b %d, %Y}</b><br>7-Day Avg: %{y:.2f} " + efficiency_label + "<extra></extra>",
+            )
         )
-    )
+
+    chart_height = 220 if mode in ("scatter", "rolling") else 350
+    show_legend = mode == "full"
 
     fig.update_layout(
-        height=350,
+        height=chart_height,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font_color="#e5e7eb",
         margin=dict(l=20, r=20, t=20, b=20),
         xaxis=dict(title=""),
         yaxis=dict(title=efficiency_label),
-        showlegend=True,
+        showlegend=show_legend,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",
         hoverlabel=_HOVER_LABEL,
