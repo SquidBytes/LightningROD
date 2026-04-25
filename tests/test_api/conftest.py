@@ -17,6 +17,7 @@ async def client(db_session):
     """
     from fastapi import FastAPI
     from fastapi.staticfiles import StaticFiles
+
     from web.main import localtime_filter
     from web.routes import (
         battery,
