@@ -79,12 +79,6 @@ class EVTripMetrics(Base):
     # with declared source units.
     ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
-    # Pipeline schema version (Phase 29, D-D1). NULL = pre-v2 / suspect era
-    # spanning 2026-03-21 onward (commit abd736b double-conversion bug).
-    # 2 = ingested via adapter-driven pipeline with declared source units.
-    # See .planning/phases/29-unit-ingestion-overhaul/29-CONTEXT.md D-D1/D-D3.
-    ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
-
     __table_args__ = (
         Index("idx_ev_trip_metrics_start_time", "start_time"),
         Index("idx_ev_trip_metrics_device_id", "device_id"),
