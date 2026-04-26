@@ -16,15 +16,20 @@ For feature documentation, see the docs site at
 - Developer Tools toggle in Settings → General; Data Sources sidebar link is hidden unless developer mode is enabled.
 - `gen_data_sources_doc.py` generator and committed `data-sources.md` reference doc.
 - `FieldContract` module for observable-contract validation and display-layer assertions.
-- mypy static type checking added to the dev toolchain.
-- Ruff ruleset expanded (I, B, UP) with pre-commit hook.
+- mypy static type checking added to the dev toolchain (CI-enforced).
+- Ruff ruleset expanded (I, B, UP) with pre-commit hook; codebase-wide type fixes applied.
 - Cross-source match-and-enrich tests for `ev_trip_metrics` dedup.
+- Thermal field wiring (`elvehcharging`/`outsidetemp`) for trip ingestion.
+- Pre-commit reference-checking script under `scripts/`.
+- `/healthz` liveness + readiness endpoint (returns 503 if the database is unreachable) and `HEALTHCHECK` directives on both Docker images so `docker ps` reports container health.
+- About card on Settings → General showing the running LightningROD version with links to release notes, documentation, and source.
 
 ### Changed
 
 - `hass_processor` and `hass_client` migrated into `ha_fordpass` adapter; legacy `_fordpass_*` feature flags removed.
 - Action buttons on review location rows clustered per row (UX polish).
 - Approved-tab edit dialog hoisted to page-scope modal (reuses shared `edit-loc-modal`).
+- Docker artifacts moved into a dedicated `docker/` subfolder.
 
 ### Fixed
 

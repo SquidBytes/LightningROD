@@ -19,6 +19,10 @@ If you would like to, please consider buying me a coffee.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/SquidBytes)
 
+> [!NOTE]
+> AI (primarily Claude) was used to build this project — see the [AI Usage Disclaimer](https://squidbytes.github.io/LightningROD/ai-disclaimer/) for how, why, and where I drew the lines.
+
+
 ## Features
 
 - Charging session CRUD with sorting/filtering, group edit, and rich drawer details
