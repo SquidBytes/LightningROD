@@ -10,7 +10,7 @@ COPY web/static/ web/static/
 RUN npx @tailwindcss/cli -i input.css -o web/static/css/output.css --minify
 
 ## Stage 2: Python application
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Version passed in from docker-compose (or `docker build --build-arg`).
 # Defaults to "dev" for ad-hoc builds. Mirror into ENV so the running app
