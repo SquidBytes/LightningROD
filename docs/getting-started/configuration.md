@@ -38,7 +38,7 @@ When running with Docker Compose, the `POSTGRES_HOST` is automatically set to `d
   web:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
     env_file: .env
     environment:
       - POSTGRES_HOST=db
@@ -52,13 +52,16 @@ Settings configured through the web UI at `/settings`:
 
 | Setting | Storage | Description |
 |---------|---------|-------------|
+| Vehicles | `ev_vehicles` table | Vehicle profiles, active vehicle selection, ICE comparison inputs |
 | Charging networks | `ev_charging_networks` table | Per-network electricity costs and colors |
 | Locations | `ev_location_lookup` table | Named locations with optional cost override |
 | Charger stalls | `ev_charger_stalls` table | Charger specs per location |
-| Gas comparison | `app_settings` | MPG and gas price for savings calculations |
+| Network subscriptions | `ev_network_subscriptions` table | Member rate windows and monthly fees for network plans |
+| Gas price history | `gas_price_history` table | Monthly station and average gas prices for savings ranges |
 | Unit preferences | `app_settings` | US (mi/kWh) or EU (km/kWh) |
 | Timezone | `app_settings` | Display timezone (e.g., America/New_York) |
 | Comparison toggles | `app_settings` | Show or hide cost comparison sections |
+| Gas price sensor IDs | `app_settings` | HA entity IDs used for gas price ingestion |
 | HA URL | `app_settings` | Home Assistant instance URL |
 | HA Access Token | `app_settings` | Long-lived access token for HA WebSocket |
 | HA VIN Override | `app_settings` | Override auto-detected vehicle VIN |

@@ -1,24 +1,65 @@
-<!-- Headline summary cards -->
+<!-- Headline summary cards (Phase 27-06: Free Charging card replaced with multi-metric ratios) -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <!-- Card A: Total Spend (with free-charging sub-line + Actual vs Estimated tooltip) -->
     <div class="card bg-base-200">
-        <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Spent</p>
+        <div class="card-body p-4">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Total Spent</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.costs_actual_vs_estimated }}"
+                      aria-label="{{ tooltips.costs_actual_vs_estimated }}">ⓘ</span>
+            </p>
             <p class="text-3xl font-bold">${{ "%.2f"|format(summary.total_cost) }}</p>
             <p class="text-sm text-base-content/60 mt-1">{{ summary.total_sessions }} sessions</p>
+            {% if free_charging_savings_val and free_charging_savings_val > 0 %}
+            <p class="text-xs text-base-content/40 mt-1">
+                ${{ "%.2f"|format(summary.total_cost) }} spent; ${{ "%.2f"|format(free_charging_savings_val) }} saved via free charging
+            </p>
+            {% endif %}
         </div>
     </div>
+
+    <!-- Card B: Total Energy (preserved) -->
     <div class="card bg-base-200">
-        <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Total Energy</p>
+        <div class="card-body p-4">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Total Energy</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.costs_total_energy }}"
+                      aria-label="{{ tooltips.costs_total_energy }}">ⓘ</span>
+            </p>
             <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
             <p class="text-sm text-base-content/60 mt-1">across {{ summary.total_sessions }} sessions</p>
         </div>
     </div>
+
+    <!-- Card C: Multi-metric Cost Ratios card (replaces Free Charging card) -->
     <div class="card bg-base-200">
-        <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">Free Charging</p>
-            <p class="text-3xl font-bold text-green-400">{{ summary.free_session_count }} <span class="text-xl font-normal text-base-content/60">sessions</span></p>
-            <p class="text-sm text-base-content/60 mt-1">{{ "%.1f"|format(summary.free_total_kwh) }} kWh free</p>
+        <div class="card-body p-4">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Cost Ratios</p>
+            <div class="space-y-2">
+                <div class="flex items-baseline gap-2">
+                    <span class="text-lg font-bold">{{ avg_per_session_formatted }}</span>
+                    <span class="text-xs text-base-content/60">per session</span>
+                    <span class="cursor-help tooltip tooltip-bottom ml-auto"
+                          data-tip="{{ tooltips.costs_avg_per_session }}"
+                          aria-label="{{ tooltips.costs_avg_per_session }}">ⓘ</span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span class="text-lg font-bold">{{ cost_per_mile_formatted }}</span>
+                    <span class="text-xs text-base-content/60">per mile</span>
+                    <span class="cursor-help tooltip tooltip-bottom ml-auto"
+                          data-tip="{{ tooltips.costs_cost_per_mile }}"
+                          aria-label="{{ tooltips.costs_cost_per_mile }}">ⓘ</span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span class="text-lg font-bold">{{ cost_per_kwh_formatted }}</span>
+                    <span class="text-xs text-base-content/60">per kWh</span>
+                    <span class="cursor-help tooltip tooltip-bottom ml-auto"
+                          data-tip="{{ tooltips.costs_cost_per_kwh }}"
+                          aria-label="{{ tooltips.costs_cost_per_kwh }}">ⓘ</span>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -63,6 +104,42 @@
         </div>
     </div>
     {% endfor %}
+</div>
+{% endif %}
+
+<!-- Subscription Savings card -->
+{% if subscription_savings is defined and subscription_savings and subscription_savings.total_saved > 0 %}
+<div class="card bg-base-200 shadow-sm mb-6">
+    <div class="card-body p-5">
+        <h3 class="card-title text-base font-semibold">Subscription Savings</h3>
+        <div class="grid grid-cols-3 gap-4 mt-3">
+            <div>
+                <div class="text-xs text-base-content/50 uppercase tracking-wide">Total Saved</div>
+                <div class="text-lg font-bold text-success">${{ "%.2f"|format(subscription_savings.total_saved) }}</div>
+            </div>
+            <div>
+                <div class="text-xs text-base-content/50 uppercase tracking-wide">Monthly Fees</div>
+                <div class="text-lg font-bold text-error">-${{ "%.2f"|format(subscription_savings.total_fees) }}</div>
+            </div>
+            <div>
+                <div class="text-xs text-base-content/50 uppercase tracking-wide">Net Savings</div>
+                <div class="text-lg font-bold {% if subscription_savings.net_savings > 0 %}text-success{% else %}text-error{% endif %}">
+                    ${{ "%.2f"|format(subscription_savings.net_savings) }}
+                </div>
+            </div>
+        </div>
+        {% if subscription_savings.by_network %}
+        <div class="divider my-2"></div>
+        <div class="space-y-2">
+            {% for net in subscription_savings.by_network %}
+            <div class="flex justify-between text-sm">
+                <span>{{ net.network }} <span class="text-base-content/50">({{ net.session_count }} sessions)</span></span>
+                <span class="text-success font-medium">${{ "%.2f"|format(net.total_saved) }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
 </div>
 {% endif %}
 

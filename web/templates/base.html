@@ -26,39 +26,123 @@
         </div>
         <div class="drawer-side z-50">
             <label for="main-drawer" class="drawer-overlay" aria-label="close sidebar"></label>
-            <div class="bg-base-200 min-h-full w-64 flex flex-col">
+            <div class="bg-base-200 min-h-full w-56 flex flex-col">
                 <div class="p-4 border-b border-base-300 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 flex-shrink-0" viewBox="0 0 48 48" fill="none">
                         <path d="M26 4L10 26h12l-4 18 16-22H22l4-18z" fill="#47A8E5" stroke="#47A8E5" stroke-width="1.5" stroke-linejoin="round"/>
                     </svg>
                     <span class="text-brand-accent font-bold text-xl">LightningROD</span>
                 </div>
-                <ul class="menu flex-1 p-3 gap-1">
-                    <li><a href="/" class="{{ 'active' if active_page == 'dashboard' }}">
+
+                <!-- Vehicle Switcher Dropdown -->
+                <div class="dropdown w-full px-4 pt-4 pb-1">
+                    <div tabindex="0" role="button" class="btn btn-ghost btn-sm text-sm w-full justify-between text-left">
+                        <span class="truncate">
+                            {% if active_vehicle is defined and active_vehicle %}
+                                {{ active_vehicle.display_name }}
+                            {% else %}
+                                No Vehicle
+                            {% endif %}
+                        </span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                    <ul tabindex="0" class="dropdown-content menu bg-base-300 rounded-box z-[100] w-full shadow-lg mt-1">
+                        {% if all_vehicles is defined %}
+                        {% for vehicle in all_vehicles %}
+                        <li>
+                            <form method="post" action="/vehicles/{{ vehicle.id }}/activate" class="p-0">
+                                <input type="hidden" name="redirect_to" value="{{ request.url.path }}">
+                                <button type="submit" class="w-full text-left {{ 'active' if active_vehicle and vehicle.id == active_vehicle.id }}">
+                                    {{ vehicle.display_name }}
+                                </button>
+                            </form>
+                        </li>
+                        {% endfor %}
+                        {% endif %}
+                    </ul>
+                </div>
+
+                <ul class="menu flex-1 p-4 gap-1 overflow-y-auto">
+                    <!-- Active-state styling lives in input.css (Phase 26): .drawer-side .menu > li > a.active -->
+                    <!-- OVERVIEW -->
+                    <li class="menu-title text-xs uppercase tracking-wider text-base-content/40 pt-2 pb-1">Overview</li>
+                    <li><a href="/" class="text-base py-3 {{ 'active' if active_page == 'dashboard' }}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                         </svg>
-                        Dashboard
+                        Home
                     </a></li>
-                    <li><a href="/sessions" class="{{ 'active' if active_page == 'sessions' }}">
+
+                    <!-- VEHICLE -->
+                    <li class="menu-title text-xs uppercase tracking-wider text-base-content/40 pt-3 pb-1">Vehicle</li>
+                    <li><a href="/battery" class="text-base py-3 {{ 'active' if active_page == 'battery' }}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h14a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1zm16 3h1" />
                         </svg>
-                        Sessions
+                        Battery Analytics
                     </a></li>
-                    <li><a href="/costs" class="{{ 'active' if active_page == 'costs' }}">
+
+                    <!-- CHARGING -->
+                    <li class="menu-title text-xs uppercase tracking-wider text-base-content/40 pt-3 pb-1">Charging</li>
+                    <li><a href="/charging/sessions" class="text-base py-3 {{ 'active' if active_page == 'sessions' }} flex justify-between">
+                        <span class="flex items-center gap-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            Sessions
+                        </span>
+                        <span id="sessions-review-badge"
+                              hx-get="/charging/sessions/review-count-badge"
+                              hx-trigger="load, sessionReviewResolved from:body"
+                              hx-swap="innerHTML"></span>
+                    </a></li>
+                    <li><a href="/charging/performance" class="text-base py-3 {{ 'active' if active_page == 'performance' }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                        </svg>
+                        Performance
+                    </a></li>
+                    <li><a href="/charging/costs" class="text-base py-3 {{ 'active' if active_page == 'costs' }}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         Costs
                     </a></li>
-                    <li><a href="/energy" class="{{ 'active' if active_page == 'energy' }}">
+
+                    <!-- DRIVING -->
+                    <li class="menu-title text-xs uppercase tracking-wider text-base-content/40 pt-3 pb-1">Driving</li>
+                    <li><a href="/driving/sessions" class="text-base py-3 {{ 'active' if active_page == 'trip_sessions' }}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                         </svg>
-                        Energy
+                        Trip Sessions
                     </a></li>
-                    <li><a href="/settings" class="{{ 'active' if active_page == 'settings' }}">
+                    <li><a href="/driving/performance" class="text-base py-3 {{ 'active' if active_page == 'driving_performance' }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 15l4-4 4 4 5-5" />
+                        </svg>
+                        Analytics
+                    </a></li>
+
+                    <!-- SYSTEM (pinned to bottom) -->
+                    <li class="menu-title text-xs uppercase tracking-wider text-base-content/40 mt-auto pt-3 pb-1">System</li>
+                    <li><a href="/review" class="text-base py-3 {{ 'active' if active_page == 'review_queue' }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                        </svg>
+                        Review Queue
+                    </a></li>
+                    {% if developer_mode() %}
+                    <li><a href="/admin/data-sources" class="text-base py-3 {{ 'active' if active_page == 'data_sources' }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7c0-2 1-3 3-3h10c2 0 3 1 3 3M4 7h16" />
+                        </svg>
+                        Data Sources
+                    </a></li>
+                    {% endif %}
+                    <li><a href="/settings" class="text-base py-3 {{ 'active' if active_page == 'settings' }}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

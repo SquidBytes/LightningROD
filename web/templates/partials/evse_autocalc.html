@@ -1,0 +1,94 @@
+<script>
+/**
+ * Shared EVSE auto-calc module: bidirectional kW / V / A triangle calculation.
+ * "Dry populate" UX: calculated values appear as greyed placeholders,
+ * submitted when field is left empty, never overwrite user-entered values.
+ */
+function attachEvseAutoCalc(kwId, voltId, ampId) {
+    var kwEl = document.getElementById(kwId);
+    var voltEl = document.getElementById(voltId);
+    var ampEl = document.getElementById(ampId);
+    if (!kwEl || !voltEl || !ampEl) return;
+
+    function calc(changed) {
+        var kw = parseFloat(kwEl.value);
+        var v = parseFloat(voltEl.value);
+        var a = parseFloat(ampEl.value);
+
+        // kW = V * A / 1000
+        if (changed !== 'kw' && !kwEl.value) {
+            if (!isNaN(v) && !isNaN(a) && v > 0 && a > 0) {
+                var calcKw = (v * a / 1000).toFixed(1);
+                kwEl.placeholder = calcKw + ' kW';
+                kwEl.dataset.calcValue = calcKw;
+                kwEl.classList.add('placeholder-base-content/40');
+            } else {
+                delete kwEl.dataset.calcValue;
+                kwEl.classList.remove('placeholder-base-content/40');
+            }
+        }
+
+        // V = kW * 1000 / A
+        if (changed !== 'volt' && !voltEl.value) {
+            if (!isNaN(kw) && !isNaN(a) && kw > 0 && a > 0) {
+                var calcV = (kw * 1000 / a).toFixed(0);
+                voltEl.placeholder = calcV + ' V';
+                voltEl.dataset.calcValue = calcV;
+                voltEl.classList.add('placeholder-base-content/40');
+            } else {
+                delete voltEl.dataset.calcValue;
+                voltEl.classList.remove('placeholder-base-content/40');
+            }
+        }
+
+        // A = kW * 1000 / V
+        if (changed !== 'amp' && !ampEl.value) {
+            if (!isNaN(kw) && !isNaN(v) && kw > 0 && v > 0) {
+                var calcA = (kw * 1000 / v).toFixed(0);
+                ampEl.placeholder = calcA + ' A';
+                ampEl.dataset.calcValue = calcA;
+                ampEl.classList.add('placeholder-base-content/40');
+            } else {
+                delete ampEl.dataset.calcValue;
+                ampEl.classList.remove('placeholder-base-content/40');
+            }
+        }
+    }
+
+    kwEl.addEventListener('input', function() { calc('kw'); });
+    voltEl.addEventListener('input', function() { calc('volt'); });
+    ampEl.addEventListener('input', function() { calc('amp'); });
+
+    // Initial calculation from any pre-existing values
+    calc(null);
+}
+
+// Global HTMX listeners (idempotent via guard flag)
+if (!window._evseAutoCalcInit) {
+    window._evseAutoCalcInit = true;
+
+    // Before HTMX request: copy calculated placeholder values into empty fields for submission
+    document.body.addEventListener('htmx:configRequest', function(evt) {
+        var trigger = evt.detail.elt;
+        var form = trigger.closest('form') || trigger;
+        form.querySelectorAll('input[data-calc-value]').forEach(function(el) {
+            if (!el.value && el.dataset.calcValue) {
+                el.value = el.dataset.calcValue;
+            }
+        });
+    });
+
+    // After HTMX swap: re-attach auto-calc to any groups marked with data attribute
+    document.body.addEventListener('htmx:afterSettle', function(evt) {
+        var target = evt.detail.target || document;
+        target.querySelectorAll('[data-evse-autocalc-group]').forEach(function(group) {
+            var kwId = group.dataset.evseCalcKw;
+            var voltId = group.dataset.evseCalcVolt;
+            var ampId = group.dataset.evseCalcAmp;
+            if (kwId && voltId && ampId) {
+                attachEvseAutoCalc(kwId, voltId, ampId);
+            }
+        });
+    });
+}
+</script>

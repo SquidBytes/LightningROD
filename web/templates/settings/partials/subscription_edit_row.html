@@ -1,0 +1,52 @@
+{# Inline edit form for a subscription period -- replaces #subscription-periods-list content #}
+<div class="space-y-2">
+    <p class="text-sm uppercase tracking-wide text-base-content/40 mb-3">Edit Subscription Period</p>
+
+    <form class="bg-base-300/30 rounded-lg p-4 space-y-3"
+          hx-put="/settings/subscriptions/{{ sub.id }}"
+          hx-target="#subscription-periods-list"
+          hx-swap="innerHTML">
+        <input type="hidden" name="network_id" value="{{ network_id }}">
+        <div class="grid grid-cols-2 gap-3">
+            <label class="form-control">
+                <div class="label"><span class="label-text text-xs">Member Rate ($/kWh)</span></div>
+                <input type="number" name="member_rate" step="0.001" min="0" required
+                       value="{{ '%.3f'|format(sub.member_rate) }}"
+                       class="input input-sm input-bordered w-full">
+            </label>
+            <label class="form-control">
+                <div class="label"><span class="label-text text-xs">Monthly Fee ($)</span></div>
+                <input type="number" name="monthly_fee" step="0.01" min="0"
+                       value="{{ '%.2f'|format(sub.monthly_fee) }}"
+                       class="input input-sm input-bordered w-full">
+            </label>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+            <label class="form-control">
+                <div class="label"><span class="label-text text-xs">Start Date</span></div>
+                <input type="date" name="start_date" required
+                       value="{{ sub.start_date.strftime('%Y-%m-%d') }}"
+                       class="input input-sm input-bordered w-full">
+            </label>
+            <label class="form-control">
+                <div class="label"><span class="label-text text-xs">End Date (blank = active)</span></div>
+                <input type="date" name="end_date"
+                       value="{{ sub.end_date.strftime('%Y-%m-%d') if sub.end_date else '' }}"
+                       class="input input-sm input-bordered w-full">
+            </label>
+        </div>
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">Notes (optional)</span></div>
+            <textarea name="notes" rows="2" placeholder="Optional notes..."
+                      class="textarea textarea-bordered textarea-sm w-full resize-none">{{ sub.notes or '' }}</textarea>
+        </label>
+        <div class="flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+            <button type="button"
+                    hx-get="/settings/networks/{{ network_id }}/subscriptions"
+                    hx-target="#subscription-periods-list"
+                    hx-swap="innerHTML"
+                    class="btn btn-ghost btn-sm">Cancel</button>
+        </div>
+    </form>
+</div>

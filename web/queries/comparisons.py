@@ -1,72 +1,200 @@
+"""Query helpers for comparisons."""
+
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
-from web.queries.costs import build_time_filter, compute_session_cost, get_networks_by_name
-from web.queries.settings import get_app_settings_dict
+from db.models.reference import GasPriceHistory
+from db.models.vehicle import EVVehicle
+from web.queries.costs import (
+    build_time_filter,
+    compute_session_cost,
+    get_networks_by_name,
+)
+from web.unit_system import GAL_PER_LITER, MI_PER_KM
 
 
-async def query_gas_comparison(db: AsyncSession, time_range: str = "all") -> dict:
+def _find_gas_price(
+    prices: list[GasPriceHistory], year: int, month: int
+) -> tuple[float | None, float | None]:
+    """Find the gas price entry for (year, month) or nearest earlier month.
+
+    Prices must be sorted by (year DESC, month DESC).
+    Returns (station_price, average_price). Defaults to (3.50, 3.50) if no entries.
+    """
+    for entry in prices:
+        if (entry.year, entry.month) <= (year, month):
+            station = float(entry.station_price) if entry.station_price is not None else None
+            average = float(entry.average_price) if entry.average_price is not None else None
+            return (station, average)
+    # No entry found — use default
+    return (3.50, 3.50)
+
+
+def _empty_gas_result() -> dict:
+    """Return a zeroed-out gas comparison result dict."""
+    return {
+        "ev_total": 0.0,
+        "gas_total_low": 0.0,
+        "gas_total_high": 0.0,
+        "savings_low": 0.0,
+        "savings_high": 0.0,
+        "savings_pct_low": 0.0,
+        "savings_pct_high": 0.0,
+        "session_count": 0,
+        "total_distance": 0.0,  # km (metric base)
+        "ice_label": None,
+        "has_range": False,
+    }
+
+
+async def query_gas_comparison(
+    db: AsyncSession,
+    device_id: str | None = None,
+    vehicle: EVVehicle | None = None,
+    time_range: str = "all",
+) -> dict:
     """Compare actual EV charging cost to equivalent gasoline cost.
 
-    Only includes sessions where:
-    - miles_added > 0
-    - display_cost is not None (network is configured)
+    Uses date-aware gas price lookup with two price tracks (station and average)
+    to produce a savings range. Supports dual calculation paths:
+    - Primary (distance-based): when session.distance_added > 0 and
+      vehicle.ice_fuel_efficiency set
+    - Fallback (percentage-based): when session.energy_kwh > 0 and vehicle has
+      battery_capacity_kwh and ice_fuel_tank_capacity
+
+    All stored values are metric (km, L/100km, liters). Gas prices from external
+    US sources are in $/gallon, so we convert distance to miles and efficiency
+    to MPG internally for the cost math.
 
     Returns dict with:
-    - ev_total: float — sum of actual EV charging costs
-    - gas_total: float — sum of equivalent gas costs
-    - savings: float — gas_total - ev_total (positive = EV cheaper)
-    - savings_pct: float — savings as percentage of gas_total
-    - session_count: int
-    - total_miles: float
-    - gas_price: float — $/gallon used for calculation
-    - mpg: float — vehicle MPG used for calculation
+    - ev_total, gas_total_low, gas_total_high
+    - savings_low, savings_high, savings_pct_low, savings_pct_high
+    - session_count, total_distance (km), ice_label, has_range
     """
-    settings = await get_app_settings_dict(db, ["gas_price_per_gallon", "vehicle_mpg"])
-    gas_price = float(settings.get("gas_price_per_gallon") or "3.50")
-    mpg = float(settings.get("vehicle_mpg") or "28.0")
+    # If no vehicle or no ICE config, return empty result
+    if vehicle is None or not vehicle.ice_fuel_efficiency:
+        return _empty_gas_result()
+
+    # L/100km stored in DB -> convert to MPG for gas math
+    ice_l_per_100km = float(vehicle.ice_fuel_efficiency)
+    ice_mpg = 235.215 / ice_l_per_100km if ice_l_per_100km > 0 else None
+    # The fallback gas-equivalent path below divides `session.energy_kwh` by
+    # pack capacity to get a "percent of tank" figure. That only makes sense
+    # against USABLE capacity — energy_kwh is what the charger actually put
+    # into the pack, not the gross cell headroom.
+    battery_kwh = float(vehicle.battery_capacity_kwh) if vehicle.battery_capacity_kwh else None
+    # Tank capacity stored in liters -> convert to gallons for gas math
+    fuel_tank_liters = float(vehicle.ice_fuel_tank_capacity) if vehicle.ice_fuel_tank_capacity else None
+    fuel_tank_gal = fuel_tank_liters * GAL_PER_LITER if fuel_tank_liters else None
+
+    # Load all gas price history into memory (small table)
+    price_result = await db.execute(
+        select(GasPriceHistory).order_by(
+            GasPriceHistory.year.desc(), GasPriceHistory.month.desc()
+        )
+    )
+    prices = list(price_result.scalars().all())
 
     networks_by_name = await get_networks_by_name(db)
 
-    stmt = select(EVChargingSession).where(EVChargingSession.miles_added > 0)
+    # Build session query
+    stmt = select(EVChargingSession)
     time_filter = build_time_filter(time_range)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
 
     result = await db.execute(stmt)
     sessions = result.scalars().all()
 
     ev_total = 0.0
-    gas_total = 0.0
+    gas_total_station = 0.0
+    gas_total_average = 0.0
+    station_has_data = False
+    average_has_data = False
     session_count = 0
-    total_miles = 0.0
+    total_distance_km = 0.0
 
     for s in sessions:
         cost_info = compute_session_cost(s, networks_by_name)
         if cost_info["display_cost"] is None:
             continue
 
-        miles = float(s.miles_added)
-        gas_cost = (miles / mpg) * gas_price
+        # Determine gallons equivalent via dual calculation path
+        gallons = None
+        distance_km = float(s.distance_added) if s.distance_added else 0.0
+        distance_mi = distance_km * MI_PER_KM
+
+        if distance_mi > 0 and ice_mpg:
+            # Primary: distance-based (convert km->mi for MPG math)
+            gallons = distance_mi / ice_mpg
+        elif (
+            s.energy_kwh
+            and float(s.energy_kwh) > 0
+            and battery_kwh
+            and fuel_tank_gal
+        ):
+            # Fallback: percentage-based
+            pct = float(s.energy_kwh) / battery_kwh
+            gallons = pct * fuel_tank_gal
+
+        if gallons is None:
+            continue
+
+        # Look up gas price for session's month
+        if s.session_start_utc is None:
+            continue
+        s_year = s.session_start_utc.year
+        s_month = s.session_start_utc.month
+        station_price, average_price = _find_gas_price(prices, s_year, s_month)
+
+        # Accumulate costs per track
+        if station_price is not None:
+            gas_total_station += gallons * station_price
+            station_has_data = True
+        if average_price is not None:
+            gas_total_average += gallons * average_price
+            average_has_data = True
 
         ev_total += cost_info["display_cost"]
-        gas_total += gas_cost
         session_count += 1
-        total_miles += miles
+        total_distance_km += distance_km
 
-    savings = gas_total - ev_total
-    savings_pct = (savings / gas_total * 100) if gas_total > 0 else 0.0
+    # Determine low/high bounds from the two tracks
+    if station_has_data and average_has_data:
+        gas_total_low = min(gas_total_station, gas_total_average)
+        gas_total_high = max(gas_total_station, gas_total_average)
+        has_range = gas_total_low != gas_total_high
+    elif station_has_data:
+        gas_total_low = gas_total_high = gas_total_station
+        has_range = False
+    elif average_has_data:
+        gas_total_low = gas_total_high = gas_total_average
+        has_range = False
+    else:
+        gas_total_low = gas_total_high = 0.0
+        has_range = False
+
+    savings_low = gas_total_low - ev_total
+    savings_high = gas_total_high - ev_total
+    savings_pct_low = (savings_low / gas_total_low * 100) if gas_total_low > 0 else 0.0
+    savings_pct_high = (savings_high / gas_total_high * 100) if gas_total_high > 0 else 0.0
 
     return {
         "ev_total": ev_total,
-        "gas_total": gas_total,
-        "savings": savings,
-        "savings_pct": savings_pct,
+        "gas_total_low": gas_total_low,
+        "gas_total_high": gas_total_high,
+        "savings_low": savings_low,
+        "savings_high": savings_high,
+        "savings_pct_low": savings_pct_low,
+        "savings_pct_high": savings_pct_high,
         "session_count": session_count,
-        "total_miles": total_miles,
-        "gas_price": gas_price,
-        "mpg": mpg,
+        "total_distance": total_distance_km,  # km, metric base
+        "ice_label": vehicle.ice_label,
+        "has_range": has_range,
     }
 
 
@@ -108,7 +236,7 @@ async def query_network_comparison(
         if cost_info["display_cost"] is None:
             continue
 
-        kwh = float(s.energy_kwh)
+        kwh = float(s.energy_kwh or 0)
         hypothetical_cost = kwh * reference_rate
 
         ev_total += cost_info["display_cost"]

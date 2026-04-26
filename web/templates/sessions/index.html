@@ -41,18 +41,35 @@
                 <span id="selected-count" class="text-base text-base-content/70 font-medium whitespace-nowrap min-w-[100px]">0 selected</span>
 
                 <div class="form-control">
+                    {# Network combobox → location <select> cascade (D-D6 pure HTMX, no fetch()).
+                       resolveNetworkCombobox() sets the hidden #bulk-network-id synchronously,
+                       then HTMX's hx-trigger="change" on the text input issues hx-get with the
+                       hidden's value included (hx-include selector targets [data-network-hidden]). #}
                     <input type="hidden" name="network_id" id="bulk-network-id" value="" data-network-hidden>
                     <input type="text" id="bulk-network" list="bulk-network-list"
                            placeholder="Network..."
                            class="input input-bordered input-sm w-40"
                            autocomplete="off"
-                           oninput="resolveNetworkCombobox(this)">
+                           oninput="resolveNetworkCombobox(this); htmx.trigger(this, 'change');"
+                           hx-get="/locations/by-network"
+                           hx-trigger="change"
+                           hx-include="[data-network-hidden]"
+                           hx-target="#bulk-location-id"
+                           hx-swap="innerHTML"
+                           hx-params="network_id"
+                           hx-on::after-request="document.getElementById('bulk-location-id').disabled = !document.getElementById('bulk-network-id').value">
                     <datalist id="bulk-network-list">
                         {% for net in networks %}
                         <option value="{{ net.network_name }}" data-id="{{ net.id }}"></option>
                         {% endfor %}
                     </datalist>
                 </div>
+
+                <select id="bulk-location-id" name="bulk_location_id"
+                        class="select select-bordered select-sm w-40"
+                        disabled>
+                    <option value="">Location (select network first)</option>
+                </select>
 
                 <select id="bulk-charge-type" class="select select-bordered select-sm">
                     <option value="">Charge Type...</option>
@@ -86,8 +103,8 @@
         <div class="drawer-content">
             <!-- Table region -- HTMX swap target, auto-refreshes on CRUD events -->
             <div id="sessions-table-region"
-                 hx-get="/sessions"
-                 hx-trigger="session-updated from:body, session-deleted from:body, session-created from:body"
+                 hx-get="/charging/sessions"
+                 hx-trigger="session-updated from:body, session-deleted from:body, session-created from:body, sessionReviewResolved from:body"
                  hx-target="#sessions-table-region"
                  hx-swap="innerHTML"
                  hx-include="#filter-form"
@@ -97,7 +114,7 @@
         </div>
         <div class="drawer-side z-40">
             <label for="session-drawer" class="drawer-overlay" aria-label="close drawer"></label>
-            <div class="bg-base-200 min-h-full w-96 overflow-y-auto" id="drawer-body">
+            <div class="bg-base-200 min-h-full w-[32rem] overflow-y-auto" id="drawer-body">
                 <!-- HTMX loads drawer content here -->
             </div>
         </div>
@@ -119,6 +136,20 @@
     </form>
 </dialog>
 
+<!-- Delete confirmation modal -->
+<dialog id="delete-session-modal" class="modal">
+    <div class="modal-box max-w-sm">
+        <h3 class="font-bold text-lg">Delete Session</h3>
+        <p class="py-4 text-base-content/70">This action cannot be undone.</p>
+        <div class="modal-action">
+            <form method="dialog"><button class="btn btn-ghost">Keep Session</button></form>
+            <button id="confirm-delete-session"
+                    class="btn btn-error">Delete</button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <!-- Toast container -->
 <div id="toast-container" class="fixed top-4 right-4 z-[70] space-y-2"></div>
 
@@ -130,6 +161,15 @@ function openDrawer() {
 function closeDrawer() {
     document.getElementById('session-drawer').checked = false;
 }
+
+// Phase 26: Escape key closes the Sessions drawer when it is open
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    var drawer = document.getElementById('session-drawer');
+    if (drawer && drawer.checked) {
+        drawer.checked = false;
+    }
+});
 
 // Auto-open drawer when HTMX loads content into it
 document.body.addEventListener('htmx:afterSettle', function(evt) {
@@ -164,12 +204,12 @@ function toggleEditMode() {
 }
 
 function openSessionModal(sessionId) {
-    htmx.ajax('GET', '/sessions/' + sessionId + '/modal', {target: '#session-modal-content', swap: 'innerHTML'});
+    htmx.ajax('GET', '/charging/sessions/' + sessionId + '/modal', {target: '#session-modal-content', swap: 'innerHTML'});
     document.getElementById('session-modal').showModal();
 }
 
 function openNewSessionModal() {
-    htmx.ajax('GET', '/sessions/new/modal', {target: '#session-modal-content', swap: 'innerHTML'});
+    htmx.ajax('GET', '/charging/sessions/new/modal', {target: '#session-modal-content', swap: 'innerHTML'});
     document.getElementById('session-modal').showModal();
 }
 
@@ -178,11 +218,16 @@ function closeSessionModal() {
     document.getElementById('session-modal-content').innerHTML = '';
 }
 
+function openDeleteSessionModal(sessionId) {
+    var btn = document.getElementById('confirm-delete-session');
+    btn.setAttribute('hx-delete', '/charging/sessions/' + sessionId);
+    btn.setAttribute('hx-swap', 'none');
+    htmx.process(btn);
+    document.getElementById('delete-session-modal').showModal();
+}
+
 function confirmDeleteFromModal(sessionId) {
-    if (confirm('Are you sure you want to delete this session?')) {
-        htmx.ajax('DELETE', '/sessions/' + sessionId, {target: '#drawer-body', swap: 'innerHTML'});
-        closeSessionModal();
-    }
+    openDeleteSessionModal(sessionId);
 }
 
 // Listen for closeModal event from HTMX responses
@@ -205,7 +250,7 @@ function highlightRow(sessionId) {
     var rows = document.querySelectorAll('#sessions-table-region tbody tr');
     rows.forEach(function(row) {
         var hxGet = row.getAttribute('hx-get');
-        if (hxGet && hxGet.includes('/sessions/' + sessionId + '/detail')) {
+        if (hxGet && hxGet.includes('/charging/sessions/' + sessionId + '/detail')) {
             row.classList.add('bg-blue-900/30');
             setTimeout(function() {
                 row.style.transition = 'background-color 2s ease-out';
@@ -230,6 +275,8 @@ document.body.addEventListener('session-deleted', function() {
     showToast('Session deleted', 'success');
     closeDrawer();
     closeSessionModal();
+    var delModal = document.getElementById('delete-session-modal');
+    if (delModal) delModal.close();
 });
 document.body.addEventListener('session-created', function(evt) {
     showToast('Session added', 'success');
@@ -243,6 +290,11 @@ document.body.addEventListener('session-created', function(evt) {
 
 // --- Group Edit ---
 var _groupEditActive = false;
+
+// Phase 28-04 D-D6: refreshBulkLocations() removed. The network→location cascade
+// is now pure HTMX (hx-get + hx-trigger="change" on #bulk-network). The text input's
+// oninput fires htmx.trigger(this, 'change') after resolveNetworkCombobox() has set
+// the hidden #bulk-network-id, so HTMX issues the request with an up-to-date network_id.
 
 function toggleGroupEdit() {
     _groupEditActive = !_groupEditActive;
@@ -269,6 +321,11 @@ function toggleGroupEdit() {
         document.getElementById('bulk-charge-type').value = '';
         document.getElementById('bulk-location').value = '';
         document.getElementById('bulk-cost').value = '';
+        var locSel = document.getElementById('bulk-location-id');
+        if (locSel) {
+            locSel.innerHTML = '<option value="">Location (select network first)</option>';
+            locSel.disabled = true;
+        }
     }
 }
 
@@ -305,11 +362,16 @@ function applyGroupEdit() {
     var networkIdInput = document.getElementById('bulk-network-id');
     var chargeSel = document.getElementById('bulk-charge-type');
     var locInput = document.getElementById('bulk-location');
+    var locIdSel = document.getElementById('bulk-location-id');
     var costInput = document.getElementById('bulk-cost');
 
     if (networkInput.value) changes.push('Network -> ' + networkInput.value);
     if (chargeSel.value) changes.push('Charge Type -> ' + chargeSel.value);
-    if (locInput.value) changes.push('Location -> ' + locInput.value);
+    if (locIdSel && locIdSel.value) {
+        var locLabel = locIdSel.options[locIdSel.selectedIndex].textContent;
+        changes.push('Location -> ' + locLabel);
+    }
+    if (locInput.value) changes.push('Location Name -> ' + locInput.value);
     if (costInput.value) changes.push('Cost -> $' + costInput.value);
 
     if (changes.length === 0) {
@@ -326,10 +388,11 @@ function applyGroupEdit() {
     if (networkIdInput.value) formData.append('bulk_network_id', networkIdInput.value);
     else if (networkInput.value) formData.append('bulk_network_name', networkInput.value);
     if (chargeSel.value) formData.append('bulk_charge_type', chargeSel.value);
+    if (locIdSel && locIdSel.value) formData.append('bulk_location_id', locIdSel.value);
     if (locInput.value) formData.append('bulk_location_name', locInput.value);
     if (costInput.value) formData.append('bulk_cost', costInput.value);
 
-    fetch('/sessions/bulk', {
+    fetch('/charging/sessions/bulk', {
         method: 'PUT',
         body: formData,
         headers: { 'HX-Request': 'true' }

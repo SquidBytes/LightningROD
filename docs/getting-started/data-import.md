@@ -25,7 +25,7 @@ LightningROD starts with an empty database. The seed script imports charging ses
 | Flag | Description |
 |------|-------------|
 | `--vin` | Vehicle identification number (required) |
-| `--csv-path` | Path to CSV file (default: `data/ev_charging_sample.csv` for demo) |
+| `--csv-path` | Path to CSV file (default: `data/charging_sessions_sample.csv` for demo) |
 | `--dry-run` | Preview what would be imported without writing to the database |
 
 ### Dry Run
@@ -89,7 +89,7 @@ CSV files go in the `data/` directory at the project root. This directory is git
 ```
 data/
 ├── .gitkeep
-└── ev_charging_sample.csv   # Included demo data (80 sessions)
+└── charging_sessions_sample.csv   # Included demo data (80 sessions)
 ```
 
 Place your own CSV files here for seeding. The `data/` directory is gitignored (except `.gitkeep` and the sample file) to keep personal data out of version control.

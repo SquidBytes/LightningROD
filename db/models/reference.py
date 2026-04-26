@@ -1,7 +1,18 @@
-from datetime import date, datetime
-from typing import Optional
+"""Database models for reference."""
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, text
+from datetime import date, datetime
+
+from sqlalchemy import (
+    Boolean,
+    Date,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,43 +23,110 @@ TIMESTAMPTZ = TIMESTAMP(timezone=True)
 
 
 class EVChargingNetwork(Base):
-    """Static charging network configuration (5 columns).
+    """Static charging network configuration.
 
     Source: 003_create_reference_tables.sql, ev_charging_networks table.
-    Not a pipeline target — manually maintained.
+    Not a pipeline target — manually maintained or auto-created from HA data.
     """
 
     __tablename__ = "ev_charging_networks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     network_name: Mapped[str] = mapped_column(String, nullable=False)
-    cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    effective_date: Mapped[Optional[date]] = mapped_column(Date)
-    notes: Mapped[Optional[str]] = mapped_column(Text)
-    is_free: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
-    color: Mapped[Optional[str]] = mapped_column(String(7))  # hex color e.g. '#FF0000'
+    cost_per_kwh: Mapped[float | None] = mapped_column(Numeric)
+    effective_date: Mapped[date | None] = mapped_column(Date)
+    notes: Mapped[str | None] = mapped_column(Text)
+    is_free: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    color: Mapped[str | None] = mapped_column(String(7))  # hex color e.g. '#FF0000'
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    source_system: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
+class EVNetworkSubscription(Base):
+    """Subscription period for a charging network with member rate and monthly fee.
+
+    Each row represents a date range during which a subscription was active.
+    Multiple periods per network enable tracking historical rate changes.
+    """
+
+    __tablename__ = "ev_network_subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    network_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ev_charging_networks.id", ondelete="CASCADE"), nullable=False
+    )
+    member_rate: Mapped[float] = mapped_column(Numeric, nullable=False)  # $/kWh with subscription
+    monthly_fee: Mapped[float] = mapped_column(Numeric, nullable=False, server_default=text("0"))
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # null = still active
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class EVLocationLookup(Base):
-    """Known location definitions for EV charging and parking (6 columns).
+    """Known location definitions for EV charging and parking.
 
     Source: 003_create_reference_tables.sql, ev_location_lookup table.
-    Not a pipeline target — manually maintained.
+    Manually maintained or auto-created from HA/CSV data.
     """
 
     __tablename__ = "ev_location_lookup"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     location_name: Mapped[str] = mapped_column(String, nullable=False)
-    address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    latitude: Mapped[Optional[float]] = mapped_column(Numeric)
-    longitude: Mapped[Optional[float]] = mapped_column(Numeric)
-    location_type: Mapped[Optional[str]] = mapped_column(String)
-    notes: Mapped[Optional[str]] = mapped_column(Text)
-    network_id: Mapped[Optional[int]] = mapped_column(
+    address: Mapped[str | None] = mapped_column(String, nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Numeric)
+    longitude: Mapped[float | None] = mapped_column(Numeric)
+    location_type: Mapped[str | None] = mapped_column(String)
+    notes: Mapped[str | None] = mapped_column(Text)
+    network_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ev_charging_networks.id", ondelete="SET NULL"), nullable=True
     )
-    cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+    cost_per_kwh: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    source_system: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
+class EVLocationGPSAlias(Base):
+    """GPS coordinate alias for a known location.
+    Created when locations are merged (source GPS becomes alias on target)
+    or when a user confirms a first-time auto-association.
+    Used by resolve_location to match future sessions to known locations.
+    """
+
+    __tablename__ = "ev_location_gps_aliases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ev_location_lookup.id", ondelete="CASCADE"), nullable=False
+    )
+    latitude: Mapped[float] = mapped_column(Numeric, nullable=False)
+    longitude: Mapped[float] = mapped_column(Numeric, nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)  # 'merge', 'manual', 'auto_confirm'
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, server_default=text("NOW()"))
+
+
+class EVNetworkNameAlias(Base):
+    """Alternate name alias for a charging network.
+    Created when networks are merged (source name becomes alias on target).
+    Used by resolve_network to match future sessions to canonical networks.
+    """
+
+    __tablename__ = "ev_network_name_aliases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    network_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ev_charging_networks.id", ondelete="CASCADE"), nullable=False
+    )
+    alias_name: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, server_default=text("NOW()"))
+
+    __table_args__ = (
+        UniqueConstraint("alias_name", name="uq_ev_network_name_aliases_alias_name"),
+    )
 
 
 class EVChargerStall(Base):
@@ -65,12 +143,12 @@ class EVChargerStall(Base):
         Integer, ForeignKey("ev_location_lookup.id", ondelete="CASCADE"), nullable=False
     )
     stall_label: Mapped[str] = mapped_column(String, nullable=False)
-    charger_type: Mapped[Optional[str]] = mapped_column(String(10))  # 'L1', 'L2', 'DCFC'
-    rated_kw: Mapped[Optional[float]] = mapped_column(Numeric)
-    voltage: Mapped[Optional[float]] = mapped_column(Numeric)
-    amperage: Mapped[Optional[float]] = mapped_column(Numeric)
-    connector_type: Mapped[Optional[str]] = mapped_column(String(20))  # 'CCS', 'CHAdeMO', 'J1772', 'NACS', 'Tesla'
-    notes: Mapped[Optional[str]] = mapped_column(Text)
+    charger_type: Mapped[str | None] = mapped_column(String(10))  # 'L1', 'L2', 'DCFC'
+    rated_kw: Mapped[float | None] = mapped_column(Numeric)
+    voltage: Mapped[float | None] = mapped_column(Numeric)
+    amperage: Mapped[float | None] = mapped_column(Numeric)
+    connector_type: Mapped[str | None] = mapped_column(String(20))  # 'CCS', 'CHAdeMO', 'J1772', 'NACS', 'Tesla'
+    notes: Mapped[str | None] = mapped_column(Text)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
@@ -84,18 +162,57 @@ class EVStatistics(Base):
     __tablename__ = "ev_statistics"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    computed_at: Mapped[Optional[datetime]] = mapped_column(
+    computed_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMPTZ, server_default=text("NOW()")
     )
-    total_sessions: Mapped[Optional[int]] = mapped_column(Integer)
-    total_energy_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    total_cost: Mapped[Optional[float]] = mapped_column(Numeric)
-    total_miles_added: Mapped[Optional[float]] = mapped_column(Numeric)
-    avg_session_duration_seconds: Mapped[Optional[float]] = mapped_column(Numeric)
-    avg_energy_per_session_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    avg_cost_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    avg_miles_per_kwh: Mapped[Optional[float]] = mapped_column(Numeric)
-    notes: Mapped[Optional[str]] = mapped_column(Text)
+    total_sessions: Mapped[int | None] = mapped_column(Integer)
+    total_energy_kwh: Mapped[float | None] = mapped_column(Numeric)
+    total_cost: Mapped[float | None] = mapped_column(Numeric)
+    total_distance_added: Mapped[float | None] = mapped_column(Numeric)  # km
+    avg_session_duration_seconds: Mapped[float | None] = mapped_column(Numeric)
+    avg_energy_per_session_kwh: Mapped[float | None] = mapped_column(Numeric)
+    avg_cost_per_kwh: Mapped[float | None] = mapped_column(Numeric)
+    avg_efficiency: Mapped[float | None] = mapped_column(Numeric)  # km/kWh
+    notes: Mapped[str | None] = mapped_column(Text)
+
+
+class GasPriceHistory(Base):
+    """Monthly gas prices with two tracks: station-specific and regional average.
+
+    Each row represents one month's gas prices. The two tracks enable
+    range-based savings calculations (low/high bounds).
+    """
+
+    __tablename__ = "gas_price_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-12
+    station_price: Mapped[float | None] = mapped_column(Numeric)
+    average_price: Mapped[float | None] = mapped_column(Numeric)
+    source: Mapped[str | None] = mapped_column(String(20))  # 'manual' or 'ha_sensor'
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", name="uq_gas_price_history_year_month"),
+    )
+
+
+class GasPriceReading(Base):
+    """Raw HA sensor readings for gas prices — staging table for monthly averaging.
+
+    Individual readings are stored as they arrive from Home Assistant sensors.
+    Periodically averaged into GasPriceHistory entries per month.
+    """
+
+    __tablename__ = "gas_price_readings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entity_id: Mapped[str] = mapped_column(String, nullable=False)
+    price: Mapped[float] = mapped_column(Numeric, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False)
 
 
 class AppSettings(Base):
@@ -107,7 +224,7 @@ class AppSettings(Base):
     __tablename__ = "app_settings"
 
     key: Mapped[str] = mapped_column(String, primary_key=True)
-    value: Mapped[Optional[str]] = mapped_column(Text)
+    value: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
     )

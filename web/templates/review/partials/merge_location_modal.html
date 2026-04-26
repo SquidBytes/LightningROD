@@ -1,0 +1,92 @@
+{# D-D4 helper: does any target location differ from the source's is_verified?
+   Same pattern as merge_network_modal.html. D-D5: merge button stays enabled. #}
+{% set ns_mlm = namespace(has_crossing=false) %}
+{% for loc in target_options %}
+  {% if loc.is_verified != source.is_verified %}{% set ns_mlm.has_crossing = true %}{% endif %}
+{% endfor %}
+
+<p class="text-sm text-base-content/50 uppercase tracking-wide font-medium">Merge Location</p>
+<h3 class="text-xl font-semibold text-base-content">{{ source.location_name }}</h3>
+{% if source.address %}
+<p class="text-sm text-base-content/70">{{ source.address }}</p>
+{% endif %}
+
+<div class="mt-4 space-y-3">
+    <div class="alert alert-warning">
+        <div>
+            <p class="font-medium">This will:</p>
+            <ul class="list-disc list-inside text-sm mt-1">
+                <li>Reassign <strong>{{ session_count }}</strong> session{{ 's' if session_count != 1 }} to the target location</li>
+                <li>Move <strong>{{ stall_count }}</strong> charger stall{{ 's' if stall_count != 1 }}</li>
+                <li>Delete "{{ source.location_name }}" permanently</li>
+            </ul>
+        </div>
+    </div>
+
+    <form hx-post="/review/location/{{ source.id }}/merge"
+          hx-target="{% if return_to == 'approved' %}#review-content{% else %}#review-inner{% endif %}"
+          hx-swap="innerHTML">
+        {# Phase 28.1 G1: carry caller's tab context into POST so the server
+           renders the approved-tree or pending-table partial accordingly. #}
+        <input type="hidden" name="return_to" value="{{ return_to | default('pending') }}">
+
+        <label class="form-control w-full">
+            <div class="label"><span class="label-text">Merge into:</span></div>
+            <select name="target_id"
+                    id="merge-location-target-{{ source.id }}"
+                    class="select select-bordered w-full"
+                    required
+                    {% if ns_mlm.has_crossing %}onchange="updateLocationMergeCrossWarning({{ source.id }}, {{ 1 if source.is_verified else 0 }}, '{{ source.location_name | e }}')"{% endif %}>
+                <option value="" disabled selected>Select target location...</option>
+                {% for loc in target_options %}
+                <option value="{{ loc.id }}"
+                        data-is-verified="{{ 1 if loc.is_verified else 0 }}"
+                        data-target-name="{{ loc.location_name | e }}">{{ loc.location_name }} ({{ loc.address or 'No address' }})</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        {% if ns_mlm.has_crossing %}
+        <div id="merge-location-cross-warning-{{ source.id }}"
+             class="alert alert-warning text-sm mt-3 hidden">
+            <span>
+                <strong>This merge crosses verified/unverified boundary.</strong>
+                <span id="merge-location-cross-warning-detail-{{ source.id }}"></span>
+            </span>
+        </div>
+        {% endif %}
+
+        <div class="flex items-center justify-end pt-4 mt-4 border-t border-base-300">
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="closeMergeModal()" class="btn btn-ghost">Cancel</button>
+                <button type="submit" class="btn btn-warning">Merge</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% if ns_mlm.has_crossing %}
+<script>
+    function updateLocationMergeCrossWarning(sourceId, sourceVerified, sourceName) {
+        var sel = document.getElementById('merge-location-target-' + sourceId);
+        var warn = document.getElementById('merge-location-cross-warning-' + sourceId);
+        var detail = document.getElementById('merge-location-cross-warning-detail-' + sourceId);
+        if (!sel || !warn || !detail) return;
+        var opt = sel.options[sel.selectedIndex];
+        if (!opt || !opt.value) { warn.classList.add('hidden'); return; }
+        var targetVerified = parseInt(opt.getAttribute('data-is-verified') || '0', 10) === 1;
+        var isSourceVerified = parseInt(sourceVerified, 10) === 1;
+        if (targetVerified === isSourceVerified) {
+            warn.classList.add('hidden');
+            return;
+        }
+        var targetName = opt.getAttribute('data-target-name') || opt.textContent;
+        if (targetVerified) {
+            detail.textContent = 'The surviving row (' + targetName + ') stays verified.';
+        } else {
+            detail.textContent = 'The surviving row (' + targetName + ') will be UNVERIFIED.';
+        }
+        warn.classList.remove('hidden');
+    }
+</script>
+{% endif %}

@@ -10,14 +10,17 @@ nav = [
   {"Home" = "index.md"},
   {"Getting Started" = [
     "getting-started/installation.md",
+    "getting-started/unraid.md",
     "getting-started/configuration.md",
     "getting-started/data-import.md",
   ]},
   {"User Guide" = [
     "guide/dashboard.md",
     "guide/sessions.md",
+    "guide/performance.md",
     "guide/costs.md",
-    "guide/energy.md",
+    "guide/battery.md",
+    "guide/driving.md",
     "guide/csv-import.md",
     "guide/home-assistant.md",
     "guide/settings.md",

@@ -1,0 +1,62 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, "v*"]
+  pull_request:
+    branches: [main, "v*"]
+
+jobs:
+  pytest:
+    name: pytest + ruff
+    runs-on: ubuntu-latest
+
+    # Postgres service container — listens on port 5433 so it matches
+    # tests/conftest.py's hardcoded TEST_DB_URL without any overrides.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: lightningrod_test
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: lightningrod_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Ruff lint
+        # `continue-on-error: true` can be added to suppress
+        run: uv run ruff check .
+
+      - name: Mypy type check
+        run: uv run mypy web/ config.py db/ --no-error-summary
+
+      - name: Run pytest
+        env:
+          # conftest.py reads these but already has a hardcoded URL.
+          # Kept here for clarity or future changes
+          POSTGRES_USER: lightningrod_test
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: lightningrod_test
+          POSTGRES_HOST: localhost:5433
+        run: uv run pytest --tb=short

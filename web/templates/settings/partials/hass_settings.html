@@ -4,15 +4,15 @@
 
 <div class="card bg-base-200 max-w-2xl">
     <div class="card-body">
-        <h2 class="card-title">Home Assistant Connection</h2>
-        <p class="text-base-content/60 text-sm mb-2">Configure connection to your Home Assistant instance for automatic FordPass data ingestion.</p>
+        <h2 class="card-title text-base font-semibold">Home Assistant</h2>
+        <p class="text-base-content/60 text-sm -mt-1">Configure the connection to your Home Assistant instance.</p>
 
         <form hx-post="/settings/hass" hx-target="#hass-settings-content" hx-swap="innerHTML"
               class="space-y-4">
 
             <!-- HA URL -->
             <label class="form-control w-full">
-                <div class="label"><span class="label-text">Home Assistant URL</span></div>
+                <div class="label"><span class="label-text font-semibold">Home Assistant URL</span></div>
                 <input type="url" name="ha_url"
                        value="{{ hass.get('ha_url', '') }}"
                        placeholder="http://homeassistant.local:8123"
@@ -24,7 +24,7 @@
 
             <!-- Access Token -->
             <label class="form-control w-full">
-                <div class="label"><span class="label-text">Long-Lived Access Token</span></div>
+                <div class="label"><span class="label-text font-semibold">Long-Lived Access Token</span></div>
                 <div class="join w-full">
                     <input type="password" name="ha_token" id="ha-token-input"
                            value="{{ masked_token }}"
@@ -50,7 +50,7 @@
 
             <!-- VIN Override -->
             <label class="form-control w-full">
-                <div class="label"><span class="label-text">VIN Override</span></div>
+                <div class="label"><span class="label-text font-semibold">VIN Override</span></div>
                 <input type="text" name="ha_vin_override"
                        value="{{ hass.get('ha_vin_override', '') }}"
                        placeholder="Auto-detected from entity IDs"
@@ -62,7 +62,7 @@
 
             <!-- Unit System -->
             <label class="form-control w-full max-w-xs">
-                <div class="label"><span class="label-text">Unit System</span></div>
+                <div class="label"><span class="label-text font-semibold">Unit System</span></div>
                 {% set current_unit = hass.get('ha_unit_system', 'auto') %}
                 <select name="ha_unit_system" class="select select-bordered w-full">
                     <option value="auto" {% if current_unit == 'auto' or not current_unit %}selected{% endif %}>Auto-detect</option>
@@ -80,7 +80,7 @@
                     <input type="checkbox" name="ha_auto_connect"
                            {% if hass.get('ha_auto_connect', 'true') == 'true' %}checked{% endif %}
                            class="toggle toggle-primary">
-                    <span class="label-text">Auto-connect on startup</span>
+                    <span class="label-text font-semibold">Auto-connect on startup</span>
                 </label>
             </div>
 
@@ -94,12 +94,91 @@
     </div>
 </div>
 
+<!-- Home Location Settings -->
+<div class="card bg-base-200 max-w-2xl mt-4">
+    <div class="card-body">
+        <h2 class="card-title text-base font-semibold">Home Location</h2>
+        <p class="text-base-content/60 text-sm -mt-1">
+            Your home coordinates. On every successful HA connection these are
+            auto-populated from <code>homeassistant.config</code> if not already set;
+            use <em>Sync from HA</em> to force-refresh, or edit manually below.
+        </p>
+
+        {% if home_sync_applied %}
+        <div class="alert alert-success text-sm py-2">
+            Home location synced from HA:
+            {% for k, v in home_sync_applied.items() %}
+                <code>{{ k }}={{ v }}</code>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if home_sync_error %}
+        <div class="alert alert-warning text-sm py-2">{{ home_sync_error }}</div>
+        {% endif %}
+
+        <form hx-post="/settings/hass/home-location" hx-target="#hass-settings-content" hx-swap="innerHTML"
+              class="space-y-4">
+
+            <!-- Home Location Name -->
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Location Name</span></div>
+                <input type="text" name="home_location_name"
+                       value="{{ hass.get('home_location_name', '') }}"
+                       placeholder="Home"
+                       class="input input-bordered w-full">
+            </label>
+
+            <!-- Home Latitude -->
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Latitude</span></div>
+                <input type="number" name="home_latitude" step="any"
+                       value="{{ hass.get('home_latitude', '') }}"
+                       placeholder="e.g. 40.7128"
+                       class="input input-bordered w-full">
+            </label>
+
+            <!-- Home Longitude -->
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Longitude</span></div>
+                <input type="number" name="home_longitude" step="any"
+                       value="{{ hass.get('home_longitude', '') }}"
+                       placeholder="e.g. -74.0060"
+                       class="input input-bordered w-full">
+            </label>
+
+            <!-- Buttons -->
+            <div class="pt-2 flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-primary">Save Home Location</button>
+                <button type="button" class="btn btn-secondary"
+                        hx-post="/settings/hass/home-location/sync"
+                        hx-target="#hass-settings-content"
+                        hx-swap="innerHTML"
+                        hx-confirm="Overwrite your saved home location with the current HA coordinates?">
+                    Sync from HA
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Connection status — loaded on tab view, auto-refreshes every 10s -->
 <div id="hass-connection-status" class="mt-4"
      hx-get="/settings/hass/status"
      hx-trigger="load"
      hx-target="#hass-connection-status"
      hx-swap="innerHTML">
+</div>
+
+<!-- Gas price sensors (configured against HA entity_ids) -->
+<div hx-get="/settings/hass/gas-sensors"
+     hx-trigger="load"
+     hx-swap="outerHTML">
+    <div class="card bg-base-200 max-w-2xl mt-4">
+        <div class="card-body">
+            <span class="loading loading-spinner loading-sm"></span>
+            <span class="text-sm text-base-content/50">Loading gas sensor config…</span>
+        </div>
+    </div>
 </div>
 
 <script>

@@ -2,17 +2,19 @@
 
 Provides summary aggregation for the landing dashboard page.
 """
+from typing import Any
+
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from db.models.charging_session import EVChargingSession
 from web.queries.costs import (
     compute_session_cost,
     get_networks_by_name,
-    query_cost_summary,
 )
 
 # Shared Plotly modebar config — show minimal controls, hide logo
@@ -30,7 +32,7 @@ def _wrap_chart(html: str) -> str:
     return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
-async def query_dashboard_summary(db: AsyncSession) -> dict:
+async def query_dashboard_summary(db: AsyncSession, device_id: str | None = None) -> dict:
     """Aggregate lifetime charging data for dashboard summary cards.
 
     Returns dict with:
@@ -40,13 +42,40 @@ async def query_dashboard_summary(db: AsyncSession) -> dict:
     - avg_cost_per_session: float | None
     - avg_kwh_per_session: float | None
     """
+    # Use SQL aggregation for total_sessions and total_kwh (avoids loading all ORM objects)
+    agg_stmt = select(
+        func.count().label("total_sessions"),
+        func.coalesce(func.sum(EVChargingSession.energy_kwh), 0).label("total_kwh"),
+    )
+    if device_id:
+        agg_stmt = agg_stmt.where(EVChargingSession.device_id == device_id)
+    agg_result = await db.execute(agg_stmt)
+    agg_row = agg_result.one()
+    total_sessions = agg_row.total_sessions
+    total_kwh = float(agg_row.total_kwh)
+
+    # For cost calculation, load only the columns compute_session_cost needs
     networks_by_name = await get_networks_by_name(db)
 
-    result = await db.execute(select(EVChargingSession))
+    cost_stmt = select(EVChargingSession).options(
+        load_only(
+            EVChargingSession.id,
+            EVChargingSession.energy_kwh,
+            EVChargingSession.cost,
+            EVChargingSession.cost_source,
+            EVChargingSession.is_free,
+            EVChargingSession.location_name,
+            EVChargingSession.network_id,
+            EVChargingSession.location_id,
+            EVChargingSession.device_id,
+            EVChargingSession.session_start_utc,
+            EVChargingSession.estimated_cost,
+        )
+    )
+    if device_id:
+        cost_stmt = cost_stmt.where(EVChargingSession.device_id == device_id)
+    result = await db.execute(cost_stmt)
     sessions = result.scalars().all()
-
-    total_sessions = len(sessions)
-    total_kwh = sum(float(s.energy_kwh or 0) for s in sessions)
 
     # Cost totals only for sessions with a resolved cost
     total_cost = 0.0
@@ -73,7 +102,7 @@ async def query_dashboard_summary(db: AsyncSession) -> dict:
     }
 
 
-async def query_charging_efficiency(db: AsyncSession) -> dict:
+async def query_charging_efficiency(db: AsyncSession, device_id: str | None = None) -> dict:
     """Aggregate charging efficiency metrics from sessions with EVSE data.
 
     Returns dict with:
@@ -83,14 +112,22 @@ async def query_charging_efficiency(db: AsyncSession) -> dict:
     - avg_utilization_pct: float | None (average max_power/charger_rated_kw)
     """
     # Loss metrics: sessions with both evse_energy_kwh and energy_kwh
+    loss_filters = [
+        EVChargingSession.evse_energy_kwh.isnot(None),
+        EVChargingSession.energy_kwh.isnot(None),
+        EVChargingSession.evse_energy_kwh > 0,
+    ]
+    if device_id:
+        loss_filters.append(EVChargingSession.device_id == device_id)
     loss_result = await db.execute(
-        select(EVChargingSession).where(
-            and_(
-                EVChargingSession.evse_energy_kwh.isnot(None),
-                EVChargingSession.energy_kwh.isnot(None),
-                EVChargingSession.evse_energy_kwh > 0,
+        select(EVChargingSession)
+        .options(
+            load_only(
+                EVChargingSession.evse_energy_kwh,
+                EVChargingSession.energy_kwh,
             )
         )
+        .where(and_(*loss_filters))
     )
     loss_sessions = loss_result.scalars().all()
 
@@ -99,8 +136,8 @@ async def query_charging_efficiency(db: AsyncSession) -> dict:
     loss_pct_sum = 0.0
 
     for s in loss_sessions:
-        evse_e = float(s.evse_energy_kwh)
-        veh_e = float(s.energy_kwh)
+        evse_e = float(s.evse_energy_kwh or 0)
+        veh_e = float(s.energy_kwh or 0)
         loss = evse_e - veh_e
         total_loss_kwh += loss
         loss_pct_sum += (loss / evse_e) * 100
@@ -108,13 +145,22 @@ async def query_charging_efficiency(db: AsyncSession) -> dict:
     avg_loss_pct = loss_pct_sum / sessions_with_evse if sessions_with_evse > 0 else None
 
     # Utilization metrics: sessions with max power and charger_rated_kw
+    util_filters = [
+        EVChargingSession.charger_rated_kw.isnot(None),
+        EVChargingSession.charger_rated_kw > 0,
+    ]
+    if device_id:
+        util_filters.append(EVChargingSession.device_id == device_id)
     util_result = await db.execute(
-        select(EVChargingSession).where(
-            and_(
-                EVChargingSession.charger_rated_kw.isnot(None),
-                EVChargingSession.charger_rated_kw > 0,
+        select(EVChargingSession)
+        .options(
+            load_only(
+                EVChargingSession.max_power,
+                EVChargingSession.evse_max_power_kw,
+                EVChargingSession.charger_rated_kw,
             )
         )
+        .where(and_(*util_filters))
     )
     util_sessions = util_result.scalars().all()
 
@@ -125,7 +171,7 @@ async def query_charging_efficiency(db: AsyncSession) -> dict:
             float(s.max_power) if s.max_power is not None else None
         )
         if max_pwr is not None:
-            util_pct_sum += (max_pwr / float(s.charger_rated_kw)) * 100
+            util_pct_sum += (max_pwr / float(s.charger_rated_kw or 1)) * 100
             util_count += 1
 
     avg_utilization_pct = util_pct_sum / util_count if util_count > 0 else None
@@ -239,7 +285,7 @@ def build_monthly_energy_by_network_chart(
     df = df.groupby(["month", "network"], as_index=False)["kwh"].sum()
     df = df.sort_values("month")
 
-    kwargs = dict(x="month", y="kwh", color="network", barmode="stack")
+    kwargs: dict[str, Any] = dict(x="month", y="kwh", color="network", barmode="stack")
     if network_colors:
         kwargs["color_discrete_map"] = network_colors
     fig = px.bar(df, **kwargs)

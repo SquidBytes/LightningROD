@@ -105,15 +105,15 @@
         <button
             type="button"
             hx-get="/settings/import/reset"
-            hx-target="#import-flow-container"
-            hx-swap="innerHTML"
+            hx-target="#import-tab-wrapper"
+            hx-swap="outerHTML"
             class="btn btn-primary"
         >
             Import Another File
         </button>
 
         {# View Sessions — navigate to sessions list #}
-        <a href="/sessions" class="btn btn-ghost">
+        <a href="/charging/sessions" class="btn btn-ghost">
             View Sessions
         </a>
     </div>

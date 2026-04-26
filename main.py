@@ -1,3 +1,5 @@
+"""Module for main."""
+
 def main():
     print("Hello from lightningrod!")
 

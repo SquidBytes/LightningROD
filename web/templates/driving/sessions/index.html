@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-6xl">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-base-content mb-2">Trip History</h1>
+            <p class="text-base-content/60">Track driving efficiency, energy consumption, and trip metrics over time.</p>
+        </div>
+        <button
+            type="button"
+            onclick="document.getElementById('trip-modal').showModal(); htmx.ajax('GET', '/driving/sessions/new', {target: '#trip-modal-content', swap: 'innerHTML'})"
+            class="btn btn-primary btn-sm gap-2"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Trip
+        </button>
+    </div>
+
+    {% with filter_url="/driving/sessions", filter_target="#driving-sessions-content", active_preset=active_range, date_param_name="range" %}
+      {% include "partials/filter_bar.html" %}
+    {% endwith %}
+
+    <!-- Sort controls -->
+    <div class="flex items-center gap-2 mb-4">
+        <span class="text-base-content/60 text-sm">Sort by:</span>
+        <div class="join">
+            {% set sort_options = [("date", "Date"), ("distance", "Distance"), ("efficiency", "Efficiency"), ("temperature", "Temp"), ("score", "Score")] %}
+            {% for value, label in sort_options %}
+            <button type="button"
+                onclick="setTripSort('{{ value }}')"
+                class="join-item btn btn-sm {% if sort_by == value %}btn-primary{% else %}btn-ghost{% endif %}"
+                data-sort-btn="{{ value }}"
+            >{{ label }}</button>
+            {% endfor %}
+        </div>
+        <button type="button"
+            onclick="toggleSortDir()"
+            class="btn btn-ghost btn-sm btn-square"
+            title="Toggle sort direction"
+            id="sort-dir-btn"
+        >
+            {% if sort_dir == 'asc' %}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
+            {% else %}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+            {% endif %}
+        </button>
+    </div>
+
+    <!-- Drawer wrapper for trip detail panel -->
+    <div class="drawer drawer-end">
+        <input id="trip-drawer" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content">
+            <!-- HTMX swap target -->
+            <div id="driving-sessions-content"
+                 hx-get="/driving/sessions"
+                 hx-trigger="trip-created from:body"
+                 hx-target="#driving-sessions-content"
+                 hx-swap="innerHTML"
+                 hx-include="#filter-form"
+            >
+                {% include "driving/sessions/partials/summary.html" %}
+            </div>
+        </div>
+        <div class="drawer-side z-40">
+            <label for="trip-drawer" class="drawer-overlay" aria-label="close drawer"></label>
+            <div class="bg-base-200 min-h-full w-[32rem] overflow-y-auto" id="trip-drawer-body">
+                <!-- HTMX loads drawer content here -->
+                <div class="flex items-center justify-center h-32 text-base-content/30">
+                    <span>Select a trip to view details</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Trip add modal -->
+<dialog id="trip-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-lg">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="trip-modal-content">
+            <!-- HTMX loads add form here -->
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<!-- Expanded trip detail modal -->
+<dialog id="trip-expanded-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-5xl max-h-[90vh] overflow-y-auto">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <h3 class="font-bold text-lg mb-4">Trip Details</h3>
+        <div id="trip-expanded-content">
+            <!-- HTMX loads expanded charts here -->
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- Toast container -->
+<div id="toast-container" class="fixed top-4 right-4 z-[70] space-y-2"></div>
+
+<script>
+// Hidden inputs for sort state (inside filter-form)
+(function() {
+    var form = document.getElementById('filter-form');
+    if (!form) return;
+
+    // Add sort hidden inputs if not present
+    if (!form.querySelector('[name="sort"]')) {
+        var sortInput = document.createElement('input');
+        sortInput.type = 'hidden';
+        sortInput.name = 'sort';
+        sortInput.id = 'trip_sort_input';
+        sortInput.value = '{{ sort_by }}';
+        form.appendChild(sortInput);
+    }
+    if (!form.querySelector('[name="dir"]')) {
+        var dirInput = document.createElement('input');
+        dirInput.type = 'hidden';
+        dirInput.name = 'dir';
+        dirInput.id = 'trip_dir_input';
+        dirInput.value = '{{ sort_dir }}';
+        form.appendChild(dirInput);
+    }
+})();
+
+// Auto-open drawer when HTMX loads content into it
+document.body.addEventListener('htmx:afterSettle', function(evt) {
+    if (evt.target.id === 'trip-drawer-body') {
+        document.getElementById('trip-drawer').checked = true;
+    }
+});
+
+// Phase 26: Escape key closes the Trips drawer when it is open
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    var drawer = document.getElementById('trip-drawer');
+    if (drawer && drawer.checked) {
+        drawer.checked = false;
+    }
+});
+
+function setTripSort(value) {
+    document.getElementById('trip_sort_input').value = value;
+    // Reset to page 1
+    var pageInput = document.getElementById('page_input');
+    if (pageInput) pageInput.value = '1';
+    // Update button states
+    document.querySelectorAll('[data-sort-btn]').forEach(function(btn) {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-ghost');
+    });
+    var activeBtn = document.querySelector('[data-sort-btn="' + value + '"]');
+    if (activeBtn) {
+        activeBtn.classList.remove('btn-ghost');
+        activeBtn.classList.add('btn-primary');
+    }
+    htmx.trigger(document.body, 'filterChanged');
+}
+
+function toggleSortDir() {
+    var dirInput = document.getElementById('trip_dir_input');
+    dirInput.value = dirInput.value === 'asc' ? 'desc' : 'asc';
+    var pageInput = document.getElementById('page_input');
+    if (pageInput) pageInput.value = '1';
+    htmx.trigger(document.body, 'filterChanged');
+}
+
+function showToast(message, type) {
+    var container = document.getElementById('toast-container');
+    var toast = document.createElement('div');
+    var cls = type === 'success' ? 'alert alert-success' : 'alert alert-error';
+    toast.className = cls + ' text-sm shadow-lg transform transition-all duration-300';
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(function() {
+        toast.classList.add('opacity-0', 'translate-x-4');
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 3000);
+}
+
+document.body.addEventListener('trip-created', function() {
+    showToast('Trip added', 'success');
+    document.getElementById('trip-modal').close();
+});
+</script>
+{% endblock %}

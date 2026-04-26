@@ -1,0 +1,333 @@
+{# Vehicle add/edit modal — reused for both add and edit #}
+<h3 class="text-lg font-bold mb-4">{{ 'Edit Vehicle' if vehicle else 'Add Vehicle' }}</h3>
+
+<form
+    {% if vehicle %}
+    hx-put="/settings/vehicles/{{ vehicle.id }}"
+    {% else %}
+    hx-post="/settings/vehicles"
+    {% endif %}
+    hx-target="#vehicle-management-card"
+    hx-swap="outerHTML"
+    hx-on::after-request="if(event.detail.successful) closeVehicleModal()"
+>
+    {# DaisyUI CSS-only radio tabs #}
+    <div role="tablist" class="tabs tabs-bordered mb-4">
+        <input type="radio" name="vehicle-tabs" role="tab" class="tab" aria-label="EV Details" checked />
+        <div role="tabpanel" class="tab-content pt-4">
+            {# Display Name (required) — full width #}
+            <label class="form-control mb-4">
+                <div class="label"><span class="label-text text-xs">Display Name *</span></div>
+                <input type="text" name="display_name" required
+                       value="{{ vehicle.display_name if vehicle else '' }}"
+                       placeholder="e.g. My Lightning"
+                       class="input input-sm input-bordered w-full">
+            </label>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {# Make — combo-box with datalist #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Make</span></div>
+                    <input type="text" name="make" id="vehicle-make"
+                           list="make-options"
+                           value="{{ vehicle.make or '' }}"
+                           placeholder="e.g. Ford"
+                           class="input input-sm input-bordered w-full"
+                           autocomplete="off">
+                    <datalist id="make-options"></datalist>
+                </label>
+
+                {# Model — combo-box with datalist #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Model</span></div>
+                    <input type="text" name="model" id="vehicle-model"
+                           list="model-options"
+                           value="{{ vehicle.model or '' }}"
+                           placeholder="e.g. F-150 Lightning"
+                           class="input input-sm input-bordered w-full"
+                           autocomplete="off">
+                    <datalist id="model-options"></datalist>
+                </label>
+
+                {# Trim Level — combo-box with datalist (e.g. Lariat, XLT, Premium) #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Trim Level</span></div>
+                    <input type="text" name="trim_level" id="vehicle-trim-level"
+                           list="trim-level-options"
+                           value="{{ vehicle.trim_level or '' }}"
+                           placeholder="e.g. Lariat"
+                           class="input input-sm input-bordered w-full"
+                           autocomplete="off">
+                    <datalist id="trim-level-options"></datalist>
+                </label>
+
+                {# Battery Option — combo-box with datalist (e.g. Standard Range, Extended Range) #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Battery Option</span></div>
+                    <input type="text" name="battery_option" id="vehicle-battery-option"
+                           list="battery-option-options"
+                           value="{{ vehicle.battery_option or '' }}"
+                           placeholder="e.g. Extended Range"
+                           class="input input-sm input-bordered w-full"
+                           autocomplete="off">
+                    <datalist id="battery-option-options"></datalist>
+                </label>
+
+                {# Year #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Year</span></div>
+                    <input type="number" name="year" min="1990" max="2099"
+                           value="{{ vehicle.year or '' }}"
+                           placeholder="e.g. 2024"
+                           class="input input-sm input-bordered w-full">
+                </label>
+
+                {# Usable Battery Capacity kWh #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Usable Capacity (kWh)</span></div>
+                    <input type="number" name="battery_capacity_kwh" id="vehicle-battery-kwh"
+                           step="0.1" min="0"
+                           value="{{ vehicle.battery_capacity_kwh or '' }}"
+                           placeholder="e.g. 98"
+                           class="input input-sm input-bordered w-full">
+                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Driver-facing capacity used for efficiency math.</span></div>
+                </label>
+
+                {# Gross Battery Capacity kWh #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Gross Pack Capacity (kWh)</span></div>
+                    <input type="number" name="battery_gross_capacity_kwh" id="vehicle-battery-gross-kwh"
+                           step="0.1" min="0"
+                           value="{{ vehicle.battery_gross_capacity_kwh or '' }}"
+                           placeholder="e.g. 108"
+                           class="input input-sm input-bordered w-full">
+                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Total pack kWh. Matches FordPass <code>maximumBatteryCapacity</code>; used for battery health math.</span></div>
+                </label>
+
+                {# VIN #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">VIN</span></div>
+                    <input type="text" name="vin"
+                           value="{{ vehicle.vin or '' }}"
+                           placeholder="Optional"
+                           class="input input-sm input-bordered w-full">
+                </label>
+
+                {# Device ID — full width #}
+                <label class="form-control md:col-span-2">
+                    <div class="label"><span class="label-text text-xs">Device ID</span></div>
+                    <input type="text" name="device_id"
+                           value="{{ vehicle.device_id if vehicle else '' }}"
+                           placeholder="Auto-generated if blank"
+                           class="input input-sm input-bordered w-full">
+                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Used to link sensor data. Auto-generated for manual vehicles.</span></div>
+                </label>
+            </div>
+        </div>
+
+        <input type="radio" name="vehicle-tabs" role="tab" class="tab" aria-label="Gas Comparison" />
+        <div role="tabpanel" class="tab-content pt-4">
+            <p class="text-sm text-base-content/60 mb-4">Configure an ICE (gas) vehicle to compare costs against. These fields are used for gas savings calculations on the Costs page.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {# Fuel Economy (MPG or L/100km) #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Combined {{ units.fuel_efficiency_label }}</span></div>
+                    <input type="number" name="ice_fuel_efficiency" step="0.1" min="0.1"
+                           value="{% if ice_fuel_efficiency_display is not none %}{{ '%.1f'|format(ice_fuel_efficiency_display) }}{% endif %}"
+                           placeholder="{% if distance_unit == 'us' %}e.g. 28{% else %}e.g. 8.4{% endif %}"
+                           class="input input-sm input-bordered w-full">
+                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">EPA combined fuel economy of the comparison vehicle.</span></div>
+                </label>
+
+                {# Fuel Tank Capacity (gal or L) #}
+                <label class="form-control">
+                    <div class="label"><span class="label-text text-xs">Fuel Tank Size ({{ units.fuel_volume_label }})</span></div>
+                    <input type="number" name="ice_fuel_tank_capacity" step="0.1" min="1"
+                           value="{% if ice_fuel_tank_capacity_display is not none %}{{ '%.1f'|format(ice_fuel_tank_capacity_display) }}{% endif %}"
+                           placeholder="{% if distance_unit == 'us' %}e.g. 14{% else %}e.g. 53{% endif %}"
+                           class="input input-sm input-bordered w-full">
+                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Used for percentage-based calculations when distance data is unavailable.</span></div>
+                </label>
+
+                {# ICE Vehicle Label #}
+                <label class="form-control md:col-span-2">
+                    <div class="label"><span class="label-text text-xs">ICE Vehicle Label</span></div>
+                    <input type="text" name="ice_label"
+                           value="{{ vehicle.ice_label or '' }}"
+                           placeholder="e.g. 2022 Honda Civic"
+                           class="input input-sm input-bordered w-full">
+                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Shown in comparison card header on Costs page. Falls back to "Gasoline" if blank.</span></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    {# Submit buttons #}
+    <div class="flex justify-end gap-2 mt-2">
+        <button type="button" onclick="closeVehicleModal()" class="btn btn-ghost btn-sm">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">
+            {{ 'Save Changes' if vehicle else 'Add Vehicle' }}
+        </button>
+    </div>
+</form>
+
+<script>
+(function() {
+    var presets = {{ vehicle_presets_json | safe }};
+    var makeInput = document.getElementById('vehicle-make');
+    var modelInput = document.getElementById('vehicle-model');
+    var yearInput = document.querySelector('input[name="year"]');
+    var trimLevelInput = document.getElementById('vehicle-trim-level');
+    var batteryOptionInput = document.getElementById('vehicle-battery-option');
+    var kwhInput = document.getElementById('vehicle-battery-kwh');
+    var grossInput = document.getElementById('vehicle-battery-gross-kwh');
+
+    var makeList = document.getElementById('make-options');
+    var modelList = document.getElementById('model-options');
+    var trimLevelList = document.getElementById('trim-level-options');
+    var batteryOptionList = document.getElementById('battery-option-options');
+
+    function unique(arr) {
+        return [...new Set(arr)];
+    }
+
+    function updateOptions(datalist, values) {
+        datalist.innerHTML = '';
+        values.forEach(function(v) {
+            var opt = document.createElement('option');
+            opt.value = v;
+            datalist.appendChild(opt);
+        });
+    }
+
+    function getFilteredPresets() {
+        var make = makeInput.value.trim();
+        var model = modelInput.value.trim();
+        var yearStr = yearInput ? yearInput.value.trim() : '';
+        var year = yearStr ? parseInt(yearStr, 10) : null;
+        return presets.filter(function(p) {
+            if (make && p.make.toLowerCase() !== make.toLowerCase()) return false;
+            if (model && p.model.toLowerCase() !== model.toLowerCase()) return false;
+            if (year !== null && !isNaN(year)) {
+                if (year < p.year_min || year > p.year_max) return false;
+            }
+            return true;
+        });
+    }
+
+    function refreshModels() {
+        var make = makeInput.value.trim();
+        var filtered = presets.filter(function(p) {
+            return !make || p.make.toLowerCase() === make.toLowerCase();
+        });
+        var models = unique(filtered.map(function(p) { return p.model; }));
+        updateOptions(modelList, models);
+        // If only one model, auto-populate
+        if (models.length === 1 && !modelInput.value) {
+            modelInput.value = models[0];
+            refreshTrims();
+        }
+    }
+
+    function refreshTrimLevels() {
+        var filtered = getFilteredPresets();
+        var trimLevels = unique(filtered.map(function(p) { return p.trim_level; }).filter(Boolean));
+        updateOptions(trimLevelList, trimLevels);
+        if (trimLevels.length === 1 && !trimLevelInput.value) {
+            trimLevelInput.value = trimLevels[0];
+            refreshBatteryOptions();
+        }
+    }
+
+    function refreshBatteryOptions() {
+        var trimLevel = trimLevelInput.value.trim();
+        var filtered = getFilteredPresets().filter(function(p) {
+            return !trimLevel || (p.trim_level || '').toLowerCase() === trimLevel.toLowerCase();
+        });
+        var batteryOptions = unique(filtered.map(function(p) { return p.battery_option; }).filter(Boolean));
+        updateOptions(batteryOptionList, batteryOptions);
+        if (batteryOptions.length === 1 && !batteryOptionInput.value) {
+            batteryOptionInput.value = batteryOptions[0];
+            fillKwh();
+        }
+    }
+
+    function fillKwh() {
+        var trimLevel = trimLevelInput.value.trim();
+        var batteryOption = batteryOptionInput.value.trim();
+        var filtered = getFilteredPresets().filter(function(p) {
+            if (trimLevel && (p.trim_level || '').toLowerCase() !== trimLevel.toLowerCase()) return false;
+            if (batteryOption && (p.battery_option || '').toLowerCase() !== batteryOption.toLowerCase()) return false;
+            return true;
+        });
+        var usableVals = unique(filtered.map(function(p) { return p.battery_usable_kwh; }));
+        var grossVals  = unique(filtered.map(function(p) { return p.battery_gross_kwh; }));
+        if (usableVals.length === 1) {
+            kwhInput.value = usableVals[0];
+        }
+        if (grossVals.length === 1) {
+            grossInput.value = grossVals[0];
+        }
+    }
+
+    makeInput.addEventListener('input', function() {
+        modelInput.value = '';
+        trimLevelInput.value = '';
+        batteryOptionInput.value = '';
+        kwhInput.value = '';
+        grossInput.value = '';
+        refreshModels();
+    });
+
+    modelInput.addEventListener('input', function() {
+        trimLevelInput.value = '';
+        batteryOptionInput.value = '';
+        kwhInput.value = '';
+        grossInput.value = '';
+        refreshTrimLevels();
+    });
+
+    if (yearInput) {
+        yearInput.addEventListener('input', function() {
+            // Year narrows the preset pool; re-run downstream resolution so a
+            // user changing MY2024 Lariat -> MY2025 Lariat picks up the right
+            // pack capacity without page refresh.
+            refreshTrimLevels();
+            refreshBatteryOptions();
+            fillKwh();
+        });
+    }
+
+    trimLevelInput.addEventListener('input', function() {
+        batteryOptionInput.value = '';
+        kwhInput.value = '';
+        grossInput.value = '';
+        refreshBatteryOptions();
+    });
+
+    batteryOptionInput.addEventListener('input', function() {
+        kwhInput.value = '';
+        grossInput.value = '';
+        fillKwh();
+    });
+
+    // Initialize: populate all datalists
+    var allMakes = unique(presets.map(function(p) { return p.make; }));
+    updateOptions(makeList, allMakes);
+
+    // Auto-select Ford if it's the only make and no make is already set
+    if (allMakes.length === 1 && !makeInput.value) {
+        makeInput.value = allMakes[0];
+        refreshModels();
+    } else if (makeInput.value) {
+        // Editing existing vehicle -- populate downstream datalists
+        refreshModels();
+        if (modelInput.value) {
+            refreshTrimLevels();
+            if (trimLevelInput.value) {
+                refreshBatteryOptions();
+            }
+        }
+    }
+})();
+</script>

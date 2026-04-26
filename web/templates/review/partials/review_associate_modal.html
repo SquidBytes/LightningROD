@@ -1,0 +1,88 @@
+{# Associate picker partial (Phase 28 / D-C1).
+
+Rendered into the page-scope #edit-loc-modal-content div via
+GET /review/location/{id}/associate-modal. Lightweight form — just a
+network combobox (free-text + datalist) + submit — distinct from the
+deeper location edit form served by /review/location/{id}/edit-form.
+
+Posting this form invokes POST /review/location/{id}/associate:
+- If the resolved hidden network_id is set (datalist match), the
+  location is associated with that network.
+- Else if the free-text network_name matches an existing network
+  case-insensitively, that network is used.
+- Otherwise a new EVChargingNetwork(is_verified=False,
+  source_system="manual") is created and the location is associated
+  to it. is_verified on the location is NEVER touched here (D-C5).
+
+The server returns the refreshed pending-locations partial + an
+HX-Trigger: closeEditLocModal header, closing the shared modal via
+the body listener in review_queue.html.
+#}
+<p class="text-sm text-base-content/50 uppercase tracking-wide font-medium">Associate Location</p>
+<h3 class="text-xl font-semibold text-base-content">{{ loc.location_name }}</h3>
+<p class="text-sm text-base-content/70 mt-1 mb-4">
+    Pick an existing network from the list or type a new name to create one.
+</p>
+
+<form hx-post="/review/location/{{ loc.id }}/associate"
+      hx-target="#review-inner"
+      hx-swap="innerHTML"
+      class="space-y-4">
+
+    <label class="form-control w-full">
+        <div class="label"><span class="label-text text-sm">Network</span></div>
+        <input type="text"
+               name="network_name"
+               list="network-datalist-associate-{{ loc.id }}"
+               autocomplete="off"
+               placeholder="Pick existing or type new"
+               required
+               class="input input-bordered w-full"
+               oninput="resolveAssociateNetworkCombobox(this)" />
+        <datalist id="network-datalist-associate-{{ loc.id }}">
+            {% for net in all_networks %}
+            <option value="{{ net.network_name }}" data-id="{{ net.id }}"></option>
+            {% endfor %}
+        </datalist>
+        {# Hidden id is populated by resolveAssociateNetworkCombobox when the
+           typed text matches an existing network (case-insensitively). If the
+           text doesn't match, this stays empty and the server creates a new
+           unverified network from network_name. #}
+        <input type="hidden" name="network_id" data-network-hidden value="" />
+    </label>
+
+    <p class="text-xs text-base-content/60">
+        Associating does not mark this location verified. Verify it separately
+        once the association looks right.
+    </p>
+
+    <div class="flex items-center justify-end pt-4 mt-2 border-t border-base-300">
+        <div class="flex items-center gap-3">
+            <button type="button"
+                    onclick="closeEditLocModal()"
+                    class="btn btn-ghost">
+                Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">
+                Associate
+            </button>
+        </div>
+    </div>
+</form>
+
+<script>
+/* Local resolver for the Associate picker's datalist combobox.
+   Mirrors resolveNetworkCombobox in base.html but scoped to this modal's
+   label so the two combobox instances don't compete for the same hidden
+   input when a global (base.html) combobox also exists on the page. */
+function resolveAssociateNetworkCombobox(input) {
+    var hidden = input.closest('.form-control').querySelector('[data-network-hidden]');
+    if (!hidden) return;
+    var dl = document.getElementById(input.getAttribute('list'));
+    if (!dl) { hidden.value = ''; return; }
+    var match = Array.from(dl.options).find(function(opt) {
+        return opt.value.toLowerCase() === input.value.toLowerCase();
+    });
+    hidden.value = match ? match.dataset.id : '';
+}
+</script>

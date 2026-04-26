@@ -1,0 +1,150 @@
+{
+  "sensor.fordpass_YOUR_VIN_elveh": {
+    "entity_id": "sensor.fordpass_YOUR_VIN_elveh",
+    "state": "162",
+    "attributes": {
+      "unit_of_measurement": "mi",
+      "friendly_name": "fordpass YOUR_VIN Elveh",
+      "icon": "mdi:car-electric",
+      "tripDistanceTraveled": 19,
+      "tripDuration": 30,
+      "tripEnergyConsumed": 7.6,
+      "tripEfficiency": 2.5,
+      "tripRangeRegenerated": 2.1,
+      "tripAmbientTemp": 15,
+      "tripOutsideAirAmbientTemp": 15,
+      "tripCabinTemp": 20,
+      "tripElectricalEfficiency": 2.5,
+      "tripDrivingScore": 85,
+      "tripSpeed": 60,
+      "tripAcceleration": 75,
+      "tripDeceleration": 70,
+      "maximumBatteryCapacity": 131.0,
+      "batteryActualCharge": 115.0,
+      "maximumBatteryRange": 260,
+      "totalDistanceAdded": 103,
+      "batteryVoltage": 390.0,
+      "batteryAmperage": 5.0,
+      "batterykW": 1.95,
+      "motorVoltage": 350.0,
+      "motorAmperage": 3.0,
+      "motorkW": 1.05
+    },
+    "last_changed": "2026-04-19T12:00:00+00:00",
+    "last_updated": "2026-04-19T12:00:00+00:00"
+  },
+  "sensor.fordpass_YOUR_VIN_soc": {
+    "entity_id": "sensor.fordpass_YOUR_VIN_soc",
+    "state": "80",
+    "attributes": {
+      "unit_of_measurement": "%",
+      "friendly_name": "fordpass YOUR_VIN Soc",
+      "batteryRange": 260
+    },
+    "last_changed": "2026-04-19T12:00:00+00:00",
+    "last_updated": "2026-04-19T12:00:00+00:00"
+  },
+  "sensor.fordpass_YOUR_VIN_elvehcharging": {
+    "entity_id": "sensor.fordpass_YOUR_VIN_elvehcharging",
+    "state": "CHARGING",
+    "last_changed": "2026-04-19T12:00:00+00:00",
+    "last_updated": "2026-04-19T12:00:00+00:00",
+    "attributes": {
+      "friendly_name": "fordpass YOUR_VIN EV Charging",
+      "batteryTemperature": 77.0,
+      "unit_of_measurement": "°F"
+    }
+  },
+  "sensor.fordpass_YOUR_VIN_metrics": {
+    "entity_id": "sensor.fordpass_YOUR_VIN_metrics",
+    "state": "ok",
+    "attributes": {
+      "friendly_name": "fordpass YOUR_VIN Metrics",
+      "icon": "mdi:gauge",
+      "xevBatteryRange": 418,
+      "xevBatteryMaximumRange": 418,
+      "xevBatteryCapacity": 131000,
+      "xevBatteryStateOfCharge": 80,
+      "xevBatteryActualStateOfCharge": 77,
+      "xevBatteryVoltage": 390.0,
+      "xevBatteryAmperage": 5.0,
+      "xevBatteryPower": 1950
+    },
+    "last_changed": "2026-04-19T12:00:00+00:00",
+    "last_updated": "2026-04-19T12:00:00+00:00"
+  },
+  "sensor.fordpass_YOUR_VIN_events": {
+    "entity_id": "sensor.fordpass_YOUR_VIN_events",
+    "state": "ok",
+    "attributes": {
+      "friendly_name": "fordpass YOUR_VIN Events",
+      "customEvents": {
+        "xev-key-off-trip-segment-data": {
+          "oemData": {
+            "trip_data": {
+              "stringArrayValue": [
+                "{\"ambient_temperature\": 15, \"outside_air_ambient_temperature\": 15, \"cabin_temperature\": 20, \"energy_consumed\": 7600, \"distance_traveled\": 19, \"trip_duration\": 1800}"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "last_changed": "2026-04-19T12:00:00+00:00",
+    "last_updated": "2026-04-19T12:00:00+00:00"
+  },
+  "sensor.fordpass_YOUR_VIN_energytransferlogentry": {
+    "entity_id": "sensor.fordpass_YOUR_VIN_energytransferlogentry",
+    "state": "complete",
+    "attributes": {
+      "friendly_name": "fordpass YOUR_VIN Energy Transfer Log Entry",
+      "energyConsumed": 36.5,
+      "chargerType": "DC_FAST",
+      "energyTransferDuration": {
+        "begin": "2026-04-19T11:00:00+00:00",
+        "end": "2026-04-19T11:30:00+00:00",
+        "totalTime": 1800
+      },
+      "plugDetails": {
+        "totalPluggedInTime": 1920,
+        "totalDistanceAdded": 64
+      },
+      "stateOfCharge": {
+        "firstSOC": 25,
+        "lastSOC": 80
+      },
+      "power": {
+        "max": 150000.0,
+        "min": 5000.0,
+        "weightedAverage": 105000.0
+      },
+      "location": {
+        "name": "Example Charger",
+        "network": "ExampleNet",
+        "latitude": 0.0,
+        "longitude": 0.0,
+        "address": {
+          "address1": "123 Example St",
+          "city": "Anytown",
+          "state": "XX"
+        }
+      },
+      "batteryTemperature": 25.0,
+      "outsidetemp": 15.0
+    },
+    "last_changed": "2026-04-19T12:00:00+00:00",
+    "last_updated": "2026-04-19T12:00:00+00:00"
+  },
+  "sensor.fordpass_YOUR_VIN_outsidetemp": {
+    "entity_id": "sensor.fordpass_YOUR_VIN_outsidetemp",
+    "state": "60",
+    "attributes": {
+      "unit_of_measurement": "°F",
+      "friendly_name": "fordpass YOUR_VIN Outside Temp",
+      "icon": "mdi:thermometer",
+      "ambientTemp": 60
+    },
+    "last_changed": "2026-04-19T12:00:00+00:00",
+    "last_updated": "2026-04-19T12:00:00+00:00"
+  }
+}

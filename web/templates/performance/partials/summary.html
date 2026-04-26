@@ -1,0 +1,149 @@
+<!-- Headline Summary Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+
+    <!-- Card 1: Total Energy (Phase 27-05: shrunken + sparkline beneath, D5/D8) -->
+    <div class="card bg-base-200">
+        <div class="card-body p-4">
+            <div class="flex items-center gap-1 mb-1">
+                <p class="text-xs uppercase tracking-wide text-base-content/40">Total Energy</p>
+                <span class="cursor-help tooltip tooltip-bottom" data-tip="{{ tooltips.performance_total_energy }}" aria-label="{{ tooltips.performance_total_energy }}">ⓘ</span>
+            </div>
+            <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
+            <p class="text-sm text-base-content/60 mt-1">{{ summary.total_sessions }} sessions</p>
+            <div class="mt-2 plotly-chart-wrap" style="height: 72px;">
+                {{ monthly_energy_sparkline_html | safe }}
+            </div>
+            <p class="text-[11px] text-base-content/40 leading-tight mt-1">Monthly energy</p>
+        </div>
+    </div>
+
+    <!-- Card 2: AC vs DC Distribution (Phase 25 — replaces the previous recovery tile, moved to /driving/performance) -->
+    <div class="card bg-base-200">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-2">
+                <p class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                    <span>AC vs DC</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="{{ tooltips.performance_ac_vs_dc }}"
+                          aria-label="{{ tooltips.performance_ac_vs_dc }}">ⓘ</span>
+                </p>
+                <div class="join" role="tablist" aria-label="Distribution metric">
+                    <button type="button" onclick="setDonutMetric('kwh', this)"
+                        class="join-item btn btn-xs btn-primary" data-donut-btn="kwh">kWh</button>
+                    <button type="button" onclick="setDonutMetric('count', this)"
+                        class="join-item btn btn-xs btn-ghost" data-donut-btn="count">Sessions</button>
+                    <button type="button" onclick="setDonutMetric('cost', this)"
+                        class="join-item btn btn-xs btn-ghost" data-donut-btn="cost">Cost</button>
+                </div>
+            </div>
+            {% if donut_kwh or donut_count or donut_cost %}
+                <p class="text-[11px] text-base-content/40 leading-tight mb-1">Share of charging by source — AC (Level 1/2) vs DC fast charging.</p>
+                <div id="donut-kwh" class="plotly-chart-wrap">{{ donut_kwh | safe }}</div>
+                <div id="donut-count" class="plotly-chart-wrap hidden">{{ donut_count | safe }}</div>
+                <div id="donut-cost" class="plotly-chart-wrap hidden">{{ donut_cost | safe }}</div>
+            {% else %}
+                <p class="text-base-content/40 text-sm py-8 text-center">No charge-type data for this range.</p>
+            {% endif %}
+        </div>
+    </div>
+    <script>
+    function setDonutMetric(metric, btn) {
+        ['kwh', 'count', 'cost'].forEach(function(m) {
+            var el = document.getElementById('donut-' + m);
+            if (el) el.classList.toggle('hidden', m !== metric);
+            var b = document.querySelector('[data-donut-btn="' + m + '"]');
+            if (b) {
+                b.classList.toggle('btn-primary', m === metric);
+                b.classList.toggle('btn-ghost', m !== metric);
+            }
+        });
+        // Re-measure now that the target container is visible
+        var active = document.getElementById('donut-' + metric);
+        if (active) {
+            var plotDiv = active.querySelector('.js-plotly-plot');
+            if (plotDiv) Plotly.Plots.resize(plotDiv);
+        }
+    }
+    </script>
+
+    <!-- Card 3: Range per kWh (Avg Efficiency) (Phase 27-05: shrunken + sparkline beneath, D5/D8) -->
+    <div class="card bg-base-200">
+        <div class="card-body p-4">
+            <div class="flex items-center gap-1 mb-1">
+                <p class="text-xs uppercase tracking-wide text-base-content/40">Range per kWh</p>
+                <span class="cursor-help tooltip tooltip-bottom" data-tip="{{ tooltips.performance_avg_efficiency }}" aria-label="{{ tooltips.performance_avg_efficiency }}">ⓘ</span>
+            </div>
+            {% if summary.avg_efficiency is not none %}
+                <p class="text-3xl font-bold">{{ "%.2f"|format(summary.avg_efficiency) }} <span class="text-xl font-normal text-base-content/60">{{ unit_label }}</span></p>
+                <p class="text-sm text-base-content/60 mt-1">
+                    Best: {{ "%.2f"|format(summary.best_efficiency) }} &middot;
+                    Worst: {{ "%.2f"|format(summary.worst_efficiency) }}
+                </p>
+            {% else %}
+                <p class="text-2xl font-semibold text-base-content/30">No data</p>
+                <p class="text-xs text-base-content/30 mt-1">Requires sessions with miles added</p>
+            {% endif %}
+            <div class="mt-2 plotly-chart-wrap" style="height: 72px;">
+                {{ efficiency_sparkline_html | safe }}
+            </div>
+            <p class="text-[11px] text-base-content/40 leading-tight mt-1">Efficiency over time</p>
+        </div>
+    </div>
+
+</div>
+
+<!-- Section 3: Efficiency Scatter Chart -->
+<div class="card bg-base-200 mb-4">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">Charging Efficiency</h3>
+        {% if chart_html %}
+            {{ chart_html | safe }}
+        {% else %}
+            <p class="text-base-content/40 text-sm py-8 text-center">No efficiency data available for this time range.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Section 4: Monthly Energy by Charge Type -->
+{% if monthly_energy_chart %}
+<div class="card bg-base-200">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+            <span>Monthly Energy by Type</span>
+            <span class="cursor-help tooltip tooltip-bottom"
+                  data-tip="{{ tooltips.performance_monthly_energy }}"
+                  aria-label="{{ tooltips.performance_monthly_energy }}">ⓘ</span>
+        </h3>
+        {{ monthly_energy_chart | safe }}
+    </div>
+</div>
+{% endif %}
+
+<!-- Synthetic Charge Curve (Phase 25) — DC fallback aggregate -->
+{% if synthetic_curve_chart %}
+<div class="card bg-base-200 mt-4">
+    <div class="card-body">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+                <h3 class="card-title text-sm font-medium text-base-content/60">DC Charge Curve</h3>
+                <span class="badge badge-warning badge-sm">Synthetic</span>
+            </div>
+            <div class="text-xs text-base-content/60">
+                Avg peak
+                <span class="font-mono text-base-content">
+                    {{ "%.0f"|format(synthetic_meta.median_peak_kw or 0) }} kW
+                </span>
+                &middot;
+                <span class="font-mono text-base-content">
+                    {{ synthetic_meta.dc_session_count }}
+                </span>
+                DC sessions
+            </div>
+        </div>
+        <div class="plotly-chart-wrap">{{ synthetic_curve_chart | safe }}</div>
+        <p class="text-xs text-base-content/40 mt-2">
+            Aggregated taper curve shown when real detailed battery telemetry is unavailable for the range window.
+        </p>
+    </div>
+</div>
+{% endif %}

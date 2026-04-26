@@ -1,6 +1,10 @@
+# Compose project name — forces container/network naming to "lightningrod-*"
+name: lightningrod
+
 services:
   db:
     image: postgres:16
+    container_name: lightningrod-db
     volumes:
       - pgdata:/var/lib/postgresql/data
     env_file: .env
@@ -15,12 +19,22 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
+      args:
+        # Stamp the version into the image at build time so `docker inspect`
+        # and the running app can both report what's running.
+        LIGHTNINGROD_VERSION: ${LIGHTNINGROD_VERSION:-dev}
+    # Tag the built image as lightningrod-web:<version> (defaults to :dev when
+    # LIGHTNINGROD_VERSION isn't set). For release builds either export the
+    # var or use: `LIGHTNINGROD_VERSION=0.3.0 docker compose build`.
+    image: lightningrod-web:${LIGHTNINGROD_VERSION:-dev}
+    container_name: lightningrod-web
     ports:
       - "${APP_PORT:-8000}:8000"
     env_file: .env
     environment:
       - POSTGRES_HOST=db
+      - LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION:-dev}
     depends_on:
       db:
         condition: service_healthy

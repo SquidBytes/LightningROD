@@ -50,7 +50,7 @@ The status section below the configuration form shows live connection informatio
 
 - **Reconnect** -- Disconnect and reconnect the WebSocket
 - **Disconnect** -- Stop the WebSocket connection entirely
-- **Backfill History (30 days)** -- Fetch historical charging sessions (available when connected)
+- **Backfill History** -- Fetch historical charging sessions and gas sensor readings from HA's recorder (available when connected)
 
 ## How It Works
 
@@ -66,6 +66,10 @@ The status section below the configuration form shows live connection informatio
 If the connection drops, LightningROD reconnects automatically with exponential backoff (1s, 2s, 4s, up to 60s max). On reconnect, a fresh state snapshot is fetched to fill any data gaps.
 
 Authentication errors (bad token) stop reconnection entirely -- you'll need to update the token in settings.
+
+### Home Location Auto-Populate
+
+On every successful connect, LightningROD pulls the `home` zone coordinates and name from Home Assistant's config and writes them into your app settings (`home_latitude`, `home_longitude`, `home_location_name`). This is non-destructive — if you've already set home location manually, it's left alone. The values are used by the location resolver to tag charging sessions that happened at home.
 
 ### Charging Session Detection
 
@@ -96,9 +100,12 @@ Vehicle and battery telemetry is batched -- multiple sensor updates are accumula
 
 ## History Backfill
 
-Click **Backfill History (30 days)** to fetch historical `energytransferlogentry` states from HA's REST API. This creates charging session records for charges that occurred before LightningROD was connected.
+Click **Backfill History** to fetch historical states from HA's REST API. The button pulls as much history as your HA recorder retains — there is no 30-day cap. It covers:
 
-Duplicate detection applies during backfill -- sessions that already exist are skipped.
+- `energytransferlogentry` — creates charging session records for charges before LightningROD was connected
+- Configured **Gas Price Sensors** (station and/or average) — ingested into the gas price history used on the Costs page
+
+Duplicate detection applies during backfill — existing sessions and gas readings are skipped automatically.
 
 !!! tip "First-time setup"
-    After configuring the HA connection for the first time, use the backfill button to import your recent charging history. Going forward, sessions are created automatically in real time.
+    After configuring the HA connection for the first time, run the backfill to import your historical charging and gas price data. Going forward, sessions and readings flow in automatically in real time.

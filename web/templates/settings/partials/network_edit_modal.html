@@ -65,7 +65,8 @@
             </div>
         </div>
 
-        {# Locations tab #}
+        {% if caller_context | default('settings') == 'settings' %}
+        {# Locations tab -- hidden in review context (D-A3, Phase 28) #}
         <input type="radio" name="network-modal-tabs" role="tab" class="tab" aria-label="Locations" />
         <div role="tabpanel" class="tab-content p-6 min-h-[320px]">
             <div id="network-locations-list"
@@ -75,6 +76,18 @@
                 <p class="text-base-content/50 text-sm">Loading locations...</p>
             </div>
         </div>
+
+        {# Subscription tab -- hidden in review context (D-A3, Phase 28) #}
+        <input type="radio" name="network-modal-tabs" role="tab" class="tab" aria-label="Subscription" />
+        <div role="tabpanel" class="tab-content p-6 min-h-[320px]">
+            <div id="subscription-periods-list"
+                 hx-get="/settings/networks/{{ network.id }}/subscriptions"
+                 hx-trigger="intersect once"
+                 hx-swap="innerHTML">
+                <p class="text-base-content/50 text-sm">Loading subscription periods...</p>
+            </div>
+        </div>
+        {% endif %}
 
     </div>
 
@@ -86,9 +99,9 @@
                 Cancel
             </button>
             <button type="button"
-                    hx-put="/settings/networks/{{ network.id }}"
-                    hx-target="#network-management-card"
-                    hx-swap="outerHTML"
+                    hx-put="{{ save_url | default('/settings/networks/' ~ network.id) }}"
+                    hx-target="{{ save_target | default('#network-management-card') }}"
+                    hx-swap="{{ save_swap | default('outerHTML') }}"
                     hx-include="#network-modal-form"
                     class="btn btn-primary">
                 Save

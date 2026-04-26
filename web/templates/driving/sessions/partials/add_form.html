@@ -1,0 +1,92 @@
+<h3 class="text-lg font-bold mb-4">Add Trip</h3>
+<form hx-post="/driving/sessions"
+      hx-target="#driving-sessions-content"
+      hx-swap="innerHTML"
+      class="space-y-4"
+>
+    <!-- Date -->
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text">Date <span class="text-error">*</span></span>
+        </label>
+        <input type="date" name="trip_date" value="{{ default_date }}" required
+               class="input input-bordered w-full">
+    </div>
+
+    <!-- Distance + Duration row -->
+    <div class="grid grid-cols-2 gap-3">
+        <div class="form-control">
+            <label class="label">
+                <span class="label-text">Distance ({{ units.distance_label }})</span>
+            </label>
+            <input type="number" name="distance" step="0.1" min="0"
+                   id="trip-distance"
+                   oninput="autoCalcEfficiency()"
+                   class="input input-bordered w-full"
+                   placeholder="0.0">
+        </div>
+        <div class="form-control">
+            <label class="label">
+                <span class="label-text">Duration (min)</span>
+            </label>
+            <input type="number" name="duration_minutes" step="1" min="0"
+                   class="input input-bordered w-full"
+                   placeholder="0">
+        </div>
+    </div>
+
+    <!-- Energy + Efficiency row -->
+    <div class="grid grid-cols-2 gap-3">
+        <div class="form-control">
+            <label class="label">
+                <span class="label-text">Energy (kWh)</span>
+            </label>
+            <input type="number" name="energy_consumed" step="0.01" min="0"
+                   id="trip-energy"
+                   oninput="autoCalcEfficiency()"
+                   class="input input-bordered w-full"
+                   placeholder="0.00">
+        </div>
+        <div class="form-control">
+            <label class="label">
+                <span class="label-text">Efficiency ({{ units.efficiency_label }})</span>
+            </label>
+            <input type="number" name="efficiency" step="0.1" min="0"
+                   id="trip-efficiency"
+                   class="input input-bordered w-full"
+                   placeholder="Auto-calculated">
+        </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text">Notes</span>
+        </label>
+        <textarea name="notes" rows="2"
+                  class="textarea textarea-bordered w-full"
+                  placeholder="Optional notes about this trip"></textarea>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex justify-end gap-2 pt-2">
+        <button type="button" class="btn btn-ghost btn-sm"
+                onclick="document.getElementById('trip-modal').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Save Trip</button>
+    </div>
+</form>
+
+<script>
+function autoCalcEfficiency() {
+    var dist = parseFloat(document.getElementById('trip-distance').value);
+    var energy = parseFloat(document.getElementById('trip-energy').value);
+    var effInput = document.getElementById('trip-efficiency');
+    if (dist > 0 && energy > 0 && !effInput.dataset.userEdited) {
+        effInput.value = (dist / energy).toFixed(1);
+    }
+}
+// Track if user manually edited efficiency
+document.getElementById('trip-efficiency').addEventListener('input', function() {
+    this.dataset.userEdited = 'true';
+});
+</script>

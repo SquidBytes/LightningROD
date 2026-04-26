@@ -1,0 +1,50 @@
+name: CodeQL
+
+# Runs GitHub's built-in CodeQL analysis on the Python code base.
+# Alerts show up under Security → Code scanning on the public repo.
+# Free on public repos.
+on:
+  push:
+    branches: [main, "v*"]
+  pull_request:
+    branches: [main, "v*"]
+  schedule:
+    # Weekly scan at 04:27 UTC on Mondays — catches vulnerabilities
+    # introduced by dependency changes that slipped between pushes.
+    - cron: '27 4 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['python']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          # Use the "security-extended" query suite (broader than default,
+          # still free) so we get low-severity hygiene findings too.
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"

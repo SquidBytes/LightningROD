@@ -1,17 +1,19 @@
+"""Database migration script."""
+
 import asyncio
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from alembic import context
+from config import settings
 
 # Import ALL models so Base.metadata has all tables registered.
 # This is critical — Alembic autogenerate will produce an empty migration
 # if model modules are not imported before target_metadata is set.
 from db.models import Base  # noqa: F401 — side effect import registers all models
-from config import settings
 
 # Alembic Config object — access to values within the .ini file.
 config = context.config

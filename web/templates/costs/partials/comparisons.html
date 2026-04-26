@@ -9,7 +9,7 @@
     <div class="flex gap-2 mb-4">
         {% if gas_comparison %}
             <button id="tab-gas" onclick="showTab('gas')"
-                class="btn btn-sm btn-primary">vs Gasoline</button>
+                class="btn btn-sm btn-primary">vs {{ gas_comparison.ice_label or 'Gasoline' }}</button>
         {% endif %}
         {% if network_comparison %}
             <button id="tab-network" onclick="showTab('network')"
@@ -21,6 +21,7 @@
     <!-- Gasoline comparison panel -->
     {% if gas_comparison %}
     <div id="panel-gas">
+        {% if gas_comparison.session_count > 0 %}
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div class="card bg-base-200">
                 <div class="card-body items-center text-center">
@@ -32,19 +33,42 @@
             <div class="card bg-base-200">
                 <div class="card-body items-center text-center">
                     <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Equivalent Gas Cost</p>
-                    <p class="text-3xl font-bold">${{ "%.2f"|format(gas_comparison.gas_total) }}</p>
-                    <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(gas_comparison.total_miles) }} miles at {{ gas_comparison.mpg }} MPG, ${{ "%.2f"|format(gas_comparison.gas_price) }}/gal</p>
+                    <p class="text-3xl font-bold">
+                        {% if gas_comparison.has_range %}
+                            ${{ "%.2f"|format(gas_comparison.gas_total_low) }}&ndash;${{ "%.2f"|format(gas_comparison.gas_total_high) }}
+                        {% else %}
+                            ${{ "%.2f"|format(gas_comparison.gas_total_low) }}
+                        {% endif %}
+                    </p>
+                    <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(gas_comparison.total_distance) }} {{ units.distance_long }}</p>
                 </div>
             </div>
             <div class="card bg-base-200">
                 <div class="card-body items-center text-center">
                     <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">You Saved</p>
-                    <p class="text-3xl font-bold {% if gas_comparison.savings >= 0 %}text-green-400{% else %}text-red-400{% endif %}">${{ "%.2f"|format(gas_comparison.savings|abs) }}</p>
-                    <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(gas_comparison.savings_pct|abs) }}% {% if gas_comparison.savings >= 0 %}less than gas{% else %}more than gas{% endif %}</p>
+                    <p class="text-3xl font-bold {% if gas_comparison.savings_low >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+                        {% if gas_comparison.has_range %}
+                            ${{ "%.2f"|format(gas_comparison.savings_low|abs) }}&ndash;${{ "%.2f"|format(gas_comparison.savings_high|abs) }}
+                        {% else %}
+                            ${{ "%.2f"|format(gas_comparison.savings_low|abs) }}
+                        {% endif %}
+                    </p>
+                    <p class="text-sm text-base-content/60 mt-1">
+                        {% if gas_comparison.has_range %}
+                            {{ "%.0f"|format(gas_comparison.savings_pct_low|abs) }}&ndash;{{ "%.0f"|format(gas_comparison.savings_pct_high|abs) }}%
+                        {% else %}
+                            {{ "%.0f"|format(gas_comparison.savings_pct_low|abs) }}%
+                        {% endif %}
+                        {% if gas_comparison.savings_low >= 0 %}less than gas{% else %}more than gas{% endif %}
+                    </p>
+                    <p class="text-xs text-base-content/40 mt-1">(estimated)</p>
                 </div>
             </div>
         </div>
-        <p class="text-xs text-base-content/40">Based on your configured settings. Update in Settings.</p>
+        <p class="text-xs text-base-content/40">Based on your vehicle's ICE comparison config and gas price history. Update in Settings.</p>
+        {% else %}
+        <p class="text-sm text-base-content/40">No gas comparison data available. Configure ICE comparison in Settings &gt; Vehicles and add gas prices in Settings &gt; Comparison.</p>
+        {% endif %}
     </div>
     {% endif %}
 
@@ -56,7 +80,7 @@
             <form class="flex items-center gap-2">
                 <input type="hidden" name="range" value="{{ active_range }}">
                 <select id="ref-rate-select"
-                        hx-get="/costs"
+                        hx-get="/charging/costs"
                         hx-target="#costs-content"
                         hx-swap="innerHTML"
                         hx-include="closest form"

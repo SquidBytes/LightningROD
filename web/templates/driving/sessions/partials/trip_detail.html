@@ -1,0 +1,92 @@
+{# Lazy-loaded trip detail content - radar chart + metrics #}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <!-- Driving Score Radar Chart -->
+    <div>
+        {% if radar_chart %}
+            <h4 class="text-sm font-medium text-base-content/60 mb-2">Driving Score</h4>
+            {{ radar_chart | safe }}
+        {% else %}
+            <p class="text-base-content/40 text-sm py-4">No driving score data available.</p>
+        {% endif %}
+    </div>
+
+    <!-- Trip Metrics -->
+    <div class="space-y-3">
+        {% if trip.ambient_temp is not none or trip.cabin_temp is not none or trip.outside_air_temp is not none %}
+        <div>
+            <h4 class="text-sm font-medium text-base-content/60 mb-1">Temperature</h4>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                {% if trip.ambient_temp is not none %}
+                <div>
+                    <span class="text-base-content/40">Ambient:</span>
+                    <span>{{ "%.1f"|format(trip.ambient_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}</span>
+                </div>
+                {% endif %}
+                {% if trip.cabin_temp is not none %}
+                <div>
+                    <span class="text-base-content/40">Cabin:</span>
+                    <span>{{ "%.1f"|format(trip.cabin_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}</span>
+                </div>
+                {% endif %}
+                {% if trip.outside_air_temp is not none %}
+                <div>
+                    <span class="text-base-content/40">Outside:</span>
+                    <span>{{ "%.1f"|format(trip.outside_air_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if trip.range_regenerated is not none %}
+        <div>
+            <h4 class="text-sm font-medium text-base-content/60 mb-1">Regeneration</h4>
+            <p class="text-sm">
+                <span class="text-base-content/40">Range Regenerated:</span>
+                <span>{{ "%.1f"|format(trip.range_regenerated|cvt_dist(distance_unit)) }} {{ units.range_label }}</span>
+            </p>
+        </div>
+        {% endif %}
+
+        {% if trip.electrical_efficiency is not none %}
+        <div>
+            <h4 class="text-sm font-medium text-base-content/60 mb-1">Electrical Efficiency</h4>
+            <p class="text-sm">{{ "%.2f"|format(trip.electrical_efficiency) }}</p>
+        </div>
+        {% endif %}
+
+        {% if trip.driving_score is not none %}
+        <div>
+            <h4 class="text-sm font-medium text-base-content/60 mb-1">Scores</h4>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                    <span class="text-base-content/40">Overall:</span>
+                    <span>{{ "%.0f"|format(trip.driving_score) }}</span>
+                </div>
+                {% if trip.speed_score is not none %}
+                <div>
+                    <span class="text-base-content/40">Speed:</span>
+                    <span>{{ "%.0f"|format(trip.speed_score) }}</span>
+                </div>
+                {% endif %}
+                {% if trip.acceleration_score is not none %}
+                <div>
+                    <span class="text-base-content/40">Accel:</span>
+                    <span>{{ "%.0f"|format(trip.acceleration_score) }}</span>
+                </div>
+                {% endif %}
+                {% if trip.deceleration_score is not none %}
+                <div>
+                    <span class="text-base-content/40">Decel:</span>
+                    <span>{{ "%.0f"|format(trip.deceleration_score) }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if not (trip.ambient_temp is not none or trip.cabin_temp is not none or trip.outside_air_temp is not none or trip.range_regenerated is not none or trip.electrical_efficiency is not none or trip.driving_score is not none) %}
+        <p class="text-base-content/40 text-sm py-2">No additional details available for this trip.</p>
+        {% endif %}
+    </div>
+</div>

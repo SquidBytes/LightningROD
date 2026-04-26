@@ -1,0 +1,6 @@
+{% if mini_chart_html %}
+<div class="mt-2">
+    {{ mini_chart_html | safe }}
+    <a href="/battery?session={{ session.id }}" class="text-xs link link-primary mt-1 inline-block">View full chart</a>
+</div>
+{% endif %}

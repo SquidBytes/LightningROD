@@ -1,0 +1,154 @@
+<!-- Summary Stats -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Total Trips</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.driving_sessions_total_trips }}"
+                      aria-label="{{ tooltips.driving_sessions_total_trips }}">ⓘ</span>
+            </p>
+            <p class="text-3xl font-bold">{{ summary.count }}</p>
+        </div>
+    </div>
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Total Distance</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.driving_sessions_total_distance }}"
+                      aria-label="{{ tooltips.driving_sessions_total_distance }}">ⓘ</span>
+            </p>
+            <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_distance) }} <span class="text-xl font-normal text-base-content/60">{{ units.distance_label }}</span></p>
+        </div>
+    </div>
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Avg Efficiency</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.driving_sessions_avg_efficiency }}"
+                      aria-label="{{ tooltips.driving_sessions_avg_efficiency }}">ⓘ</span>
+            </p>
+            {% if summary.avg_efficiency is not none %}
+            <p class="text-3xl font-bold">{{ "%.1f"|format(summary.avg_efficiency) }} <span class="text-xl font-normal text-base-content/60">{{ units.efficiency_label }}</span></p>
+            {% else %}
+            <p class="text-2xl font-semibold text-base-content/30">No data</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                <span>Total Energy</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.driving_sessions_total_energy }}"
+                      aria-label="{{ tooltips.driving_sessions_total_energy }}">ⓘ</span>
+            </p>
+            <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_energy) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
+        </div>
+    </div>
+</div>
+
+<!-- Trip List -->
+{% if trips %}
+
+    <!-- Desktop table (hidden on mobile) -->
+    <div class="hidden lg:block overflow-x-auto">
+        <table class="table table-sm w-full">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Date</th>
+                    <th>Distance</th>
+                    <th>Duration</th>
+                    <th>Temp</th>
+                    <th>Energy</th>
+                    <th>Reported Eff.</th>
+                    <th>Calc. Eff.</th>
+                    <th>Score</th>
+                    <th>Regen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trip in trips %}
+                {% with row_index=loop.index0 %}
+                {% include "driving/sessions/partials/trip_row.html" %}
+                {% endwith %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Mobile cards (hidden on desktop) -->
+    <div class="lg:hidden space-y-3">
+        {% for trip in trips %}
+        <div class="card bg-base-200 cursor-pointer hover:bg-base-300/50"
+             hx-get="/driving/sessions/{{ trip.id }}/drawer"
+             hx-target="#trip-drawer-body"
+             hx-swap="innerHTML">
+            <div class="card-body p-4">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="font-medium">
+                            {% if trip.end_time %}{{ trip.end_time|localtime(user_tz|default('UTC'), "%b %-d, %Y") }}{% else %}Unknown date{% endif %}
+                        </p>
+                        <p class="text-sm text-base-content/60">
+                            {% if trip.distance is not none %}{{ "%.1f"|format(trip.distance|cvt_dist(distance_unit)) }} {{ units.distance_label }}{% endif %}
+                            {% if trip.duration is not none %}
+                                &middot; {{ (trip.duration | int) // 60 }}h {{ (trip.duration | int) % 60 }}m
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="text-right">
+                        {% if trip.efficiency is not none %}
+                        <p class="font-semibold text-primary">{{ "%.1f"|format(trip.efficiency|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}</p>
+                        {% endif %}
+                        {% if trip.energy_consumed is not none %}
+                        <p class="text-sm text-base-content/60">{{ "%.1f"|format(trip.energy_consumed) }} kWh</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if trip.driving_score is not none %}
+                <div class="mt-2">
+                    <div class="relative h-5 w-full rounded overflow-hidden">
+                        <div class="absolute inset-0 bg-gradient-to-r from-error via-warning to-success"></div>
+                        <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
+                            {{ "%.0f"|format(trip.driving_score) }}
+                        </span>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+{% else %}
+    <div class="card bg-base-200">
+        <div class="card-body text-center py-12">
+            <p class="text-base-content/40">No trips recorded yet. Trips are automatically captured from your vehicle, or you can add one manually.</p>
+        </div>
+    </div>
+{% endif %}
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="flex justify-center items-center gap-2 mt-6">
+    {% if has_prev %}
+    <button type="button"
+        class="btn btn-sm btn-ghost"
+        onclick="document.getElementById('page_input').value='{{ page - 1 }}'; htmx.trigger(document.body, 'filterChanged')"
+    >Previous</button>
+    {% endif %}
+
+    <span class="text-sm text-base-content/60">Page {{ page }} of {{ total_pages }}</span>
+
+    {% if has_next %}
+    <button type="button"
+        class="btn btn-sm btn-ghost"
+        onclick="document.getElementById('page_input').value='{{ page + 1 }}'; htmx.trigger(document.body, 'filterChanged')"
+    >Next</button>
+    {% endif %}
+</div>
+{% endif %}

@@ -1,0 +1,113 @@
+{# Networks tab content partial -- search, sort, table (pending only) #}
+
+{# Search + sort row #}
+<div class="flex flex-wrap items-center gap-3 mb-4">
+    <input type="search" name="q" value="{{ current_q }}"
+           placeholder="Search networks..."
+           class="input input-bordered input-sm w-64"
+           hx-get="/review/networks"
+           hx-trigger="input changed delay:300ms, search"
+           hx-target="#review-inner"
+           hx-swap="innerHTML"
+           hx-include="[name='sort']" />
+
+    <select name="sort" class="select select-bordered select-sm"
+            hx-get="/review/networks"
+            hx-trigger="change"
+            hx-target="#review-inner"
+            hx-swap="innerHTML"
+            hx-include="[name='q']">
+        <option value="name" {{ 'selected' if current_sort == 'name' }}>Sort: Name</option>
+        <option value="sessions" {{ 'selected' if current_sort == 'sessions' }}>Sort: Sessions</option>
+        <option value="status" {{ 'selected' if current_sort == 'status' }}>Sort: Status</option>
+    </select>
+</div>
+
+{# Networks table #}
+{% if networks %}
+<div class="overflow-x-auto">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Sessions</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for net in networks %}
+            <tr id="net-row-{{ net.id }}">
+                <td>
+                    {% if net.color %}
+                    <span class="inline-block w-3 h-3 rounded-full mr-1" style="background-color: {{ net.color }}"></span>
+                    {% endif %}
+                    {{ net.network_name }}
+                </td>
+                <td>
+                    <span class="badge badge-sm badge-ghost">{{ net_session_counts.get(net.id, 0) }}</span>
+                </td>
+                <td>
+                    {% if net.source_system == 'home_assistant' %}
+                    <span class="badge badge-sm badge-info">HA</span>
+                    {% elif net.source_system == 'csv_import' %}
+                    <span class="badge badge-sm badge-accent">CSV</span>
+                    {% elif net.source_system == 'manual' %}
+                    <span class="badge badge-sm badge-ghost">manual</span>
+                    {% elif net.source_system %}
+                    <span class="badge badge-sm">{{ net.source_system }}</span>
+                    {% else %}
+                    <span class="badge badge-sm badge-ghost">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if net.is_verified %}
+                    <span class="badge badge-sm badge-success">Verified</span>
+                    {% else %}
+                    <span class="badge badge-sm badge-warning">Unverified</span>
+                    {% endif %}
+                </td>
+                <td class="flex gap-1 flex-wrap">
+                    {% if not net.is_verified %}
+                    <button class="btn btn-xs btn-success"
+                            hx-post="/review/network/{{ net.id }}/verify"
+                            hx-target="#review-inner"
+                            hx-swap="innerHTML">
+                        Verify
+                    </button>
+                    {% endif %}
+                    <button class="btn btn-xs btn-info"
+                            onclick="openNetworkModal({{ net.id }})">
+                        Edit
+                    </button>
+                    <button class="btn btn-xs btn-neutral"
+                            onclick="openMergeModal('network', {{ net.id }})">
+                        Merge
+                    </button>
+                    {% if not net.is_verified %}
+                    <button class="btn btn-xs btn-error"
+                            hx-post="/review/network/{{ net.id }}/delete"
+                            hx-target="#review-inner"
+                            hx-swap="innerHTML"
+                            hx-confirm="Delete this network? Sessions will be unlinked.">
+                        Delete
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert">
+    <span>
+        {% if current_q %}
+        No networks matching "{{ current_q }}"
+        {% else %}
+        No networks pending review.
+        {% endif %}
+    </span>
+</div>
+{% endif %}

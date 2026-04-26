@@ -8,38 +8,79 @@
 
 {# Tab bar using DaisyUI CSS-only radio tabs with adjacent tab-content #}
 <div role="tablist" class="tabs tabs-bordered">
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Vehicles" {{ 'checked' if active_tab == 'vehicles' }} />
+    <div role="tabpanel" class="tab-content pt-6">
+        {% include "settings/partials/vehicle_management.html" %}
+    </div>
+
     <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="General" {{ 'checked' if active_tab == 'general' }} />
     <div role="tabpanel" class="tab-content pt-6">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Comparison Settings -->
+        <div class="space-y-6">
+            <!-- Gas Comparison -->
             <div class="card bg-base-200">
                 <div class="card-body">
-                    <h2 class="card-title">Comparison Settings</h2>
-                    <div id="gas-settings">
+                    <h2 class="card-title text-base font-semibold">Gas Comparison</h2>
+                    <p class="text-base-content/60 text-sm -mt-1">Configure ICE vehicle comparison and gas price tracking.</p>
+                    <div id="gas-settings" class="mt-2">
                         {% include "settings/partials/gas_settings.html" %}
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Unit Preferences -->
-        <div class="card bg-base-200 mt-6 max-w-lg">
-            <div class="card-body">
-                <h2 class="card-title">Unit Preferences</h2>
-                <p class="text-base-content/60 text-sm">Choose how efficiency values display on the energy dashboard.</p>
-                <div id="unit-settings">
-                    {% include "settings/partials/unit_settings.html" %}
+            <!-- Units -->
+            <div class="card bg-base-200 max-w-lg">
+                <div class="card-body">
+                    <h2 class="card-title text-base font-semibold">Units</h2>
+                    <p class="text-base-content/60 text-sm -mt-1">Configure display units for distance, temperature, and energy.</p>
+                    <div id="unit-settings" class="mt-2">
+                        {% include "settings/partials/unit_settings.html" %}
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Timezone -->
-        <div class="card bg-base-200 mt-6 max-w-lg">
-            <div class="card-body">
-                <h2 class="card-title">Timezone</h2>
-                <p class="text-base-content/60 text-sm">Set your local timezone for displaying session timestamps.</p>
-                <div id="timezone-settings">
-                    {% include "settings/partials/timezone_settings.html" %}
+            <!-- Timezone -->
+            <div class="card bg-base-200 max-w-lg">
+                <div class="card-body">
+                    <h2 class="card-title text-base font-semibold">Timezone</h2>
+                    <p class="text-base-content/60 text-sm -mt-1">Set your local timezone for date and time display.</p>
+                    <div id="timezone-settings" class="mt-2">
+                        {% include "settings/partials/timezone_settings.html" %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Developer Tools -->
+            <div class="card bg-base-200 max-w-lg border border-warning/20">
+                <div class="card-body">
+                    <h2 class="card-title text-base font-semibold">Developer Tools</h2>
+                    <p class="text-base-content/60 text-sm -mt-1">Diagnostic pages for inspecting data sources and sensor mappings.</p>
+                    <div id="developer-settings" class="mt-2">
+                        {% include "settings/partials/developer_settings.html" %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- About -->
+            <div class="card bg-base-200 max-w-lg">
+                <div class="card-body">
+                    <h2 class="card-title text-base font-semibold">About</h2>
+                    <div class="mt-2 space-y-2 text-sm">
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-base-content/60">LightningROD version</span>
+                            <span class="font-mono">{{ app_version }}</span>
+                        </div>
+                        <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                            <a href="https://github.com/squidbytes/LightningROD/releases"
+                               target="_blank" rel="noopener"
+                               class="link link-primary">Release notes</a>
+                            <a href="https://squidbytes.github.io/LightningROD/"
+                               target="_blank" rel="noopener"
+                               class="link link-primary">Documentation</a>
+                            <a href="https://github.com/squidbytes/LightningROD"
+                               target="_blank" rel="noopener"
+                               class="link link-primary">Source</a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -66,6 +107,21 @@
     </div>
 </div>
 
+{# Vehicle add/edit modal using DaisyUI dialog #}
+<dialog id="vehicle-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="vehicle-modal-content">
+            {# Modal content injected by openVehicleModal() #}
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
 {# Network edit modal using DaisyUI dialog #}
 <dialog id="network-modal" class="modal">
     <div class="modal-box w-11/12 max-w-4xl">
@@ -81,7 +137,40 @@
     </form>
 </dialog>
 
+{# Stall edit modal using DaisyUI dialog #}
+<dialog id="stall-edit-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="stall-edit-modal-content">
+            {# Modal content injected by HTMX from stall edit endpoint #}
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
 <script>
+function openVehicleModal(vehicleId) {
+    if (vehicleId > 0) {
+        htmx.ajax('GET', '/settings/vehicles/' + vehicleId + '/edit',
+            {target: '#vehicle-modal-content', swap: 'innerHTML'});
+    } else {
+        htmx.ajax('GET', '/settings/vehicles/new',
+            {target: '#vehicle-modal-content', swap: 'innerHTML'});
+    }
+    document.getElementById('vehicle-modal').showModal();
+}
+
+function closeVehicleModal() {
+    document.getElementById('vehicle-modal').close();
+    document.getElementById('vehicle-modal-content').innerHTML = '';
+}
+
+document.body.addEventListener('closeVehicleModal', closeVehicleModal);
+
 function openNetworkModal(networkId) {
     htmx.ajax('GET', '/settings/networks/' + networkId + '/edit-modal',
         {target: '#network-modal-content', swap: 'innerHTML'});

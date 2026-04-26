@@ -1,22 +1,33 @@
-import json
-from typing import Optional
+"""Query helpers for settings."""
 
-from sqlalchemy import select
+import json
+from typing import Any
+
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.reference import AppSettings, EVChargerStall, EVChargingNetwork, EVLocationLookup
+from db.models.reference import (
+    AppSettings,
+    EVChargerStall,
+    EVChargingNetwork,
+    EVLocationLookup,
+    EVNetworkNameAlias,
+    EVNetworkSubscription,
+)
 
 # Predefined EV charging networks with brand-accurate colors
-PREDEFINED_NETWORKS = [
-    {"name": "Tesla Supercharger", "color": "#E31937", "cost_per_kwh": 0.35, "is_free": False},
-    {"name": "Electrify America", "color": "#00B140", "cost_per_kwh": 0.48, "is_free": False},
-    {"name": "ChargePoint", "color": "#00A4E4", "cost_per_kwh": 0.39, "is_free": False},
-    {"name": "EVgo", "color": "#F7941D", "cost_per_kwh": 0.35, "is_free": False},
+PREDEFINED_NETWORKS: list[dict[str, Any]] = [
+    {"name": "Tesla Supercharger", "color": "#CC0000", "cost_per_kwh": 0.42, "is_free": False},
+    {"name": "Electrify America", "color": "#00A94F", "cost_per_kwh": 0.48, "is_free": False},
+    {"name": "ChargePoint", "color": "#FF6B2D", "cost_per_kwh": 0.35, "is_free": False},
+    {"name": "EVgo", "color": "#00AEEF", "cost_per_kwh": 0.39, "is_free": False},
+    {"name": "EV Connect", "color": "#4CAF50", "cost_per_kwh": 0.30, "is_free": False},
+    {"name": "IONNA", "color": "#1A1A2E", "cost_per_kwh": 0.40, "is_free": False},
+    {"name": "Rivian Adventure Network", "color": "#517B50", "cost_per_kwh": 0.35, "is_free": False},
     {"name": "Blink", "color": "#0072CE", "cost_per_kwh": 0.49, "is_free": False},
     {"name": "Flo", "color": "#6CBE45", "cost_per_kwh": 0.35, "is_free": False},
     {"name": "Ford BlueOval", "color": "#003478", "cost_per_kwh": 0.33, "is_free": False},
-    {"name": "Rivian Adventure Network", "color": "#4DB848", "cost_per_kwh": 0.35, "is_free": False},
     {"name": "Shell Recharge", "color": "#FFD500", "cost_per_kwh": 0.39, "is_free": False},
     {"name": "BP Pulse", "color": "#009B3A", "cost_per_kwh": 0.36, "is_free": False},
     {"name": "Home", "color": "#6366F1", "cost_per_kwh": 0.12, "is_free": True},
@@ -38,9 +49,10 @@ async def get_all_networks(db: AsyncSession) -> list[EVChargingNetwork]:
 
 async def resolve_network(
     db: AsyncSession,
-    network_id: Optional[int] = None,
-    network_name: Optional[str] = None,
-) -> Optional[int]:
+    network_id: int | None = None,
+    network_name: str | None = None,
+    source_system: str | None = None,
+) -> int | None:
     """Resolve a network to its ID. Accepts ID directly or name for lookup/auto-create.
 
     Priority: network_id (if truthy) > network_name lookup > auto-create from name.
@@ -55,7 +67,6 @@ async def resolve_network(
     name = network_name.strip()
 
     # Try case-insensitive match against existing networks
-    from sqlalchemy import func
     result = await db.execute(
         select(EVChargingNetwork).where(
             func.lower(EVChargingNetwork.network_name) == name.lower()
@@ -65,6 +76,16 @@ async def resolve_network(
     if existing:
         return existing.id
 
+    # Check network name aliases (from prior merge operations)
+    alias_result = await db.execute(
+        select(EVNetworkNameAlias.network_id).where(
+            func.lower(EVNetworkNameAlias.alias_name) == name.lower()
+        )
+    )
+    alias_match = alias_result.scalar_one_or_none()
+    if alias_match:
+        return alias_match
+
     # Auto-create new network — use predefined data if it's a known network
     known = _PREDEFINED_BY_NAME.get(name.lower())
     new_net = EVChargingNetwork(
@@ -72,6 +93,8 @@ async def resolve_network(
         is_free=known["is_free"] if known else False,
         color=known["color"] if known else DEFAULT_COLOR,
         cost_per_kwh=known["cost_per_kwh"] if known else None,
+        is_verified=False,
+        source_system=source_system,
     )
     db.add(new_net)
     await db.flush()  # get the ID without committing
@@ -81,9 +104,9 @@ async def resolve_network(
 async def create_network(
     db: AsyncSession,
     name: str,
-    cost_per_kwh: Optional[float],
+    cost_per_kwh: float | None,
     is_free: bool,
-    color: Optional[str],
+    color: str | None,
 ) -> EVChargingNetwork:
     """Create a new charging network row.
 
@@ -109,10 +132,10 @@ async def update_network(
     db: AsyncSession,
     network_id: int,
     name: str,
-    cost_per_kwh: Optional[float],
+    cost_per_kwh: float | None,
     is_free: bool,
-    color: Optional[str],
-) -> Optional[EVChargingNetwork]:
+    color: str | None,
+) -> EVChargingNetwork | None:
     """Update all fields of an existing charging network.
 
     Returns the updated network or None if not found.
@@ -215,12 +238,12 @@ async def create_location(
     db: AsyncSession,
     network_id: int,
     name: str,
-    location_type: Optional[str] = None,
-    notes: Optional[str] = None,
-    address: Optional[str] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-    cost_per_kwh: Optional[float] = None,
+    location_type: str | None = None,
+    notes: str | None = None,
+    address: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    cost_per_kwh: float | None = None,
 ) -> EVLocationLookup:
     """Create a new location linked to a network."""
     loc = EVLocationLookup(
@@ -243,13 +266,13 @@ async def update_location(
     db: AsyncSession,
     location_id: int,
     name: str,
-    location_type: Optional[str] = None,
-    notes: Optional[str] = None,
-    address: Optional[str] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-    cost_per_kwh: Optional[float] = None,
-) -> Optional[EVLocationLookup]:
+    location_type: str | None = None,
+    notes: str | None = None,
+    address: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    cost_per_kwh: float | None = None,
+) -> EVLocationLookup | None:
     """Update a location row. Returns updated location or None if not found."""
     result = await db.execute(
         select(EVLocationLookup).where(EVLocationLookup.id == location_id)
@@ -278,6 +301,147 @@ async def delete_location(db: AsyncSession, location_id: int) -> bool:
     if loc is None:
         return False
     await db.delete(loc)
+    await db.commit()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Subscription CRUD
+# ---------------------------------------------------------------------------
+
+
+async def get_subscriptions_for_network(
+    db: AsyncSession, network_id: int
+) -> list[EVNetworkSubscription]:
+    """Return all subscription periods for a network, ordered by start_date desc."""
+    result = await db.execute(
+        select(EVNetworkSubscription)
+        .where(EVNetworkSubscription.network_id == network_id)
+        .order_by(EVNetworkSubscription.start_date.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_all_subscriptions_by_network(
+    db: AsyncSession,
+) -> dict[int, list[EVNetworkSubscription]]:
+    """Return dict mapping network_id to list of EVNetworkSubscription objects.
+
+    Used by cost summary to batch-load all subscriptions.
+    """
+    result = await db.execute(
+        select(EVNetworkSubscription).order_by(EVNetworkSubscription.start_date)
+    )
+    all_subs = result.scalars().all()
+    by_network: dict[int, list[EVNetworkSubscription]] = {}
+    for sub in all_subs:
+        by_network.setdefault(sub.network_id, []).append(sub)
+    return by_network
+
+
+async def validate_no_overlap(
+    db: AsyncSession,
+    network_id: int,
+    start_date,
+    end_date=None,
+    exclude_id: int | None = None,
+) -> bool:
+    """Check that a new/edited period does not overlap any existing period for the same network.
+
+    Treat null end_date as date.max. Return True if no overlap.
+    """
+    from datetime import date as date_type
+
+    stmt = select(EVNetworkSubscription).where(
+        EVNetworkSubscription.network_id == network_id
+    )
+    if exclude_id:
+        stmt = stmt.where(EVNetworkSubscription.id != exclude_id)
+
+    result = await db.execute(stmt)
+    existing = result.scalars().all()
+
+    for period in existing:
+        # Two ranges overlap if: start1 <= end2 AND start2 <= end1
+        p_end = period.end_date or date_type.max
+        new_end = end_date or date_type.max
+        if start_date <= p_end and period.start_date <= new_end:
+            return False  # overlap detected
+    return True
+
+
+async def create_subscription(
+    db: AsyncSession,
+    network_id: int,
+    member_rate: float,
+    monthly_fee: float,
+    start_date,
+    end_date=None,
+    notes: str | None = None,
+) -> EVNetworkSubscription:
+    """Create a new subscription period. Validates no overlap first.
+
+    Raises ValueError if overlap detected.
+    """
+    if not await validate_no_overlap(db, network_id, start_date, end_date):
+        raise ValueError("Subscription period overlaps with an existing period for this network")
+
+    sub = EVNetworkSubscription(
+        network_id=network_id,
+        member_rate=member_rate,
+        monthly_fee=monthly_fee,
+        start_date=start_date,
+        end_date=end_date,
+        notes=notes,
+    )
+    db.add(sub)
+    await db.commit()
+    await db.refresh(sub)
+    return sub
+
+
+async def update_subscription(
+    db: AsyncSession,
+    subscription_id: int,
+    member_rate: float,
+    monthly_fee: float,
+    start_date,
+    end_date=None,
+    notes: str | None = None,
+) -> EVNetworkSubscription | None:
+    """Update an existing subscription period. Validates no overlap (excluding self).
+
+    Returns updated row or None if not found. Raises ValueError if overlap detected.
+    """
+    result = await db.execute(
+        select(EVNetworkSubscription).where(EVNetworkSubscription.id == subscription_id)
+    )
+    sub = result.scalar_one_or_none()
+    if sub is None:
+        return None
+
+    if not await validate_no_overlap(db, sub.network_id, start_date, end_date, exclude_id=subscription_id):
+        raise ValueError("Subscription period overlaps with an existing period for this network")
+
+    sub.member_rate = member_rate
+    sub.monthly_fee = monthly_fee
+    sub.start_date = start_date
+    sub.end_date = end_date
+    sub.notes = notes
+    await db.commit()
+    await db.refresh(sub)
+    return sub
+
+
+async def delete_subscription(db: AsyncSession, subscription_id: int) -> bool:
+    """Delete a subscription period. Returns True if deleted, False if not found."""
+    result = await db.execute(
+        select(EVNetworkSubscription).where(EVNetworkSubscription.id == subscription_id)
+    )
+    sub = result.scalar_one_or_none()
+    if sub is None:
+        return False
+    await db.delete(sub)
     await db.commit()
     return True
 
@@ -311,6 +475,26 @@ async def get_app_settings_dict(
     return {k: found.get(k, "") for k in keys}
 
 
+async def get_unit_context(db: AsyncSession) -> dict:
+    """Load unit-system settings for template context.
+
+    Reads `distance_unit` and `temp_unit` from app_settings (defaults to "us")
+    and returns a dict ready to splat into Jinja2 template context:
+
+        {"distance_unit": ..., "temp_unit": ..., "units": {...labels...}}
+    """
+    from web.unit_system import get_units
+
+    settings = await get_app_settings_dict(db, ["distance_unit", "temp_unit"])
+    distance_unit = settings.get("distance_unit") or "us"
+    temp_unit = settings.get("temp_unit") or "us"
+    return {
+        "distance_unit": distance_unit,
+        "temp_unit": temp_unit,
+        "units": get_units(distance_unit, temp_unit),
+    }
+
+
 async def set_app_setting(db: AsyncSession, key: str, value: str) -> None:
     """Upsert a single key-value pair in app_settings."""
     stmt = pg_insert(AppSettings).values(key=key, value=value)
@@ -327,16 +511,35 @@ async def set_app_setting(db: AsyncSession, key: str, value: str) -> None:
 # ---------------------------------------------------------------------------
 
 NETWORK_CHARGER_TEMPLATES = {
+    "Tesla Supercharger": [
+        {"label": "V3 Supercharger", "charger_type": "DCFC", "rated_kw": 250, "voltage": 500, "amperage": 350, "connector_type": "NACS"},
+        {"label": "V4 Supercharger", "charger_type": "DCFC", "rated_kw": 325, "voltage": 1000, "amperage": 615, "connector_type": "NACS"},
+    ],
     "Electrify America": [
         {"label": "150kW CCS", "charger_type": "DCFC", "rated_kw": 150, "voltage": 400, "amperage": 375, "connector_type": "CCS"},
         {"label": "350kW CCS", "charger_type": "DCFC", "rated_kw": 350, "voltage": 800, "amperage": 500, "connector_type": "CCS"},
     ],
-    "Tesla Supercharger": [
-        {"label": "250kW V3", "charger_type": "DCFC", "rated_kw": 250, "voltage": 400, "amperage": 625, "connector_type": "NACS"},
-    ],
     "ChargePoint": [
         {"label": "L2 Charger", "charger_type": "L2", "rated_kw": 7.7, "voltage": 240, "amperage": 32, "connector_type": "J1772"},
         {"label": "62.5kW DCFC", "charger_type": "DCFC", "rated_kw": 62.5, "voltage": 400, "amperage": 156, "connector_type": "CCS"},
+        {"label": "240kW Express Plus", "charger_type": "DCFC", "rated_kw": 240, "voltage": 800, "amperage": 300, "connector_type": "CCS"},
+    ],
+    "EVgo": [
+        {"label": "50kW DCFC", "charger_type": "DCFC", "rated_kw": 50, "voltage": 400, "amperage": 125, "connector_type": "CCS"},
+        {"label": "150kW DCFC", "charger_type": "DCFC", "rated_kw": 150, "voltage": 400, "amperage": 375, "connector_type": "CCS"},
+        {"label": "350kW DCFC", "charger_type": "DCFC", "rated_kw": 350, "voltage": 1000, "amperage": 500, "connector_type": "CCS"},
+    ],
+    "EV Connect": [
+        {"label": "L2 Charger", "charger_type": "L2", "rated_kw": 7.7, "voltage": 240, "amperage": 32, "connector_type": "J1772"},
+        {"label": "DCFC", "charger_type": "DCFC", "rated_kw": 60, "voltage": 400, "amperage": 150, "connector_type": "CCS"},
+    ],
+    "IONNA": [
+        {"label": "400kW HYC400 CCS", "charger_type": "DCFC", "rated_kw": 400, "voltage": 1000, "amperage": 500, "connector_type": "CCS"},
+        {"label": "400kW HYC400 NACS", "charger_type": "DCFC", "rated_kw": 400, "voltage": 1000, "amperage": 500, "connector_type": "NACS"},
+    ],
+    "Rivian Adventure Network": [
+        {"label": "300kW DCFC CCS", "charger_type": "DCFC", "rated_kw": 300, "voltage": 920, "amperage": 500, "connector_type": "CCS"},
+        {"label": "300kW DCFC NACS", "charger_type": "DCFC", "rated_kw": 300, "voltage": 920, "amperage": 500, "connector_type": "NACS"},
     ],
     "Home": [
         {"label": "L2 Wall Connector", "charger_type": "L2", "rated_kw": 9.6, "voltage": 240, "amperage": 40, "connector_type": "NACS"},
@@ -390,12 +593,12 @@ async def create_stall(
     db: AsyncSession,
     location_id: int,
     label: str,
-    charger_type: Optional[str] = None,
-    rated_kw: Optional[float] = None,
-    voltage: Optional[float] = None,
-    amperage: Optional[float] = None,
-    connector_type: Optional[str] = None,
-    notes: Optional[str] = None,
+    charger_type: str | None = None,
+    rated_kw: float | None = None,
+    voltage: float | None = None,
+    amperage: float | None = None,
+    connector_type: str | None = None,
+    notes: str | None = None,
     is_default: bool = False,
 ) -> EVChargerStall:
     """Create a new charger stall for a location."""
@@ -419,15 +622,15 @@ async def create_stall(
 async def update_stall(
     db: AsyncSession,
     stall_id: int,
-    label: Optional[str] = None,
-    charger_type: Optional[str] = None,
-    rated_kw: Optional[float] = None,
-    voltage: Optional[float] = None,
-    amperage: Optional[float] = None,
-    connector_type: Optional[str] = None,
-    notes: Optional[str] = None,
-    is_default: Optional[bool] = None,
-) -> Optional[EVChargerStall]:
+    label: str | None = None,
+    charger_type: str | None = None,
+    rated_kw: float | None = None,
+    voltage: float | None = None,
+    amperage: float | None = None,
+    connector_type: str | None = None,
+    notes: str | None = None,
+    is_default: bool | None = None,
+) -> EVChargerStall | None:
     """Update a charger stall. Returns updated stall or None if not found."""
     result = await db.execute(
         select(EVChargerStall).where(EVChargerStall.id == stall_id)

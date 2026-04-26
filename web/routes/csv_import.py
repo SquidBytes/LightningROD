@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
 from web.queries.settings import get_all_networks, get_app_setting, resolve_network
+from web.queries.vehicles import get_active_vehicle, get_all_vehicles, get_vehicle_by_id
 from web.services.csv_parser import (
     DB_FIELD_OPTIONS,
     auto_detect_mappings,
@@ -52,7 +54,7 @@ async def upload_csv(
     db: AsyncSession = Depends(get_db),
     file: UploadFile = File(...),
     import_timezone: str = Form("UTC"),
-) -> HTMLResponse:
+) -> Response:
     """Accept a CSV file upload, auto-detect columns, and render preview directly.
 
     Skips the column mapper step entirely.  Reads file bytes, parses CSV,
@@ -112,6 +114,8 @@ async def upload_csv(
 
     import_data = _serialize_rows(transformed)
     all_networks = await get_all_networks(db)
+    vehicles = await get_all_vehicles(db)
+    active_vehicle = await get_active_vehicle(db)
 
     return templates.TemplateResponse(
         request,
@@ -127,6 +131,9 @@ async def upload_csv(
             "unmatched_columns": unmatched_columns,
             "import_timezone": import_timezone,
             "networks": all_networks,
+            "vehicles": vehicles,
+            "active_vehicle": active_vehicle,
+            "all_vehicles": vehicles,
         },
     )
 
@@ -144,13 +151,13 @@ async def verify_row(
     """
     form = await request.form()
 
-    row_index = int(form.get("row_index", "0"))
+    row_index = int(str(form.get("row_index", "0")))
     import_timezone = str(form.get("import_timezone", "UTC"))
     editor_open = bool(form.get("editor_open", ""))
 
     # Resolve network: combobox sends network_id (hidden) and network_name (visible)
-    form_network_id = form.get("network_id", "")
-    form_network_name = form.get("network_name", "")
+    form_network_id = str(form.get("network_id", ""))
+    form_network_name = str(form.get("network_name", ""))
     resolved_network_id = await resolve_network(
         db,
         network_id=int(form_network_id) if form_network_id else None,
@@ -205,7 +212,7 @@ async def verify_row(
 async def execute_import(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> HTMLResponse:
+) -> Response:
     """Accept the confirmed import form, commit selected rows, and return summary.
 
     Reads import_data (JSON string of all transformed rows), selected_rows (list of
@@ -217,7 +224,7 @@ async def execute_import(
     # Parse the full rows payload from the hidden import_data field
     import_data_raw = form.get("import_data", "")
     try:
-        rows: list[dict] = json.loads(import_data_raw) if import_data_raw else []
+        rows: list[dict] = json.loads(str(import_data_raw)) if import_data_raw else []
     except (json.JSONDecodeError, ValueError):
         return JSONResponse(
             status_code=422,
@@ -229,7 +236,7 @@ async def execute_import(
     selected_indices: set[int] = set()
     for val in selected_rows_raw:
         try:
-            selected_indices.add(int(val))
+            selected_indices.add(int(str(val)))
         except (ValueError, TypeError):
             pass
 
@@ -243,11 +250,31 @@ async def execute_import(
             except (ValueError, TypeError):
                 pass
 
+    # Determine device_id for imported sessions from vehicle picker
+    import_vehicle_id = form.get("import_vehicle_id")
+    import_device_id = None
+    if import_vehicle_id:
+        try:
+            vehicle = await get_vehicle_by_id(db, int(str(import_vehicle_id)))
+            if vehicle:
+                import_device_id = vehicle.device_id
+        except (ValueError, TypeError):
+            pass
+    if not import_device_id:
+        active_vehicle = await get_active_vehicle(db)
+        if active_vehicle:
+            import_device_id = active_vehicle.device_id
+
     # Re-parse row values from JSON serialized form (datetimes are ISO strings)
     # The rows are already in serialized form; import_rows handles string UUIDs/datetimes
     # via the EVChargingSession model accepting strings for UUID columns
     # We need to convert back to proper types for the model
     rows = _deserialize_rows(rows)
+
+    # Assign selected vehicle's device_id to all imported rows
+    if import_device_id:
+        for row in rows:
+            row["device_id"] = import_device_id
 
     # Execute the import
     counts = await import_rows(rows, selected_indices, duplicate_actions, db)
@@ -274,12 +301,17 @@ async def reset_import(
     Called by the 'Import Another File' button on the summary page via HTMX.
     """
     user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
+    vehicles = await get_all_vehicles(db)
+    active_vehicle = await get_active_vehicle(db)
     return templates.TemplateResponse(
         request,
         "settings/partials/import_tab.html",
         {
             "db_fields": get_db_field_options(),
             "user_tz": user_tz,
+            "vehicles": vehicles,
+            "active_vehicle": active_vehicle,
+            "all_vehicles": vehicles,
         },
     )
 
@@ -290,12 +322,12 @@ def _deserialize_rows(rows: list[dict]) -> list[dict]:
     Converts ISO datetime strings back to aware datetime objects and UUID strings
     back to uuid.UUID instances.
     """
-    from datetime import datetime
     import uuid as _uuid
+    from datetime import datetime
 
     result = []
     for row in rows:
-        deserialized = {}
+        deserialized: dict[str, Any] = {}
         for k, v in row.items():
             if isinstance(v, str) and k in (
                 "session_start_utc",
@@ -325,8 +357,8 @@ def _serialize_rows(rows: list[dict]) -> list[dict]:
 
     Converts datetime objects to ISO strings and UUIDs to strings.
     """
-    from datetime import datetime
     import uuid as _uuid
+    from datetime import datetime
 
     result = []
     for row in rows:

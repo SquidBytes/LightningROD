@@ -1,0 +1,286 @@
+{# Approved tree partial -- collapsible networks with nested approved locations.
+   Standalone verified locations (network_id IS NULL) render inside a synthetic
+   "No Network" pseudo-node at the bottom of the same tree (D-B5 / D-B6). #}
+
+{% if not approved_networks and not standalone_locations %}
+<div class="alert">
+    <span>No approved networks or locations yet.</span>
+</div>
+{% else %}
+
+<div class="alert alert-info mb-4">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span>These verified entries are used to automatically match networks and locations on new charging sessions. Edit or merge an entry to change how future sessions get tagged.</span>
+</div>
+
+<div class="overflow-x-auto mb-6">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th class="w-8"></th>
+                <th>Network</th>
+                <th>Locations</th>
+                <th>Sessions</th>
+                <th class="text-right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for net in approved_networks %}
+            {% set child_locs = locations_by_network.get(net.id, []) %}
+            <tr id="approved-net-row-{{ net.id }}"
+                class="cursor-pointer hover transition-colors"
+                onclick="toggleApprovedNetwork({{ net.id }})">
+                <td>
+                    <svg id="approved-chevron-{{ net.id }}"
+                         class="h-3 w-3 text-base-content/40 transition-transform duration-200 flex-shrink-0"
+                         viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                              d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                              clip-rule="evenodd"/>
+                    </svg>
+                </td>
+                <td>
+                    {% if net.color %}
+                    <span class="inline-block w-3 h-3 rounded-full mr-1 align-middle" style="background-color: {{ net.color }}"></span>
+                    {% endif %}
+                    <span class="font-medium">{{ net.network_name }}</span>
+                    <span class="badge badge-sm badge-success ml-2">Verified</span>
+                </td>
+                <td>
+                    <span class="badge badge-sm badge-ghost">{{ child_locs | length }}</span>
+                </td>
+                <td>
+                    <span class="badge badge-sm badge-ghost">{{ net_session_counts.get(net.id, 0) }}</span>
+                </td>
+                <td class="text-right" onclick="event.stopPropagation()">
+                    <div class="flex justify-end gap-1 flex-wrap">
+                        <button class="btn btn-xs btn-info"
+                                onclick="openNetworkModal({{ net.id }})">
+                            Edit
+                        </button>
+                        <button class="btn btn-xs btn-neutral"
+                                onclick="openMergeModal('network', {{ net.id }}, 'approved')">
+                            Merge
+                        </button>
+                        {% if net.is_verified %}
+                        <button class="btn btn-xs btn-warning"
+                                hx-post="/review/network/{{ net.id }}/unverify"
+                                hx-target="#review-content"
+                                hx-swap="innerHTML">
+                            Unverify
+                        </button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+
+            {# Children row (collapsed by default) #}
+            <tr id="approved-net-children-{{ net.id }}" class="hidden">
+                <td colspan="5" class="bg-base-300/30 px-6 py-3">
+                    {% if child_locs %}
+                    <table class="table table-xs">
+                        <thead>
+                            <tr>
+                                <th>Location</th>
+                                <th>Address</th>
+                                <th>Type</th>
+                                <th>Sessions</th>
+                                <th class="text-right w-56">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for loc in child_locs %}
+                            <tr>
+                                <td>{{ loc.location_name }}</td>
+                                <td class="max-w-48 truncate">{{ loc.address or '-' }}</td>
+                                <td>
+                                    {% if loc.location_type %}
+                                    <span class="badge badge-xs badge-ghost capitalize">{{ loc.location_type }}</span>
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge badge-xs badge-ghost">{{ loc_session_counts.get(loc.id, 0) }}</span>
+                                </td>
+                                <td class="text-right">
+                                    {# Phase 28.1 G3: Action-cell visual grouping (D-UX1/D-UX2 adapted to
+                                       verified rows). Clusters read left-to-right: Unverify+Edit | Merge.
+                                       The per-cluster marker class below carries no CSS rules — it is a
+                                       grep anchor used by the 28.1-02 smoke tests. #}
+                                    <div class="flex justify-end gap-3 flex-wrap items-start">
+                                        {# Cluster 1: Unverify + Edit — verify-class left group
+                                           (mirrors Pending's Verify+Edit cluster). #}
+                                        {% if loc.is_verified %}
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-warning"
+                                                    hx-post="/review/location/{{ loc.id }}/unverify"
+                                                    hx-target="#review-content"
+                                                    hx-swap="innerHTML">
+                                                Unverify
+                                            </button>
+                                            <button class="btn btn-xs btn-info"
+                                                    onclick="openEditLocModal({{ loc.id }}, 'approved')">
+                                                Edit
+                                            </button>
+                                        </div>
+                                        {% else %}
+                                        {# Defensive — if an unverified row ever lands in the Approved tree,
+                                           render Edit without an Unverify button. #}
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-info"
+                                                    onclick="openEditLocModal({{ loc.id }}, 'approved')">
+                                                Edit
+                                            </button>
+                                        </div>
+                                        {% endif %}
+
+                                        {# Cluster 2: Merge — transform / relationship actions. #}
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-neutral"
+                                                    onclick="openMergeModal('location', {{ loc.id }}, 'approved')">
+                                                Merge
+                                            </button>
+                                        </div>
+
+                                        {# Cluster 3: intentionally empty — Approved-tab location rows have no
+                                           destructive action (Delete is Pending-only per Phase 28-02). The
+                                           outer gap-3 still provides the visual grouping cue. #}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="text-base-content/50 text-sm">No approved locations for this network.</p>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+
+            {# Synthetic "No Network" pseudo-node for standalone verified locations (D-B6).
+               Renders only when there is at least one standalone location so the
+               tree stays visually clean when every verified location is attached
+               to a real network. Uses the same chevron + child-row shape as a
+               real network row with the sentinel id `none`. #}
+            {% if standalone_locations %}
+            <tr id="approved-net-row-none"
+                class="cursor-pointer hover transition-colors"
+                onclick="toggleApprovedNetwork('none')">
+                <td>
+                    <svg id="approved-chevron-none"
+                         class="h-3 w-3 text-base-content/40 transition-transform duration-200 flex-shrink-0"
+                         viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                              d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                              clip-rule="evenodd"/>
+                    </svg>
+                </td>
+                <td>
+                    <span class="inline-block w-3 h-3 rounded-full mr-1 align-middle" style="background-color: #6B7280"></span>
+                    <span class="font-medium text-base-content/70">No Network</span>
+                    <span class="badge badge-sm badge-ghost ml-2">Standalone</span>
+                </td>
+                <td>
+                    <span class="badge badge-sm badge-ghost">{{ standalone_locations | length }}</span>
+                </td>
+                <td>
+                    {# Standalone-pseudo-node has no aggregate session count — child rows show their own. #}
+                    <span class="text-base-content/40 text-sm">—</span>
+                </td>
+                <td class="text-right" onclick="event.stopPropagation()">
+                    {# No network-level edit/merge on the pseudo-node — it is not a real network. #}
+                    <span class="text-base-content/40 text-sm">—</span>
+                </td>
+            </tr>
+
+            {# Children row for standalone locations (collapsed by default). #}
+            <tr id="approved-net-children-none" class="hidden">
+                <td colspan="5" class="bg-base-300/30 px-6 py-3">
+                    <table class="table table-xs">
+                        <thead>
+                            <tr>
+                                <th>Location</th>
+                                <th>Address</th>
+                                <th>Type</th>
+                                <th>Sessions</th>
+                                <th class="text-right w-56">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for loc in standalone_locations %}
+                            <tr>
+                                <td>{{ loc.location_name }}</td>
+                                <td class="max-w-48 truncate">{{ loc.address or '-' }}</td>
+                                <td>
+                                    {% if loc.location_type %}
+                                    <span class="badge badge-xs badge-ghost capitalize">{{ loc.location_type }}</span>
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge badge-xs badge-ghost">{{ loc_session_counts.get(loc.id, 0) }}</span>
+                                </td>
+                                <td class="text-right">
+                                    {# Phase 28.1 G3: Action-cell visual grouping (D-UX1/D-UX2 adapted to
+                                       verified rows). Clusters read left-to-right: Unverify+Edit | Merge.
+                                       The per-cluster marker class below carries no CSS rules — it is a
+                                       grep anchor used by the 28.1-02 smoke tests. #}
+                                    <div class="flex justify-end gap-3 flex-wrap items-start">
+                                        {# Cluster 1: Unverify + Edit — verify-class left group
+                                           (mirrors Pending's Verify+Edit cluster). #}
+                                        {% if loc.is_verified %}
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-warning"
+                                                    hx-post="/review/location/{{ loc.id }}/unverify"
+                                                    hx-target="#review-content"
+                                                    hx-swap="innerHTML">
+                                                Unverify
+                                            </button>
+                                            <button class="btn btn-xs btn-info"
+                                                    onclick="openEditLocModal({{ loc.id }}, 'approved')">
+                                                Edit
+                                            </button>
+                                        </div>
+                                        {% else %}
+                                        {# Defensive — if an unverified row ever lands in the Approved tree,
+                                           render Edit without an Unverify button. #}
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-info"
+                                                    onclick="openEditLocModal({{ loc.id }}, 'approved')">
+                                                Edit
+                                            </button>
+                                        </div>
+                                        {% endif %}
+
+                                        {# Cluster 2: Merge — transform / relationship actions. #}
+                                        <div class="flex gap-1 flex-wrap review-action-cluster">
+                                            <button class="btn btn-xs btn-neutral"
+                                                    onclick="openMergeModal('location', {{ loc.id }}, 'approved')">
+                                                Merge
+                                            </button>
+                                        </div>
+
+                                        {# Cluster 3: intentionally empty — Approved-tab location rows have no
+                                           destructive action (Delete is Pending-only per Phase 28-02). The
+                                           outer gap-3 still provides the visual grouping cue. #}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{# Phase 28.1 G2: per-row dialogs + location accumulator removed.
+   Approved-tab Edit now reuses the page-scope #edit-loc-modal in
+   review_queue.html via openEditLocModal(id, 'approved'), same pattern
+   28-01 established for the Pending tab. #}
+
+{% endif %}

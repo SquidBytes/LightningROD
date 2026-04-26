@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-6xl">
+    <h1 class="text-3xl font-bold text-base-content mb-2">Battery Analytics</h1>
+    <p class="text-base-content/60 mb-6">Track battery health, state of charge, and charging behavior over time.</p>
+
+    {% with filter_url="/battery", filter_target="#battery-content", active_preset=active_range, date_param_name="range" %}
+      {% include "partials/filter_bar.html" %}
+    {% endwith %}
+
+    <!-- HTMX swap target -->
+    <div id="battery-content">
+        {% include "battery/partials/summary.html" %}
+    </div>
+</div>
+{% endblock %}

@@ -1,4 +1,7 @@
-from typing import Optional
+"""Route handlers for settings."""
+
+import json
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse
@@ -8,26 +11,53 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargerStall, EVChargingNetwork, EVLocationLookup
+from web import developer_mode as dev_mode_module
 from web.dependencies import get_db
+from web.queries.gas_prices import (
+    delete_gas_price,
+    get_all_gas_prices,
+    upsert_gas_price,
+)
 from web.queries.settings import (
     create_location,
     create_network,
     create_stall,
+    create_subscription,
     delete_location,
     delete_network,
     delete_stall,
+    delete_subscription,
     get_all_networks,
     get_app_setting,
     get_app_settings_dict,
     get_charger_templates,
     get_locations_for_network,
     get_stalls_for_location,
+    get_subscriptions_for_network,
+    get_unit_context,
     set_app_setting,
     update_location,
     update_network,
     update_stall,
+    update_subscription,
+)
+from web.queries.vehicles import (
+    VEHICLE_PRESETS,
+    create_vehicle,
+    delete_vehicle,
+    get_active_vehicle,
+    get_all_vehicles,
+    get_vehicle_by_id,
+    set_active_vehicle,
+    update_vehicle,
 )
 from web.services.csv_parser import get_db_field_options
+from web.unit_system import (
+    convert_fuel_efficiency,
+    convert_fuel_volume,
+    to_metric_fuel_efficiency,
+    to_metric_fuel_volume,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -50,14 +80,28 @@ async def _network_management_context(db: AsyncSession) -> dict:
     return {"networks": networks, "location_counts": location_counts, "session_counts": session_counts}
 
 
+async def _vehicle_management_context(db: AsyncSession) -> dict:
+    """Build context dict for vehicle_management.html — vehicles + active vehicle + presets."""
+    vehicles = await get_all_vehicles(db)
+    active_vehicle = await get_active_vehicle(db)
+    return {
+        "vehicles": vehicles,
+        "active_vehicle": active_vehicle,
+        "vehicle_presets": VEHICLE_PRESETS,
+        "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+    }
+
+
 SETTINGS_KEYS = [
-    "gas_price_per_gallon",
-    "vehicle_mpg",
     "comparison_gas_enabled",
     "comparison_network_enabled",
     "comparison_section_visible",
-    "efficiency_unit",
+    "developer_mode",
+    "distance_unit",
+    "temp_unit",
     "user_timezone",
+    "gas_sensor_station_entity_id",
+    "gas_sensor_average_entity_id",
 ]
 
 
@@ -65,11 +109,14 @@ SETTINGS_KEYS = [
 async def settings_index(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tab: Optional[str] = Query(None),
+    tab: str | None = Query(None),
 ):
     net_ctx = await _network_management_context(db)
+    veh_ctx = await _vehicle_management_context(db)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
-    if tab == "import":
+    if tab == "vehicles":
+        active_tab = "vehicles"
+    elif tab == "import":
         active_tab = "import"
     elif tab == "networks":
         active_tab = "networks"
@@ -84,18 +131,255 @@ async def settings_index(
         user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
         import_ctx = {"db_fields": get_db_field_options(), "user_tz": user_tz}
 
+    all_vehicles = await get_all_vehicles(db)
+    unit_ctx = await get_unit_context(db)
+
     return templates.TemplateResponse(
         request,
         "settings/index.html",
         {
+            **unit_ctx,
             **net_ctx,
+            **veh_ctx,
             **import_ctx,
             "settings": settings,
             "active_page": "settings",
             "page_title": "Settings",
             "active_tab": active_tab,
+            "all_vehicles": all_vehicles,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Vehicle CRUD routes
+# ---------------------------------------------------------------------------
+
+
+@router.get("/settings/vehicles", response_class=HTMLResponse)
+async def vehicles_partial(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the vehicle management partial (for HTMX refresh)."""
+    veh_ctx = await _vehicle_management_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_management.html",
+        veh_ctx,
+    )
+
+
+@router.get("/settings/vehicles/new", response_class=HTMLResponse)
+async def new_vehicle_form(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the vehicle add modal form."""
+    unit_ctx = await get_unit_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_edit_modal.html",
+        {
+            **unit_ctx,
+            "vehicle": None,
+            "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+            "ice_fuel_efficiency_display": None,
+            "ice_fuel_tank_capacity_display": None,
+        },
+    )
+
+
+@router.post("/settings/vehicles", response_class=HTMLResponse)
+async def create_vehicle_route(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    display_name: str = Form(""),
+    make: str | None = Form(None),
+    model: str | None = Form(None),
+    year: int | None = Form(None),
+    trim_level: str | None = Form(None),
+    battery_option: str | None = Form(None),
+    battery_capacity_kwh: float | None = Form(None),
+    battery_gross_capacity_kwh: float | None = Form(None),
+    vin: str | None = Form(None),
+    device_id: str | None = Form(None),
+    ice_fuel_efficiency: float | None = Form(None),
+    ice_fuel_tank_capacity: float | None = Form(None),
+    ice_label: str | None = Form(None),
+):
+    if not display_name or not display_name.strip():
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Display name is required"},
+        )
+    # User-entered ICE values are in display units — convert to metric for storage
+    unit_ctx = await get_unit_context(db)
+    ice_fuel_efficiency_metric = to_metric_fuel_efficiency(
+        ice_fuel_efficiency, unit_ctx["distance_unit"]
+    )
+    ice_fuel_tank_capacity_metric = to_metric_fuel_volume(
+        ice_fuel_tank_capacity, unit_ctx["distance_unit"]
+    )
+    await create_vehicle(
+        db,
+        display_name=display_name.strip(),
+        make=make or None,
+        model=model or None,
+        year=year,
+        trim_level=trim_level or None,
+        battery_option=battery_option or None,
+        battery_capacity_kwh=battery_capacity_kwh,
+        battery_gross_capacity_kwh=battery_gross_capacity_kwh,
+        vin=vin or None,
+        device_id=device_id or None,
+        ice_fuel_efficiency=ice_fuel_efficiency_metric,
+        ice_fuel_tank_capacity=ice_fuel_tank_capacity_metric,
+        ice_label=ice_label or None,
+    )
+    veh_ctx = await _vehicle_management_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_management.html",
+        veh_ctx,
+    )
+
+
+@router.get("/settings/vehicles/{vehicle_id}/edit", response_class=HTMLResponse)
+async def edit_vehicle_form(
+    vehicle_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the vehicle edit modal form with vehicle data + presets.
+
+    ICE values are stored metric (L/100km, liters). Convert to display units
+    for pre-filling the form.
+    """
+    vehicle = await get_vehicle_by_id(db, vehicle_id)
+    if vehicle is None:
+        return HTMLResponse(status_code=404)
+    unit_ctx = await get_unit_context(db)
+    ice_fuel_efficiency_display = convert_fuel_efficiency(
+        float(vehicle.ice_fuel_efficiency) if vehicle.ice_fuel_efficiency else None,
+        unit_ctx["distance_unit"],
+    )
+    ice_fuel_tank_capacity_display = convert_fuel_volume(
+        float(vehicle.ice_fuel_tank_capacity) if vehicle.ice_fuel_tank_capacity else None,
+        unit_ctx["distance_unit"],
+    )
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_edit_modal.html",
+        {
+            **unit_ctx,
+            "vehicle": vehicle,
+            "ice_fuel_efficiency_display": ice_fuel_efficiency_display,
+            "ice_fuel_tank_capacity_display": ice_fuel_tank_capacity_display,
+            "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+        },
+    )
+
+
+@router.put("/settings/vehicles/{vehicle_id}", response_class=HTMLResponse)
+async def update_vehicle_route(
+    vehicle_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    display_name: str = Form(""),
+    make: str | None = Form(None),
+    model: str | None = Form(None),
+    year: int | None = Form(None),
+    trim_level: str | None = Form(None),
+    battery_option: str | None = Form(None),
+    battery_capacity_kwh: float | None = Form(None),
+    battery_gross_capacity_kwh: float | None = Form(None),
+    vin: str | None = Form(None),
+    device_id: str | None = Form(None),
+    ice_fuel_efficiency: float | None = Form(None),
+    ice_fuel_tank_capacity: float | None = Form(None),
+    ice_label: str | None = Form(None),
+):
+    if not display_name or not display_name.strip():
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Display name is required"},
+        )
+    # User-entered ICE values are in display units — convert to metric for storage
+    unit_ctx = await get_unit_context(db)
+    ice_fuel_efficiency_metric = to_metric_fuel_efficiency(
+        ice_fuel_efficiency, unit_ctx["distance_unit"]
+    )
+    ice_fuel_tank_capacity_metric = to_metric_fuel_volume(
+        ice_fuel_tank_capacity, unit_ctx["distance_unit"]
+    )
+    await update_vehicle(
+        db,
+        vehicle_id,
+        display_name=display_name.strip(),
+        make=make or None,
+        model=model or None,
+        year=year,
+        trim_level=trim_level or None,
+        battery_option=battery_option or None,
+        battery_capacity_kwh=battery_capacity_kwh,
+        battery_gross_capacity_kwh=battery_gross_capacity_kwh,
+        vin=vin or None,
+        device_id=device_id or None,
+        ice_fuel_efficiency=ice_fuel_efficiency_metric,
+        ice_fuel_tank_capacity=ice_fuel_tank_capacity_metric,
+        ice_label=ice_label or None,
+    )
+    veh_ctx = await _vehicle_management_context(db)
+    response = templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_management.html",
+        veh_ctx,
+    )
+    response.headers["HX-Trigger"] = "closeVehicleModal"
+    return response
+
+
+@router.delete("/settings/vehicles/{vehicle_id}", response_class=HTMLResponse)
+async def delete_vehicle_route(
+    vehicle_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    deleted = await delete_vehicle(db, vehicle_id)
+    if not deleted:
+        return HTMLResponse(
+            '<div class="alert alert-error text-sm">Cannot delete the active vehicle. Set another vehicle as active first.</div>',
+            status_code=400,
+        )
+    veh_ctx = await _vehicle_management_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_management.html",
+        veh_ctx,
+    )
+
+
+@router.post("/settings/vehicles/{vehicle_id}/activate", response_class=HTMLResponse)
+async def activate_vehicle_route(
+    vehicle_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await set_active_vehicle(db, vehicle_id)
+    veh_ctx = await _vehicle_management_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/vehicle_management.html",
+        veh_ctx,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Network CRUD routes
+# ---------------------------------------------------------------------------
 
 
 @router.post("/settings/networks", response_class=HTMLResponse)
@@ -103,9 +387,9 @@ async def create_network_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     network_name: str = Form(...),
-    cost_per_kwh: Optional[float] = Form(None),
-    color: Optional[str] = Form(None),
-    is_free: Optional[str] = Form(None),
+    cost_per_kwh: float | None = Form(None),
+    color: str | None = Form(None),
+    is_free: str | None = Form(None),
 ):
     is_free_bool = is_free is not None
     await create_network(
@@ -178,9 +462,9 @@ async def update_network_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     network_name: str = Form(...),
-    cost_per_kwh: Optional[float] = Form(None),
-    color: Optional[str] = Form(None),
-    is_free: Optional[str] = Form(None),
+    cost_per_kwh: float | None = Form(None),
+    color: str | None = Form(None),
+    is_free: str | None = Form(None),
 ):
     is_free_bool = is_free is not None
     await update_network(
@@ -237,10 +521,10 @@ async def recalculate_network_costs(
     locations = await get_locations_for_network(db, network_id)
     location_cost_map = {loc.id: float(loc.cost_per_kwh) for loc in locations if loc.cost_per_kwh is not None}
 
-    result = await db.execute(
+    sessions_result = await db.execute(
         select(EVChargingSession).where(EVChargingSession.network_id == network_id)
     )
-    sessions = result.scalars().all()
+    sessions = sessions_result.scalars().all()
 
     updated = 0
     for s in sessions:
@@ -292,7 +576,7 @@ async def convert_network_to_location(
     db: AsyncSession = Depends(get_db),
     target_network_id: int = Form(...),
     location_name: str = Form(...),
-    location_type: Optional[str] = Form(None),
+    location_type: str | None = Form(None),
 ):
     """Convert a network into a location under another network.
 
@@ -327,10 +611,10 @@ async def convert_network_to_location(
     )
 
     # Reassign all sessions from source network to target network + new location
-    result = await db.execute(
+    sessions_result = await db.execute(
         select(EVChargingSession).where(EVChargingSession.network_id == network_id)
     )
-    sessions = result.scalars().all()
+    sessions = sessions_result.scalars().all()
     for s in sessions:
         s.network_id = target_network_id
         s.location_name = location_name
@@ -409,12 +693,12 @@ async def create_location_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     location_name: str = Form(...),
-    location_type: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
-    address: Optional[str] = Form(None),
-    latitude: Optional[float] = Form(None),
-    longitude: Optional[float] = Form(None),
-    cost_per_kwh: Optional[float] = Form(None),
+    location_type: str | None = Form(None),
+    notes: str | None = Form(None),
+    address: str | None = Form(None),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
+    cost_per_kwh: float | None = Form(None),
 ):
     """Add a location under a network."""
     await create_location(
@@ -444,13 +728,13 @@ async def update_location_route(
     request: Request,
     db: AsyncSession = Depends(get_db),
     location_name: str = Form(...),
-    location_type: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
+    location_type: str | None = Form(None),
+    notes: str | None = Form(None),
     network_id: int = Form(...),
-    address: Optional[str] = Form(None),
-    latitude: Optional[float] = Form(None),
-    longitude: Optional[float] = Form(None),
-    cost_per_kwh: Optional[float] = Form(None),
+    address: str | None = Form(None),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
+    cost_per_kwh: float | None = Form(None),
 ):
     """Update a location and return the refreshed location list."""
     await update_location(
@@ -546,19 +830,41 @@ async def location_stalls(
     )
 
 
+@router.get("/settings/stalls/{stall_id}/edit", response_class=HTMLResponse)
+async def stall_edit_modal(
+    stall_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    location_id: int = 0,
+):
+    """Return stall edit modal content."""
+    result = await db.execute(
+        select(EVChargerStall).where(EVChargerStall.id == stall_id)
+    )
+    stall = result.scalar_one_or_none()
+    if not stall:
+        return HTMLResponse("<p>Stall not found.</p>", status_code=404)
+    loc_id = location_id or stall.location_id
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/stall_edit_modal.html",
+        {"stall": stall, "location_id": loc_id},
+    )
+
+
 @router.post("/settings/locations/{location_id}/stalls", response_class=HTMLResponse)
 async def create_stall_route(
     location_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
     stall_label: str = Form(...),
-    charger_type: Optional[str] = Form(None),
-    rated_kw: Optional[float] = Form(None),
-    voltage: Optional[float] = Form(None),
-    amperage: Optional[float] = Form(None),
-    connector_type: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
-    is_default: Optional[str] = Form(None),
+    charger_type: str | None = Form(None),
+    rated_kw: float | None = Form(None),
+    voltage: float | None = Form(None),
+    amperage: float | None = Form(None),
+    connector_type: str | None = Form(None),
+    notes: str | None = Form(None),
+    is_default: str | None = Form(None),
 ):
     """Create a stall for a location."""
     await create_stall(
@@ -588,13 +894,13 @@ async def update_stall_route(
     db: AsyncSession = Depends(get_db),
     location_id: int = Form(...),
     stall_label: str = Form(...),
-    charger_type: Optional[str] = Form(None),
-    rated_kw: Optional[float] = Form(None),
-    voltage: Optional[float] = Form(None),
-    amperage: Optional[float] = Form(None),
-    connector_type: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
-    is_default: Optional[str] = Form(None),
+    charger_type: str | None = Form(None),
+    rated_kw: float | None = Form(None),
+    voltage: float | None = Form(None),
+    amperage: float | None = Form(None),
+    connector_type: str | None = Form(None),
+    notes: str | None = Form(None),
+    is_default: str | None = Form(None),
 ):
     """Update a stall and return refreshed stall rows."""
     await update_stall(
@@ -676,12 +982,168 @@ async def prefill_stalls(
     )
 
 
+# ---------------------------------------------------------------------------
+# Subscription CRUD routes
+# ---------------------------------------------------------------------------
+
+
+async def _subscription_tab_context(db: AsyncSession, network_id: int) -> dict:
+    """Build context for subscription_tab.html partial."""
+    periods = await get_subscriptions_for_network(db, network_id)
+    return {"periods": periods, "network_id": network_id}
+
+
+@router.get("/settings/networks/{network_id}/subscriptions", response_class=HTMLResponse)
+async def network_subscriptions(
+    network_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
+    """Return subscription tab partial for a given network (lazy-loaded in modal)."""
+    ctx = await _subscription_tab_context(db, network_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/subscription_tab.html",
+        ctx,
+    )
+
+
+@router.post("/settings/networks/{network_id}/subscriptions", response_class=HTMLResponse)
+async def create_subscription_route(
+    network_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    member_rate: float = Form(...),
+    monthly_fee: float = Form(0),
+    start_date: str = Form(...),
+    end_date: str = Form(""),
+    notes: str = Form(""),
+):
+    """Create a new subscription period for a network."""
+    parsed_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    parsed_end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date.strip() else None
+
+    try:
+        await create_subscription(
+            db,
+            network_id=network_id,
+            member_rate=member_rate,
+            monthly_fee=monthly_fee,
+            start_date=parsed_start,
+            end_date=parsed_end,
+            notes=notes.strip() or None,
+        )
+    except ValueError as e:
+        ctx = await _subscription_tab_context(db, network_id)
+        ctx["error"] = str(e)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/subscription_tab.html",
+            ctx,
+        )
+
+    ctx = await _subscription_tab_context(db, network_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/subscription_tab.html",
+        ctx,
+    )
+
+
+@router.get("/settings/subscriptions/{subscription_id}/edit", response_class=HTMLResponse)
+async def edit_subscription_form(
+    subscription_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return inline edit form for a subscription period."""
+    from sqlalchemy import select as sa_select
+
+    from db.models.reference import EVNetworkSubscription
+
+    result = await db.execute(
+        sa_select(EVNetworkSubscription).where(EVNetworkSubscription.id == subscription_id)
+    )
+    sub = result.scalar_one_or_none()
+    if sub is None:
+        return HTMLResponse(status_code=404)
+
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/subscription_edit_row.html",
+        {"sub": sub, "network_id": sub.network_id},
+    )
+
+
+@router.put("/settings/subscriptions/{subscription_id}", response_class=HTMLResponse)
+async def update_subscription_route(
+    subscription_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    member_rate: float = Form(...),
+    monthly_fee: float = Form(0),
+    start_date: str = Form(...),
+    end_date: str = Form(""),
+    notes: str = Form(""),
+    network_id: int = Form(...),
+):
+    """Update a subscription period."""
+    parsed_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    parsed_end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date.strip() else None
+
+    try:
+        await update_subscription(
+            db,
+            subscription_id=subscription_id,
+            member_rate=member_rate,
+            monthly_fee=monthly_fee,
+            start_date=parsed_start,
+            end_date=parsed_end,
+            notes=notes.strip() or None,
+        )
+    except ValueError as e:
+        ctx = await _subscription_tab_context(db, network_id)
+        ctx["error"] = str(e)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/subscription_tab.html",
+            ctx,
+        )
+
+    ctx = await _subscription_tab_context(db, network_id)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/subscription_tab.html",
+        ctx,
+    )
+
+
+@router.delete("/settings/subscriptions/{subscription_id}", response_class=HTMLResponse)
+async def delete_subscription_route(
+    subscription_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    network_id: int = 0,
+):
+    """Delete a subscription period and return refreshed list."""
+    await delete_subscription(db, subscription_id)
+    if network_id:
+        ctx = await _subscription_tab_context(db, network_id)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/subscription_tab.html",
+            ctx,
+        )
+    return HTMLResponse("")
+
+
 HASS_SETTINGS_KEYS = [
     "ha_url",
     "ha_token",
     "ha_vin_override",
     "ha_unit_system",
     "ha_auto_connect",
+    "home_latitude",
+    "home_longitude",
+    "home_location_name",
 ]
 
 
@@ -715,7 +1177,7 @@ async def save_hass_settings(
     ha_token: str = Form(""),
     ha_vin_override: str = Form(""),
     ha_unit_system: str = Form("auto"),
-    ha_auto_connect: Optional[str] = Form(None),
+    ha_auto_connect: str | None = Form(None),
 ):
     """Save HASS configuration to app_settings."""
     if ha_url:
@@ -749,6 +1211,80 @@ async def save_hass_settings(
         {"hass": settings, "masked_token": masked_token, "saved": True},
     )
     return response
+
+
+@router.post("/settings/hass/home-location", response_class=HTMLResponse)
+async def save_home_location_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    home_location_name: str = Form(""),
+    home_latitude: str = Form(""),
+    home_longitude: str = Form(""),
+):
+    """Save home location settings to app_settings."""
+    await set_app_setting(db, "home_location_name", home_location_name)
+    await set_app_setting(db, "home_latitude", home_latitude)
+    await set_app_setting(db, "home_longitude", home_longitude)
+
+    # Re-read saved values for display
+    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
+    token = settings.get("ha_token", "")
+    masked_token = ""
+    if token:
+        if len(token) > 8:
+            masked_token = "*" * (len(token) - 8) + token[-8:]
+        else:
+            masked_token = token
+
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_settings.html",
+        {"hass": settings, "masked_token": masked_token, "saved": True},
+    )
+
+
+@router.post("/settings/hass/home-location/sync", response_class=HTMLResponse)
+async def sync_home_location_from_ha(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Force-overwrite the home location from HA config (latitude/longitude/location_name)."""
+    from web.services.hass_client import hass_service
+
+    if not hass_service.health.get("connected"):
+        # Re-render the form with an error banner
+        settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
+        token = settings.get("ha_token", "")
+        masked_token = (
+            ("*" * (len(token) - 8) + token[-8:]) if len(token) > 8 else token
+        ) if token else ""
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/hass_settings.html",
+            {
+                "hass": settings,
+                "masked_token": masked_token,
+                "home_sync_error": "Must be connected to HA to sync home location.",
+            },
+        )
+
+    applied = await hass_service.sync_home_location_from_config()
+
+    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
+    token = settings.get("ha_token", "")
+    masked_token = (
+        ("*" * (len(token) - 8) + token[-8:]) if len(token) > 8 else token
+    ) if token else ""
+
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/hass_settings.html",
+        {
+            "hass": settings,
+            "masked_token": masked_token,
+            "home_sync_applied": applied,
+        },
+    )
 
 
 @router.get("/settings/hass/status", response_class=HTMLResponse)
@@ -799,7 +1335,11 @@ async def hass_reconnect(request: Request):
 
 @router.post("/settings/hass/backfill", response_class=HTMLResponse)
 async def hass_backfill(request: Request):
-    """Trigger history backfill from HA REST API for past charging sessions."""
+    """Trigger history backfill from HA REST API.
+
+    Pulls as much charging session and gas sensor history as HA will return
+    (no artificial time cap). Duplicates are automatically skipped.
+    """
     from web.services.hass_client import hass_service
 
     if not hass_service.health.get("connected"):
@@ -807,19 +1347,40 @@ async def hass_backfill(request: Request):
             '<div class="alert alert-error text-sm">Must be connected to HA to backfill.</div>'
         )
 
-    result = await hass_service.backfill_history(days=30)
+    result = await hass_service.backfill_history(days=None)
 
     if result.get("error"):
         return HTMLResponse(
             f'<div class="alert alert-error text-sm">{result["error"]}</div>'
         )
 
+    sessions = result.get("sessions", {})
+    gas = result.get("gas", {})
+
+    parts: list[str] = [
+        f"<strong>Sessions:</strong> {sessions.get('processed', 0)} processed"
+    ]
+    if sessions.get("errors"):
+        parts[-1] += f", {sessions['errors']} errors"
+
+    if gas:
+        for entity_id, counts in gas.items():
+            line = (
+                f"<strong>{entity_id}:</strong> "
+                f"{counts.get('inserted', 0)} new, "
+                f"{counts.get('skipped', 0)} skipped"
+            )
+            if counts.get("errors"):
+                line += f", {counts['errors']} errors"
+            parts.append(line)
+    else:
+        parts.append("<em class='text-base-content/50'>No gas sensors configured</em>")
+
+    body = "<br>".join(parts)
     return HTMLResponse(
-        f'<div class="alert alert-success text-sm">'
-        f'Backfill complete: {result["processed"]} sessions processed'
-        f'{", " + str(result["errors"]) + " errors" if result["errors"] else ""}. '
-        f'Duplicates are automatically skipped.'
-        f'</div>'
+        f'<div class="alert alert-success text-sm"><div>{body}<br>'
+        f'<span class="text-xs text-base-content/60">Duplicates are automatically skipped.</span>'
+        f'</div></div>'
     )
 
 
@@ -841,20 +1402,190 @@ async def hass_disconnect(request: Request):
     )
 
 
-@router.post("/settings/gas", response_class=HTMLResponse)
-async def update_gas_settings(
+async def _gas_price_history_context(db: AsyncSession) -> dict:
+    """Build context for gas_price_history.html partial."""
+    from datetime import datetime
+
+    gas_prices = await get_all_gas_prices(db)
+    sensor_keys = ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"]
+    sensor_settings = await get_app_settings_dict(db, sensor_keys)
+    return {
+        "gas_prices": gas_prices,
+        "sensor_settings": sensor_settings,
+        "now": datetime.now(),
+    }
+
+
+@router.get("/settings/gas-prices", response_class=HTMLResponse)
+async def gas_price_history(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    gas_price: float = Form(...),
-    vehicle_mpg: float = Form(...),
 ):
-    await set_app_setting(db, "gas_price_per_gallon", str(gas_price))
-    await set_app_setting(db, "vehicle_mpg", str(vehicle_mpg))
-    settings = await get_app_settings_dict(db, SETTINGS_KEYS)
+    """Return the gas price history partial (lazy-loaded from gas_settings.html)."""
+    ctx = await _gas_price_history_context(db)
     return templates.TemplateResponse(
         request,
-        "settings/partials/gas_settings.html",
-        {"settings": settings, "saved": True},
+        "settings/partials/gas_price_history.html",
+        ctx,
+    )
+
+
+@router.post("/settings/gas-prices", response_class=HTMLResponse)
+async def add_gas_price(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    year: int = Form(...),
+    month: int = Form(...),
+    station_price: float | None = Form(None),
+    average_price: float | None = Form(None),
+):
+    await upsert_gas_price(db, year, month, station_price=station_price, average_price=average_price)
+    ctx = await _gas_price_history_context(db)
+    ctx["saved"] = True
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/gas_price_history.html",
+        ctx,
+    )
+
+
+@router.delete("/settings/gas-prices/{price_id}", response_class=HTMLResponse)
+async def delete_gas_price_route(
+    price_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await delete_gas_price(db, price_id)
+    ctx = await _gas_price_history_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/gas_price_history.html",
+        ctx,
+    )
+
+
+async def _hass_gas_sensors_context(
+    db: AsyncSession, *, check_live: bool = False, gas_saved: bool = False
+) -> dict:
+    """Build context for the HASS-page gas sensor partial.
+
+    When check_live is True, queries HA for the current state of each
+    configured sensor via the REST client so the UI can show "not reporting"
+    vs the live value. Otherwise returns None for sensor_states so the
+    template just reflects the stored config and DB stats.
+    """
+    from sqlalchemy import func as sa_func
+
+    from db.models.reference import GasPriceHistory, GasPriceReading
+    from web.services.hass_client import hass_service
+
+    sensor_keys = ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"]
+    sensor_settings = await get_app_settings_dict(db, sensor_keys)
+
+    sensor_states: dict = {"station": None, "average": None}
+    if check_live:
+        for role, key in (
+            ("station", "gas_sensor_station_entity_id"),
+            ("average", "gas_sensor_average_entity_id"),
+        ):
+            entity_id = (sensor_settings.get(key) or "").strip()
+            if not entity_id:
+                continue
+            state_obj = await hass_service.fetch_entity_state(entity_id)
+            if not state_obj:
+                continue
+            raw_val = state_obj.get("state")
+            try:
+                price = float(str(raw_val)) if raw_val not in (None, "unknown", "unavailable", "") else None
+            except (TypeError, ValueError):
+                price = None
+            if price is None:
+                continue
+            last_changed = state_obj.get("last_changed") or state_obj.get("last_updated") or ""
+            sensor_states[role] = {
+                "value": f"${price:.3f}",
+                "last_changed": last_changed[:19].replace("T", " ") if last_changed else "",
+            }
+
+    # DB stats: total readings + latest timestamp + monthly row count
+    reading_count_stmt = select(sa_func.count()).select_from(GasPriceReading)
+    latest_reading_stmt = select(sa_func.max(GasPriceReading.recorded_at))
+    monthly_count_stmt = select(sa_func.count()).select_from(GasPriceHistory)
+
+    reading_count = (await db.execute(reading_count_stmt)).scalar_one() or 0
+    latest_reading_ts = (await db.execute(latest_reading_stmt)).scalar_one()
+    monthly_count = (await db.execute(monthly_count_stmt)).scalar_one() or 0
+
+    latest_reading = ""
+    if latest_reading_ts:
+        latest_reading = latest_reading_ts.strftime("%Y-%m-%d %H:%M")
+
+    return {
+        "sensor_settings": sensor_settings,
+        "sensor_states": sensor_states,
+        "db_stats": {
+            "reading_count": reading_count,
+            "latest_reading": latest_reading,
+            "monthly_count": monthly_count,
+        },
+        "gas_saved": gas_saved,
+    }
+
+
+@router.get("/settings/hass/gas-sensors", response_class=HTMLResponse)
+async def hass_gas_sensors_partial(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the gas-sensor card for the HASS page, with a live HA check."""
+    ctx = await _hass_gas_sensors_context(db, check_live=True)
+    return templates.TemplateResponse(
+        request, "settings/partials/hass_gas_sensors.html", ctx
+    )
+
+
+@router.post("/settings/hass/gas-sensors", response_class=HTMLResponse)
+async def save_hass_gas_sensors(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    gas_sensor_station_entity_id: str | None = Form(None),
+    gas_sensor_average_entity_id: str | None = Form(None),
+):
+    """Save gas sensor config + trigger an immediate live check in the render."""
+    await set_app_setting(
+        db, "gas_sensor_station_entity_id", gas_sensor_station_entity_id or ""
+    )
+    await set_app_setting(
+        db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or ""
+    )
+    from web.services.hass_processor import invalidate_gas_sensor_cache
+    invalidate_gas_sensor_cache()
+    ctx = await _hass_gas_sensors_context(db, check_live=True, gas_saved=True)
+    return templates.TemplateResponse(
+        request, "settings/partials/hass_gas_sensors.html", ctx
+    )
+
+
+# Legacy route kept for compatibility with any pre-existing HTMX calls from
+# the fuel tab. The new form lives on the HASS page; this still works for
+# anything that posted to the old URL.
+@router.post("/settings/gas-sensors", response_class=HTMLResponse)
+async def save_gas_sensors(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    gas_sensor_station_entity_id: str | None = Form(None),
+    gas_sensor_average_entity_id: str | None = Form(None),
+):
+    await set_app_setting(db, "gas_sensor_station_entity_id", gas_sensor_station_entity_id or "")
+    await set_app_setting(db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or "")
+    from web.services.hass_processor import invalidate_gas_sensor_cache
+    invalidate_gas_sensor_cache()
+    ctx = await _gas_price_history_context(db)
+    ctx["saved"] = True
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/gas_price_history.html",
+        ctx,
     )
 
 
@@ -862,12 +1593,16 @@ async def update_gas_settings(
 async def update_unit_settings(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    efficiency_unit: str = Form("us"),
+    distance_unit: str = Form("us"),
+    temp_unit: str = Form("us"),
 ):
-    # Validate: only "us" or "eu" accepted
-    if efficiency_unit not in ("us", "eu"):
-        efficiency_unit = "us"
-    await set_app_setting(db, "efficiency_unit", efficiency_unit)
+    # Validate: only "us" or "metric" accepted for each axis
+    if distance_unit not in ("us", "metric"):
+        distance_unit = "us"
+    if temp_unit not in ("us", "metric"):
+        temp_unit = "us"
+    await set_app_setting(db, "distance_unit", distance_unit)
+    await set_app_setting(db, "temp_unit", temp_unit)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
     return templates.TemplateResponse(
         request,
@@ -896,9 +1631,9 @@ async def update_timezone_setting(
 async def update_toggles(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    comparison_gas_enabled: Optional[str] = Form(None),
-    comparison_network_enabled: Optional[str] = Form(None),
-    comparison_section_visible: Optional[str] = Form(None),
+    comparison_gas_enabled: str | None = Form(None),
+    comparison_network_enabled: str | None = Form(None),
+    comparison_section_visible: str | None = Form(None),
 ):
     await set_app_setting(
         db,
@@ -919,5 +1654,22 @@ async def update_toggles(
     return templates.TemplateResponse(
         request,
         "settings/partials/gas_settings.html",
+        {"settings": settings, "saved": True},
+    )
+
+
+@router.post("/settings/developer-mode", response_class=HTMLResponse)
+async def update_developer_mode(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    developer_mode: str | None = Form(None),
+):
+    enabled = developer_mode is not None
+    await set_app_setting(db, "developer_mode", "true" if enabled else "false")
+    dev_mode_module.set_enabled(enabled)
+    settings = await get_app_settings_dict(db, SETTINGS_KEYS)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/developer_settings.html",
         {"settings": settings, "saved": True},
     )

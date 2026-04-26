@@ -1,0 +1,19 @@
+{
+    "name": "F-150 Lightning Standard Range",
+    "battery_usable_kwh": 98,
+    "battery_gross_kwh": 108,
+    "max_dc_kw": 155,
+    "curve": [
+        {"soc": 0, "kw": 80},
+        {"soc": 10, "kw": 158},
+        {"soc": 20, "kw": 127},
+        {"soc": 30, "kw": 124},
+        {"soc": 40, "kw": 120},
+        {"soc": 50, "kw": 116},
+        {"soc": 60, "kw": 112},
+        {"soc": 70, "kw": 109},
+        {"soc": 80, "kw": 105},
+        {"soc": 90, "kw": 32},
+        {"soc": 100, "kw": 7}
+    ]
+}

@@ -46,7 +46,7 @@ The `ev_charging_session` table includes:
 - **Cost**: `cost`, `cost_source`, `estimated_cost`, `cost_without_overrides`
 - **EVSE**: `evse_voltage`, `evse_amperage`, `evse_kw`, `evse_energy_kwh`, `evse_max_power_kw`, `charger_rated_kw`, `evse_source`, `stall_id`
 - **Location data**: `address`, `latitude`, `longitude`
-- **Metadata**: `source_system`, `ingested_at`, `original_timestamp`
+- **Metadata**: `source_system`, `ingested_at`, `original_timestamp`, `ingest_schema_version`
 
 ## Connection Management
 

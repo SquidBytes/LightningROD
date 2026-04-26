@@ -8,8 +8,8 @@ import csv
 import hashlib
 import io
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # CSV field options — descriptors for all mappable EVChargingSession columns
 # ---------------------------------------------------------------------------
 
-DB_FIELD_OPTIONS = [
+DB_FIELD_OPTIONS: list[dict[str, Any]] = [
     {
         "field": "session_start_utc",
         "label": "Session Start (UTC)",
@@ -135,9 +135,9 @@ DB_FIELD_OPTIONS = [
         "important": False,
     },
     {
-        "field": "miles_added",
-        "label": "Miles Added",
-        "description": "Estimated range added during the session",
+        "field": "distance_added",
+        "label": "Distance Added",
+        "description": "Estimated range added during the session (miles or km per user units)",
         "required": False,
         "important": False,
     },
@@ -290,7 +290,8 @@ _SEED_COLUMN_MAP: dict[str, str] = {
     "end_soc_percent": "end_soc",
     "cost_total": "cost",
     "cost_without_overrides": "cost_without_overrides",
-    "miles_added": "miles_added",
+    "miles_added": "distance_added",
+    "distance_added": "distance_added",
     "charging_voltage": "charging_voltage",
     "charging_amperage": "charging_amperage",
     "is_complete": "is_complete",
@@ -362,7 +363,8 @@ _KEYWORD_HINTS: list[tuple[list[str], str]] = [
     (["soc", "start"], "start_soc"),
     (["soc", "end"], "end_soc"),
     (["cost", "total"], "cost"),
-    (["miles"], "miles_added"),
+    (["miles"], "distance_added"),
+    (["distance", "added"], "distance_added"),
     (["voltage"], "charging_voltage"),
     (["amperage"], "charging_amperage"),
     (["location", "name"], "location_name"),
@@ -498,9 +500,9 @@ def auto_detect_mappings(
 
 
 def make_session_id(
-    start_time: Optional[datetime],
-    location_name: Optional[str],
-    energy_kwh: Optional[float],
+    start_time: datetime | None,
+    location_name: str | None,
+    energy_kwh: float | None,
 ) -> uuid.UUID:
     """Generate a deterministic UUID from session fields using MD5.
 
@@ -522,7 +524,7 @@ _WORK_LOCATIONS = {"Work"}
 _HOME_LOCATIONS = {"Home"}
 _NETWORK_NAMES = {"Tesla", "Supercharger", "Electrify America", "ElectrifyAmerica", "EA", "EVgo", "Charge Point", "ChargePoint"}
 
-def _int_or_none(v: str) -> Optional[int]:
+def _int_or_none(v: str) -> int | None:
     """Return int or None if empty/invalid."""
     v = v.strip() if v else ""
     if not v:
@@ -533,13 +535,13 @@ def _int_or_none(v: str) -> Optional[int]:
         return None
 
 
-def _str_or_none(v: str) -> Optional[str]:
+def _str_or_none(v: str) -> str | None:
     """Return stripped string or None if empty."""
     v = v.strip() if v else ""
     return v if v else None
 
 
-def _float_or_none(v: str) -> Optional[float]:
+def _float_or_none(v: str) -> float | None:
     """Return float or None if empty/invalid."""
     v = v.strip() if v else ""
     if not v:
@@ -555,7 +557,7 @@ def _parse_bool(v: str) -> bool:
     return v.strip().lower() in ("true", "1", "yes") if v else False
 
 
-def _parse_bool_or_none(v: str) -> Optional[bool]:
+def _parse_bool_or_none(v: str) -> bool | None:
     """Return True/False for explicit bool strings, None for empty/whitespace.
 
     Used for nullable boolean fields like ``is_free`` where an empty CSV value
@@ -572,7 +574,7 @@ def _parse_bool_or_none(v: str) -> Optional[bool]:
     return None
 
 
-def _parse_timestamp(v: str) -> Optional[datetime]:
+def _parse_timestamp(v: str) -> datetime | None:
     """Parse ISO timestamp string to timezone-aware datetime.
 
     If result is naive (no tzinfo), treats as UTC.
@@ -583,13 +585,13 @@ def _parse_timestamp(v: str) -> Optional[datetime]:
     try:
         dt = datetime.fromisoformat(v)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
     except (ValueError, TypeError):
         return None
 
 
-def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> Optional[datetime]:
+def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> datetime | None:
     """Parse ISO timestamp string to timezone-aware datetime using the given timezone.
 
     If the parsed datetime is naive (no tzinfo), treats it as being in ``import_tz``
@@ -603,17 +605,17 @@ def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> Optional[datetim
         dt = datetime.fromisoformat(v)
         if dt.tzinfo is None:
             # Treat naive timestamp as being in the user-selected import timezone
-            tz = ZoneInfo(import_tz) if import_tz and import_tz != "UTC" else timezone.utc
-            dt = dt.replace(tzinfo=tz).astimezone(timezone.utc)
+            tz = ZoneInfo(import_tz) if import_tz and import_tz != "UTC" else UTC
+            dt = dt.replace(tzinfo=tz).astimezone(UTC)
         else:
             # Already has timezone — convert to UTC
-            dt = dt.astimezone(timezone.utc)
+            dt = dt.astimezone(UTC)
         return dt
     except (ValueError, TypeError, KeyError):
         return None
 
 
-def _parse_uuid(v: str) -> Optional[uuid.UUID]:
+def _parse_uuid(v: str) -> uuid.UUID | None:
     """Parse a UUID string, returning None if empty or invalid."""
     v = v.strip() if v else ""
     if not v:
@@ -624,7 +626,7 @@ def _parse_uuid(v: str) -> Optional[uuid.UUID]:
         return None
 
 
-def _normalize_charge_type(charger_type: str, location_name: str) -> Optional[str]:
+def _normalize_charge_type(charger_type: str, location_name: str) -> str | None:
     """Normalize charger type to 'AC' or 'DC'."""
     ct = charger_type.strip().upper() if charger_type else ""
     if ct in ("AC", "AC LEVEL 2", "AC_BASIC", "LEVEL_2", "AC_CHARGING", "AC LEVEL 1", "L2", "LEVEL 2", "LEVEL 1"):
@@ -677,7 +679,7 @@ _DB_FIELD_PARSERS: dict[str, object] = {
     "min_power": _float_or_none,
     "start_soc": _float_or_none,
     "end_soc": _float_or_none,
-    "miles_added": _float_or_none,
+    "distance_added": _float_or_none,
     "charging_voltage": _float_or_none,
     "charging_amperage": _float_or_none,
     "is_complete": _parse_bool,
@@ -928,11 +930,21 @@ async def import_rows(
     Returns:
         Dict with keys: added, skipped, updated, failed.
 
+    Distance values in CSV are assumed to be in the user's current display unit
+    system and converted to metric (km) before storage.
+
     Partial success: each row is wrapped in a savepoint (SAVEPOINT via begin_nested).
     A failed row is rolled back to the savepoint and counted as failed; successful
     rows remain in the transaction. A single commit at the end persists all successes.
     """
     from db.models.charging_session import EVChargingSession
+    from web.queries.settings import get_unit_context
+    from web.unit_system import to_metric_distance
+
+    # Determine the user's distance unit once for batch conversion.
+    # get_unit_context already falls back to "us" when settings aren't set.
+    unit_ctx = await get_unit_context(db_session)
+    distance_unit = unit_ctx["distance_unit"]
 
     added = 0
     skipped = 0
@@ -988,12 +1000,39 @@ async def import_rows(
         # Strip any keys not in the valid column set (e.g. connector_type, stall_id)
         clean_row = {k: v for k, v in clean_row.items() if k in _VALID_SESSION_COLUMNS}
 
+        # Convert distance_added from user display unit to metric (km) for storage
+        if clean_row.get("distance_added") is not None:
+            clean_row["distance_added"] = to_metric_distance(
+                clean_row["distance_added"], distance_unit
+            )
+
         if action == "insert":
             try:
                 async with await db_session.begin_nested():
                     # Ensure device_id has a fallback (model requires NOT NULL)
                     if not clean_row.get("device_id"):
                         clean_row["device_id"] = "csv_import"
+
+                    # Resolve location_id if lat/lon or address present and not already set
+                    if not clean_row.get("location_id"):
+                        lat = clean_row.get("latitude")
+                        lon = clean_row.get("longitude")
+                        addr = clean_row.get("address")
+                        if (lat is not None and lon is not None) or addr:
+                            from web.queries.locations import resolve_location
+
+                            resolved_loc_id = await resolve_location(
+                                db_session,
+                                latitude=lat,
+                                longitude=lon,
+                                address=addr,
+                                network_id=clean_row.get("network_id"),
+                                location_name=clean_row.get("location_name"),
+                                source_system="csv_import",
+                            )
+                            if resolved_loc_id:
+                                clean_row["location_id"] = resolved_loc_id
+
                     session_obj = EVChargingSession(**clean_row)
                     db_session.add(session_obj)
                 added += 1

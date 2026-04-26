@@ -32,7 +32,7 @@ The template includes columns for:
 | evse_voltage | `480` | No |
 | evse_kw | `150` | No |
 
-The full template has ~24 columns covering all session and EVSE fields.
+The full template includes 30+ columns, covering core session fields plus location metadata, EVSE fields, and stall linkage fields.
 
 ## Auto-Detection
 
@@ -62,6 +62,7 @@ The preview shows all parsed rows (no row cap) in a scrollable table with column
 |--------|---------|
 | New | No matching session found -- will be imported |
 | Duplicate | Matches an existing session |
+| Fuzzy Match | Similar existing session found (time/location/energy tolerance) |
 | Error | Row has a parsing issue |
 
 ### Inline Editing

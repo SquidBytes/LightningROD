@@ -1,0 +1,232 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write       # create release + upload assets
+  packages: write       # push to ghcr.io
+  id-token: write       # sign SLSA provenance attestations
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Job 1: build + push both images in parallel via a matrix.
+  # ---------------------------------------------------------------------
+  build-images:
+    name: Build ${{ matrix.variant }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: standalone
+            dockerfile: docker/Dockerfile.standalone
+            image_name: lightningrod
+            tag_suffix: -standalone
+          - variant: web
+            dockerfile: docker/Dockerfile
+            image_name: lightningrod-web
+            tag_suffix: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building LightningROD ${VERSION} (${{ matrix.variant }})"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.variant }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          # SBOM + SLSA provenance — attached to each image at push time.
+          sbom: true
+          provenance: mode=max
+          build-args: |
+            LIGHTNINGROD_VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}:${{ steps.version.outputs.version }}${{ matrix.tag_suffix }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}:latest${{ matrix.tag_suffix }}
+          labels: |
+            org.opencontainers.image.title=LightningROD
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  # ---------------------------------------------------------------------
+  # Job 2: after both images are pushed, build the compose bundle and
+  # create the GitHub Release with notes pulled from CHANGELOG.md.
+  # ---------------------------------------------------------------------
+  release:
+    name: Create GitHub Release
+    needs: build-images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0     # needed for auto-generated release notes
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      # Package the compose files + .env.example + a README into a tiny
+      # tarball so users can deploy with `curl && tar && compose up`
+      # without cloning the whole repo.
+      - name: Build compose bundle
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          STAGE="lightningrod-${VERSION}"
+          mkdir -p "${STAGE}"
+
+          cp docker-compose.yml "${STAGE}/docker-compose.yml"
+          cp docker/docker-compose.standalone.yml "${STAGE}/docker-compose.standalone.yml"
+          cp .env.example "${STAGE}/.env.example"
+
+          # Pin the image tag inside the bundled compose files to the
+          # exact release version, so `docker compose up` pulls the right
+          # thing instead of :dev.
+          sed -i "s|:\${LIGHTNINGROD_VERSION:-dev}|:${VERSION}|g" \
+              "${STAGE}/docker-compose.yml"
+          sed -i "s|:\${LIGHTNINGROD_VERSION:-dev}|:${VERSION}|g" \
+              "${STAGE}/docker-compose.standalone.yml"
+
+          cat > "${STAGE}/README.md" <<EOF
+          # LightningROD ${VERSION}
+
+          Self-hosted charging analytics for Ford electric vehicles.
+
+          ## Install
+
+          Two deployment options. Pick one.
+
+          ### Option A: Standalone (embedded PostgreSQL — simplest)
+
+              cp .env.example .env
+              # edit .env — at minimum set POSTGRES_PASSWORD
+              docker compose -f docker-compose.standalone.yml up -d
+
+          ### Option B: Two-container (bring-your-own PostgreSQL)
+
+              cp .env.example .env
+              # edit .env — set POSTGRES_PASSWORD
+              docker compose up -d
+
+          Then open http://localhost:8000 and go to Settings → Home
+          Assistant to connect your HA instance.
+
+          ## Documentation
+
+          Full documentation, setup guides, and feature reference:
+          <https://squidbytes.github.io/LightningROD/>
+
+          ## More info
+
+          - Project: https://github.com/${{ github.repository }}
+          - Version: ${VERSION}
+          EOF
+
+          tar czf "lightningrod-${VERSION}-compose.tar.gz" "${STAGE}"
+          ls -lh "lightningrod-${VERSION}-compose.tar.gz"
+
+      # Pull the real release notes from CHANGELOG.md (hard-fail if the
+      # section doesn't exist or is empty), then append the static install
+      # block. This is what softprops/action-gh-release uploads as the
+      # Release body — no inline placeholders, no post-publish edits
+      # required.
+      - name: Compose release body from CHANGELOG.md
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Extract the [X.Y.Z] section — exits non-zero if missing/empty.
+          python3 scripts/extract-changelog.py "${VERSION}" > release_body.md
+
+          # Append the static install block. Quoted heredoc keeps backticks
+          # and $ literal; sed swaps in the dynamic values afterwards.
+          cat >> release_body.md <<'MARKER'
+
+          ---
+
+          ## Install
+
+          **Option A — Standalone (embedded PostgreSQL, simplest):**
+
+          ```bash
+          docker pull ghcr.io/__OWNER__/lightningrod:__VERSION__-standalone
+          docker run -d \
+            --name lightningrod \
+            -p 8000:8000 \
+            -v lightningrod-data:/var/lib/postgresql/data \
+            ghcr.io/__OWNER__/lightningrod:__VERSION__-standalone
+          ```
+
+          **Option B — Two-container (bring-your-own PostgreSQL):**
+
+          ```bash
+          curl -LO https://github.com/__REPO__/releases/download/__TAG__/lightningrod-__VERSION__-compose.tar.gz
+          tar xzf lightningrod-__VERSION__-compose.tar.gz
+          cd lightningrod-__VERSION__
+          cp .env.example .env    # edit POSTGRES_PASSWORD etc.
+          docker compose up -d
+          ```
+
+          Both images are multi-arch: `linux/amd64` + `linux/arm64` (Apple Silicon, Raspberry Pi 4/5).
+
+          Then open http://localhost:8000 and go to Settings → Home Assistant to connect your HA instance.
+
+          ## Documentation
+
+          Full documentation, setup guides, and feature reference:
+          <https://squidbytes.github.io/LightningROD/>
+          MARKER
+
+          sed -i \
+            -e "s|__VERSION__|${VERSION}|g" \
+            -e "s|__OWNER__|${OWNER}|g" \
+            -e "s|__REPO__|${REPO}|g" \
+            -e "s|__TAG__|${TAG}|g" \
+            release_body.md
+
+          echo "--- Composed release body ---"
+          cat release_body.md
+          echo "--- end ---"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: LightningROD ${{ steps.version.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          # Auto-appends a PR-level list below the composed body.
+          generate_release_notes: true
+          body_path: release_body.md
+          files: |
+            lightningrod-*-compose.tar.gz

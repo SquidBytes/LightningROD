@@ -103,8 +103,9 @@
                         hx-post="/settings/hass/backfill"
                         hx-target="#hass-backfill-result"
                         hx-swap="innerHTML"
-                        hx-indicator="#backfill-spinner">
-                    Backfill History (30 days)
+                        hx-indicator="#backfill-spinner"
+                        title="Pulls all charging session + gas sensor history HA will return. Duplicates are skipped.">
+                    Backfill Historical Data
                 </button>
                 {% endif %}
                 {% if health.connection_state == 'connected' or health.connection_state == 'connecting' or health.connection_state == 'reconnecting' %}

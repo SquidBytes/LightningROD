@@ -50,7 +50,7 @@
         <button
             id="save-btn"
             type="button"
-            hx-put="/sessions/{{ session.id }}"
+            hx-put="/charging/sessions/{{ session.id }}"
             hx-target="#drawer-body"
             hx-swap="innerHTML"
             hx-include="#edit-form"
@@ -107,6 +107,10 @@
                         {% set current_network_id = session.network_id %}
                         {% set input_class = 'input input-sm input-bordered w-full' %}
                         {% set datalist_id = 'drawer-network-list' %}
+                        {# D-D7: cascade wiring — network change refills #drawer-location-id via
+                           hx-get="/locations/by-network" hx-target="#drawer-location-id" on the
+                           combobox text input (see partials/network_combobox.html). #}
+                        {% set cascade_target_id = 'drawer-location-id' %}
                         {% include "partials/network_combobox.html" %}
                     </span>
                 </dd>
@@ -156,11 +160,17 @@
                                 {% if cost_info.cost_source == 'manual' %}
                                     <span class="badge badge-info badge-xs ml-2">User Set</span>
                                 {% endif %}
+                                {% if cost_info.subscription_active %}
+                                    <span class="badge badge-info badge-xs ml-1">Member</span>
+                                {% endif %}
                             </div>
                         {% elif cost_info.estimated_cost is not none %}
                             <div class="text-center">
                                 <span class="text-2xl font-bold text-base-content/60">~${{ "%.2f"|format(cost_info.estimated_cost) }}</span>
                                 <span class="badge badge-ghost badge-xs ml-2">Estimated</span>
+                                {% if cost_info.subscription_active %}
+                                    <span class="badge badge-info badge-xs ml-1">Member</span>
+                                {% endif %}
                             </div>
                         {% else %}
                             <div class="text-center">
@@ -207,6 +217,21 @@
                                     <div class="text-xs text-base-content/40 pt-1">{{ cost_info.calculation }}</div>
                                 {% endif %}
                             </dl>
+                            {% if cost_info.subscription_active %}
+                                <div class="divider my-1"></div>
+                                <dl class="space-y-1.5 text-sm">
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">Without Subscription</dt>
+                                        <dd class="text-base-content">${{ "%.2f"|format(cost_info.non_member_cost) }}</dd>
+                                    </div>
+                                    {% if cost_info.savings is not none and cost_info.savings > 0 %}
+                                    <div class="flex justify-between">
+                                        <dt class="text-base-content/60">You Saved</dt>
+                                        <dd class="text-success font-medium">${{ "%.2f"|format(cost_info.savings) }}</dd>
+                                    </div>
+                                    {% endif %}
+                                </dl>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -225,7 +250,7 @@
                 >
             </div>
             <div class="flex justify-between items-center">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Location Name</dt>
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Location</dt>
                 <dd class="text-base-content text-base">
                     <!-- Read mode -->
                     <span data-read-field>
@@ -240,15 +265,30 @@
                             <span class="text-base-content/40">—</span>
                         {% endif %}
                     </span>
-                    <!-- Edit mode -->
-                    <input
-                        type="text"
-                        name="location_name"
-                        data-edit-field
-                        value="{{ session.location_name or '' }}"
-                        placeholder="e.g., Home, EA Station"
-                        class="hidden input input-sm input-bordered w-full"
-                    >
+                    {# Edit mode: D-D7 cascade target. Populated on first open from network_locations;
+                       refilled by HTMX when the network combobox above fires 'change'. Free-text
+                       location_name input retained below as fallback for first-time entries. #}
+                    <span data-edit-field class="hidden w-full">
+                        <select name="location_id"
+                                id="drawer-location-id"
+                                class="select select-sm select-bordered w-full mb-2">
+                            {% if session.network_id and network_locations %}
+                                <option value="">— No change —</option>
+                                {% for loc in network_locations %}
+                                    <option value="{{ loc.id }}" {% if session.location_id == loc.id %}selected{% endif %}>{{ loc.location_name }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="">Location (select network first)</option>
+                            {% endif %}
+                        </select>
+                        <input
+                            type="text"
+                            name="location_name"
+                            value="{{ session.location_name or '' }}"
+                            placeholder="Or type a new location name"
+                            class="input input-sm input-bordered w-full"
+                        >
+                    </span>
                 </dd>
             </div>
             <div class="flex justify-between items-center">
@@ -421,10 +461,10 @@
                 </dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-base-content/60 text-base w-40 shrink-0">Miles Added</dt>
+                <dt class="text-base-content/60 text-base w-40 shrink-0">Distance Added</dt>
                 <dd class="text-base-content text-base">
-                    {% if session.miles_added is not none %}
-                        {{ "%.1f"|format(session.miles_added) }} mi
+                    {% if session.distance_added is not none %}
+                        {{ "%.1f"|format(session.distance_added|cvt_dist(distance_unit)) }} {{ units.distance_label }}
                     {% else %}
                         <span class="text-base-content/40">—</span>
                     {% endif %}
@@ -432,6 +472,19 @@
             </div>
         </dl>
     </div>
+
+    <!-- Battery Charge Curve -->
+    {% if mini_chart_html %}
+    <div>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Charge Curve</h3>
+        {% include "battery/partials/mini_charge_curve.html" %}
+    </div>
+    {% elif session.start_soc is not none or session.end_soc is not none %}
+    <div>
+        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Charge Curve</h3>
+        <a href="/battery?session={{ session.id }}" class="text-sm link link-primary">View charge curve</a>
+    </div>
+    {% endif %}
 
     <!-- EVSE / Charger -->
     <div>
@@ -570,9 +623,20 @@
                 </dd>
             </div>
             <div class="flex justify-between gap-4">
-                <dt class="text-base-content/60 text-base shrink-0">Device ID</dt>
-                <dd class="text-base-content text-base font-mono text-right truncate">
-                    {{ session.device_id or '—' }}
+                <dt class="text-base-content/60 text-base shrink-0">Vehicle</dt>
+                <dd class="text-base-content text-base text-right truncate">
+                    {% if vehicles is defined and vehicles|length > 1 %}
+                    <select name="vehicle_device_id" form="edit-session-{{ session.id }}"
+                            class="select select-bordered select-xs font-mono">
+                        {% for v in vehicles %}
+                        <option value="{{ v.device_id }}" {% if v.device_id == session.device_id %}selected{% endif %}>
+                            {{ v.display_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% else %}
+                    <span class="font-mono">{{ session.device_id or '—' }}</span>
+                    {% endif %}
                 </dd>
             </div>
             <div class="flex justify-between">
@@ -610,11 +674,9 @@
 
     <!-- Delete button -->
     <div class="pt-2">
-        <button
-            type="button"
-            onclick="if(confirm('Delete this session?')) { htmx.ajax('DELETE', '/sessions/{{ session.id }}', {swap:'none'}); closeDrawer(); }"
-            class="btn btn-error btn-outline btn-sm w-full"
-        >
+        <button type="button"
+                onclick="openDeleteSessionModal({{ session.id }})"
+                class="btn btn-error btn-outline btn-sm w-full">
             Delete Session
         </button>
     </div>
@@ -626,7 +688,7 @@
 <div class="sticky bottom-0 bg-base-200 border-t border-base-300 p-4 flex items-center justify-between">
     {% if prev_id %}
         <button
-            hx-get="/sessions/{{ prev_id }}/detail?next_id={{ session.id }}"
+            hx-get="/charging/sessions/{{ prev_id }}/detail?next_id={{ session.id }}"
             hx-target="#drawer-body"
             hx-swap="innerHTML"
             class="btn btn-ghost btn-sm gap-1"
@@ -649,7 +711,7 @@
 
     {% if next_id %}
         <button
-            hx-get="/sessions/{{ next_id }}/detail?prev_id={{ session.id }}"
+            hx-get="/charging/sessions/{{ next_id }}/detail?prev_id={{ session.id }}"
             hx-target="#drawer-body"
             hx-swap="innerHTML"
             class="btn btn-ghost btn-sm gap-1"

@@ -1,27 +1,56 @@
 {% if saved %}
-<div class="alert alert-success text-sm mb-3">Unit preference saved.</div>
+<div class="alert alert-success text-sm mb-3">Unit preferences saved.</div>
 {% endif %}
 
 <form hx-post="/settings/units" hx-target="#unit-settings" hx-swap="innerHTML"
-      class="space-y-3">
-    <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-base-300/50 transition-colors">
-        <input type="radio" name="efficiency_unit" value="us"
-               {% if not settings.efficiency_unit or settings.efficiency_unit == 'us' %}checked{% endif %}
-               class="radio radio-primary radio-sm">
-        <div>
-            <span class="text-sm font-medium">US Units</span>
-            <span class="text-base-content/40 text-sm ml-2">mi/kWh (miles per kilowatt-hour)</span>
-        </div>
-    </label>
-    <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-base-300/50 transition-colors">
-        <input type="radio" name="efficiency_unit" value="eu"
-               {% if settings.efficiency_unit == 'eu' %}checked{% endif %}
-               class="radio radio-primary radio-sm">
-        <div>
-            <span class="text-sm font-medium">EU Units</span>
-            <span class="text-base-content/40 text-sm ml-2">km/kWh (kilometers per kilowatt-hour)</span>
-        </div>
-    </label>
+      class="space-y-6">
+
+    {# Distance unit axis (distance, speed, efficiency, fuel economy, fuel volume) #}
+    <div class="space-y-3">
+        <h4 class="text-sm font-semibold text-base-content/80">Distance &amp; Fuel Units</h4>
+        <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-base-300/50 transition-colors">
+            <input type="radio" name="distance_unit" value="us"
+                   {% if not settings.distance_unit or settings.distance_unit == 'us' %}checked{% endif %}
+                   class="radio radio-primary radio-sm">
+            <div>
+                <span class="text-sm font-semibold">US</span>
+                <span class="text-base-content/40 text-sm ml-2">mi, mph, mi/kWh, MPG, gal</span>
+            </div>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-base-300/50 transition-colors">
+            <input type="radio" name="distance_unit" value="metric"
+                   {% if settings.distance_unit == 'metric' %}checked{% endif %}
+                   class="radio radio-primary radio-sm">
+            <div>
+                <span class="text-sm font-semibold">Metric</span>
+                <span class="text-base-content/40 text-sm ml-2">km, km/h, km/kWh, L/100km, L</span>
+            </div>
+        </label>
+    </div>
+
+    {# Temperature axis #}
+    <div class="space-y-3">
+        <h4 class="text-sm font-semibold text-base-content/80">Temperature</h4>
+        <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-base-300/50 transition-colors">
+            <input type="radio" name="temp_unit" value="us"
+                   {% if not settings.temp_unit or settings.temp_unit == 'us' %}checked{% endif %}
+                   class="radio radio-primary radio-sm">
+            <div>
+                <span class="text-sm font-semibold">Fahrenheit</span>
+                <span class="text-base-content/40 text-sm ml-2">&deg;F</span>
+            </div>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-base-300/50 transition-colors">
+            <input type="radio" name="temp_unit" value="metric"
+                   {% if settings.temp_unit == 'metric' %}checked{% endif %}
+                   class="radio radio-primary radio-sm">
+            <div>
+                <span class="text-sm font-semibold">Celsius</span>
+                <span class="text-base-content/40 text-sm ml-2">&deg;C</span>
+            </div>
+        </label>
+    </div>
+
     <div class="pt-1">
         <button type="submit" class="btn btn-primary btn-sm">
             Save

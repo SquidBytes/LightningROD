@@ -1,5 +1,6 @@
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+"""Query helpers for sessions."""
+
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,9 @@ SORTABLE_COLUMNS = {
 }
 
 
-async def get_most_recent_location(db: AsyncSession) -> Optional[str]:
+async def get_most_recent_location(
+    db: AsyncSession, device_id: str | None = None
+) -> str | None:
     """Return the location_name of the most recent session, or None."""
     stmt = (
         select(EVChargingSession.location_name)
@@ -33,6 +36,8 @@ async def get_most_recent_location(db: AsyncSession) -> Optional[str]:
         .order_by(EVChargingSession.session_start_utc.desc())
         .limit(1)
     )
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -41,21 +46,22 @@ async def query_sessions(
     db: AsyncSession,
     page: int = 1,
     per_page: int = 25,
-    date_preset: Optional[str] = None,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-    charge_type: Optional[str] = None,
-    location_type: Optional[str] = None,
-    network_ids: Optional[list[int]] = None,
-    sort_by: Optional[str] = None,
-    sort_dir: Optional[str] = None,
+    date_preset: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    charge_type: str | None = None,
+    location_type: str | None = None,
+    network_ids: list[int] | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+    device_id: str | None = None,
 ) -> tuple[list[EVChargingSession], int, dict]:
     """Query charging sessions with optional filters and pagination.
 
     Returns a tuple of (sessions, total_count, summary_dict).
     summary_dict contains: count, total_kwh
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Determine sort column and direction
     sort_col = SORTABLE_COLUMNS.get(sort_by) if sort_by else None
@@ -74,6 +80,10 @@ async def query_sessions(
     # Accumulate filter clauses
     filters = []
 
+    # Vehicle scoping filter
+    if device_id:
+        filters.append(EVChargingSession.device_id == device_id)
+
     # Date preset filter
     if date_preset and date_preset != "all":
         if date_preset == "7d":
@@ -86,7 +96,7 @@ async def query_sessions(
             cutoff = now - timedelta(days=90)
             filters.append(EVChargingSession.session_start_utc >= cutoff)
         elif date_preset == "ytd":
-            cutoff = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+            cutoff = datetime(now.year, 1, 1, tzinfo=UTC)
             filters.append(EVChargingSession.session_start_utc >= cutoff)
         elif date_preset == "1y":
             cutoff = now - timedelta(days=365)
@@ -96,14 +106,14 @@ async def query_sessions(
     if not date_preset or date_preset == "all":
         if date_from:
             try:
-                dt_from = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
+                dt_from = datetime.fromisoformat(date_from).replace(tzinfo=UTC)
                 filters.append(EVChargingSession.session_start_utc >= dt_from)
             except ValueError:
                 pass
         if date_to:
             try:
                 dt_to = datetime.fromisoformat(date_to).replace(
-                    hour=23, minute=59, second=59, tzinfo=timezone.utc
+                    hour=23, minute=59, second=59, tzinfo=UTC
                 )
                 filters.append(EVChargingSession.session_start_utc <= dt_to)
             except ValueError:

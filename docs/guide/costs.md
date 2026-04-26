@@ -1,6 +1,6 @@
 # Cost Analytics
 
-The costs page (`/costs`) breaks down your charging expenses and shows savings compared to gas or other charging networks.
+The costs page (`/charging/costs`) breaks down your charging expenses and shows savings compared to gas or other charging networks.
 
 ![costs](../assets/images/lr_costs.gif)
 
@@ -8,9 +8,15 @@ The costs page (`/costs`) breaks down your charging expenses and shows savings c
 
 Cards at the top show:
 
-- **Total cost** across all sessions (actual + estimated)
-- **Breakdown by location type** -- home, work, public, and free charging
-- **Per-network costs** -- spending at each charging network with color badges
+- **Total Spent** -- Sum of resolved session costs in scope
+- **Total Energy** -- kWh covered by resolved-cost sessions
+- **Free Charging** -- Free-session count and free kWh
+
+Below that, LightningROD shows:
+
+- **Actual vs Estimated** breakdown
+- **Cost by Network** cards with network colors
+- **Subscription Savings** when member-rate periods apply
 
 ## Time Range Filter
 
@@ -31,7 +37,7 @@ Two comparison modes, each togglable from [Settings](settings.md):
 
 ### Gas Comparison
 
-Calculates what you would have spent driving a gas vehicle over the same miles using your configured MPG and gas price, then shows the savings.
+Calculates what you would have spent driving a configured ICE comparison vehicle over the same miles, using your gas price history (station and/or average).
 
 ### Network Comparison
 
@@ -41,10 +47,13 @@ Shows what you would have paid if all sessions were charged at a reference netwo
 
 Session costs follow a priority cascade:
 
-1. **User-entered cost** -- If you manually set a cost on a session, that value is used
-2. **Estimated cost** -- Calculated from the location's `cost_per_kwh` (if set), falling back to the network's `cost_per_kwh`, multiplied by `energy_kwh`
-3. **Free** -- Sessions at free networks show $0
+1. **Session marked free** -- Display cost is `$0.00`
+2. **Stored session cost** -- Manual/imported values are used for display
+3. **Network marked free** -- Display cost is `$0.00`
+4. **Location override rate** -- `energy_kwh * location.cost_per_kwh`
+5. **Network rate** -- `energy_kwh * network.cost_per_kwh` (or active subscription member rate)
+6. **No rate data** -- session is unconfigured for cost and excluded from resolved totals
 
-The cost page tracks actual and estimated costs separately so you can see how much of your cost data is real vs calculated.
+Estimated cost is tracked separately from display cost to support actual-vs-estimated analysis.
 
-When you change a network or location cost in settings, estimated costs can be recalculated for affected sessions.
+When rates or subscriptions change in Settings, costs can be recalculated for affected sessions.

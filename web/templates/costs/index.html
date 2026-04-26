@@ -4,7 +4,7 @@
     <h1 class="text-3xl font-bold text-base-content mb-2">Cost Analytics</h1>
     <p class="text-base-content/60 mb-6">Track your charging costs across networks over time.</p>
 
-    {% with filter_url="/costs", filter_target="#costs-content", active_preset=active_range, date_param_name="range" %}
+    {% with filter_url="/charging/costs", filter_target="#costs-content", active_preset=active_range, date_param_name="range" %}
       {% include "partials/filter_bar.html" %}
     {% endwith %}
 
