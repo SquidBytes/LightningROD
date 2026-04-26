@@ -50,7 +50,7 @@ async def compute_global_offset(
     while preserving relative spacing between rows. If no rows exist, offset is
     timedelta(0) and max_observed is None.
     """
-    sources = sources or TIMESTAMP_SOURCES
+    sources = TIMESTAMP_SOURCES if sources is None else sources
     now = now or datetime.now(UTC)
 
     max_observed: datetime | None = None
