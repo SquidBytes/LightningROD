@@ -42,6 +42,9 @@ Presets cover the F-150 Lightning and Mustang Mach-E lineups (E-Transit is not c
 
 Networks are the primary organizational unit for charging locations and rates. Each network has:
 
+!!! tip "Settings vs. Review Queue"
+    The Networks tab is where you maintain the **canonical list** of networks, locations, and rates. The [Review Queue](review-queue.md) is where you triage **auto-detected** networks and locations that ingestion produced — verify them, merge duplicates, or delete junk before they accumulate. Use Settings for setup; use Review Queue for cleanup.
+
 | Field | Description |
 |-------|-------------|
 | Name | Network name (e.g., "Home", "Electrify America") |

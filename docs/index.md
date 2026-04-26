@@ -42,7 +42,9 @@ In short: more fields means better calculations, safer backfills, and fewer assu
 
 **Driving** -- Trip Sessions table with 10-column detail view + slide-out drive graphs, plus a Driving Performance analytics page covering mi/kWh vs ambient temperature correlation, regen recovery per trip, and driving efficiency trend. (New in v0.3.)
 
-**Network & Location Management** -- Color-coded networks, expandable location management, per-location cost overrides, charger stall definitions (with template pre-fill), subscription period management, and a review queue for auto-detected entries.
+**Network & Location Management** -- Color-coded networks, expandable location management, per-location cost overrides, charger stall definitions (with template pre-fill), and subscription period management.
+
+**Review Queue** -- Verify, edit, merge, and clean up auto-detected networks and locations from Pending and Approved tabs. Promote a one-off location into its own network in a single click.
 
 **CSV Import** -- Template download plus auto-detection fallback, timezone-aware parsing, inline row correction for errors/duplicates, and support for full session/EVSE field mapping.
 

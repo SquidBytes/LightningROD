@@ -41,6 +41,10 @@ Use **Group Edit** above the table to bulk update selected rows. You can apply s
 - Location
 - Cost
 
+When you change Network in the group editor, the Location dropdown filters to the locations under that network — so a bulk re-network operation can't strand sessions at a location that doesn't belong to the new network.
+
+To clean up the underlying networks and locations themselves (verify auto-detected entries, merge duplicates, promote one-offs), use the [Review Queue](review-queue.md) instead.
+
 ## Adding Sessions
 
 Click the **Add Session** button above the table. A modal opens with fields for date, energy (kWh), cost, network, location, charge type, duration, SOC start/end, and notes.
