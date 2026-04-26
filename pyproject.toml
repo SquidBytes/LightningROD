@@ -8,6 +8,7 @@ description = "Self-hosted charging analytics for Ford electric vehicles"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "aiosqlite>=0.22.1",
     "alembic>=1.18.4",
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.136.1",
@@ -31,6 +32,7 @@ dev = [
     "ruff>=0.15.12",
     "hypothesis>=6.100.0",
     "mypy>=1.20.2",
+    "sqlglot>=30.6.0",
     "types-python-dateutil>=2.9.0.20260408",
 ]
 
