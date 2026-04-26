@@ -19,7 +19,7 @@ import csv
 import hashlib
 import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 project_root = Path(__file__).parent.parent
@@ -35,6 +35,7 @@ from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargingNetwork, EVLocationLookup
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle import EVVehicle
+from scripts.seed.base import shift_datetime
 
 SOURCE_SYSTEM = "sample_generator"
 
@@ -107,6 +108,52 @@ def parse_uuid(v: str) -> uuid.UUID | None:
 
 def parse_bool(v: str) -> bool:
     return v.strip().lower() in ("true", "1", "yes") if v else False
+
+
+def latest_timestamp_in_rows(rows: list[dict], fields: list[str]) -> datetime | None:
+    latest: datetime | None = None
+    for row in rows:
+        for field in fields:
+            ts = parse_timestamp(row.get(field, ""))
+            if ts is None:
+                continue
+            if latest is None or ts > latest:
+                latest = ts
+    return latest
+
+
+def sample_time_offset(
+    *,
+    battery_rows: list[dict] | None = None,
+    session_rows: list[dict] | None = None,
+    trip_rows: list[dict] | None = None,
+    now: datetime | None = None,
+) -> timedelta:
+    """Return an offset that moves the latest seeded timestamp to now.
+
+    The committed sample CSVs intentionally stay fixed and reproducible. At
+    seed time we shift their timestamps forward as one block so default
+    dashboard ranges have recent data for screenshots/GIF recording.
+    """
+    now = now or datetime.now(UTC)
+    candidates = [
+        latest_timestamp_in_rows(battery_rows or [], ["recorded_at"]),
+        latest_timestamp_in_rows(
+            session_rows or [],
+            ["session_start_utc", "session_end_utc", "recorded_at"],
+        ),
+        latest_timestamp_in_rows(trip_rows or [], ["start_time", "end_time", "recorded_at"]),
+    ]
+    latest = max((ts for ts in candidates if ts is not None), default=None)
+    return timedelta(0) if latest is None else now - latest
+
+
+def apply_time_offset(row: dict, fields: list[str], offset: timedelta) -> dict:
+    if offset == timedelta(0):
+        return row
+    for field in fields:
+        row[field] = shift_datetime(row.get(field), offset)
+    return row
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +434,12 @@ async def seed_vehicle(device_id: str, dry_run: bool) -> None:
             print(f"  Set as active vehicle (id={vehicle.id})")
 
 
-async def seed_battery(device_id: str, csv_path: str, dry_run: bool) -> int:
+async def seed_battery(
+    device_id: str,
+    csv_path: str,
+    dry_run: bool,
+    time_offset: timedelta = timedelta(0),
+) -> int:
     print(f"\n{'='*60}")
     print("  BATTERY STATUS")
     print(f"{'='*60}")
@@ -401,6 +453,7 @@ async def seed_battery(device_id: str, csv_path: str, dry_run: bool) -> int:
     for raw_row in raw_rows:
         db_row = transform_battery_row(raw_row, device_id)
         if db_row:
+            apply_time_offset(db_row, ["recorded_at", "original_timestamp"], time_offset)
             transformed.append(db_row)
     print(f"  Transformed {len(transformed)} rows")
 
@@ -526,7 +579,11 @@ async def seed_cost_reference(dry_run: bool) -> dict[str, int]:
 
 
 async def seed_sessions(
-    device_id: str, csv_path: str, dry_run: bool, location_id_map: dict | None = None
+    device_id: str,
+    csv_path: str,
+    dry_run: bool,
+    location_id_map: dict | None = None,
+    time_offset: timedelta = timedelta(0),
 ) -> int:
     print(f"\n{'='*60}")
     print("  CHARGING SESSIONS")
@@ -560,6 +617,11 @@ async def seed_sessions(
     for raw_row in raw_rows:
         db_row = transform_session_row(raw_row, device_id, network_lookup, location_id_map)
         if db_row:
+            apply_time_offset(
+                db_row,
+                ["session_start_utc", "session_end_utc", "recorded_at"],
+                time_offset,
+            )
             transformed.append(db_row)
     print(f"  Transformed {len(transformed)} rows")
 
@@ -585,7 +647,12 @@ async def seed_sessions(
     return len(transformed)
 
 
-async def seed_trips(device_id: str, csv_path: str, dry_run: bool) -> int:
+async def seed_trips(
+    device_id: str,
+    csv_path: str,
+    dry_run: bool,
+    time_offset: timedelta = timedelta(0),
+) -> int:
     print(f"\n{'='*60}")
     print("  TRIP METRICS")
     print(f"{'='*60}")
@@ -599,6 +666,11 @@ async def seed_trips(device_id: str, csv_path: str, dry_run: bool) -> int:
     for raw_row in raw_rows:
         db_row = transform_trip_row(raw_row, device_id)
         if db_row:
+            apply_time_offset(
+                db_row,
+                ["start_time", "end_time", "recorded_at", "original_timestamp"],
+                time_offset,
+            )
             transformed.append(db_row)
     print(f"  Transformed {len(transformed)} rows")
 
@@ -732,20 +804,47 @@ async def seed(args: argparse.Namespace):
     print(f"\n  Device ID: {device_id}")
     print(f"  Mode: {'DRY RUN' if dry_run else 'LIVE'}")
 
+    battery_raw: list[dict] = []
+    session_raw: list[dict] = []
+    trip_raw: list[dict] = []
+    if seed_all or args.battery_only:
+        with open(battery_csv, newline="", encoding="utf-8") as f:
+            battery_raw = list(csv.DictReader(f))
+    if seed_all or args.sessions_only:
+        with open(sessions_csv, newline="", encoding="utf-8") as f:
+            session_raw = list(csv.DictReader(f))
+    if seed_all or args.trips_only:
+        with open(trips_csv, newline="", encoding="utf-8") as f:
+            trip_raw = list(csv.DictReader(f))
+
+    time_offset = sample_time_offset(
+        battery_rows=battery_raw,
+        session_rows=session_raw,
+        trip_rows=trip_raw,
+    )
+    if time_offset != timedelta(0):
+        print(f"  Time shift: sample timestamps + {time_offset}")
+
     # Always create/update the sample vehicle first
     await seed_vehicle(device_id, dry_run)
 
     if seed_all or args.battery_only:
-        await seed_battery(device_id, battery_csv, dry_run)
+        await seed_battery(device_id, battery_csv, dry_run, time_offset)
 
     if seed_all or args.sessions_only:
         # Seed reference data (locations + networks) so cost features work,
         # then pass the location_id_map to the session seeder.
         location_id_map = await seed_cost_reference(dry_run)
-        await seed_sessions(device_id, sessions_csv, dry_run, location_id_map=location_id_map)
+        await seed_sessions(
+            device_id,
+            sessions_csv,
+            dry_run,
+            location_id_map=location_id_map,
+            time_offset=time_offset,
+        )
 
     if seed_all or args.trips_only:
-        await seed_trips(device_id, trips_csv, dry_run)
+        await seed_trips(device_id, trips_csv, dry_run, time_offset)
 
     if not dry_run:
         await verify(device_id)
