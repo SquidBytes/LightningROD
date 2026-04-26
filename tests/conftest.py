@@ -45,6 +45,11 @@ def _run_alembic_migrations():
         text=True,
     )
     if result.returncode != 0:
+        # If DB is unavailable (e.g. running unit tests without Docker), skip
+        # migrations rather than aborting the entire test session. Tests that
+        # actually need the DB will fail individually via missing fixtures.
+        if "Connect call failed" in result.stderr or "ConnectionRefusedError" in result.stderr:
+            return
         raise RuntimeError(
             f"Alembic migration failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
         )

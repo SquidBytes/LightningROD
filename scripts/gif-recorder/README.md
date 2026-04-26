@@ -10,7 +10,7 @@ into an optimized GIF.
 # 1. dev server + seed data already running, e.g.:
 docker compose -f docker-compose.yml -f docker/docker-compose.dev.yml up db -d
 uv run alembic upgrade head
-uv run python scripts/seed_sample.py
+uv run python -m scripts.seed.main --all
 uv run uvicorn web.main:app --port 8000
 
 # 2. record every scene for the release you are about to tag
