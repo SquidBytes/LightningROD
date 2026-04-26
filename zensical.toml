@@ -23,6 +23,7 @@ nav = [
     "guide/driving.md",
     "guide/csv-import.md",
     "guide/home-assistant.md",
+    "guide/review-queue.md",
     "guide/settings.md",
   ]},
   {"Development" = [
