@@ -2,13 +2,12 @@
 
 from datetime import datetime
 
-from sqlalchemy import Integer, Numeric, String, text
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy import DateTime, Integer, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
 
-TIMESTAMPTZ = TIMESTAMP(timezone=True)
+TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVVehicle(Base):

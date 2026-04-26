@@ -2,14 +2,14 @@
 
 from datetime import datetime
 
-from sqlalchemy import Index, Numeric, String, text
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
+from sqlalchemy import DateTime, Index, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
+from db.types import JSONStorage
 
 # PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = TIMESTAMP(timezone=True)
+TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVVehicleStatus(Base):
@@ -44,10 +44,10 @@ class EVVehicleStatus(Base):
     coolant_temp: Mapped[float | None] = mapped_column(Numeric)
     torque_at_transmission: Mapped[float | None] = mapped_column(Numeric)
 
-    # Structured status (JSONB)
-    door_lock_status: Mapped[dict | None] = mapped_column(JSONB)
-    tire_pressure: Mapped[dict | None] = mapped_column(JSONB)
-    indicators: Mapped[dict | None] = mapped_column(JSONB)
+    # Structured status (cross-dialect JSON storage)
+    door_lock_status: Mapped[dict | None] = mapped_column(JSONStorage)
+    tire_pressure: Mapped[dict | None] = mapped_column(JSONStorage)
+    indicators: Mapped[dict | None] = mapped_column(JSONStorage)
 
     # Dynamics fields (new — from updated FordPass ha-fordpass integration, 2026-02)
     brake_torque: Mapped[float | None] = mapped_column(Numeric)

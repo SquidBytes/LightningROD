@@ -2,14 +2,13 @@
 
 from datetime import datetime
 
-from sqlalchemy import Index, Numeric, String, Text, text
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy import DateTime, Index, Numeric, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
 
 # PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = TIMESTAMP(timezone=True)
+TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVLocation(Base):
