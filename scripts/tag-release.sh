@@ -10,7 +10,7 @@
 #
 # Preconditions (all hard-fail):
 #   - Working tree is clean (no uncommitted changes)
-#   - scripts/gif-recorder/output/ has GIFs tagged for this release
+#   - scripts/gif-recorder/output/ has every scene GIF tagged for this release
 #   - CHANGELOG.md has a non-empty [Unreleased] section with no
 #     placeholder markers (TBD / TODO / XXX / FIXME / <!-- ... -->)
 #   - The target version does not already exist in CHANGELOG.md
@@ -60,22 +60,27 @@ if [[ ! -x "${GIF_PUBLISHER}" ]]; then
     exit 1
 fi
 
-shopt -s nullglob
-release_gifs=("${GIF_OUTPUT_DIR}"/lr_*-"${TAG}".gif)
-shopt -u nullglob
+missing_gifs=()
+while IFS= read -r scene_file; do
+    scene_name="$(basename "${scene_file}" .spec.ts)"
+    gif_path="${GIF_OUTPUT_DIR}/lr_${scene_name}-${TAG}.gif"
+    [[ -f "${gif_path}" ]] || missing_gifs+=("${gif_path}")
+done < <(find scripts/gif-recorder/scenes -maxdepth 1 -name "*.spec.ts" -type f | sort)
 
-if [[ ${#release_gifs[@]} -eq 0 ]]; then
+if [[ ${#missing_gifs[@]} -gt 0 ]]; then
     cat >&2 <<EOF
-Error: no release GIFs found for ${TAG}.
+Error: missing release GIFs for ${TAG}.
 
-Record the current scenes with the release tag, then rerun this script:
+Record all current scenes with the release tag, then rerun this script:
     GIF_TAG=${TAG} ./scripts/gif-recorder/record.sh
 
-Or record selected scenes:
-    GIF_TAG=${TAG} ./scripts/gif-recorder/record.sh overview costs sessions
+Missing files:
+EOF
+    printf '    %s\n' "${missing_gifs[@]}" >&2
+    cat >&2 <<EOF
 
-Expected files:
-    ${GIF_OUTPUT_DIR}/lr_*-${TAG}.gif
+If you intentionally changed the scene set, update scripts/gif-recorder/scenes/
+before tagging so the release docs and recorded assets stay in sync.
 EOF
     exit 1
 fi

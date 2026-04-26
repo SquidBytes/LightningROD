@@ -76,28 +76,23 @@ Full documentation is available at the [documentation site](https://SquidBytes.g
 
 ## Gallery
 
-Screenshots are from `v0.1.5` and may not be up to date
+Selected views from the current release.
+
+### Overview
+
+![overview v0.2](docs/assets/images/lr_overview.gif)
 
 ### Session List and drawer
 
 ![sessionList v0.2](docs/assets/images/lr_sessions.gif)
 
-
 ### Cost Page
 
 ![cost page v0.2](docs/assets/images/lr_costs.gif)
 
-### Energy Page
-
-![energy v0.2](docs/assets/images/lr_energy.gif)
-
 ### Settings Page
 
 ![main settings page v0.2](docs/assets/images/lr_settings.gif)
-
-![settings networks v0.2](docs/assets/images/lr_settings_networks.gif)
-
-![settings csv import v0.2](docs/assets/images/lr_csv_import.gif)
 
 
 ## Quick Start

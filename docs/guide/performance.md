@@ -2,6 +2,8 @@
 
 The charging performance page (`/charging/performance`) tracks how you charge: energy totals, efficiency trends, AC vs DC split, and synthetic fast-charging curves for the active vehicle.
 
+![charging performance](../assets/images/lr_performance.gif)
+
 !!! note "Renamed from Energy"
     This page was `/charging/energy` in earlier releases. The route and sidebar label were renamed in v0.3 to better reflect what it shows — this is a **charging-side** analytics page, distinct from the new **Driving Performance** page.
 

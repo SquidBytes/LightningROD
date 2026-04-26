@@ -2,6 +2,8 @@
 
 The battery analytics page (`/battery`) tracks long-term battery health, state of charge, charging behavior, and the 12V low-voltage system for the active vehicle.
 
+![battery analytics](../assets/images/lr_battery.gif)
+
 ## Date Range Filter
 
 Pick `7d`, `30d`, `90d`, `YTD`, or `All` via the filter bar. The range is carried in the URL as `?range=…`.
