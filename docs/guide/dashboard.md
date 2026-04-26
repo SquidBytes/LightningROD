@@ -2,7 +2,7 @@
 
 The dashboard (`/`) gives you a quick overview across all vehicles.
 
-![dashboard](../assets/images/lr_dashboard.gif)
+![overview](../assets/images/lr_overview.gif)
 
 ## Vehicle Cards
 

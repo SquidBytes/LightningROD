@@ -12,6 +12,8 @@ It has two pages under the sidebar's `DRIVING` group:
 
 ## Trip Sessions (`/driving/sessions`)
 
+![trip sessions](../assets/images/lr_trips.gif)
+
 A paginated table of trips with ten columns: number, date, distance, duration, temperature, energy used, reported efficiency, calculated efficiency, driving score, and regeneration.
 
 Click any row to open a slide-out detail drawer with:
@@ -25,6 +27,8 @@ Click any row to open a slide-out detail drawer with:
 Summary cards above the table - Total Trips, Avg Efficiency, Total Distance, Total Energy - respect the date range filter.
 
 ## Driving Performance (`/driving/performance`)
+
+![driving performance](../assets/images/lr_driving_performance.gif)
 
 A driving-side analytics page introduced in v0.3.
 

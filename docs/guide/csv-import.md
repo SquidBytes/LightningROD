@@ -2,8 +2,6 @@
 
 Import charging sessions in bulk from CSV files. You can open the import flow from the **CSV Import** tab on the Settings page.
 
-![csv import](../assets/images/lr_csv_import.gif)
-
 ## Import Flow
 
 The import uses three steps:
