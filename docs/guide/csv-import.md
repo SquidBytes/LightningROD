@@ -1,20 +1,20 @@
 # CSV Import
 
-Import charging sessions in bulk from CSV files. The import flow is available from the **CSV Import** tab on the Settings page.
+Import charging sessions in bulk from CSV files. You can open the import flow from the **CSV Import** tab on the Settings page.
 
 ![csv import](../assets/images/lr_csv_import.gif)
 
 ## Import Flow
 
-The import uses a three-step flow:
+The import uses three steps:
 
-1. **Upload** -- Select a CSV file, choose a timezone, and upload
-2. **Preview** -- Review parsed rows, fix errors inline, handle duplicates
+1. **Upload** -- Select a CSV file, choose a timezone, and upload it
+2. **Preview** -- Review parsed rows, fix errors inline, and handle duplicates
 3. **Summary** -- See counts of added, updated, skipped, and failed rows
 
 ## CSV Template
 
-Download the template CSV from the upload screen. It contains headers for all mappable fields -- fill in what you have and leave the rest blank.
+Download the template CSV from the upload screen. It includes headers for all mappable fields, so you can fill in what you have and leave the rest blank.
 
 The template includes columns for:
 
@@ -32,11 +32,11 @@ The template includes columns for:
 | evse_voltage | `480` | No |
 | evse_kw | `150` | No |
 
-The full template includes 30+ columns, covering core session fields plus location metadata, EVSE fields, and stall linkage fields.
+The full template includes 30+ columns for session details, location data, EVSE fields, and stall links.
 
 ## Auto-Detection
 
-You don't have to use the template. The importer auto-detects common column name patterns:
+You do not have to use the template. The importer can match common column names automatically:
 
 - Exact matches against known column names
 - Normalized matching (lowercase, stripped punctuation)
@@ -46,7 +46,7 @@ An info banner shows which columns were matched and which were skipped.
 
 ## Timezone Handling
 
-The upload form includes a timezone selector, defaulting to your app timezone setting.
+The upload form includes a timezone selector, which defaults to your app timezone setting.
 
 - **Naive timestamps** (no timezone info in the CSV) are interpreted as the selected timezone and converted to UTC for storage
 - **Timezone-aware timestamps** (with explicit offset or zone) are respected as-is
@@ -54,20 +54,20 @@ The upload form includes a timezone selector, defaulting to your app timezone se
 
 ## Preview Table
 
-The preview shows all parsed rows (no row cap) in a scrollable table with columns for date, location, energy, cost, type, network, duration, and status.
+The preview shows every parsed row in a scrollable table with columns for date, location, energy, cost, type, network, duration, and status.
 
 ### Row Status
 
 | Status | Meaning |
 |--------|---------|
-| New | No matching session found -- will be imported |
+| New | No matching session found and it will be imported |
 | Duplicate | Matches an existing session |
-| Fuzzy Match | Similar existing session found (time/location/energy tolerance) |
+| Fuzzy Match | Similar existing session found within the matching tolerance |
 | Error | Row has a parsing issue |
 
 ### Inline Editing
 
-Click an error or duplicate row to expand an inline editor below it. Edit problematic fields directly -- the row re-verifies automatically when you move focus away from a field (blur triggers server-side validation via HTMX).
+Click an error or duplicate row to expand an inline editor below it. Edit the fields directly and the row re-checks automatically when you move focus away.
 
 ### Duplicate Handling
 
@@ -77,7 +77,7 @@ Duplicate rows offer three actions:
 - **Insert anyway** -- Import as a new session regardless
 - **Update existing** -- Overwrite the existing session with CSV values
 
-Duplicate detection uses exact match on `session_id` and fuzzy match on start time (within 1 hour), location, and energy (within 10%).
+Duplicate detection uses an exact match on `session_id` and a fuzzy match on start time, location, and energy.
 
 ## Import Results
 
@@ -88,7 +88,7 @@ After confirming, the summary shows:
 - **Skipped** -- Rows you deselected or marked as skip
 - **Failed** -- Rows that couldn't be inserted (shown with error details)
 
-Each row is imported independently -- a failed row doesn't affect others.
+Each row is imported on its own, so one failed row does not affect the others.
 
 !!! tip "Large Imports"
-    For initial bulk imports (hundreds of sessions), consider using the [seed script](../getting-started/data-import.md) instead. It runs server-side with direct database access.
+    For very large imports, consider using the [seed script](../getting-started/data-import.md) instead. It runs server-side with direct database access.

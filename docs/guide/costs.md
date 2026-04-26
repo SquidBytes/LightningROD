@@ -1,6 +1,6 @@
 # Cost Analytics
 
-The costs page (`/charging/costs`) breaks down your charging expenses and shows savings compared to gas or other charging networks.
+The costs page (`/charging/costs`) breaks down your charging expenses and shows how they compare with gas or other charging networks.
 
 ![costs](../assets/images/lr_costs.gif)
 
@@ -20,7 +20,7 @@ Below that, LightningROD shows:
 
 ## Time Range Filter
 
-Filter costs by time period: 7d, 30d, 90d, YTD, 1y, or all-time. Summary cards and charts update together.
+Filter costs by time period: 7d, 30d, 90d, YTD, 1y, or all-time. The cards and charts update together.
 
 ## Charts
 
@@ -29,23 +29,23 @@ Two interactive Plotly charts:
 - **Monthly cost trend** -- Bar chart showing spending over time
 - **Network breakdown** -- Cost distribution across charging networks, using each network's configured color
 
-Charts use network-specific colors for consistent visual identification across the app.
+Charts use the same network colors you see elsewhere in the app.
 
 ## Savings Comparisons
 
-Two comparison modes, each togglable from [Settings](settings.md):
+Two comparison modes, both controlled from [Settings](settings.md):
 
 ### Gas Comparison
 
-Calculates what you would have spent driving a configured ICE comparison vehicle over the same miles, using your gas price history (station and/or average).
+Shows what you would have spent driving the configured ICE comparison vehicle over the same miles, using your gas price history.
 
 ### Network Comparison
 
-Shows what you would have paid if all sessions were charged at a reference network's cost. Select any configured network from the dropdown to compare.
+Shows what you would have paid if every session had used a reference network's rate. Choose any configured network from the dropdown.
 
 ## How Session Costs Work
 
-Session costs follow a priority cascade:
+Session costs follow this order:
 
 1. **Session marked free** -- Display cost is `$0.00`
 2. **Stored session cost** -- Manual/imported values are used for display
@@ -54,6 +54,6 @@ Session costs follow a priority cascade:
 5. **Network rate** -- `energy_kwh * network.cost_per_kwh` (or active subscription member rate)
 6. **No rate data** -- session is unconfigured for cost and excluded from resolved totals
 
-Estimated cost is tracked separately from display cost to support actual-vs-estimated analysis.
+Estimated cost is tracked separately so LightningROD can compare actual and estimated values.
 
-When rates or subscriptions change in Settings, costs can be recalculated for affected sessions.
+If rates or subscriptions change in Settings, you can recalculate costs for the affected sessions.
