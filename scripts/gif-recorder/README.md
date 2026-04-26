@@ -13,21 +13,29 @@ uv run alembic upgrade head
 uv run python scripts/seed_sample.py
 uv run uvicorn web.main:app --port 8000
 
-# 2. record every scene (or pass scene names: ./record.sh overview costs)
-./scripts/gif-recorder/record.sh
+# 2. record every scene for the release you are about to tag
+GIF_TAG=v0.4.0 ./scripts/gif-recorder/record.sh
 
 # 3. final gifs land in scripts/gif-recorder/output/
 ls scripts/gif-recorder/output/
 ```
 
-Outputs: `output/lr_<scene>.gif`. Drop them into `docs/assets/images/` to
-publish — the existing README links use that path.
+Outputs: `output/lr_<scene>-<tag>.gif`, for example
+`output/lr_overview-v0.4.0.gif`. `scripts/tag-release.sh <version>` publishes
+matching `v<version>` GIFs into `docs/assets/images/` under stable names like
+`lr_overview.gif`, then refreshes versioned GIF captions in markdown.
+
+If you only want to publish already-recorded GIFs without tagging a release:
+
+```bash
+./scripts/gif-recorder/publish-gifs.sh --tag v0.4.0
+```
 
 ## Layout
 
 ```
 scripts/gif-recorder/
-  playwright.config.ts     # 1280x800 viewport, video=on, headless
+  playwright.config.ts     # 1920x1080 viewport, video=on, headless
   record.sh                # entrypoint: pre-flight check, run tests, convert
   convert-to-gif.sh        # 2-pass ffmpeg palette + paletteuse
   scenes/
@@ -41,8 +49,9 @@ scripts/gif-recorder/
 1. Create `scenes/<name>.spec.ts`.
 2. Use the helpers — `gotoAndWait`, `hideCursor`, `settle(ms)` — to keep
    pacing readable.
-3. Output filename is `lr_<name>.gif`, derived from the spec filename.
-4. `./record.sh <name>` records just that one.
+3. Output filename is `lr_<name>-<tag>.gif`, derived from the spec filename
+   and `GIF_TAG`.
+4. `GIF_TAG=v0.4.0 ./record.sh <name>` records just that one.
 
 ## Tuning the GIF
 
@@ -68,6 +77,7 @@ Plotly charts have soft gradients — if banding is ugly, swap the dither.
 | `GIF_FPS` | `15` | Frame rate of the final GIF |
 | `GIF_WIDTH` | `1280` | Output width (height auto-scaled from viewport aspect) |
 | `GIF_HEAD_TRIM` | `1.5` | Seconds to drop from the front of the video. Playwright video starts at context creation, so the first ~1.5s is page-render settle time. |
+| `GIF_TAG` | current branch | Suffix appended to output filenames. Set to `v<release>` before running `tag-release.sh`; set to empty to disable. |
 | `GIF_VIEWPORT_WIDTH` | `1920` | Browser viewport width (also the video width — must match) |
 | `GIF_VIEWPORT_HEIGHT` | `1080` | Browser viewport height (also the video height — must match) |
 

@@ -2,14 +2,15 @@
 # tag-release.sh — prepare a LightningROD release in one command.
 #
 # Promotes [Unreleased] in CHANGELOG.md to [X.Y.Z] - <today>, bumps the
-# version across pyproject.toml / package.json / .env, commits, and
-# creates an annotated tag. 
+# version across pyproject.toml / package.json / .env, publishes matching
+# release GIFs into docs/assets/images, commits, and creates an annotated tag.
 #
 # Usage:
 #   scripts/tag-release.sh 0.3.1
 #
 # Preconditions (all hard-fail):
 #   - Working tree is clean (no uncommitted changes)
+#   - scripts/gif-recorder/output/ has GIFs tagged for this release
 #   - CHANGELOG.md has a non-empty [Unreleased] section with no
 #     placeholder markers (TBD / TODO / XXX / FIXME / <!-- ... -->)
 #   - The target version does not already exist in CHANGELOG.md
@@ -37,6 +38,8 @@ fi
 
 TAG="v${VERSION}"
 TODAY="$(date +%Y-%m-%d)"
+GIF_OUTPUT_DIR="scripts/gif-recorder/output"
+GIF_PUBLISHER="scripts/gif-recorder/publish-gifs.sh"
 
 # --- 1. Working tree must be clean --------------------------------------
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -51,7 +54,33 @@ if [[ ! -f CHANGELOG.md ]]; then
     exit 1
 fi
 
-# --- 3. Validate [Unreleased] and promote it to [VERSION] - TODAY -------
+# --- 3. Release GIFs must already be recorded ----------------------------
+if [[ ! -x "${GIF_PUBLISHER}" ]]; then
+    echo "Error: GIF publisher not found or not executable: ${GIF_PUBLISHER}" >&2
+    exit 1
+fi
+
+shopt -s nullglob
+release_gifs=("${GIF_OUTPUT_DIR}"/lr_*-"${TAG}".gif)
+shopt -u nullglob
+
+if [[ ${#release_gifs[@]} -eq 0 ]]; then
+    cat >&2 <<EOF
+Error: no release GIFs found for ${TAG}.
+
+Record the current scenes with the release tag, then rerun this script:
+    GIF_TAG=${TAG} ./scripts/gif-recorder/record.sh
+
+Or record selected scenes:
+    GIF_TAG=${TAG} ./scripts/gif-recorder/record.sh overview costs sessions
+
+Expected files:
+    ${GIF_OUTPUT_DIR}/lr_*-${TAG}.gif
+EOF
+    exit 1
+fi
+
+# --- 4. Validate [Unreleased] and promote it to [VERSION] - TODAY -------
 python3 - "${VERSION}" "${TODAY}" <<'PY'
 import re
 import sys
@@ -118,24 +147,27 @@ path.write_text(new_text)
 print(f"Promoted [Unreleased] → [{version}] - {today}")
 PY
 
-# --- 4. Bump version in pyproject.toml / package.json / .env -------------
+# --- 5. Bump version in pyproject.toml / package.json / .env -------------
 scripts/bump-version.sh "${VERSION}"
 
-# --- 5. Stage everything the bump + promotion touched -------------------
-git add CHANGELOG.md pyproject.toml package.json
+# --- 6. Publish release GIFs and refresh markdown captions ----------------
+"${GIF_PUBLISHER}" --tag "${TAG}"
+
+# --- 7. Stage everything the bump + promotion + GIF publish touched -------
+git add CHANGELOG.md pyproject.toml package.json README.md docs
 [[ -f package-lock.json ]] && git add package-lock.json
 [[ -f uv.lock ]] && git add uv.lock
 # .env is typically gitignored for LightningROD; bump-version.sh touches
 # it for local docker compose builds, but we don't commit it.
 git reset .env 2>/dev/null || true
 
-# --- 6. Commit ----------------------------------------------------------
+# --- 8. Commit ----------------------------------------------------------
 git commit -m "release: v${VERSION}"
 
-# --- 7. Tag -------------------------------------------------------------
+# --- 9. Tag -------------------------------------------------------------
 git tag -a "${TAG}" -m "LightningROD ${TAG}"
 
-# --- 8. Print push instructions (do NOT push automatically) --------------
+# --- 10. Print push instructions (do NOT push automatically) -------------
 BRANCH="$(git branch --show-current)"
 cat <<EOF
 

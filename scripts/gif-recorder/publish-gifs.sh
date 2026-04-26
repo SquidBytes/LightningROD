@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # publish-gifs.sh — promote freshly recorded gifs into docs/assets/images/
-# and refresh the version annotations in the README.
+# and refresh version annotations in markdown GIF captions.
 #
 # Recordings live in scripts/gif-recorder/output/ as lr_<scene>-<tag>.gif
 # (the tag is the recording branch). This script picks the gifs whose tag
 # matches the current milestone, copies each to docs/assets/images/lr_<scene>.gif
-# (stable filename so README links never break), and then rewrites every
-# `v0.X` annotation in the README's gif alt-text to the current full
-# version from pyproject.toml.
+# (stable filename so README/docs links never break), and then rewrites every
+# `v0.X` annotation in markdown gif alt-text to the current full version from
+# pyproject.toml.
 #
 # Usage:
 #   scripts/gif-recorder/publish-gifs.sh                # use auto-detected tag (current branch)
 #   scripts/gif-recorder/publish-gifs.sh --tag v0.4     # promote v0.4-tagged gifs
 #   scripts/gif-recorder/publish-gifs.sh --dry-run      # show what would change, do nothing
-#   scripts/gif-recorder/publish-gifs.sh --no-readme    # copy gifs but leave README alone
+#   scripts/gif-recorder/publish-gifs.sh --no-readme    # copy gifs but leave markdown alone
 #
-# The script never commits or pushes — it just stages files in the working
-# tree so you can review the diff before tag-release.sh runs.
+# The script never commits or pushes — it only changes files in the working
+# tree so you can review the diff before committing.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,6 +24,7 @@ APP_ROOT="$(cd "$HERE/../.." && pwd)"
 SRC_DIR="${GIF_OUT_DIR:-$HERE/output}"
 DEST_DIR="$APP_ROOT/docs/assets/images"
 README="$APP_ROOT/README.md"
+DOCS_DIR="$APP_ROOT/docs"
 
 DRY_RUN=0
 UPDATE_README=1
@@ -34,7 +35,7 @@ while [[ $# -gt 0 ]]; do
     --tag) TAG="$2"; shift 2 ;;
     --tag=*) TAG="${1#--tag=}"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
-    --no-readme) UPDATE_README=0; shift ;;
+    --no-readme|--no-docs) UPDATE_README=0; shift ;;
     -h|--help)
       sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
@@ -90,36 +91,58 @@ for src in "${candidates[@]}"; do
   copied+=("$stem")
 done
 
-# Update README version annotations in the gallery section. Targets
-# patterns like `![cost page v0.2](docs/assets/images/lr_costs.gif)` and
-# rewrites the version token to `v${VERSION}`. The replacement only
-# touches lines that have both `![` and `.gif)`, so other version
-# mentions in prose are left alone.
+# Update markdown version annotations in gif captions. Targets patterns like
+# `![cost page v0.2](docs/assets/images/lr_costs.gif)` and rewrites the
+# version token to `v${VERSION}`. The replacement only touches lines that have
+# both `![` and `.gif)`, so other version mentions in prose are left alone.
 if [[ "$UPDATE_README" -eq 1 ]]; then
-  if [[ ! -f "$README" ]]; then
-    echo "  (no README.md found — skipping caption update)"
+  markdown_files=()
+  [[ -f "$README" ]] && markdown_files+=("$README")
+  if [[ -d "$DOCS_DIR" ]]; then
+    while IFS= read -r file; do
+      markdown_files+=("$file")
+    done < <(find "$DOCS_DIR" -type f -name "*.md" | sort)
+  fi
+
+  if [[ ${#markdown_files[@]} -eq 0 ]]; then
+    echo "  (no markdown files found — skipping caption update)"
   else
     if [[ "$DRY_RUN" -eq 1 ]]; then
-      python3 - "$README" "$VERSION" <<'PY'
-import re, sys
-path, version = sys.argv[1], sys.argv[2]
-with open(path) as f:
-    src = f.read()
+      python3 - "$VERSION" "${markdown_files[@]}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+version = sys.argv[1]
+paths = [Path(p) for p in sys.argv[2:]]
 pat = re.compile(r"(!\[[^]]*?)\bv\d+\.\d+(?:\.\d+)?(\b[^]]*\]\([^)]+\.gif\))")
-hits = pat.findall(src)
-print(f"  would rewrite {len(hits)} README caption(s) to v{version}")
+total = 0
+for path in paths:
+    src = path.read_text()
+    hits = pat.findall(src)
+    total += len(hits)
+    if hits:
+        print(f"  would rewrite {len(hits)} caption(s) in {path}")
+print(f"  would rewrite {total} markdown caption(s) to v{version}")
 PY
     else
-      python3 - "$README" "$VERSION" <<'PY'
-import re, sys
-path, version = sys.argv[1], sys.argv[2]
-with open(path) as f:
-    src = f.read()
+      python3 - "$VERSION" "${markdown_files[@]}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+version = sys.argv[1]
+paths = [Path(p) for p in sys.argv[2:]]
 pat = re.compile(r"(!\[[^]]*?)\bv\d+\.\d+(?:\.\d+)?(\b[^]]*\]\([^)]+\.gif\))")
-new, n = pat.subn(rf"\1v{version}\2", src)
-with open(path, "w") as f:
-    f.write(new)
-print(f"  rewrote {n} README caption(s) to v{version}")
+total = 0
+for path in paths:
+    src = path.read_text()
+    new, n = pat.subn(rf"\1v{version}\2", src)
+    if n:
+        path.write_text(new)
+        print(f"  rewrote {n} caption(s) in {path}")
+    total += n
+print(f"  rewrote {total} markdown caption(s) to v{version}")
 PY
     fi
   fi
@@ -128,4 +151,4 @@ fi
 echo
 echo "Done. Review the changes:"
 echo "  git -C \"$APP_ROOT\" status"
-echo "  git -C \"$APP_ROOT\" diff -- docs/assets/images README.md"
+echo "  git -C \"$APP_ROOT\" diff -- docs/assets/images README.md docs"
