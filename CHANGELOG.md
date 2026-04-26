@@ -9,6 +9,16 @@ For feature documentation, see the docs site at
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.3.21] - 2026-04-25
+
+### Added
+
 - `ha_fordpass` adapter with `FIELD_CONTRACTS` — single ingestion entry point replacing scattered `hass_processor` / `hass_client` logic.
 - Unit-detection layer: resolves HA signal units at ingestion time via a pure `to_metric()` conversion function and `UnknownSourceUnit` sentinel.
 - `ingest_schema_version` column on `ev_session`, `ev_trip_metrics`, and related models.

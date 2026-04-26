@@ -1,6 +1,6 @@
 {
   "name": "lightningrod",
-  "version": "0.3.0",
+  "version": "0.3.21",
   "description": "Self-hosted charging analytics for Ford electric vehicles",
   "private": true,
   "devDependencies": {
