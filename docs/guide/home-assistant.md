@@ -1,40 +1,39 @@
 # Home Assistant Integration
 
-LightningROD connects to [Home Assistant](https://www.home-assistant.io/) via WebSocket to ingest real-time FordPass vehicle data from the [ha-fordpass](https://github.com/marq24/ha_fordpass) integration. This is the primary method for automatic charging session detection.
+LightningROD connects to [Home Assistant](https://www.home-assistant.io/) through WebSocket and reads FordPass vehicle data from the [ha-fordpass](https://github.com/marq24/ha_fordpass) integration. This is the main way automatic charging session detection works.
 
-![hass](../assets/images/lr_hass.png)
 
 ## Prerequisites
 
 - A running Home Assistant instance with [ha-fordpass](https://github.com/marq24/ha_fordpass) installed and configured
-- A **long-lived access token** from Home Assistant (created at Profile > Security > Long-Lived Access Tokens)
-- Network connectivity between LightningROD and your Home Assistant instance
+- A **long-lived access token** from Home Assistant
+- Network access between LightningROD and your Home Assistant instance
 
 ## Configuration
 
-Navigate to **Settings > Home Assistant** to configure the connection.
+Go to **Settings > Home Assistant** to configure the connection.
 
 | Field | Description |
 |-------|-------------|
 | HA URL | Full URL to your Home Assistant instance (e.g., `http://homeassistant.local:8123`) |
 | Access Token | Long-lived access token (displayed masked after saving) |
-| VIN Override | Optional -- override the auto-detected VIN |
+| VIN Override | Optional override for the auto-detected VIN |
 | Unit System | Auto-detect (default), Metric, or Imperial |
 | Auto-connect | Connect automatically when the app starts (default: on) |
 
-After saving, LightningROD connects to HA's WebSocket API, authenticates, and begins receiving events.
+After saving, LightningROD connects to Home Assistant, authenticates, and starts receiving events.
 
 ### VIN Auto-Detection
 
-LightningROD automatically detects your vehicle's VIN by scanning FordPass entity IDs for the pattern `sensor.fordpass_{vin}_*`. The detected VIN is displayed in the connection status section. Use the VIN Override field if auto-detection picks the wrong vehicle.
+LightningROD automatically detects your vehicle's VIN by looking for FordPass entity IDs that match `sensor.fordpass_{vin}_*`. The detected VIN appears in the connection status area. Use VIN Override if the wrong vehicle is picked.
 
 ### Unit System
 
-LightningROD queries HA's configuration to detect whether your instance uses metric or imperial units. All values are normalized to metric (km, Celsius, kWh) for storage and converted back for display. You can override the detected unit system if needed.
+LightningROD checks Home Assistant to see whether your instance uses metric or imperial units. Values are stored in metric and converted back for display. You can override the detected unit system if needed.
 
 ## Connection Status
 
-The status section below the configuration form shows live connection information, updated every 10 seconds:
+The status section below the configuration form shows live connection information and updates every 10 seconds:
 
 | Metric | Description |
 |--------|-------------|
@@ -48,32 +47,32 @@ The status section below the configuration form shows live connection informatio
 
 ### Controls
 
-- **Reconnect** -- Disconnect and reconnect the WebSocket
-- **Disconnect** -- Stop the WebSocket connection entirely
-- **Backfill History** -- Fetch historical charging sessions and gas sensor readings from HA's recorder (available when connected)
+- **Reconnect** -- Disconnect and reconnect
+- **Disconnect** -- Stop the connection
+- **Backfill History** -- Fetch historical charging sessions and gas price readings from Home Assistant's recorder
 
 ## How It Works
 
 ### Real-Time Data Flow
 
-1. LightningROD opens a persistent WebSocket connection to HA
-2. On connect, it fetches a full state snapshot of all entities
+1. LightningROD opens a persistent WebSocket connection to Home Assistant
+2. On connect, it fetches a full snapshot of all entities
 3. It subscribes to `state_changed` events for ongoing updates
-4. Incoming sensor events are dispatched to handlers by entity type
+4. Incoming sensor events are routed to the right handlers
 
 ### Reconnection
 
-If the connection drops, LightningROD reconnects automatically with exponential backoff (1s, 2s, 4s, up to 60s max). On reconnect, a fresh state snapshot is fetched to fill any data gaps.
+If the connection drops, LightningROD reconnects automatically with increasing delays up to 60 seconds. When it reconnects, it fetches a fresh snapshot to fill any gaps.
 
-Authentication errors (bad token) stop reconnection entirely -- you'll need to update the token in settings.
+If authentication fails, reconnection stops until you update the token in settings.
 
 ### Home Location Auto-Populate
 
-On every successful connect, LightningROD pulls the `home` zone coordinates and name from Home Assistant's config and writes them into your app settings (`home_latitude`, `home_longitude`, `home_location_name`). This is non-destructive — if you've already set home location manually, it's left alone. The values are used by the location resolver to tag charging sessions that happened at home.
+On every successful connect, LightningROD pulls the `home` zone coordinates and name from Home Assistant and writes them into your app settings (`home_latitude`, `home_longitude`, `home_location_name`). If you already set home manually, it is left alone. These values help tag sessions that happened at home.
 
 ### Charging Session Detection
 
-Charging sessions are created automatically from `energytransferlogentry` events. Each event fires once per completed charge and contains rich data:
+Charging sessions are created automatically from `energytransferlogentry` events. Each event fires once per completed charge and includes:
 
 - Energy delivered (kWh)
 - SOC at start and end
@@ -82,9 +81,9 @@ Charging sessions are created automatically from `energytransferlogentry` events
 - Location with address, coordinates, and network name
 - Charger type (AC Level 1, AC Level 2, DC Fast)
 
-Sessions created from HA are tagged with a **HASS** data source badge on the sessions page.
+Sessions created from Home Assistant are tagged with a **HASS** data source badge on the sessions page.
 
-**Duplicate detection** prevents the same session from being recorded twice. Sessions are matched on start time, energy delivered, and source system.
+Duplicate detection keeps the same session from being recorded twice. Sessions are matched on start time, energy delivered, and source system.
 
 ### Vehicle Telemetry
 
@@ -96,16 +95,16 @@ In addition to charging sessions, LightningROD ingests 29 FordPass sensors cover
 - **Tire pressure** -- All four wheels plus system state
 - **GPS** -- Latitude and longitude (logged, not persisted)
 
-Vehicle and battery telemetry is batched -- multiple sensor updates are accumulated and written as a single database record to reduce write volume.
+Vehicle and battery telemetry is batched so multiple sensor updates are written as one database record.
 
 ## History Backfill
 
-Click **Backfill History** to fetch historical states from HA's REST API. The button pulls as much history as your HA recorder retains — there is no 30-day cap. It covers:
+Click **Backfill History** to fetch historical states from Home Assistant's REST API. It pulls as much history as your recorder retains. It covers:
 
 - `energytransferlogentry` — creates charging session records for charges before LightningROD was connected
 - Configured **Gas Price Sensors** (station and/or average) — ingested into the gas price history used on the Costs page
 
-Duplicate detection applies during backfill — existing sessions and gas readings are skipped automatically.
+Duplicate detection also applies during backfill, so existing sessions and gas readings are skipped automatically.
 
 !!! tip "First-time setup"
-    After configuring the HA connection for the first time, run the backfill to import your historical charging and gas price data. Going forward, sessions and readings flow in automatically in real time.
+    After you set up the connection for the first time, run the backfill to import your historical charging and gas price data. After that, new sessions and readings come in automatically.

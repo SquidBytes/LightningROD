@@ -80,19 +80,19 @@ Selected views from the current release.
 
 ### Overview
 
-![overview v0.2](docs/assets/images/lr_overview.gif)
+![overview](docs/assets/images/lr_overview.gif)
 
 ### Session List and drawer
 
-![sessionList v0.2](docs/assets/images/lr_sessions.gif)
+![sessionList](docs/assets/images/lr_sessions.gif)
 
 ### Cost Page
 
-![cost page v0.2](docs/assets/images/lr_costs.gif)
+![cost page](docs/assets/images/lr_costs.gif)
 
 ### Settings Page
 
-![main settings page v0.2](docs/assets/images/lr_settings.gif)
+![main settings page](docs/assets/images/lr_settings.gif)
 
 
 ## Quick Start

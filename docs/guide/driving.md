@@ -1,6 +1,6 @@
 # Driving
 
-The **Driving** section covers everything that happens between charges: individual trips, efficiency vs temperature, and regen recovery.
+The **Driving** section covers what happens between charges: individual trips, efficiency vs temperature, and regen recovery.
 
 It has two pages under the sidebar's `DRIVING` group:
 
@@ -8,56 +8,56 @@ It has two pages under the sidebar's `DRIVING` group:
 - **Analytics** at `/driving/performance` — efficiency correlations and regen trends
 
 !!! note "Renamed from Trips"
-    In earlier releases this lived at `/trips`. v0.3 moved it under `/driving/*` so it's symmetrical with `/charging/*`. Trip data, detail drawers, and sidebar badges are unchanged — only the URL and sidebar grouping moved.
+    In earlier releases this lived at `/trips`. v0.3 moved it under `/driving/*` so it sits alongside `/charging/*`. The trip data and detail views stayed the same; only the URL and sidebar grouping changed.
 
 ## Trip Sessions (`/driving/sessions`)
 
 ![trip sessions](../assets/images/lr_trips.gif)
 
-A paginated table of trips with ten columns: number, date, distance, duration, temperature, energy consumed, reported efficiency, calculated efficiency, driving score (as a gradient bar), and regeneration.
+A paginated table of trips with ten columns: number, date, distance, duration, temperature, energy used, reported efficiency, calculated efficiency, driving score, and regeneration.
 
 Click any row to open a slide-out detail drawer with:
 
-- **Overview** — start/end location (auto-detected from GPS proximity), distance, duration, energy, temperature
+- **Overview** -- start/end location, distance, duration, energy, temperature
 - **Driving scores** — smooth/efficient/safe score breakdown
 - **Environment chart** — temperature and altitude over the trip
 - **Drive graphs** — SOC, speed, and range on a shared time axis (interpolated segments shown as dotted lines at 40% opacity)
 - **Expand** — a full-screen modal with Battery, Environment, and Driving chart sections
 
-Summary cards above the table — Total Trips, Avg Efficiency, Total Distance, Total Energy — respect the date range filter.
+Summary cards above the table - Total Trips, Avg Efficiency, Total Distance, Total Energy - respect the date range filter.
 
 ## Driving Performance (`/driving/performance`)
 
 ![driving performance](../assets/images/lr_driving_performance.gif)
 
-A new analytics page introduced in v0.3 for driving-side metrics.
+A driving-side analytics page introduced in v0.3.
 
 ### Summary Row
 
-- **Range Recovered (Regen)** — total regen across trips in range (moved here from the old Energy page)
-- Plus per-page summary tiles for total distance, average efficiency, etc.
+- **Range Recovered (Regen)** -- total regen across trips in range
+- Plus per-page summary tiles for total distance, average efficiency, and more
 
 ### Driving Efficiency Trend
 
-A time-series chart of mi/kWh per trip (or km/kWh in metric). The twin of the Charging Efficiency trend on `/charging/performance`.
+A time-series chart of mi/kWh per trip (or km/kWh in metric). It mirrors the Charging Efficiency trend on `/charging/performance`.
 
 ### Efficiency vs Temperature
 
-A scatter plot of individual trip efficiency against ambient temperature, with a fitted linear trendline. Useful for spotting cold-weather efficiency loss.
+A scatter plot of individual trip efficiency against ambient temperature, with a fitted trendline. Useful for spotting cold-weather efficiency loss.
 
 - **X-axis**: ambient temperature (°F or °C per unit preference)
 - **Y-axis**: calculated mi/kWh or km/kWh
-- **Trendline**: least-squares linear fit — only shown when enough trips have ambient temperature data (at least 5 for short ranges, 10 for longer)
+- **Trendline**: least-squares linear fit, shown only when enough trips have ambient temperature data
 
 ### Regen Recovery
 
-A dual-axis bar + line chart showing regen per trip:
+A dual-axis bar and line chart showing regen per trip:
 
 - **Bars**: regen kWh per trip
-- **Line**: regen percentage (regen kWh / gross kWh used) per trip
+- **Line**: regen percentage per trip
 - Most recent trips first, scoped to the current date range
 
-Hover any bar for trip date, regen kWh, gross kWh, regen %, and distance.
+Hover any bar for trip date, regen kWh, regen %, and distance.
 
 ## Date Range Filter
 

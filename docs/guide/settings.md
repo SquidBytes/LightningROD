@@ -16,31 +16,34 @@ The settings page (`/settings`) is organized into focused tabs. Most updates app
 
 ## Vehicles Tab
 
-Use this tab to manage EV profiles and select the active vehicle. The active vehicle is used for vehicle-scoped pages like Charging Sessions, Costs, Charging Performance, Battery Analytics, and Driving.
+Use this tab to manage vehicle profiles and choose the active vehicle for vehicle-specific pages like Charging Sessions, Costs, Charging Performance, Battery Analytics, and Driving.
 
-Vehicle fields include display name, make/model/year, usable capacity, gross pack capacity, VIN/device ID, and ICE comparison fields.
+Each vehicle includes a name, make/model/year, usable capacity, gross battery capacity, VIN or device ID, and ICE comparison fields.
 
 ### Usable vs Gross Pack Capacity
 
-Each vehicle stores **two** capacity numbers because they drive different calculations:
+Each vehicle stores two capacity values because they power different calculations:
 
-- **Usable Capacity** is the driver-facing kWh — the energy you actually have available to drive. This is what efficiency math uses (e.g. the fallback gas-equivalent calculation on the Costs page when a session has no distance data).
-- **Gross Pack Capacity** is the total installed cell kWh. This is what FordPass reports via its `maximumBatteryCapacity` attribute, and it's what the Battery Analytics page uses for health and degradation math — comparing the current pack reading to the original gross.
+- **Usable capacity** is the energy you can actually drive with. It is used for efficiency and range-related calculations.
+- **Gross pack capacity** is the full battery size. Battery Analytics uses it to compare the current pack reading against the original pack size.
 
-Mixing the two will give you nonsense health percentages (a fresh pack can read >100% if usable is stored in the gross field). The preset table below fills both values automatically when you pick a trim.
+Keeping these values separate avoids bad health numbers. The preset table below fills both values automatically when you pick a trim.
 
 ### Vehicle Presets
 
-The Edit Vehicle modal offers cascading combo-box fields for **Make → Model → Trim → Capacity**. Typing or selecting a Make narrows the Model options, selecting a Model narrows the Trim options, and picking a Trim auto-fills **both** the usable and gross capacity fields from the preset table. Ford is auto-selected since it's the only preset make today, and you can free-type any value for non-preset vehicles.
+The Edit Vehicle modal uses a simple Make → Model → Trim → Capacity picker. Choosing a make narrows the model list, choosing a model narrows the trim list, and choosing a trim fills in both capacity fields from the preset table.
 
-Presets cover the F-150 Lightning and Mustang Mach-E lineups (E-Transit is not currently in the preset table). If you have a FordPass sensor showing a different gross value than the preset, you can edit the preset table in `web/queries/vehicles.py` and file an issue with the reported value.
+Ford is preselected because it is the only preset make today. For vehicles outside the preset list, you can type the values yourself.
 
 !!! info "Lariat / trim packages"
-    The preset table currently treats "trim" as a battery variant (SR / ER / Flash). Marketing trim packages (Pro / XLT / Lariat / Platinum) are planned for a future release — for now, leave the trim blank or type your package name manually.
+    The preset table currently treats trim as a battery variant such as SR, ER, or Flash. If you want to use a marketing trim package like Pro, XLT, Lariat, or Platinum, leave the trim blank or type it in manually.
 
 ## Networks Tab
 
-Networks are the primary organizational unit for charging locations and rates. Each network has:
+Networks group charging locations and rates. Each network includes:
+
+!!! tip "Settings vs. Review Queue"
+    Use the Networks tab to manage the main list of networks, locations, and rates. Use the [Review Queue](review-queue.md) to clean up new items that were added automatically. Settings is for setup; Review Queue is for review and cleanup.
 
 | Field | Description |
 |-------|-------------|
@@ -50,15 +53,15 @@ Networks are the primary organizational unit for charging locations and rates. E
 | Free | Whether this network charges nothing |
 | Notes | Optional description |
 
-The table shows each network with color badge, session count, and location count. Rows expand to show a read-only location summary.
+The table shows each network with its color, session count, and location count. Rows expand to show a read-only location summary.
 
 ### Network Edit Modal
 
 The network modal has three tabs:
 
 - **Details** -- Edit name, rate, color, free toggle, and notes. Includes **Recalculate Session Costs** for network-driven recalculation.
-- **Locations** -- Manage locations under this network.
-- **Subscription** -- Manage historical/current member-rate periods for this network.
+- **Locations** -- Manage locations for this network.
+- **Subscription** -- Manage member-rate periods over time.
 
 ### Locations
 
@@ -75,7 +78,7 @@ Location `cost_per_kwh` overrides network `cost_per_kwh` when computing estimate
 
 ### Charger Stalls
 
-Each location can have multiple stalls with different hardware specs:
+Each location can have multiple stalls with different hardware details:
 
 | Field | Description |
 |-------|-------------|
@@ -86,13 +89,13 @@ Each location can have multiple stalls with different hardware specs:
 | Connector type | CCS, CHAdeMO, J1772, NACS, Tesla |
 | Default | Auto-select this stall when the location is chosen |
 
-When editing a session, selecting a stall can auto-fill EVSE fields (rated kW, voltage, amperage).
+When you edit a session, picking a stall can fill in the EVSE fields for you.
 
-For supported networks, use **Pre-fill from [Network]** to load known stall templates quickly.
+For supported networks, use **Pre-fill from [Network]** to load known stall templates.
 
 ### Subscription Periods
 
-Subscriptions let you model member pricing over time.
+Subscriptions let you track member pricing over time.
 
 | Field | Description |
 |-------|-------------|
@@ -101,17 +104,15 @@ Subscriptions let you model member pricing over time.
 | Start / End date | Active period (`end_date` blank means currently active) |
 | Notes | Optional plan metadata |
 
-Subscription data powers member-vs-non-member savings on the Costs page.
+This data powers member-vs-non-member savings on the Costs page.
 
 ## General Tab
 
 ### Developer Tools
 
-The **Enable developer tools** checkbox unlocks diagnostic features that are hidden by default. When enabled, a **Data Sources** link appears in the System section of the sidebar.
+Enable developer tools to show extra diagnostics in the sidebar. When this is on, the **Data Sources** page appears under System.
 
-**Data Sources** (`/admin/data-sources`) shows every Home Assistant signal source that the ingestion layer knows about — the HA entity pattern, attribute, contract-declared unit, detection method and confidence, coverage status, and the last raw value seen. Use it to diagnose unit detection issues or verify that a new sensor is being ingested with the right unit.
-
-The toggle is persisted in `app_settings` and takes effect immediately (no restart needed). It is off by default; there is no user-visible harm in leaving it on, but the page is clutter for day-to-day use.
+**Data Sources** (`/admin/data-sources`) lists the Home Assistant signals LightningROD knows about, along with the unit it expects and the last value it saw. Use it when a sensor looks wrong or you want to confirm that a new signal is being read correctly.
 
 ### Comparison Display Options
 
@@ -123,20 +124,20 @@ Toggle which comparison sections appear on the Costs page:
 
 ### Gas Price History
 
-Maintain month-by-month gas price history with two tracks:
+Keep month-by-month gas price history with two tracks:
 
 - Station price (your usual station)
 - Average price (regional average)
 
-These values are used to compute savings ranges in gas comparison cards.
+These values are used in the gas comparison cards.
 
 ### Gas Price Sensors (Home Assistant)
 
-Optional sensor entity IDs can be configured for station and average gas price feeds.
+You can also connect Home Assistant sensor entity IDs for station and average gas prices.
 
 ### Unit Preferences
 
-LightningROD stores all distances, temperatures, efficiencies, and volumes in **metric** as the canonical database form (km, °C, km/kWh, L/100km, liters), and converts once at the display/input boundary. Unit preferences are split into two independent axes so you can mix them:
+LightningROD stores distances, temperatures, efficiency, and volume in metric in the database, then converts them for display. Distance and temperature are controlled separately, so you can mix them if you want:
 
 | Axis | Options | What it changes |
 |------|---------|-----------------|
@@ -147,13 +148,13 @@ You can, for example, pick `mi/kWh` with `°C` if that's how you think about you
 
 ### Timezone
 
-Set your local timezone (e.g., `America/New_York`). All timestamps throughout the app are converted from UTC to your selected timezone for display. This is display-only -- stored data remains in UTC.
+Set your local timezone, such as `America/New_York`. The app displays timestamps in that timezone, but stored data stays in UTC.
 
-The timezone setting also serves as the default for CSV imports.
+This setting is also used as the default for CSV imports.
 
 ## Home Assistant Tab
 
-Configure the connection to Home Assistant for automatic charging session detection and vehicle telemetry ingestion. See the dedicated [Home Assistant Integration](home-assistant.md) guide for full details.
+Use this tab to connect LightningROD to Home Assistant for automatic session detection and vehicle telemetry. See the dedicated [Home Assistant Integration](home-assistant.md) guide for details.
 
 The tab includes:
 
@@ -163,6 +164,6 @@ The tab includes:
 
 ## CSV Import Tab
 
-Use this tab for bulk imports. It supports template download, timezone selection, auto-mapped columns, preview, inline fixes, duplicate handling, and final import summary.
+Use this tab for bulk imports. It includes template download, timezone selection, automatic column matching, preview, inline fixes, duplicate handling, and a final summary.
 
 See the dedicated [CSV Import](csv-import.md) guide for the full flow.
