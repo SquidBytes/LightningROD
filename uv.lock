@@ -577,7 +577,7 @@ wheels = [
 
 [[package]]
 name = "lightningrod"
-version = "0.3.0"
+version = "0.3.21"
 source = { virtual = "." }
 dependencies = [
     { name = "alembic" },

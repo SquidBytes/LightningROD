@@ -8,6 +8,7 @@
 #
 # What it touches:
 #   pyproject.toml         (authoritative [project].version)
+#   uv.lock                (refreshed via `uv lock` so [[package]] lightningrod stays in sync)
 #   package.json           (npm "version" field)
 #   .env                   (LIGHTNINGROD_VERSION, consumed by docker-compose)
 #
@@ -60,6 +61,18 @@ if n != 1:
 path.write_text(new_text)
 PY
 echo "  updated pyproject.toml"
+
+# uv.lock — refresh so the [[package]] lightningrod entry matches pyproject.
+# `uv lock` is idempotent and only writes the lockfile; it does NOT touch the
+# project's installed environment (use `uv sync` for that).
+if [[ -f "${ROOT}/uv.lock" ]]; then
+    if command -v uv >/dev/null 2>&1; then
+        (cd "${ROOT}" && uv lock --quiet)
+        echo "  refreshed uv.lock"
+    else
+        echo "  uv.lock present but \`uv\` CLI not on PATH — refresh manually with \`uv lock\`" >&2
+    fi
+fi
 
 # package.json — update the "version" field
 python3 - "$package_json" "$new_version" <<'PY'

@@ -41,6 +41,11 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building LightningROD ${VERSION} (${{ matrix.variant }})"
 
+      # GHCR rejects mixed-case repo names — lowercase the owner segment.
+      - name: Lowercase repo owner
+        id: owner
+        run: echo "lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -67,8 +72,8 @@ jobs:
           build-args: |
             LIGHTNINGROD_VERSION=${{ steps.version.outputs.version }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}:${{ steps.version.outputs.version }}${{ matrix.tag_suffix }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}:latest${{ matrix.tag_suffix }}
+            ghcr.io/${{ steps.owner.outputs.lc }}/${{ matrix.image_name }}:${{ steps.version.outputs.version }}${{ matrix.tag_suffix }}
+            ghcr.io/${{ steps.owner.outputs.lc }}/${{ matrix.image_name }}:latest${{ matrix.tag_suffix }}
           labels: |
             org.opencontainers.image.title=LightningROD
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
@@ -167,6 +172,10 @@ jobs:
           REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
+          # GHCR image paths must be lowercase — pre-compute the lowercase
+          # owner so install snippets show a working `docker pull`.
+          OWNER_LC="${OWNER,,}"
+
           # Extract the [X.Y.Z] section — exits non-zero if missing/empty.
           python3 scripts/extract-changelog.py "${VERSION}" > release_body.md
 
@@ -211,7 +220,7 @@ jobs:
 
           sed -i \
             -e "s|__VERSION__|${VERSION}|g" \
-            -e "s|__OWNER__|${OWNER}|g" \
+            -e "s|__OWNER__|${OWNER_LC}|g" \
             -e "s|__REPO__|${REPO}|g" \
             -e "s|__TAG__|${TAG}|g" \
             release_body.md
