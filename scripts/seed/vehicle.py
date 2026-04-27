@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import AppSettings
@@ -25,7 +25,7 @@ async def _set_active_vehicle(db: AsyncSession, vehicle_id: int) -> None:
     )
     stmt = stmt.on_conflict_do_update(
         index_elements=["key"],
-        set_={"value": str(vehicle_id)},
+        set_={"value": str(vehicle_id), "updated_at": func.now()},
     )
     await db.execute(stmt)
 

@@ -502,7 +502,7 @@ async def set_app_setting(db: AsyncSession, key: str, value: str) -> None:
     )
     stmt = stmt.on_conflict_do_update(
         index_elements=["key"],
-        set_={"value": value, "updated_at": stmt.excluded.updated_at},
+        set_={"value": value, "updated_at": func.now()},
     )
     await db.execute(stmt)
     await db.commit()
