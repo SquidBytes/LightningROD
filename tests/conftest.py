@@ -37,9 +37,34 @@ os.environ["DATABASE_URL"] = TEST_DB_URL
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 _migrations_done = False
+
+
+def _attach_sqlite_pragmas(engine):
+    """Mirror db/engine.py: install per-connection PRAGMAs on a fresh test engine.
+
+    The test fixture creates an isolated engine per test for transaction
+    rollback semantics; that engine bypasses db/engine.py's listener entirely,
+    so SQLite would default to foreign_keys=OFF and journal_mode=delete. We
+    re-install the same listener here so test runs match the production
+    engine's behaviour (T-30-07-01 + RESEARCH Pitfall 1 mitigation).
+    """
+    if engine.sync_engine.dialect.name != "sqlite":
+        return
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys = ON")
+            cursor.execute("PRAGMA journal_mode = WAL")
+            cursor.execute("PRAGMA synchronous = NORMAL")
+            cursor.execute("PRAGMA busy_timeout = 5000")
+        finally:
+            cursor.close()
 
 
 def _run_alembic_migrations():
@@ -88,6 +113,7 @@ async def db_session():
     within the test transaction rather than committing.
     """
     engine = create_async_engine(TEST_DB_URL, echo=False)
+    _attach_sqlite_pragmas(engine)
     async with engine.connect() as conn:
         trans = await conn.begin()
         session = AsyncSession(
