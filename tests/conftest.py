@@ -31,7 +31,6 @@ def _resolve_test_db_url() -> str:
 # DATABASE_URL must be set before any app imports so config.py + alembic
 # env.py pick it up. E402 below is allowed by ruff because only os.environ
 # assignments separate the import groups.
-_BACKEND = os.environ.get("TEST_BACKEND", "postgres")
 TEST_DB_URL = _resolve_test_db_url()
 os.environ["DATABASE_URL"] = TEST_DB_URL
 
