@@ -75,7 +75,7 @@ def localtime_filter(dt, tz_str: str = "UTC", fmt: str | None = None):
         dt = dt.replace(tzinfo=UTC)
     try:
         converted = dt.astimezone(ZoneInfo(tz_str))
-    except (KeyError, Exception):
+    except Exception:
         converted = dt  # Fall back to original if invalid tz
     if fmt:
         return converted.strftime(fmt)
