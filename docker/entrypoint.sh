@@ -10,7 +10,13 @@ case "$DATABASE_URL" in
         SQLITE_PATH="${DATABASE_URL#sqlite+aiosqlite:///}"
         # Strip leading slashes so '////data/demo.db' -> '/data/demo.db' and
         # 'relative/path.db' picks up a leading slash for mkdir below.
+        # Short-circuit :memory: URLs — in-memory DBs are fundamentally
+        # incompatible with the file-marker seed pattern; treat as non-file
+        # backend so mkdir / marker logic is skipped.
         case "$SQLITE_PATH" in
+            :memory:|/:memory:)
+                SQLITE_PATH=""
+                ;;
             /*) ;;
             *)  SQLITE_PATH="/$SQLITE_PATH" ;;
         esac
