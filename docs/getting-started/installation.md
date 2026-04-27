@@ -3,23 +3,22 @@
 LightningROD can be deployed two ways:
 
 - **Docker Compose** (recommended) -- two containers: the web app and PostgreSQL
-- **Standalone Docker** -- single container with embedded PostgreSQL
+- **Standalone Docker** -- single container with embedded SQLite
 
 !!! tip "Unraid?"
     Dedicated [Unraid Setup guide](unraid.md) for Docker Compose Manager-specific steps.
 
 ## Which Docker file do I use?
 
-Only `docker-compose.yml` lives at the repo root -- it's the default stack you get from `docker compose up`. Everything else lives under `docker/` and is opted into with an explicit `-f` flag (or by building from a non-default `Dockerfile`).
+Only `docker-compose.yml` lives at the repo root -- it's the default stack you get from `docker compose up`. Everything else lives under `docker/` and is opted into with an explicit `-f` flag.
 
 ### For users (deploying the app)
 
 | File | What it is | Command |
 |------|------------|---------|
 | `docker-compose.yml` *(repo root)* | The default two-container stack: web app + PostgreSQL. **Start here.** | `docker compose up --build -d` |
-| `docker/Dockerfile` | Multi-stage image for the web container (Node builds CSS, Python runs the app). Referenced by `docker-compose.yml` -- you don't invoke it directly. | *(built automatically)* |
-| `docker/Dockerfile.standalone` | All-in-one image: app **and** PostgreSQL in a single container. For users who don't want a separate db container. | `docker build -f docker/Dockerfile.standalone -t lightningrod:standalone .` |
-| `docker/docker-compose.standalone.yml` | Compose wrapper that builds and runs the standalone image with a named volume. Easier than `docker run` if you prefer Compose. | `docker compose -f docker/docker-compose.standalone.yml up --build -d` |
+| `docker/Dockerfile` | Multi-stage image for the web container (Node builds CSS, Python runs the app). Used by both deployment paths. | *(built automatically)* |
+| `docker/docker-compose.standalone.yml` | Compose wrapper for the single-container SQLite deployment. Reuses the slim image with `DATABASE_URL` pointed at `/data/lightningrod.db` and a named volume mounted at `/data`. | `docker compose -f docker/docker-compose.standalone.yml up --build -d` |
 
 ### For contributors (development & tests)
 
@@ -27,8 +26,7 @@ Only `docker-compose.yml` lives at the repo root -- it's the default stack you g
 |------|------------|---------|
 | `docker/docker-compose.dev.yml` | Overlay applied **on top of** `docker-compose.yml`. Exposes PostgreSQL on `localhost:5432` so you can run the FastAPI app on your host with hot-reload. | `docker compose -f docker-compose.yml -f docker/docker-compose.dev.yml up db -d` (see [Development Setup](../development/setup.md)) |
 | `docker/docker-compose.test.yml` | Standalone test PostgreSQL on port `5433`, isolated from your dev database. Used by `./run-tests.sh`. | `docker compose -f docker/docker-compose.test.yml up -d test-db` |
-| `docker/entrypoint.sh` | Web container startup script: runs Alembic migrations, then uvicorn. Baked into `docker/Dockerfile`. | *(internal)* |
-| `docker/entrypoint.standalone.sh` | Standalone container startup: bootstraps PostgreSQL, creates the role/db, runs migrations, starts the app. Baked into `docker/Dockerfile.standalone`. | *(internal)* |
+| `docker/entrypoint.sh` | Web container startup script: resolves the database URL, runs Alembic migrations, then uvicorn. Baked into `docker/Dockerfile`. | *(internal)* |
 
 ## Requirements
 
@@ -121,26 +119,25 @@ Migrations run automatically on startup, so schema changes are applied when you 
 
 ## Standalone Docker
 
-Runs both the application and PostgreSQL in a single container.
+Runs the application in a single container with an embedded SQLite database stored on a named Docker volume. No separate database service required.
 
 === "docker run"
 
     ```bash
     git clone https://github.com/SquidBytes/LightningROD.git
     cd LightningROD
-    cp .env.example .env
     ```
 
-    Edit `.env` to set a real password, then build and run:
+    Build and run:
 
     ```bash
-    docker build -f docker/Dockerfile.standalone -t lightningrod:standalone .
+    docker build -f docker/Dockerfile -t lightningrod-web:dev .
     docker run -d \
       -p 8000:8000 \
-      -v lightningrod-data:/var/lib/postgresql/data \
-      --env-file .env \
+      -v lightningrod-data:/data \
+      -e DATABASE_URL=sqlite+aiosqlite:////data/lightningrod.db \
       --name lightningrod \
-      lightningrod:standalone
+      lightningrod-web:dev
     ```
 
 === "docker compose (standalone)"
@@ -151,7 +148,7 @@ Runs both the application and PostgreSQL in a single container.
     cp .env.example .env
     ```
 
-    Edit `.env` to set a real password, then start:
+    Start the standalone stack (the compose file overrides `DATABASE_URL` to point at the SQLite file regardless of what is in `.env`):
 
     ```bash
     docker compose -f docker/docker-compose.standalone.yml up --build -d
@@ -161,16 +158,15 @@ The app will be available at `http://localhost:8000` (or your configured `APP_PO
 
 ### What Happens on Startup (Standalone)
 
-The standalone entrypoint handles everything in a single container:
+The standalone entrypoint is the same `docker/entrypoint.sh` used by the default stack:
 
-1. Initializes the PostgreSQL data directory if empty (first run)
-2. Starts PostgreSQL as a background service
-3. Creates the database role and database if they don't exist
-4. Runs Alembic migrations
-5. Starts the FastAPI application
+1. Resolves the SQLite path from `DATABASE_URL` (`/data/lightningrod.db`)
+2. Ensures `/data/` exists (the Dockerfile pre-creates it and declares it as a volume)
+3. Runs Alembic migrations
+4. Starts the FastAPI application
 
 !!! note
-    Data is stored in a Docker volume mounted at `/var/lib/postgresql/data`. This persists across container restarts and rebuilds.
+    Data is stored in a Docker volume mounted at `/data`. This persists across container restarts and rebuilds.
 
 ### Stopping and Restarting (Standalone)
 
@@ -187,14 +183,14 @@ docker compose -f docker/docker-compose.standalone.yml up -d
 
 ```bash
 git pull
-docker build -f docker/Dockerfile.standalone -t lightningrod:standalone .
+docker build -f docker/Dockerfile -t lightningrod-web:dev .
 docker stop lightningrod && docker rm lightningrod
 docker run -d \
   -p 8000:8000 \
-  -v lightningrod-data:/var/lib/postgresql/data \
-  --env-file .env \
+  -v lightningrod-data:/data \
+  -e DATABASE_URL=sqlite+aiosqlite:////data/lightningrod.db \
   --name lightningrod \
-  lightningrod:standalone
+  lightningrod-web:dev
 ```
 
 Or with compose:
