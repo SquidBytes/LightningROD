@@ -18,10 +18,9 @@ def test_seed_main_dry_run_runs_clean():
     affected. The assertion confirms the seed pipeline can plan + execute
     end-to-end against the SQLite dialect.
     """
-    env = {**os.environ, "DATABASE_URL": os.environ["DATABASE_URL"]}
     cp = subprocess.run(
         [sys.executable, "-m", "scripts.seed.main", "--all", "--dry-run"],
-        env=env,
+        env=os.environ.copy(),
         capture_output=True,
         text=True,
         timeout=180,
