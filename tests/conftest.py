@@ -88,7 +88,16 @@ def _run_alembic_migrations():
         # If DB is unavailable (e.g. running unit tests without Docker), skip
         # migrations rather than aborting the entire test session. Tests that
         # actually need the DB will fail individually via missing fixtures.
-        if "Connect call failed" in result.stderr or "ConnectionRefusedError" in result.stderr:
+        # Lowercase the stderr once and check a stable marker tuple — relying
+        # on a single exact string is fragile across asyncpg/aiosqlite versions.
+        stderr_lower = result.stderr.lower()
+        connect_markers = (
+            "connect call failed",
+            "connectionrefusederror",
+            "could not connect to server",
+            "no such file or directory",  # aiosqlite missing parent dir
+        )
+        if any(marker in stderr_lower for marker in connect_markers):
             return
         raise RuntimeError(
             f"Alembic migration failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
