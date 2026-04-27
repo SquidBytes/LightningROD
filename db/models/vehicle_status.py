@@ -13,7 +13,7 @@ TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVVehicleStatus(Base):
-    """Vehicle operational status snapshots (31 columns).
+    """Vehicle operational status snapshots (28 columns).
 
     Source: 002_create_target_tables.sql, ev_vehicle_status table.
     Includes 12 dynamics fields from updated FordPass ha-fordpass integration (2026-02).
@@ -40,8 +40,7 @@ class EVVehicleStatus(Base):
     ignition_status: Mapped[str | None] = mapped_column(String)
     remote_start_status: Mapped[str | None] = mapped_column(String)
 
-    # Temperatures and torque
-    coolant_temp: Mapped[float | None] = mapped_column(Numeric)
+    # Torque
     torque_at_transmission: Mapped[float | None] = mapped_column(Numeric)
 
     # Structured status (cross-dialect JSON storage)
@@ -54,14 +53,14 @@ class EVVehicleStatus(Base):
     wheel_torque_status: Mapped[str | None] = mapped_column(String)
     yaw_rate: Mapped[float | None] = mapped_column(Numeric)
     acceleration: Mapped[float | None] = mapped_column(Numeric)
-    engine_speed: Mapped[float | None] = mapped_column(Numeric)
-    outside_temperature: Mapped[float | None] = mapped_column(Numeric)
-    cabin_temperature: Mapped[float | None] = mapped_column(Numeric)
     deep_sleep_status: Mapped[str | None] = mapped_column(String)
     device_connectivity: Mapped[str | None] = mapped_column(String)
     evcc_status: Mapped[str | None] = mapped_column(String)
     seatbelt_status: Mapped[str | None] = mapped_column(String)
-    remote_start_countdown: Mapped[float | None] = mapped_column(Numeric)
+
+    # Environment (time-series, populated from per-sensor HA entities)
+    outside_temperature: Mapped[float | None] = mapped_column(Numeric)
+    cabin_temperature: Mapped[float | None] = mapped_column(Numeric)
 
     # Pipeline metadata
     source_system: Mapped[str | None] = mapped_column(String(100))

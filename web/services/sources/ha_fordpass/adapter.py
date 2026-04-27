@@ -313,6 +313,88 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_unit="degC",
         notes="Cached from outsidetemp sensor; mirrored to start/end",
     ),
+    # --- ev_vehicle_status (from sensor.{vin}_metrics) ----------------------
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_attribute="odometer",
+        source_unit="km",
+        ha_unit_system_converted=True,
+        target_db_table="ev_vehicle_status",
+        target_db_column="odometer",
+        target_unit="km",
+        notes=(
+            "Cumulative odometer; ha-fordpass localizes per HA unit_system "
+            "(imperial -> mi, metric -> km)."
+        ),
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_attribute="speed",
+        source_unit="km/h",
+        ha_unit_system_converted=True,
+        target_db_table="ev_vehicle_status",
+        target_db_column="speed",
+        target_unit="km/h",
+        notes=(
+            "Instantaneous vehicle speed; ha-fordpass localizes per "
+            "unit_system. Zero when parked."
+        ),
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_attribute="brakeTorque",
+        source_unit="Nm",
+        target_db_table="ev_vehicle_status",
+        target_db_column="brake_torque",
+        target_unit="Nm",
+        notes="Brake torque. SI passthrough; no localization in ha-fordpass.",
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_attribute="yawRate",
+        source_unit="deg/s",
+        target_db_table="ev_vehicle_status",
+        target_db_column="yaw_rate",
+        target_unit="deg/s",
+        notes="Yaw rate. Passthrough; no localization.",
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_attribute="acceleration",
+        source_unit="m/s2",
+        target_db_table="ev_vehicle_status",
+        target_db_column="acceleration",
+        target_unit="m/s2",
+        notes="Longitudinal acceleration. SI passthrough.",
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_outsidetemp",
+        source_attribute="ambientTemp",
+        source_unit="degC",
+        ha_unit_system_converted=True,
+        target_db_table="ev_vehicle_status",
+        target_db_column="outside_temperature",
+        target_unit="degC",
+        notes=(
+            "Time-series ambient temp from per-sensor outsidetemp entity; "
+            "ha-fordpass localizes per HA unit_system. Note: shares the "
+            "same source as ev_charging_session.ambient_temp_start/end "
+            "(different cache discipline — vehicle_status writes per snapshot)."
+        ),
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_cabintemperature",
+        source_attribute="cabinTemperature",
+        source_unit="degC",
+        ha_unit_system_converted=True,
+        target_db_table="ev_vehicle_status",
+        target_db_column="cabin_temperature",
+        target_unit="degC",
+        notes=(
+            "Time-series cabin temp from per-sensor cabintemperature entity; "
+            "ha-fordpass localizes per HA unit_system."
+        ),
+    ),
 ]
 
 

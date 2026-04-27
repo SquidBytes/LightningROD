@@ -474,14 +474,12 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
         "yawrate": ("yaw_rate", _safe_float),
         "torqueattransmission": ("torque_at_transmission", _safe_float),
         "wheeltorquestatus": ("wheel_torque_status", str),
-        "enginespeed": ("engine_speed", _safe_float),
-        "cabintemperature": ("cabin_temperature", _temp_converter),
-        "coolanttemp": ("coolant_temp", _temp_converter),
-        "outsidetemp": ("outside_temperature", _temp_converter),
         "acceleration": ("acceleration", _safe_float),
         "deepsleep": ("deep_sleep_status", str),
         "deviceconnectivity": ("device_connectivity", str),
         "evccstatus": ("evcc_status", str),
+        "outsidetemp": ("outside_temperature", _temp_converter),
+        "cabintemperature": ("cabin_temperature", _temp_converter),
     }
 
     if slug == "lastrefresh":
