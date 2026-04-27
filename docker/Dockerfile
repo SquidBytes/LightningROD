@@ -21,7 +21,7 @@ ENV LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION}
 LABEL org.opencontainers.image.title="LightningROD" \
       org.opencontainers.image.description="Self-hosted charging analytics for Ford electric vehicles" \
       org.opencontainers.image.version="${LIGHTNINGROD_VERSION}" \
-      org.opencontainers.image.source="https://github.com/aminorjourney/LightningROD"
+      org.opencontainers.image.source="https://github.com/SquidBytes/LightningROD"
 
 WORKDIR /app
 
