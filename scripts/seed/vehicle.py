@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import AppSettings
 from db.models.vehicle import EVVehicle
+from db.portable_insert import portable_insert
 
 _DEMO_VIN = "1FT6W1EV0NWG00000"
 
@@ -20,7 +20,7 @@ async def _set_active_vehicle(db: AsyncSession, vehicle_id: int) -> None:
     renders empty. Inline upsert (not set_app_setting helper) so it stays
     inside the orchestrator's single transaction.
     """
-    stmt = pg_insert(AppSettings).values(
+    stmt = portable_insert(AppSettings, dialect=db.bind.dialect).values(
         key="active_vehicle_id", value=str(vehicle_id)
     )
     stmt = stmt.on_conflict_do_update(
