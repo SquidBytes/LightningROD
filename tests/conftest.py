@@ -1,24 +1,43 @@
 """Root conftest: test engine, DB session with transaction rollback, Alembic migrations.
 
-CRITICAL: Environment variables are set BEFORE any app imports to prevent
-the production engine (db/engine.py) from connecting to the dev database.
+Backend selectable via TEST_BACKEND env var (default 'postgres'; 'sqlite' for
+the dialect-compat suite — see tests/test_dialect_sqlite/).
+
+CRITICAL: DATABASE_URL is set BEFORE any app imports to prevent the production
+engine (db/engine.py) from connecting to the dev database.
 """
 
 import os
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 
-# Set test environment BEFORE any app imports (Pitfall 3 from RESEARCH.md)
-os.environ["POSTGRES_USER"] = "lightningrod_test"
-os.environ["POSTGRES_PASSWORD"] = "testpass"
-os.environ["POSTGRES_DB"] = "lightningrod_test"
-os.environ["POSTGRES_HOST"] = "localhost"
+
+def _resolve_test_db_url() -> str:
+    """Return the test DATABASE_URL for the active TEST_BACKEND.
+
+    sqlite: tmpfile DB wiped at module load (T-30-07-01 mitigation).
+    postgres (default): the existing dockerized test-db service URL.
+    """
+    backend = os.environ.get("TEST_BACKEND", "postgres")
+    if backend == "sqlite":
+        tmp = Path(tempfile.gettempdir()) / "lightningrod_test_dialect.db"
+        tmp.unlink(missing_ok=True)
+        return f"sqlite+aiosqlite:///{tmp}"
+    return "postgresql+asyncpg://lightningrod_test:testpass@localhost:5433/lightningrod_test"
+
+
+# Backend selector + DATABASE_URL set BEFORE any app imports so config.py +
+# alembic env.py see them (Pitfall 3 from RESEARCH.md). E402 below is allowed
+# by ruff because only os.environ assignments separate the import groups.
+_BACKEND = os.environ.get("TEST_BACKEND", "postgres")
+TEST_DB_URL = _resolve_test_db_url()
+os.environ["DATABASE_URL"] = TEST_DB_URL
 
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-
-TEST_DB_URL = "postgresql+asyncpg://lightningrod_test:testpass@localhost:5433/lightningrod_test"
 
 _migrations_done = False
 
@@ -34,10 +53,7 @@ def _run_alembic_migrations():
         return
 
     env = os.environ.copy()
-    env["POSTGRES_USER"] = "lightningrod_test"
-    env["POSTGRES_PASSWORD"] = "testpass"
-    env["POSTGRES_DB"] = "lightningrod_test"
-    env["POSTGRES_HOST"] = "localhost:5433"
+    env["DATABASE_URL"] = TEST_DB_URL
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         env=env,

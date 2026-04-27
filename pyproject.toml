@@ -86,3 +86,7 @@ exclude = [
 "scripts/seed_review_queue.py" = ["E402"]
 # web/main.py resolves APP_VERSION before importing routers. Structural, not a bug.
 "web/main.py" = ["E402"]
+# Root conftest resolves TEST_BACKEND -> DATABASE_URL via a helper before
+# importing pytest/sqlalchemy so the production engine can't connect to dev DB
+# on import. Structural, not a bug. (Phase 30 Plan 30-07.)
+"tests/conftest.py" = ["E402"]
