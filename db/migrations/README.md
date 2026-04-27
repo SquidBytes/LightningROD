@@ -67,3 +67,77 @@ autogenerate).
   (NOT `from sqlalchemy.dialects.postgresql import insert as pg_insert`).
 - Keep the revision id ≤ 32 characters to fit `alembic_version.version_num
   VARCHAR(32)`.
+
+## Render demo deployment (Phase 30 D-12 / D-13)
+
+The public demo runs as a Render Web Service against a fresh SQLite
+database seeded at container start. Restart = reset; no scheduled cron.
+
+### Render service settings
+
+| Setting | Value |
+|---------|-------|
+| Service type | Web Service |
+| Tier | Free (ephemeral filesystem = automatic reset on restart) |
+| Build context | `app-public/` |
+| Dockerfile path | `app-public/docker/Dockerfile` |
+| Build command | (handled by Dockerfile multi-stage build) |
+| Start command | (uses Dockerfile ENTRYPOINT — `docker/entrypoint.sh`) |
+| Persistent disk | **None.** The ephemeral filesystem IS the reset mechanism. |
+| Health check path | `/healthz` |
+
+### Environment variables
+
+```
+DEMO_MODE=true
+DATABASE_URL=sqlite+aiosqlite:////data/demo.db
+LIGHTNINGROD_VERSION=demo
+```
+
+### What the entrypoint does on each cold start
+
+1. Resolves the SQLite path from `DATABASE_URL` (`/data/demo.db`).
+2. Ensures `/data/` exists (the Dockerfile pre-creates it).
+3. If `DEMO_MODE=true` AND no `/data/demo.db.seeded` marker:
+   - Removes any stale `demo.db` + `demo.db-wal` + `demo.db-shm` sidecars.
+   - Runs `alembic upgrade head` (creates schema from the squashed migration).
+   - Runs `python -m scripts.seed.main --all` (orchestrates every seed
+     module in FK order in one transaction; warns and continues on
+     individual seeder errors so a missing optional CSV does not crash
+     the container).
+   - Touches the marker file to make the seed idempotent within
+     the container's life.
+4. Otherwise (non-demo OR already seeded), runs `alembic upgrade head`
+   only.
+5. Starts uvicorn.
+
+### Cold-start expectations
+
+Render free-tier services sleep after ~15 minutes of inactivity. First
+visit after sleep takes ~30 seconds (container cold-start + entrypoint
+seed pipeline). This is acknowledged out-of-scope per Phase 30 deferred
+items. If the cold-start UX matters later, options include:
+(a) baking the seeded SQLite file as a Docker layer (loses freshness),
+(b) cron-pinging `/healthz` to keep the service warm (paid tier only),
+(c) upgrading to paid tier with a baked image.
+
+### If you ever enable persistent disk on Render
+
+The free-tier ephemeral filesystem makes `*-wal` / `*-shm` cleanup
+trivial — they vanish with the container. If you upgrade to a paid
+disk tier, you MUST:
+
+- Mount `/data/` as a single persistent volume (so `.db` and its
+  sidecars travel together).
+- Run `PRAGMA wal_checkpoint(TRUNCATE)` on graceful shutdown to merge
+  the WAL into the main file before snapshot.
+- Reconsider the seed-on-start pattern — at that point you probably
+  want a seeded image instead.
+
+### Demo write-protection
+
+The `DemoModeMiddleware` (`web/middleware/demo_mode.py`) blocks DELETE,
+PUT, and PATCH with a 403 JSON response when `DEMO_MODE=true`. The
+demo banner partial (`web/templates/partials/demo_banner.html`)
+renders only when `demo_mode` is true and links to the public repo
+(`aminorjourney/LightningROD`). See Plan 30-08 for details.
