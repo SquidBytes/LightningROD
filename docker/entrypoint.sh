@@ -28,17 +28,16 @@ if [ -n "$SQLITE_PATH" ]; then
     mkdir -p "$(dirname "$SQLITE_PATH")"
 fi
 
-# Demo seed logic: re-seed if (DEMO_MODE=true AND no marker file).
-# Marker file makes the seed step idempotent across uvicorn restarts within
-# the same container life. On Render free tier, container restart wipes the
-# filesystem — that's the demo's reset mechanism.
+# If DEMO_MODE=true and no marker file is present, re-seed at boot.
+# Marker keeps it idempotent across uvicorn restarts within the same
+# container life.
 SEED_MARKER="${SQLITE_PATH}.seeded"
 
 if [ -n "$SQLITE_PATH" ] && [ "$DEMO_MODE" = "true" ] && [ ! -f "$SEED_MARKER" ]; then
     echo "Demo mode: seeding fresh SQLite database at $SQLITE_PATH"
     # Defense-in-depth: drop stale main + WAL/SHM sidecars before re-seed.
-    # Render free-tier ephemeral FS makes this mostly redundant, but keeps
-    # paid-disk upgraders safe from partial-write corruption.
+    # Defensive cleanup keeps any persistent-volume deployment safe from
+    # partial-write corruption from a prior unclean exit.
     rm -f "$SQLITE_PATH" "${SQLITE_PATH}-wal" "${SQLITE_PATH}-shm"
 
     echo "  Running migrations..."
