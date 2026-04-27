@@ -25,10 +25,12 @@ LABEL org.opencontainers.image.title="LightningROD" \
 
 WORKDIR /app
 
-# Pre-create demo data directory so it exists before entrypoint runs.
-# Render free-tier writes are ephemeral; /data is the conventional path
-# for the demo SQLite file (DATABASE_URL=sqlite+aiosqlite:////data/demo.db).
+# Pre-create the data directory so it exists before entrypoint runs.
+# Container filesystems are ephemeral; /data is the conventional mount
+# point for SQLite-standalone deployments (mount a named volume here
+# to persist the database file).
 RUN mkdir -p /data && chmod 777 /data
+VOLUME /data
 
 # Install uv for fast dependency resolution
 RUN pip install uv
