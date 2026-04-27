@@ -79,11 +79,6 @@ exclude = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Seed scripts manipulate sys.path before importing project modules, which is
-# the canonical reason to allow late module imports.
-"scripts/seed.py" = ["E402"]
-"scripts/seed_sample.py" = ["E402"]
-"scripts/seed_review_queue.py" = ["E402"]
 # web/main.py resolves APP_VERSION before importing routers. Structural, not a bug.
 "web/main.py" = ["E402"]
 # Root conftest resolves TEST_BACKEND -> DATABASE_URL via a helper before
