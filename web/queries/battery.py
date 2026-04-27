@@ -15,6 +15,7 @@ import plotly.io as pio
 from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.dialect import date_trunc_compat
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.vehicle_status import EVVehicleStatus
@@ -100,7 +101,9 @@ async def query_soc_timeline(
         else:
             bucket = "2 hours"
 
-        bucket_col = func.date_trunc(bucket, EVBatteryStatus.recorded_at).label("bucket")
+        bucket_col = date_trunc_compat(
+            bucket, EVBatteryStatus.recorded_at, dialect=db.bind.dialect
+        ).label("bucket")
         stmt = (
             select(
                 bucket_col,
