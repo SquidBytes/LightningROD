@@ -2,22 +2,22 @@
 
 This project uses Alembic for schema migrations.
 
-## Phase 30 squash (2026-04-26)
+## Squashed initial migration (2026-04-26)
 
-All migration history prior to Phase 30 has been squashed into a single
+The full pre-squash migration history has been consolidated into a single
 dialect-aware initial migration: `versions/p30_squashed_initial.py`.
 
-The squashed migration is portable across PostgreSQL and SQLite — it uses
-`sa.DateTime(timezone=True)`, `sa.Uuid(as_uuid=True)`, `sa.func.now()`
-server defaults, the `JSONStorage` TypeDecorator from `db/types.py`, and
-declares both `postgresql_where=` and `sqlite_where=` on partial indexes.
+It runs on both PostgreSQL and SQLite — it uses `sa.DateTime(timezone=True)`,
+`sa.Uuid(as_uuid=True)`, `sa.func.now()` server defaults, the `JSONStorage`
+TypeDecorator from `db/types.py`, and declares both `postgresql_where=` and
+`sqlite_where=` on partial indexes.
 
-### If you are pulling Phase 30 against an EXISTING PostgreSQL dev DB
+### Pulling against an existing PostgreSQL dev database
 
 You must stamp the database to the new revision **before** running
-`alembic upgrade head`. Otherwise, the squashed migration will refuse to
-run — it raises a clear `RuntimeError` when it detects existing tables
-without a matching stamp, naming the exact command to fix the situation.
+`alembic upgrade head`. Otherwise the squashed migration refuses to run —
+it raises a `RuntimeError` when it detects existing tables without a
+matching stamp, naming the exact command to fix the situation.
 
 ```bash
 cd app-public
@@ -26,33 +26,30 @@ uv run alembic stamp p30_squashed_initial
 uv run alembic upgrade head    # no-op if already at head
 ```
 
-### If you are starting fresh (new dev DB, demo deploys, CI)
+### Starting fresh (new dev DB, demo deploys, CI)
 
-No special action required. `alembic upgrade head` will create the
-schema and apply the seed rows from the squash.
+No special action required. `alembic upgrade head` creates the schema and
+applies the seed rows.
 
 ### Why squash?
 
-Decision D-05 of Phase 30 chose a single source of schema truth that
-runs cleanly on both PostgreSQL and SQLite. Cross-dialect migrations
-are easier to maintain as one file than as 21 files with conditional
-dialect logic.
+A single source of schema truth that runs cleanly on both PostgreSQL and
+SQLite is easier to maintain than a long chain of dialect-conditional
+migrations.
 
-### What about backwards compatibility?
+### Backwards compatibility
 
-Per project policy (CLAUDE.md), backwards compatibility is NOT required.
-The `down_revision` of the squash is `None` — the squash cannot
-downgrade back through prior migrations because they no longer exist.
-Its `downgrade()` raises `NotImplementedError` deliberately. To revert
-to a pre-Phase-30 schema, check out the v0.3 branch and migrate there
-instead.
+Per project policy (`CLAUDE.md`), backwards compatibility is NOT required.
+The squash's `down_revision` is `None` — it cannot downgrade because the
+prior migrations no longer exist. Its `downgrade()` raises
+`NotImplementedError` deliberately. To revert to the pre-squash schema,
+check out a pre-squash branch and migrate there instead.
 
-## Adding new migrations after Phase 30
+## Adding new migrations
 
-Use `uv run alembic revision --autogenerate -m "your message"` as
-before. The squash is the new initial; future migrations chain off it
-normally with `down_revision = "p30_squashed_initial"` (auto-set by
-autogenerate).
+Use `uv run alembic revision --autogenerate -m "your message"` as before.
+Future migrations chain off the squash normally with
+`down_revision = "p30_squashed_initial"` (auto-set by autogenerate).
 
 ### Cross-dialect rules for new migrations
 
@@ -68,7 +65,7 @@ autogenerate).
 - Keep the revision id ≤ 32 characters to fit `alembic_version.version_num
   VARCHAR(32)`.
 
-## Render demo deployment (Phase 30 D-12 / D-13)
+## Render demo deployment
 
 The public demo runs as a Render Web Service against a fresh SQLite
 database seeded at container start. Restart = reset; no scheduled cron.
@@ -115,8 +112,7 @@ LIGHTNINGROD_VERSION=demo
 
 Render free-tier services sleep after ~15 minutes of inactivity. First
 visit after sleep takes ~30 seconds (container cold-start + entrypoint
-seed pipeline). This is acknowledged out-of-scope per Phase 30 deferred
-items. If the cold-start UX matters later, options include:
+seed pipeline). If the cold-start UX matters later, options include:
 (a) baking the seeded SQLite file as a Docker layer (loses freshness),
 (b) cron-pinging `/healthz` to keep the service warm (paid tier only),
 (c) upgrading to paid tier with a baked image.
@@ -137,7 +133,7 @@ disk tier, you MUST:
 ### Demo write-protection
 
 The `DemoModeMiddleware` (`web/middleware/demo_mode.py`) blocks DELETE,
-PUT, and PATCH with a 403 JSON response when `DEMO_MODE=true`. The
-demo banner partial (`web/templates/partials/demo_banner.html`)
-renders only when `demo_mode` is true and links to the public repo
-(`aminorjourney/LightningROD`). See Plan 30-08 for details.
+PUT, and PATCH with a 403 JSON response when `DEMO_MODE=true`. The demo
+banner partial (`web/templates/partials/demo_banner.html`) renders only
+when `demo_mode` is true and links to the public repo
+(`aminorjourney/LightningROD`).

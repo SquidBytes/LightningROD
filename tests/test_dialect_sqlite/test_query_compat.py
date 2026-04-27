@@ -40,7 +40,7 @@ async def test_date_trunc_compat_hour(db_session):
 
 @pytest.mark.db
 async def test_date_trunc_compat_multi_hour(db_session):
-    """Multi-hour bucket via integer-arithmetic path (RESEARCH Risk R1)."""
+    """Multi-hour bucket via integer-arithmetic path."""
     from db.models.battery_status import EVBatteryStatus
 
     base = datetime(2026, 1, 1, 0, 0, tzinfo=UTC)

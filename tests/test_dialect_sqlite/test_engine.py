@@ -11,7 +11,7 @@ async def test_dialect_is_sqlite(db_session):
 
 @pytest.mark.db
 async def test_pragma_foreign_keys_on(db_session):
-    """PRAGMA foreign_keys must be ON per-connection (RESEARCH Pitfall 1)."""
+    """PRAGMA foreign_keys must be ON per-connection."""
     result = await db_session.execute(text("PRAGMA foreign_keys"))
     assert result.scalar() == 1
 
@@ -25,6 +25,6 @@ async def test_pragma_journal_mode_wal(db_session):
 
 @pytest.mark.db
 async def test_pragma_busy_timeout(db_session):
-    """PRAGMA busy_timeout 5000ms — RESEARCH Pitfall 2 cheap insurance."""
+    """PRAGMA busy_timeout is set to 5000ms."""
     result = await db_session.execute(text("PRAGMA busy_timeout"))
     assert result.scalar() == 5000

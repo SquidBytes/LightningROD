@@ -17,8 +17,8 @@ from pathlib import Path
 def _resolve_test_db_url() -> str:
     """Return the test DATABASE_URL for the active TEST_BACKEND.
 
-    sqlite: tmpfile DB wiped at module load (T-30-07-01 mitigation).
-    postgres (default): the existing dockerized test-db service URL.
+    sqlite: tmpfile DB wiped at module load so each session starts clean.
+    postgres (default): the dockerized test-db service URL.
     """
     backend = os.environ.get("TEST_BACKEND", "postgres")
     if backend == "sqlite":
@@ -28,9 +28,9 @@ def _resolve_test_db_url() -> str:
     return "postgresql+asyncpg://lightningrod_test:testpass@localhost:5433/lightningrod_test"
 
 
-# Backend selector + DATABASE_URL set BEFORE any app imports so config.py +
-# alembic env.py see them (Pitfall 3 from RESEARCH.md). E402 below is allowed
-# by ruff because only os.environ assignments separate the import groups.
+# DATABASE_URL must be set before any app imports so config.py + alembic
+# env.py pick it up. E402 below is allowed by ruff because only os.environ
+# assignments separate the import groups.
 _BACKEND = os.environ.get("TEST_BACKEND", "postgres")
 TEST_DB_URL = _resolve_test_db_url()
 os.environ["DATABASE_URL"] = TEST_DB_URL
@@ -46,11 +46,10 @@ _migrations_done = False
 def _attach_sqlite_pragmas(engine):
     """Mirror db/engine.py: install per-connection PRAGMAs on a fresh test engine.
 
-    The test fixture creates an isolated engine per test for transaction
-    rollback semantics; that engine bypasses db/engine.py's listener entirely,
-    so SQLite would default to foreign_keys=OFF and journal_mode=delete. We
-    re-install the same listener here so test runs match the production
-    engine's behaviour (T-30-07-01 + RESEARCH Pitfall 1 mitigation).
+    The fixture creates an isolated engine per test for transaction-rollback
+    semantics; that engine bypasses db/engine.py's listener, so SQLite would
+    default to foreign_keys=OFF and journal_mode=delete. Re-installing the
+    same listener here keeps test behaviour aligned with production.
     """
     if engine.sync_engine.dialect.name != "sqlite":
         return

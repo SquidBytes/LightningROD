@@ -18,7 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# --- Phase 30: --backend selector ---
+# --- --backend selector ---
 BACKEND="postgres"
 PYTEST_ARGS=()
 

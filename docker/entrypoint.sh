@@ -24,15 +24,15 @@ fi
 
 # Demo seed logic: re-seed if (DEMO_MODE=true AND no marker file).
 # Marker file makes the seed step idempotent across uvicorn restarts within
-# the same container life. Container restart wipes the filesystem on Render
-# free tier, which IS the reset mechanism (D-12).
+# the same container life. On Render free tier, container restart wipes the
+# filesystem — that's the demo's reset mechanism.
 SEED_MARKER="${SQLITE_PATH}.seeded"
 
 if [ -n "$SQLITE_PATH" ] && [ "$DEMO_MODE" = "true" ] && [ ! -f "$SEED_MARKER" ]; then
     echo "Demo mode: seeding fresh SQLite database at $SQLITE_PATH"
-    # Defense-in-depth: drop stale main + WAL/SHM sidecars before re-seed
-    # (RESEARCH Pitfall 5 / Risk R7). Free-tier ephemeral FS makes this
-    # mostly redundant, but keeps paid-disk upgraders safe.
+    # Defense-in-depth: drop stale main + WAL/SHM sidecars before re-seed.
+    # Render free-tier ephemeral FS makes this mostly redundant, but keeps
+    # paid-disk upgraders safe from partial-write corruption.
     rm -f "$SQLITE_PATH" "${SQLITE_PATH}-wal" "${SQLITE_PATH}-shm"
 
     echo "  Running migrations..."

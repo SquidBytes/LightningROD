@@ -7,9 +7,8 @@ from sqlalchemy import inspect
 async def test_all_tables_created(db_session):
     """alembic upgrade head completes against SQLite and creates expected tables.
 
-    The squashed initial migration p30_squashed_initial (Plan 30-03) is the
-    only migration that runs here; this test asserts that every core table
-    declared by the ORM is actually created on the SQLite backend.
+    Asserts every core ORM table is materialised on the SQLite backend after
+    the squashed initial migration runs against a fresh database.
     """
 
     def _list_tables(sync_session):

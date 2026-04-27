@@ -1,9 +1,9 @@
-"""Per-connection FK enforcement assertion (RESEARCH Pitfall 1).
+"""Per-connection FK enforcement on SQLite.
 
 SQLite enforces foreign keys only when ``PRAGMA foreign_keys = ON`` is set per
-connection. db/engine.py installs a connect-event listener that runs the
-PRAGMA on every aiosqlite handshake. Without it, FK violations would silently
-succeed — exactly the failure mode this test guards against.
+connection. ``db/engine.py`` installs a connect-event listener that issues the
+PRAGMA on every aiosqlite handshake; without it, FK violations would silently
+succeed.
 """
 import pytest
 from sqlalchemy import text

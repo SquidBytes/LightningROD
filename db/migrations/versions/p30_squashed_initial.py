@@ -1,26 +1,23 @@
-"""squashed initial schema (Phase 30 SQLite + dialect-portable)
+"""Squashed initial schema — dialect-portable (PostgreSQL + SQLite).
 
-Squashes 21 prior migrations into a single dialect-aware initial.
-Existing PG dev DBs: alembic stamp p30_squashed_initial before pulling Phase 30.
+Consolidates 21 prior migrations into a single dialect-aware initial. The
+resulting schema matches the cumulative HEAD that the prior chain produced.
+Existing PostgreSQL dev databases must run ``alembic stamp p30_squashed_initial``
+once before pulling this migration; see ``db/migrations/README.md``.
 
-The schema produced by this migration matches the cumulative HEAD that the
-21 prior migrations produced together. It was authored by walking the
-chain (2b6f55486b4d -> ... -> s34_phase29_schema_version) and consolidating
-every CREATE TABLE / ADD COLUMN / CREATE INDEX into one upgrade, with the
-dialect-portability rewrites described in 30-RESEARCH.md §"Concrete Recipes"
-and 30-PATTERNS.md (TIMESTAMP -> DateTime, UUID -> Uuid, NOW server-default
--> func.now, JSONB -> JSONStorage, partial-index dual where-kwargs).
+Dialect-portability rewrites used throughout:
+- ``postgresql.TIMESTAMP(timezone=True)`` -> ``sa.DateTime(timezone=True)``
+- ``postgresql.UUID`` -> ``sa.Uuid(as_uuid=True)``
+- ``sa.text("NOW()")`` -> ``sa.func.now()``
+- ``postgresql.JSONB`` -> ``db.types.JSONStorage``
+- partial indexes get dual ``postgresql_where=`` + ``sqlite_where=`` kwargs
 
-A safety check at the top of upgrade() refuses to apply the migration
-against a non-empty unstamped schema (preventing data loss when an
-existing PG dev DB pulls Phase 30 without running `alembic stamp`).
+A safety check at the top of ``upgrade()`` refuses to apply against a
+non-empty unstamped schema, preventing data loss on existing dev databases.
 
-Seed data carried forward to match HEAD on a fresh DB:
-- ev_charging_networks: the 7 rows from q22_seed_charging_networks.
-  (The 14 rows seeded by c9345e830aab were all deleted by 208b4ddefdd2
-  on a fresh DB because none had associated sessions or locations.)
-- app_settings: the 3 comparison_* keys from c9345e830aab.
-  (gas_price_per_gallon and vehicle_mpg were deleted by p20_gas_comparison.)
+Seed data carried forward to match HEAD on a fresh database:
+- ``ev_charging_networks``: 7 rows (the surviving set after upstream cleanup).
+- ``app_settings``: 3 ``comparison_*`` keys.
 
 Revision ID: p30_squashed_initial
 Revises:
@@ -43,13 +40,13 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Apply the squashed initial schema."""
     # -----------------------------------------------------------------------
-    # Safety check: refuse to apply against a non-empty unstamped schema.
-    # Existing PG dev DBs must run `alembic stamp p30_squashed_initial`
-    # before pulling Phase 30. See db/migrations/README.md.
+    # Safety check: refuse to apply against a non-empty unstamped schema so
+    # an existing dev database isn't blown away by a fresh squash. Operators
+    # must `alembic stamp p30_squashed_initial` once on legacy databases
+    # before this migration runs (see db/migrations/README.md).
     #
-    # Skipped under --sql offline mode (no live connection to inspect; the
-    # generated SQL is for human review only and never touches a database).
-    # See RESEARCH §"Pitfall 7: Alembic --sql offline mode".
+    # Skipped under --sql offline mode: there's no live connection to
+    # inspect, and the rendered SQL is for human review only.
     # -----------------------------------------------------------------------
     if not context.is_offline_mode():
         bind = op.get_bind()
@@ -60,12 +57,12 @@ def upgrade() -> None:
         existing_tables.discard("alembic_version")
         if existing_tables:
             raise RuntimeError(
-                "Phase 30 squashed migration refused to run: existing tables "
+                "Squashed initial migration refused to run: existing tables "
                 "found without an Alembic stamp matching p30_squashed_initial. "
-                "If this is an existing PG dev DB, run: "
+                "If this is an existing dev database, run: "
                 "uv run alembic stamp p30_squashed_initial "
                 "(see app-public/db/migrations/README.md). "
-                "If this is a fresh DB, drop the database and re-run "
+                "If this is a fresh database, drop it and re-run "
                 "alembic upgrade head."
             )
 
@@ -744,8 +741,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """One-way migration per D-05."""
+    """No-op: squashed initial migrations are intentionally one-way."""
     raise NotImplementedError(
-        "p30_squashed_initial is one-way per D-05. "
-        "To revert, drop the database and migrate to a pre-Phase-30 commit."
+        "p30_squashed_initial is a one-way squash and cannot be downgraded. "
+        "To revert, drop the database and migrate to a pre-squash commit."
     )

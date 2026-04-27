@@ -1,4 +1,4 @@
-"""JSON / Uuid / DateTime round-trip per dialect (RESEARCH Pitfalls 3, 4)."""
+"""JSON / Uuid / DateTime round-trip on SQLite."""
 import uuid
 from datetime import UTC, datetime
 
@@ -44,9 +44,9 @@ async def test_uuid_roundtrip(db_session):
 async def test_datetime_tz_roundtrip(db_session):
     """sa.DateTime(timezone=True) round-trips a tz-aware datetime on SQLite.
 
-    Per RESEARCH Pitfall 4, SQLite stores naive ISO strings — we assert match
-    at the timestamp-component level so a naive-vs-aware return is surfaced as
-    a known concern rather than a silent data loss.
+    SQLite stores naive ISO strings, so the assertion compares at the
+    timestamp-component level — a naive-vs-aware return is surfaced rather
+    than silently lost.
     """
     from db.models.charging_session import EVChargingSession
 

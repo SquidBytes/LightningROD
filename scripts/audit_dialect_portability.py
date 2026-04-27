@@ -1,21 +1,17 @@
-"""Dev-only audit: surface PG-only constructs that scout grep + library-version
-verification missed.
+"""Dev-only audit for PostgreSQL-only SQL constructs in production code.
 
-Run from app-public/ with:
+Run from app-public/:
+
     uv run python scripts/audit_dialect_portability.py
 
-Exits 0 if clean, 1 if findings.
+Exits 0 if clean, 1 if findings. Three checks run sequentially:
 
-Implements the four audits from
-``.planning/phases/30-add-sqlite-as-alternative-database-option-with-demo-site-cap/30-RESEARCH.md``
-§"PG-Only Audit — Beyond Grep":
-
-1. Re-grep BLIND-SPOTS 1-4 + PG-only token catalog in production code.
-2. ``alembic upgrade head --sql`` smoke render on both dialects (best-effort —
-   degrades gracefully when PG isn't reachable).
-3. Optional sqlglot transpile pass (informational only — see RESEARCH §"Audit 4"
-   for the full manual procedure that captures live SQL traces).
-4. (Folded into 1) PG-only token catalog re-grep.
+1. Grep production source for PG-only patterns (imports from
+   ``sqlalchemy.dialects.postgresql``, ``func.date_trunc``, ``::numeric``
+   casts, ``gen_random_uuid``, etc.).
+2. ``alembic upgrade head --sql`` smoke render on both SQLite and
+   PostgreSQL (best-effort — degrades gracefully when PG isn't reachable).
+3. Confirms ``sqlglot`` is importable so dev dependencies stay intact.
 """
 
 from __future__ import annotations
@@ -32,8 +28,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Files that legitimately import from sqlalchemy.dialects.postgresql / sqlite
 # OR use the PG-only branch of a dispatcher. These are the canonical dispatcher
-# / TypeDecorator modules — adding to this list requires explicit code review
-# of this audit script (T-30-06-02 mitigation).
+# / TypeDecorator modules — expanding this list requires explicit review of
+# the audit itself, since the allowlist is the only thing keeping it honest.
 ALLOWLIST_FILES: frozenset[str] = frozenset({
     "db/types.py",            # JSONStorage TypeDecorator imports JSONB on PG branch
     "db/portable_insert.py",  # portable_insert dispatcher imports both Insert ctors
@@ -99,7 +95,7 @@ def _iter_production_files() -> list[Path]:
 
 
 def grep_findings() -> list[dict[str, Any]]:
-    """Audit (1) + (4): re-grep BLIND-SPOTS 1-4 and PG-only token catalog."""
+    """Scan production source files for PG-only patterns."""
     issues: list[dict[str, Any]] = []
     for path in _iter_production_files():
         rel = path.relative_to(REPO_ROOT).as_posix()
@@ -123,11 +119,11 @@ def grep_findings() -> list[dict[str, Any]]:
 
 
 def alembic_smoke_render() -> dict[str, dict[str, Any]]:
-    """Audit (2): ``alembic upgrade head --sql`` on both dialects (best-effort).
+    """Run ``alembic upgrade head --sql`` against both dialects (best-effort).
 
-    SQLite uses an in-memory URL. PG uses a transient URL that may not resolve
-    in dev shells without a running PG instance — that path returns rc=-1 with
-    a recorded error rather than failing the audit (T-30-06-04 mitigation).
+    SQLite uses an on-disk tmp URL. PG uses a transient URL that may not
+    resolve in dev shells without a running PG instance — that path returns
+    rc=-1 with a recorded error rather than failing the audit.
     """
     results: dict[str, dict[str, Any]] = {}
     targets: list[tuple[str, str]] = [
@@ -165,13 +161,10 @@ def alembic_smoke_render() -> dict[str, dict[str, Any]]:
 
 
 def sqlglot_transpile_smoke() -> dict[str, Any]:
-    """Audit (3): optional sqlglot transpile pass.
+    """Confirm sqlglot is importable so the dev dependency edge stays intact.
 
-    Live trace + transpile is a manual procedure (see RESEARCH §"Audit 4")
-    because it requires capturing emitted SQL from a real test run. Here we
-    only confirm sqlglot is importable so the dependency edge isn't silently
-    broken (RESEARCH §"Standard Stack" — sqlglot is a dev-only dependency
-    landed by Plan 30-01).
+    A full transpile pass requires capturing live SQL from a real test run,
+    which is a manual procedure outside this audit's scope.
     """
     try:
         import sqlglot  # noqa: F401
@@ -182,10 +175,7 @@ def sqlglot_transpile_smoke() -> dict[str, Any]:
         }
     return {
         "skipped": True,
-        "reason": (
-            "sqlglot import OK; live trace + transpile requires --sql output "
-            "capture — see RESEARCH §'Audit 4' for the manual procedure"
-        ),
+        "reason": "sqlglot import OK; live transpile is a separate manual step",
     }
 
 
