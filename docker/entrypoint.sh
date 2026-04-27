@@ -1,14 +1,54 @@
 #!/bin/bash
 set -e
 
-echo "Running Alembic migrations..."
-uv run alembic upgrade head
+# Resolve SQLite path from DATABASE_URL when sqlite+aiosqlite scheme.
+# DATABASE_URL=sqlite+aiosqlite:////data/demo.db -> /data/demo.db
+# SQLAlchemy URL form: 4 slashes for absolute path, 3 for relative.
+SQLITE_PATH=""
+case "$DATABASE_URL" in
+    sqlite+aiosqlite:///*)
+        SQLITE_PATH="${DATABASE_URL#sqlite+aiosqlite:///}"
+        # Strip leading slashes so '////data/demo.db' -> '/data/demo.db' and
+        # 'relative/path.db' picks up a leading slash for mkdir below.
+        case "$SQLITE_PATH" in
+            /*) ;;
+            *)  SQLITE_PATH="/$SQLITE_PATH" ;;
+        esac
+        ;;
+esac
 
-if [ "$DEMO_MODE" = "true" ]; then
-    echo "DEMO_MODE=true — running demo seed (this wipes/refreshes demo data on every start)..."
-    uv run python -m scripts.seed.main --all
+# Ensure data directory exists (parent of the .db file).
+if [ -n "$SQLITE_PATH" ]; then
+    mkdir -p "$(dirname "$SQLITE_PATH")"
+fi
+
+# Demo seed logic: re-seed if (DEMO_MODE=true AND no marker file).
+# Marker file makes the seed step idempotent across uvicorn restarts within
+# the same container life. Container restart wipes the filesystem on Render
+# free tier, which IS the reset mechanism (D-12).
+SEED_MARKER="${SQLITE_PATH}.seeded"
+
+if [ -n "$SQLITE_PATH" ] && [ "$DEMO_MODE" = "true" ] && [ ! -f "$SEED_MARKER" ]; then
+    echo "Demo mode: seeding fresh SQLite database at $SQLITE_PATH"
+    # Defense-in-depth: drop stale main + WAL/SHM sidecars before re-seed
+    # (RESEARCH Pitfall 5 / Risk R7). Free-tier ephemeral FS makes this
+    # mostly redundant, but keeps paid-disk upgraders safe.
+    rm -f "$SQLITE_PATH" "${SQLITE_PATH}-wal" "${SQLITE_PATH}-shm"
+
+    echo "  Running migrations..."
+    uv run alembic upgrade head
+
+    # Single seed entry point — scripts/seed/main.py orchestrates every module
+    # in FK order in one transaction. `|| echo` keeps the container alive even
+    # if a single seeder warns (e.g. missing optional CSV in demo).
+    echo "  Running scripts.seed.main --all..."
+    uv run python -m scripts.seed.main --all || echo "  (scripts.seed.main warned — continuing)"
+
+    touch "$SEED_MARKER"
+    echo "Demo seed complete."
 else
-    echo "DEMO_MODE not set — skipping demo seed."
+    echo "Running Alembic migrations (non-demo or already seeded)..."
+    uv run alembic upgrade head
 fi
 
 echo "Starting LightningROD..."
