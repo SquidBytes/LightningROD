@@ -91,17 +91,29 @@ async def apply_offset_to_table(
 ) -> int:
     """Bulk-shift timestamp columns on every row of a table. Returns rows updated.
 
-    Uses an UPDATE statement with column = column + offset (PostgreSQL interval).
-    Only call after generation; idempotent shift = noop only if offset is zero.
+    Dialect-aware:
+      * PostgreSQL — `column + offset` (native interval arithmetic).
+      * SQLite     — `strftime('%Y-%m-%d %H:%M:%f', column, '±N seconds')`.
+        SQLite has no interval type; SQLAlchemy's `col + timedelta` on this
+        dialect compiles to a numeric coercion that destroys the column.
+    Idempotent shift = noop only if offset is zero.
     """
     if offset == timedelta(0):
         return 0
-    from sqlalchemy import update
+    from sqlalchemy import func, update
+
+    dialect_name = db.bind.dialect.name
+    seconds = offset.total_seconds()
+    sqlite_modifier = f"{'+' if seconds >= 0 else '-'}{abs(seconds)} seconds"
 
     rows_updated = 0
     for ts_col_name in ts_columns:
         col = getattr(model, ts_col_name)
-        stmt = update(model).values({ts_col_name: col + offset}).where(col.isnot(None))
+        if dialect_name == "sqlite":
+            shifted = func.strftime("%Y-%m-%d %H:%M:%f", col, sqlite_modifier)
+        else:
+            shifted = col + offset
+        stmt = update(model).values({ts_col_name: shifted}).where(col.isnot(None))
         result = await db.execute(stmt)
         rows_updated = max(rows_updated, result.rowcount or 0)
     return rows_updated
