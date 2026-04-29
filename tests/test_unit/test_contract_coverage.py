@@ -9,6 +9,7 @@ import pytest
 import db.models.battery_status  # noqa: F401
 import db.models.charging_session  # noqa: F401
 import db.models.trip_metrics  # noqa: F401
+import db.models.vehicle_status  # noqa: F401
 
 # Trigger model imports so Base.metadata is fully populated.
 from db.models import Base  # re-exported from db.models.__init__
@@ -22,6 +23,7 @@ _WATCHED_TABLES: set[str] = {
     "ev_trip_metrics",
     "ev_charging_session",
     "ev_battery_status",
+    "ev_vehicle_status",
 }
 
 # Column-name substrings that indicate a unit-ful physical quantity.

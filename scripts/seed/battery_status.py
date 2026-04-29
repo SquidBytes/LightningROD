@@ -20,6 +20,16 @@ _IDEMPOTENCY_THRESHOLD = 120
 # Realistic range (km) for the F-150 Lightning Standard Range at 100% SoC
 _MAX_RANGE_KM = 370.0
 
+# Rated gross pack capacity (kWh). Mirrors vehicle.battery_gross_capacity_kwh
+# in scripts/seed/vehicle.py — kept in sync manually because the demo seed
+# doesn't load the vehicle row before constructing capacity values.
+_RATED_CAPACITY_KWH = 108.0
+# Total degradation across the seeded 90-day window, in kWh. ~2.8% — on the
+# high end of typical real-world F-150 Lightning measurement drift, picked so
+# the "capacity by mileage" chart shows a clear downward trend even within
+# narrower windows (7d/30d) where per-reading noise would otherwise dominate.
+_TOTAL_DEGRADATION_KWH = 3.0
+
 logger = logging.getLogger(__name__)
 
 
@@ -89,22 +99,65 @@ async def seed(db: AsyncSession) -> int:
 
     rows: list[EVBatteryStatus] = []
 
+    # Timeline anchors used to interpolate per-reading capacity. Falls back
+    # to the constructor-time `now` if charging sessions don't pin a span.
+    timeline_min = sessions[0].session_start_utc or datetime.now(UTC)
+    timeline_max = sessions[-1].session_end_utc or sessions[-1].session_start_utc or datetime.now(UTC)
+    if timeline_min.tzinfo is None:
+        timeline_min = timeline_min.replace(tzinfo=UTC)
+    if timeline_max.tzinfo is None:
+        timeline_max = timeline_max.replace(tzinfo=UTC)
+    timeline_span = (timeline_max - timeline_min).total_seconds() or 1.0
+
+    def _capacity_at(ts: datetime) -> float:
+        """Linear capacity drift over the seeded window plus small jitter.
+
+        The jitter stdev is intentionally tight (0.15 kWh): real BMS-reported
+        gross capacity is stable instantaneously — the long-term degradation
+        signal is what we want the demo chart to surface, and per-row noise
+        any larger than this overwhelms the trend in 7d/30d windows.
+        """
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        progress = (ts - timeline_min).total_seconds() / timeline_span
+        progress = max(0.0, min(1.0, progress))
+        baseline = _RATED_CAPACITY_KWH - (progress * _TOTAL_DEGRADATION_KWH)
+        return round(baseline + rng.gauss(0, 0.08), 2)
+
     # --- helper to build a single EVBatteryStatus row -----------------------
     def _make_row(
         recorded_at: datetime,
         soc: float,
         temp: float,
+        *,
+        driving: bool = False,
     ) -> EVBatteryStatus:
         hv_range = round(_soc_to_range_raw(soc), 1)
         voltage = round(rng.uniform(350.0, 420.0), 1)
         amperage = round(rng.uniform(-5.0, 5.0), 2)  # near-zero when parked
         lv_level = round(rng.uniform(75.0, 99.0), 1)
         lv_voltage = round(rng.uniform(12.1, 14.8), 2)
+
+        # Motor metrics: only meaningful while driving. ~25% of between-session
+        # readings represent a moving snapshot; charging-anchor readings are
+        # always parked (motor disengaged).
+        if driving:
+            motor_voltage = voltage
+            motor_amperage = round(rng.uniform(-30.0, 180.0), 1)
+            motor_kw = round(motor_voltage * motor_amperage / 1000.0, 2)
+            perf_status = "limited" if temp > 38.0 else "normal"
+        else:
+            motor_voltage = 0.0
+            motor_amperage = 0.0
+            motor_kw = 0.0
+            perf_status = "normal"
+
         return EVBatteryStatus(
             device_id=device_id,
             recorded_at=recorded_at,
             hv_battery_soc=round(soc, 1),
             hv_battery_actual_soc=round(soc + rng.uniform(-1.0, 1.0), 1),
+            hv_battery_capacity=_capacity_at(recorded_at),
             hv_battery_range=hv_range,
             hv_battery_max_range=_MAX_RANGE_KM,
             hv_battery_voltage=voltage,
@@ -113,7 +166,12 @@ async def seed(db: AsyncSession) -> int:
             hv_battery_temperature=temp,
             lv_battery_level=lv_level,
             lv_battery_voltage=lv_voltage,
+            motor_voltage=motor_voltage,
+            motor_amperage=motor_amperage,
+            motor_kw=motor_kw,
+            performance_status=perf_status,
             source_system="seed",
+            original_timestamp=recorded_at,
             ingest_schema_version=2,
         )
 
@@ -176,7 +234,10 @@ async def seed(db: AsyncSession) -> int:
                 # Parked state: gently drifting SoC (self-discharge ~0.3% per 12 hr)
                 soc_parked = round(rng.uniform(20.0, 90.0), 1)
                 temp_parked: float = float(seeder.value_for("ev_battery_status", "hv_battery_temperature"))
-                rows.append(_make_row(cursor, soc_parked, temp_parked))
+                # ~25% of between-session readings simulate a driving moment so
+                # motor_* columns aren't entirely zero in the demo dataset.
+                driving = rng.random() < 0.25
+                rows.append(_make_row(cursor, soc_parked, temp_parked, driving=driving))
                 between_count += 1
 
             cursor += interval + timedelta(minutes=rng.uniform(-15, 15))

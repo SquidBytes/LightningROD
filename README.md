@@ -111,61 +111,24 @@ The app will be available at `http://localhost:8000`. Migrations run automatical
 
 ### Standalone Docker (single container)
 
-Runs both the app and PostgreSQL in a single container -- no Compose required.
+Runs the app in a single container with an embedded SQLite database on a named volume -- no separate database service required.
 
 ```bash
 git clone https://github.com/SquidBytes/LightningROD.git
 cd LightningROD
-cp .env.example .env
-docker build -f docker/Dockerfile.standalone -t lightningrod:standalone .
+docker build -f docker/Dockerfile -t lightningrod-web:dev .
 docker run -d \
   -p 8000:8000 \
-  -v lightningrod-data:/var/lib/postgresql/data \
-  --env-file .env \
+  -v lightningrod-data:/data \
+  -e DATABASE_URL=sqlite+aiosqlite:////data/lightningrod.db \
   --name lightningrod \
-  lightningrod:standalone
+  lightningrod-web:dev
 ```
 
-Or using the standalone compose file:
+Or using the standalone compose file (overrides `DATABASE_URL` automatically):
 
 ```bash
 docker compose -f docker/docker-compose.standalone.yml up --build -d
 ```
 
 Reference the full [documentation site](https://SquidBytes.github.io/LightningROD/).
-
-## Demo Mode
-
-LightningROD ships with an opt-in demo seeder that populates a fully realistic
-dataset (vehicles, locations, networks, charging sessions, trips, GPS, gas
-prices, review queue) so the UI can be evaluated without a real Home Assistant
-feed.
-
-**Activation**: set `DEMO_MODE=true` on the container. The Docker entrypoint
-runs `uv run python -m scripts.seed.main --all` after Alembic migrations.
-
-```bash
-DEMO_MODE=true docker compose up
-```
-
-**Important caveats**:
-- Demo data is **wiped/refreshed every container start**. Don't enable in
-  production.
-- All seed timestamps are shifted on each run so the latest row is "now"
-  while preserving relative spacing — the dashboard's default 7-day view
-  always has data.
-- Each seed module is idempotent on its own primary key/uniqueness constraint.
-
-**Manual invocation** (for local development):
-
-```bash
-uv run python -m scripts.seed.main --all                    # Seed everything
-uv run python -m scripts.seed.main --module=evse_stalls     # Seed one module
-uv run python -m scripts.seed.main --all --no-refresh-timestamps  # Skip time-shift
-uv run python -m scripts.seed.main --dry-run                # Validate, don't commit
-```
-
-The seed package lives in `scripts/seed/`. Each module is a standalone async
-`seed(db: AsyncSession) -> int` function. The orchestrator (`main.py`) runs
-them in FK-respecting order under one transaction, applies a global
-time-shift, then writes a contracts-gap report.

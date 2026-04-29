@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import AppSettings
 from db.models.vehicle import EVVehicle
+from db.portable_insert import portable_insert
 
 _DEMO_VIN = "1FT6W1EV0NWG00000"
 
@@ -20,12 +20,12 @@ async def _set_active_vehicle(db: AsyncSession, vehicle_id: int) -> None:
     renders empty. Inline upsert (not set_app_setting helper) so it stays
     inside the orchestrator's single transaction.
     """
-    stmt = pg_insert(AppSettings).values(
+    stmt = portable_insert(AppSettings, dialect=db.bind.dialect).values(
         key="active_vehicle_id", value=str(vehicle_id)
     )
     stmt = stmt.on_conflict_do_update(
         index_elements=["key"],
-        set_={"value": str(vehicle_id)},
+        set_={"value": str(vehicle_id), "updated_at": func.now()},
     )
     await db.execute(stmt)
 
@@ -50,6 +50,11 @@ async def seed(db: AsyncSession) -> int:
         battery_option="Standard Range",
         battery_capacity_kwh=98.0,
         battery_gross_capacity_kwh=108.0,
+        # ICE comparison: same year/model/trim ICE F-150 XLT 2.7L EcoBoost (4WD)
+        # EPA combined ~21 MPG → 11.2 L/100km. 23-gal standard tank → 87.0 L.
+        ice_label="2024 Ford F-150 XLT 2.7L EcoBoost",
+        ice_fuel_efficiency=11.2,
+        ice_fuel_tank_capacity=87.0,
         source_system="seed",
     )
     db.add(vehicle)

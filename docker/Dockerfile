@@ -21,9 +21,16 @@ ENV LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION}
 LABEL org.opencontainers.image.title="LightningROD" \
       org.opencontainers.image.description="Self-hosted charging analytics for Ford electric vehicles" \
       org.opencontainers.image.version="${LIGHTNINGROD_VERSION}" \
-      org.opencontainers.image.source="https://github.com/aminorjourney/LightningROD"
+      org.opencontainers.image.source="https://github.com/SquidBytes/LightningROD"
 
 WORKDIR /app
+
+# Pre-create the data directory so it exists before entrypoint runs.
+# Container filesystems are ephemeral; /data is the conventional mount
+# point for SQLite-standalone deployments (mount a named volume here
+# to persist the database file).
+RUN mkdir -p /data && chmod 777 /data
+VOLUME /data
 
 # Install uv for fast dependency resolution
 RUN pip install uv

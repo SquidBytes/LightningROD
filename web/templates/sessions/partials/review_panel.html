@@ -11,7 +11,7 @@
             <span class="text-xs text-base-content/40">{{ session.source_system or 'unknown' }}</span>
           </div>
           <div class="space-y-1 text-sm">
-            <p><span class="text-base-content/60">Date:</span> {{ session.session_start_utc.strftime('%Y-%m-%d %H:%M') if session.session_start_utc else '--' }}</p>
+            <p><span class="text-base-content/60">Date:</span> {{ session.session_start_utc|localtime(user_tz|default('UTC'), '%Y-%m-%d %H:%M') if session.session_start_utc else '--' }}</p>
             <p><span class="text-base-content/60">Energy:</span> {{ '%.2f'|format(session.energy_kwh|float) if session.energy_kwh else '--' }} kWh</p>
             <p><span class="text-base-content/60">Location:</span> {{ session.location_name or '--' }}</p>
             <p><span class="text-base-content/60">Cost:</span> {{ '$%.2f'|format(session.cost|float) if session.cost else '--' }}</p>
@@ -29,7 +29,7 @@
             <span class="text-xs text-base-content/40">{{ other.source_system or 'unknown' }}</span>
           </div>
           <div class="space-y-1 text-sm">
-            <p><span class="text-base-content/60">Date:</span> {{ other.session_start_utc.strftime('%Y-%m-%d %H:%M') if other.session_start_utc else '--' }}</p>
+            <p><span class="text-base-content/60">Date:</span> {{ other.session_start_utc|localtime(user_tz|default('UTC'), '%Y-%m-%d %H:%M') if other.session_start_utc else '--' }}</p>
             <p><span class="text-base-content/60">Energy:</span> {{ '%.2f'|format(other.energy_kwh|float) if other.energy_kwh else '--' }} kWh</p>
             <p><span class="text-base-content/60">Location:</span> {{ other.location_name or '--' }}</p>
             <p><span class="text-base-content/60">Cost:</span> {{ '$%.2f'|format(other.cost|float) if other.cost else '--' }}</p>

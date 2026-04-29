@@ -4,7 +4,6 @@ import json
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import (
@@ -15,6 +14,7 @@ from db.models.reference import (
     EVNetworkNameAlias,
     EVNetworkSubscription,
 )
+from db.portable_insert import portable_insert
 
 # Predefined EV charging networks with brand-accurate colors
 PREDEFINED_NETWORKS: list[dict[str, Any]] = [
@@ -497,10 +497,12 @@ async def get_unit_context(db: AsyncSession) -> dict:
 
 async def set_app_setting(db: AsyncSession, key: str, value: str) -> None:
     """Upsert a single key-value pair in app_settings."""
-    stmt = pg_insert(AppSettings).values(key=key, value=value)
+    stmt = portable_insert(AppSettings, dialect=db.bind.dialect).values(
+        key=key, value=value
+    )
     stmt = stmt.on_conflict_do_update(
         index_elements=["key"],
-        set_={"value": value, "updated_at": stmt.excluded.updated_at},
+        set_={"value": value, "updated_at": func.now()},
     )
     await db.execute(stmt)
     await db.commit()

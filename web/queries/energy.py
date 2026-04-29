@@ -10,6 +10,7 @@ import plotly.io as pio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.dialect import date_trunc_compat
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
@@ -187,7 +188,9 @@ async def monthly_energy_series(
     """
     stmt = (
         select(
-            func.date_trunc("month", EVChargingSession.session_start_utc).label("m"),
+            date_trunc_compat(
+                "month", EVChargingSession.session_start_utc, dialect=db.bind.dialect
+            ).label("m"),
             func.coalesce(func.sum(EVChargingSession.energy_kwh), 0.0).label("kwh"),
         )
         .where(EVChargingSession.energy_kwh.isnot(None))

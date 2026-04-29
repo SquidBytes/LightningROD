@@ -5,6 +5,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -13,16 +14,16 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Uuid,
+    func,
     text,
 )
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
 
 # PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = TIMESTAMP(timezone=True)
+TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVChargingSession(Base):
@@ -36,7 +37,7 @@ class EVChargingSession(Base):
     # Primary identifier columns
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), default=uuid.uuid4, nullable=False
+        Uuid(as_uuid=True), default=uuid.uuid4, nullable=False
     )
     device_id: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -125,7 +126,7 @@ class EVChargingSession(Base):
     # Pipeline metadata
     source_system: Mapped[str | None] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
+        TIMESTAMPTZ, nullable=False, server_default=func.now()
     )
     original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
@@ -143,5 +144,6 @@ class EVChargingSession(Base):
             "idx_ev_charging_session_is_complete",
             "is_complete",
             postgresql_where=text("is_complete = true"),
+            sqlite_where=text("is_complete = 1"),
         ),
     )

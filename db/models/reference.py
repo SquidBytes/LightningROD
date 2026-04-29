@@ -5,21 +5,22 @@ from datetime import date, datetime
 from sqlalchemy import (
     Boolean,
     Date,
+    DateTime,
     ForeignKey,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
+    func,
     text,
 )
-from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
 
 # PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = TIMESTAMP(timezone=True)
+TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVChargingNetwork(Base):
@@ -106,7 +107,7 @@ class EVLocationGPSAlias(Base):
     latitude: Mapped[float] = mapped_column(Numeric, nullable=False)
     longitude: Mapped[float] = mapped_column(Numeric, nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False)  # 'merge', 'manual', 'auto_confirm'
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, server_default=text("NOW()"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, server_default=func.now())
 
 
 class EVNetworkNameAlias(Base):
@@ -122,7 +123,7 @@ class EVNetworkNameAlias(Base):
         Integer, ForeignKey("ev_charging_networks.id", ondelete="CASCADE"), nullable=False
     )
     alias_name: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, server_default=text("NOW()"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, server_default=func.now())
 
     __table_args__ = (
         UniqueConstraint("alias_name", name="uq_ev_network_name_aliases_alias_name"),
@@ -163,7 +164,7 @@ class EVStatistics(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     computed_at: Mapped[datetime | None] = mapped_column(
-        TIMESTAMPTZ, server_default=text("NOW()")
+        TIMESTAMPTZ, server_default=func.now()
     )
     total_sessions: Mapped[int | None] = mapped_column(Integer)
     total_energy_kwh: Mapped[float | None] = mapped_column(Numeric)
@@ -192,7 +193,7 @@ class GasPriceHistory(Base):
     average_price: Mapped[float | None] = mapped_column(Numeric)
     source: Mapped[str | None] = mapped_column(String(20))  # 'manual' or 'ha_sensor'
     updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
+        TIMESTAMPTZ, nullable=False, server_default=func.now()
     )
 
     __table_args__ = (
@@ -226,5 +227,5 @@ class AppSettings(Base):
     key: Mapped[str] = mapped_column(String, primary_key=True)
     value: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
+        TIMESTAMPTZ, nullable=False, server_default=func.now()
     )

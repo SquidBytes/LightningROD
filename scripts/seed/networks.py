@@ -2,7 +2,8 @@
 
 The q22 migration seeds 7 networks (Tesla Supercharger, Electrify America,
 ChargePoint, EVgo, EV Connect, IONNA, Rivian Adventure Network).  This module
-adds Blink and Home (residential) if they are absent, ensuring ≥ 9 rows total.
+adds Blink, Home (residential), and Work (employer-provided) if they are
+absent, ensuring ≥ 10 rows total.
 """
 from __future__ import annotations
 
@@ -31,6 +32,15 @@ _SEED_NETWORKS: list[dict] = [
         "source_system": "seed",
         "is_free": False,
         "notes": "Residential / personal charging",
+    },
+    {
+        "network_name": "Work",
+        "cost_per_kwh": 0.0,
+        "color": "#10B981",
+        "is_verified": True,
+        "source_system": "seed",
+        "is_free": True,
+        "notes": "Employer-provided workplace charging",
     },
 ]
 

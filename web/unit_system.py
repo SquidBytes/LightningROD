@@ -9,8 +9,14 @@ module converts to/from display units based on two independent user settings:
                    "metric" -> °C
 
 Users can choose them independently (e.g. mi/kWh with °C).
+
+Time inputs follow the same metric/UTC canonical-storage pattern: form values
+are parsed in the user's configured timezone (`user_timezone` app_settings key)
+and converted to UTC before storage. See ``parse_user_local_to_utc``.
 """
 
+from datetime import UTC, datetime, tzinfo
+from zoneinfo import ZoneInfo
 
 # Conversion constants
 KM_PER_MI = 1.60934
@@ -157,3 +163,75 @@ def to_metric_temp(value: float | None, temp_unit: str) -> float | None:
     if _normalize_temp_unit(temp_unit) == "us":
         return (float(value) - 32) * 5 / 9
     return float(value)
+
+
+# ---------------------------------------------------------------------------
+# Time conversion: user-local form input -> UTC (DB canonical)
+# ---------------------------------------------------------------------------
+
+
+def parse_user_local_to_utc(
+    date_str: str, time_str: str | None, tz_str: str | None
+) -> datetime:
+    """Parse a date/time form pair as user-local time and convert to UTC.
+
+    Mirrors ``to_metric_distance``: form values are interpreted in the user's
+    configured timezone (``user_timezone`` app_settings key) and the returned
+    aware datetime is in UTC, ready for direct DB storage.
+
+    Args:
+        date_str: ``YYYY-MM-DD`` string from a ``<input type="date">``.
+        time_str: ``HH:MM`` string from a ``<input type="time">``. Defaults to
+            ``"00:00"`` when None or empty.
+        tz_str: IANA timezone (e.g. ``"America/New_York"``). Falls back to UTC
+            when None, empty, or unrecognised — keeps the legacy behaviour for
+            users who have not configured a timezone.
+
+    Raises:
+        ValueError: when ``date_str`` / ``time_str`` cannot be parsed by
+            ``datetime.fromisoformat``. Caller should treat the form value as
+            invalid.
+    """
+    time_part = time_str or "00:00"
+    naive = datetime.fromisoformat(f"{date_str}T{time_part}")
+    tz: tzinfo = UTC
+    if tz_str:
+        try:
+            tz = ZoneInfo(tz_str)
+        except Exception:
+            tz = UTC
+    return naive.replace(tzinfo=tz).astimezone(UTC)
+
+
+def format_user_local(dt, tz_str: str | None, fmt: str) -> str:
+    """Format a UTC datetime as a string in the user's configured timezone.
+
+    Outbound counterpart of ``parse_user_local_to_utc``: stored UTC values are
+    converted to the user's TZ before ``strftime``. Used by server-side Plotly
+    hover/tooltip builders so timestamps render in user-local time.
+
+    Args:
+        dt: A datetime (timezone-aware UTC, or naive — naive is assumed UTC,
+            matching the canonical-storage convention). May also be a date,
+            in which case TZ conversion is a no-op.
+        tz_str: IANA timezone (e.g. ``"America/New_York"``). Falls back to UTC
+            when None, empty, or unrecognised.
+        fmt: ``strftime`` format string.
+
+    Returns:
+        Formatted string. If ``dt`` lacks ``strftime``, ``str(dt)`` is returned
+        unchanged (defensive — matches prior inline guards).
+    """
+    if not hasattr(dt, "strftime"):
+        return str(dt)
+    # date objects (no tzinfo) can't be tz-converted; format as-is.
+    if not isinstance(dt, datetime):
+        return dt.strftime(fmt)
+    tz: tzinfo = UTC
+    if tz_str:
+        try:
+            tz = ZoneInfo(tz_str)
+        except Exception:
+            tz = UTC
+    aware = dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+    return aware.astimezone(tz).strftime(fmt)

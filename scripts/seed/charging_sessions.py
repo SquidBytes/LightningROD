@@ -54,7 +54,7 @@ _PROFILES = [
         "Work",
         "AC Level 2",
         "private",
-        None,  # no network for work — free charging
+        "Work",  # employer-provided network (free)
         25,
         (5.0, 18.0),
         (1.5, 4.0),
@@ -160,13 +160,18 @@ async def seed(db: AsyncSession) -> int:
     rng = random.Random(42)
 
     # --- Generate timestamps (1–3 day spacing, 90 days back) ---
+    # Anchor the most recent session within the last ~18 hours so the
+    # default 7-day dashboard window always has fresh rows. Walk
+    # backwards from there and reverse to ascending.
     now = datetime.now(UTC)
+    earliest = now - timedelta(days=_DAYS_BACK)
     timestamps: list[datetime] = []
-    cursor = now - timedelta(days=_DAYS_BACK)
-    while cursor < now and len(timestamps) < _TARGET_SESSIONS:
+    cursor = now - timedelta(hours=rng.uniform(2.0, 18.0))
+    while cursor > earliest and len(timestamps) < _TARGET_SESSIONS:
         timestamps.append(cursor)
         gap_days = rng.uniform(1.0, 3.0)
-        cursor += timedelta(days=gap_days)
+        cursor -= timedelta(days=gap_days)
+    timestamps.reverse()
 
     sessions: list[EVChargingSession] = []
     for ts_start in timestamps:

@@ -12,16 +12,19 @@ recorded as a gap, and T19's gap-report step will turn ``EXPECTED_CONTRACTS``
 into copy-pasteable ``FieldContract(...)`` blocks for the adapter.
 
 EXPECTED_CONTRACTS (target_db_column → target_unit):
-  * odometer                → km
-  * speed                   → km/h
+  * acceleration            → m/s²
   * accelerator_position    → %
-  * cabin_temperature       → degC
-  * outside_temperature     → degC
   * brake_status            → str
+  * brake_torque            → Nm
+  * cabin_temperature       → degC
   * gear_position           → str
   * ignition_status         → str
+  * odometer                → km
+  * outside_temperature     → degC
   * parking_brake           → str
+  * speed                   → km/h
   * tire_pressure           → kPa  (JSONB; one contract per corner)
+  * yaw_rate                → deg/s
 
 Idempotent: if ≥500 status rows exist for the demo vehicle, returns 0.
 Determinism: ``random.Random(42)``.
@@ -94,26 +97,6 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
     ),
     FieldContract(
         source_entity_pattern="sensor.fordpass_{vin}_metrics",
-        source_attribute="cabinTemperature",
-        source_unit="degC",
-        ha_unit_system_converted=True,
-        target_db_table=_TABLE,
-        target_db_column="cabin_temperature",
-        target_unit="degC",
-        notes="Cabin temp; ha-fordpass localizes per HA unit_system (imperial->degF).",
-    ),
-    FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
-        source_attribute="outsideTemperature",
-        source_unit="degC",
-        ha_unit_system_converted=True,
-        target_db_table=_TABLE,
-        target_db_column="outside_temperature",
-        target_unit="degC",
-        notes="Outside temp; ha-fordpass localizes per HA unit_system.",
-    ),
-    FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
         source_attribute="brakeStatus",
         source_unit="str",
         target_db_table=_TABLE,
@@ -147,6 +130,60 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         target_db_column="parking_brake",
         target_unit="str",
         notes='Parking brake: "applied" / "released".',
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_outsidetemp",
+        source_attribute="ambientTemp",
+        source_unit="degC",
+        ha_unit_system_converted=True,
+        target_db_table=_TABLE,
+        target_db_column="outside_temperature",
+        target_unit="degC",
+        notes=(
+            "Outside ambient temperature, time-series from per-sensor "
+            "outsidetemp entity. ha-fordpass localizes via localize_temperature "
+            "(imperial -> degF, metric -> degC)."
+        ),
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_cabintemperature",
+        source_attribute="cabinTemperature",
+        source_unit="degC",
+        ha_unit_system_converted=True,
+        target_db_table=_TABLE,
+        target_db_column="cabin_temperature",
+        target_unit="degC",
+        notes=(
+            "Cabin temperature, time-series from per-sensor cabintemperature "
+            "entity. ha-fordpass localizes via localize_temperature."
+        ),
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_attribute="brakeTorque",
+        source_unit="Nm",
+        target_db_table=_TABLE,
+        target_db_column="brake_torque",
+        target_unit="Nm",
+        notes="Brake torque. SI passthrough; no localization in ha-fordpass.",
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_attribute="yawRate",
+        source_unit="deg/s",
+        target_db_table=_TABLE,
+        target_db_column="yaw_rate",
+        target_unit="deg/s",
+        notes="Yaw rate. Passthrough; no localization.",
+    ),
+    FieldContract(
+        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_attribute="acceleration",
+        source_unit="m/s2",
+        target_db_table=_TABLE,
+        target_db_column="acceleration",
+        target_unit="m/s2",
+        notes="Longitudinal acceleration. SI passthrough.",
     ),
     # Tire pressures: HA emits four corner-specific attributes; we pack them
     # into the single JSONB ``tire_pressure`` column. Four contracts, one per
@@ -399,14 +436,11 @@ async def seed(db: AsyncSession) -> int:
             deep_sleep = "off"
             yaw = round(rng.gauss(0.0, 1.5), 2)
             acceleration = round(rng.gauss(0.2, 1.2), 2)
-            engine_speed = round(rng.uniform(0.0, 4500.0), 0)  # kept nullable; ICE-style RPM analog
             brake_torque = round(rng.uniform(0.0, 200.0), 1)
             wheel_torque_status = "active"
             torque_at_trans = round(rng.uniform(50.0, 350.0), 1)
-            coolant = round(rng.uniform(20.0, 55.0), 1)
             evcc = "idle"
             remote_start = "inactive"
-            remote_start_countdown = 0.0
         else:
             # --- Parked sample: speed=0, gear P, ignition off (or accessory if charging) ---
             in_charge = any(s <= ts <= e for s, e in charging_intervals)
@@ -423,14 +457,11 @@ async def seed(db: AsyncSession) -> int:
             deep_sleep = "off" if in_charge else "on"
             yaw = 0.0
             acceleration = 0.0
-            engine_speed = 0.0
             brake_torque = 0.0
             wheel_torque_status = "inactive"
             torque_at_trans = 0.0
-            coolant = round(rng.uniform(10.0, 30.0), 1)
             evcc = "charging" if in_charge else "idle"
             remote_start = "inactive"
-            remote_start_countdown = 0.0
 
         # Suppress unused-warning bookkeeping (values used only for gap recording)
         del speed_random, accel_random, brake_seed, gear_seed, ignition_seed, parking_seed
@@ -468,7 +499,6 @@ async def seed(db: AsyncSession) -> int:
             parking_brake=parking_brake,
             ignition_status=ignition,
             remote_start_status=remote_start,
-            coolant_temp=coolant,
             torque_at_transmission=torque_at_trans,
             door_lock_status=door_lock_status,
             tire_pressure=tire_pressure,
@@ -477,14 +507,12 @@ async def seed(db: AsyncSession) -> int:
             wheel_torque_status=wheel_torque_status,
             yaw_rate=yaw,
             acceleration=acceleration,
-            engine_speed=engine_speed,
             outside_temperature=outside_temp,
             cabin_temperature=cabin_temp,
             deep_sleep_status=deep_sleep,
             device_connectivity=connectivity,
             evcc_status=evcc,
             seatbelt_status=seatbelt,
-            remote_start_countdown=remote_start_countdown,
             source_system="seed",
             original_timestamp=ts,
         )
