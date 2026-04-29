@@ -15,7 +15,7 @@ are parsed in the user's configured timezone (`user_timezone` app_settings key)
 and converted to UTC before storage. See ``parse_user_local_to_utc``.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from zoneinfo import ZoneInfo
 
 # Conversion constants
@@ -194,11 +194,10 @@ def parse_user_local_to_utc(
     """
     time_part = time_str or "00:00"
     naive = datetime.fromisoformat(f"{date_str}T{time_part}")
+    tz: tzinfo = UTC
     if tz_str:
         try:
             tz = ZoneInfo(tz_str)
         except Exception:
             tz = UTC
-    else:
-        tz = UTC
     return naive.replace(tzinfo=tz).astimezone(UTC)
