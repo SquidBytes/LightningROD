@@ -1,10 +1,13 @@
 name: Tests
 
 on:
+  # Limit to integration branches so feature/version branches stay quiet
+  # until they open a PR. PR events use workflows from the BASE branch,
+  # so CI still gates merges into main/dev regardless of head branch.
   push:
-    branches: [main, dev, "v*"]
+    branches: [main, dev]
   pull_request:
-    branches: [main, dev, "v*"]
+    branches: [main, dev]
 
 jobs:
   pytest:

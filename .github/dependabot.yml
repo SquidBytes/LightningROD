@@ -3,6 +3,7 @@ updates:
   # ----- uv (uv.lock) -----
   - package-ecosystem: uv
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: weekly
       day: monday
@@ -23,6 +24,7 @@ updates:
   # ----- npm (package.json / package-lock.json) -----
   - package-ecosystem: npm
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: weekly
       day: monday
@@ -43,6 +45,7 @@ updates:
   # ----- Docker base images (docker/Dockerfile / docker/Dockerfile.standalone) -----
   - package-ecosystem: docker
     directory: "/docker"
+    target-branch: "dev"
     schedule:
       interval: weekly
       day: monday
@@ -60,6 +63,7 @@ updates:
   # ----- GitHub Actions themselves -----
   - package-ecosystem: github-actions
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: monthly
     open-pull-requests-limit: 3
