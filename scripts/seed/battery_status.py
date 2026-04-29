@@ -24,9 +24,11 @@ _MAX_RANGE_KM = 370.0
 # in scripts/seed/vehicle.py — kept in sync manually because the demo seed
 # doesn't load the vehicle row before constructing capacity values.
 _RATED_CAPACITY_KWH = 108.0
-# Total degradation across the seeded 90-day window, in kWh. ~1.4% — matches
-# typical real-world F-150 Lightning measurement drift over a quarter.
-_TOTAL_DEGRADATION_KWH = 1.5
+# Total degradation across the seeded 90-day window, in kWh. ~2.8% — on the
+# high end of typical real-world F-150 Lightning measurement drift, picked so
+# the "capacity by mileage" chart shows a clear downward trend even within
+# narrower windows (7d/30d) where per-reading noise would otherwise dominate.
+_TOTAL_DEGRADATION_KWH = 3.0
 
 logger = logging.getLogger(__name__)
 
@@ -108,13 +110,19 @@ async def seed(db: AsyncSession) -> int:
     timeline_span = (timeline_max - timeline_min).total_seconds() or 1.0
 
     def _capacity_at(ts: datetime) -> float:
-        """Linear capacity drift over the seeded window plus ±0.6 kWh jitter."""
+        """Linear capacity drift over the seeded window plus small jitter.
+
+        The jitter stdev is intentionally tight (0.15 kWh): real BMS-reported
+        gross capacity is stable instantaneously — the long-term degradation
+        signal is what we want the demo chart to surface, and per-row noise
+        any larger than this overwhelms the trend in 7d/30d windows.
+        """
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
         progress = (ts - timeline_min).total_seconds() / timeline_span
         progress = max(0.0, min(1.0, progress))
         baseline = _RATED_CAPACITY_KWH - (progress * _TOTAL_DEGRADATION_KWH)
-        return round(baseline + rng.gauss(0, 0.6), 2)
+        return round(baseline + rng.gauss(0, 0.08), 2)
 
     # --- helper to build a single EVBatteryStatus row -----------------------
     def _make_row(

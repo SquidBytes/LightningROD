@@ -50,6 +50,11 @@ async def seed(db: AsyncSession) -> int:
         battery_option="Standard Range",
         battery_capacity_kwh=98.0,
         battery_gross_capacity_kwh=108.0,
+        # ICE comparison: same year/model/trim ICE F-150 XLT 2.7L EcoBoost (4WD)
+        # EPA combined ~21 MPG → 11.2 L/100km. 23-gal standard tank → 87.0 L.
+        ice_label="2024 Ford F-150 XLT 2.7L EcoBoost",
+        ice_fuel_efficiency=11.2,
+        ice_fuel_tank_capacity=87.0,
         source_system="seed",
     )
     db.add(vehicle)
