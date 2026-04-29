@@ -1008,10 +1008,11 @@ async def session_review_panel(
             )
         ).scalar_one_or_none()
 
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
     return templates.TemplateResponse(
         request,
         "sessions/partials/review_panel.html",
-        {"session": session, "other": other},
+        {"session": session, "other": other, "user_tz": user_tz},
     )
 
 
