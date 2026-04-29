@@ -12,13 +12,15 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import Date, cast, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.dialect import date_trunc_compat
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.vehicle_status import EVVehicleStatus
 from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
+from web.unit_system import format_user_local
 
 # Module-level cache for reference charge curve JSON data
 _CURVE_CACHE: dict[str, dict] = {}
@@ -100,7 +102,9 @@ async def query_soc_timeline(
         else:
             bucket = "2 hours"
 
-        bucket_col = func.date_trunc(bucket, EVBatteryStatus.recorded_at).label("bucket")
+        bucket_col = date_trunc_compat(
+            bucket, EVBatteryStatus.recorded_at, dialect=db.bind.dialect
+        ).label("bucket")
         stmt = (
             select(
                 bucket_col,
@@ -265,7 +269,7 @@ async def query_degradation_data(
 
     Returns list of dicts with keys: date, max_capacity.
     """
-    date_col = cast(EVBatteryStatus.recorded_at, Date)
+    date_col = date_trunc_compat("day", EVBatteryStatus.recorded_at, dialect=db.bind.dialect)
 
     stmt = (
         select(
@@ -387,8 +391,9 @@ async def query_degradation_by_mileage(
     Returns list of dicts: {odometer, max_capacity, date, recorded_at}.
     Empty list if no valid data after merge.
     """
-    # Daily max capacity with latest timestamp per day
-    date_col = cast(EVBatteryStatus.recorded_at, Date)
+    # Daily max capacity with latest timestamp per day. Use date_trunc_compat
+    # for portability — `cast(col, Date)` reads back as integer-year on SQLite.
+    date_col = date_trunc_compat("day", EVBatteryStatus.recorded_at, dialect=db.bind.dialect)
     cap_stmt = (
         select(
             date_col.label("date"),
@@ -588,10 +593,13 @@ def build_soc_timeline_chart(
     charging_regions: list[tuple[int, int]],
     distance_factor: float = 1.0,
     range_label: str = "km",
+    user_tz: str | None = None,
 ) -> str:
     """Build SOC timeline Plotly chart with color-coded charging regions.
 
     Range values are metric (km) in the DB; distance_factor converts to display.
+    ``user_tz`` is an IANA timezone for hover-tooltip formatting; falls back to
+    UTC when None/unset.
     Returns HTML string. Empty string if no data.
     """
     if not data:
@@ -607,7 +615,7 @@ def build_soc_timeline_chart(
     hover_texts = []
     for row in data:
         ts = row["recorded_at"]
-        ts_str = ts.strftime("%b %d, %Y %H:%M") if hasattr(ts, "strftime") else str(ts)
+        ts_str = format_user_local(ts, user_tz, "%b %d, %Y %H:%M")
         soc = row.get("soc")
         kw = row.get("kw")
         rng = row.get("range")
@@ -827,11 +835,17 @@ def build_charge_curve_chart(
     )
 
 
-def _build_degradation_chart_date_based(data: list[dict], rated_capacity_kwh: float) -> str:
+def _build_degradation_chart_date_based(
+    data: list[dict],
+    rated_capacity_kwh: float,
+    user_tz: str | None = None,
+) -> str:
     """Build date-based battery degradation trend chart (fallback).
 
     Used when no odometer data is available. Y-axis: percentage of rated capacity.
     Includes linear trend with 90-day projection.
+    ``user_tz`` is an IANA timezone for hover-tooltip formatting; falls back to
+    UTC when None/unset.
     Returns HTML string. Empty string if no data.
     """
     if not data or rated_capacity_kwh <= 0:
@@ -847,7 +861,7 @@ def _build_degradation_chart_date_based(data: list[dict], rated_capacity_kwh: fl
     hover_texts = []
     for i, row in enumerate(data):
         d = row["date"]
-        d_str = d.strftime("%b %d, %Y") if hasattr(d, "strftime") else str(d)
+        d_str = format_user_local(d, user_tz, "%b %d, %Y")
         hover_texts.append(
             f"<b>{d_str}</b><br>"
             f"Capacity: {capacities[i]:.1f} kWh<br>"
@@ -942,12 +956,15 @@ def build_degradation_chart(
     rated_capacity_kwh: float,
     distance_factor: float = 1.0,
     distance_label: str = "km",
+    user_tz: str | None = None,
 ) -> str:
     """Build mileage-based battery degradation chart with trend line and date annotations.
 
     X-axis: odometer in display unit, Y-axis: battery capacity (kWh raw).
     Odometer values from DB are metric (km); distance_factor converts to display.
     Falls back to date-based chart if no odometer data available.
+    ``user_tz`` is an IANA timezone for hover-tooltip / date-annotation
+    formatting; falls back to UTC when None/unset.
     Returns HTML string. Empty string if no data.
     """
     if not data or rated_capacity_kwh <= 0:
@@ -961,7 +978,9 @@ def build_degradation_chart(
 
     if not has_odometer:
         # Fall back to date-based chart
-        return _build_degradation_chart_date_based(data, rated_capacity_kwh)
+        return _build_degradation_chart_date_based(
+            data, rated_capacity_kwh, user_tz=user_tz
+        )
 
     pio.templates.default = "plotly_dark"
     fig = go.Figure()
@@ -973,7 +992,7 @@ def build_degradation_chart(
     hover_texts = []
     for i, row in enumerate(data):
         d = row.get("date")
-        d_str = d.strftime("%b %d, %Y") if d is not None else str(d)
+        d_str = format_user_local(d, user_tz, "%b %d, %Y") if d is not None else str(d)
         odo = odometers[i]
         cap = float(row["max_capacity"])
         hover_texts.append(
@@ -1053,7 +1072,7 @@ def build_degradation_chart(
         dict(
             x=odometers[i],
             y=annotation_y,
-            text=data[i]["date"].strftime("%b %d"),
+            text=format_user_local(data[i]["date"], user_tz, "%b %d"),
             showarrow=False,
             font=dict(size=9, color="#6b7280"),
         )
@@ -1082,9 +1101,11 @@ def build_degradation_chart(
     )
 
 
-def build_lv_battery_chart(data: list[dict]) -> str:
+def build_lv_battery_chart(data: list[dict], user_tz: str | None = None) -> str:
     """Build 12v battery voltage-over-time line chart.
 
+    ``user_tz`` is an IANA timezone for hover-tooltip formatting; falls back
+    to UTC when None/unset.
     Returns HTML string. Empty string if no data.
     """
     if not data:
@@ -1100,7 +1121,7 @@ def build_lv_battery_chart(data: list[dict]) -> str:
     hover_texts = []
     for row in data:
         ts = row["recorded_at"]
-        ts_str = ts.strftime("%b %d, %Y %H:%M") if hasattr(ts, "strftime") else str(ts)
+        ts_str = format_user_local(ts, user_tz, "%b %d, %Y %H:%M")
         parts = [f"<b>{ts_str}</b>"]
         v = row.get("voltage")
         if v is not None:

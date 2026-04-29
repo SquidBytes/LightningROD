@@ -6,7 +6,7 @@
         <p class="font-semibold">Possible duplicate{{ 's' if matches|length > 1 }} found</p>
         <p class="text-xs mt-1">
             {% for m in matches %}
-            {{ m.session_start_utc.strftime('%Y-%m-%d %H:%M') if m.session_start_utc else 'Unknown date' }}
+            {{ m.session_start_utc|localtime(user_tz|default('UTC'), '%Y-%m-%d %H:%M') if m.session_start_utc else 'Unknown date' }}
             — {{ '%.1f'|format(m.energy_kwh|float) if m.energy_kwh else '?' }} kWh
             ({{ m.source_system or 'unknown' }}){% if not loop.last %}, {% endif %}
             {% endfor %}

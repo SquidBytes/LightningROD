@@ -111,22 +111,21 @@ The app will be available at `http://localhost:8000`. Migrations run automatical
 
 ### Standalone Docker (single container)
 
-Runs both the app and PostgreSQL in a single container -- no Compose required.
+Runs the app in a single container with an embedded SQLite database on a named volume -- no separate database service required.
 
 ```bash
 git clone https://github.com/SquidBytes/LightningROD.git
 cd LightningROD
-cp .env.example .env
-docker build -f docker/Dockerfile.standalone -t lightningrod:standalone .
+docker build -f docker/Dockerfile -t lightningrod-web:dev .
 docker run -d \
   -p 8000:8000 \
-  -v lightningrod-data:/var/lib/postgresql/data \
-  --env-file .env \
+  -v lightningrod-data:/data \
+  -e DATABASE_URL=sqlite+aiosqlite:////data/lightningrod.db \
   --name lightningrod \
-  lightningrod:standalone
+  lightningrod-web:dev
 ```
 
-Or using the standalone compose file:
+Or using the standalone compose file (overrides `DATABASE_URL` automatically):
 
 ```bash
 docker compose -f docker/docker-compose.standalone.yml up --build -d

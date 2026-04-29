@@ -1,7 +1,7 @@
 """Route handlers for trips."""
 
 import math
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Annotated
 
 import pandas as pd
@@ -31,7 +31,7 @@ from web.queries.vehicles import (
     get_active_vehicle,
     get_all_vehicles,
 )
-from web.unit_system import MI_PER_KM, to_metric_distance
+from web.unit_system import MI_PER_KM, parse_user_local_to_utc, to_metric_distance
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -314,8 +314,12 @@ async def create_trip(
             status_code=422,
         )
 
+    # Parse trip_date as local-time (midnight) in the user's configured TZ so
+    # the resulting UTC instant lines up with their day, matching how charging
+    # sessions handle date-only form inputs.
+    create_trip_user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
     try:
-        parsed_date = datetime.fromisoformat(f"{trip_date}T00:00:00").replace(tzinfo=UTC)
+        parsed_date = parse_user_local_to_utc(trip_date, "00:00", create_trip_user_tz)
     except ValueError:
         return HTMLResponse(
             content="<p class='text-error text-sm p-2'>Invalid date format.</p>",

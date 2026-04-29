@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------
-  # Job 1: build + push both images in parallel via a matrix.
+  # Job 1: build + push the single web image. Matrix is preserved as a
+  # one-entry list so the step block stays untouched if a second variant
+  # is ever reintroduced.
   # ---------------------------------------------------------------------
   build-images:
     name: Build ${{ matrix.variant }} image
@@ -21,10 +23,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: standalone
-            dockerfile: docker/Dockerfile.standalone
-            image_name: lightningrod
-            tag_suffix: -standalone
           - variant: web
             dockerfile: docker/Dockerfile
             image_name: lightningrod-web
@@ -131,10 +129,9 @@ jobs:
 
           Two deployment options. Pick one.
 
-          ### Option A: Standalone (embedded PostgreSQL — simplest)
+          ### Option A: Standalone (single container, SQLite)
 
               cp .env.example .env
-              # edit .env — at minimum set POSTGRES_PASSWORD
               docker compose -f docker-compose.standalone.yml up -d
 
           ### Option B: Two-container (bring-your-own PostgreSQL)
@@ -187,15 +184,15 @@ jobs:
 
           ## Install
 
-          **Option A — Standalone (embedded PostgreSQL, simplest):**
+          **Option A — Standalone (single container, SQLite):**
 
           ```bash
-          docker pull ghcr.io/__OWNER__/lightningrod:__VERSION__-standalone
+          docker pull ghcr.io/__OWNER__/lightningrod-web:__VERSION__
           docker run -d \
             --name lightningrod \
             -p 8000:8000 \
-            -v lightningrod-data:/var/lib/postgresql/data \
-            ghcr.io/__OWNER__/lightningrod:__VERSION__-standalone
+            -v lightningrod-data:/data \
+            ghcr.io/__OWNER__/lightningrod-web:__VERSION__
           ```
 
           **Option B — Two-container (bring-your-own PostgreSQL):**

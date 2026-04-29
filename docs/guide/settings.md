@@ -76,7 +76,6 @@ The network modal has three tabs:
 
 Location `cost_per_kwh` overrides network `cost_per_kwh` when computing estimated costs.
 
-
 ### Charger Stalls
 
 Each location can have multiple stalls with different hardware details:

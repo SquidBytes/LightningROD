@@ -15,9 +15,9 @@ class VehicleStatusFactory(BaseFactory):
         defaults = {
             "device_id": "TEST_VIN_001",
             "speed": cls._random_float(0.0, 80.0, 1),
-            "outside_temperature": cls._random_float(20.0, 90.0, 1),
-            "cabin_temperature": cls._random_float(60.0, 75.0, 1),
             "acceleration": cls._random_float(-2.0, 2.0, 2),
+            "outside_temperature": 15.0,
+            "cabin_temperature": 22.0,
             "recorded_at": cls._random_datetime(days_back=7),
             "source_system": "test_factory",
         }

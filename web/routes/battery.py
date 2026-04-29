@@ -53,6 +53,7 @@ async def battery(
 
     unit_ctx = await get_unit_context(db)
     distance_factor = MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
 
     # Rated capacity for health/degradation math. FordPass reports the GROSS
     # pack capacity via `maximumBatteryCapacity` (stored in hv_battery_capacity),
@@ -73,6 +74,7 @@ async def battery(
             rated_capacity,
             distance_factor=distance_factor,
             distance_label=unit_ctx["units"]["distance_label"],
+            user_tz=user_tz,
         )
         if chart:
             return HTMLResponse(chart)
@@ -91,14 +93,13 @@ async def battery(
 
     if section == "lv_battery":
         lv_data = await query_lv_battery_timeline(db, time_range=time_range, device_id=active_device_id)
-        chart = build_lv_battery_chart(lv_data)
+        chart = build_lv_battery_chart(lv_data, user_tz=user_tz)
         if chart:
             return HTMLResponse(chart)
         return HTMLResponse('<p class="text-base-content/40 text-sm py-8 text-center">No 12V battery data available.</p>')
 
     # Full page or HTMX filter change: compute only SOC timeline + summary cards
     all_vehicles = await get_all_vehicles(db)
-    user_tz = await get_app_setting(db, "user_timezone", "UTC")
 
     # Load reference charge curve name for display
     ref_curve_data = load_reference_charge_curve(active_vehicle)
@@ -111,6 +112,7 @@ async def battery(
         charging_regions,
         distance_factor=distance_factor,
         range_label=unit_ctx["units"]["range_label"],
+        user_tz=user_tz,
     )
 
     # Build session time windows for click-to-drill JS

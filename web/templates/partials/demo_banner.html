@@ -1,0 +1,13 @@
+{# Demo-mode banner. Renders only when DEMO_MODE=true, set as a Jinja global in web/main.py. #}
+{% if demo_mode %}
+<div class="alert alert-info rounded-none border-b border-base-300 mb-0" role="alert">
+  <span>
+    <strong>Demo Environment</strong> — Sample data; Editing is disabled and data resets periodically..
+  </span>
+  <a class="link link-primary"
+     href="https://github.com/SquidBytes/LightningROD"
+     target="_blank" rel="noopener">
+    Self-host LightningROD →
+  </a>
+</div>
+{% endif %}

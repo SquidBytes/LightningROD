@@ -3,15 +3,23 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Index, Integer, Numeric, SmallInteger, String, text
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Index,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
 
 # PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = TIMESTAMP(timezone=True)
+TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVTripMetrics(Base):
@@ -25,7 +33,7 @@ class EVTripMetrics(Base):
     # Primary identifier
     id: Mapped[int] = mapped_column(primary_key=True)
     trip_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), default=uuid.uuid4, nullable=False
+        Uuid(as_uuid=True), default=uuid.uuid4, nullable=False
     )
     device_id: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -70,7 +78,7 @@ class EVTripMetrics(Base):
     # Pipeline metadata
     source_system: Mapped[str | None] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
+        TIMESTAMPTZ, nullable=False, server_default=func.now()
     )
     original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 

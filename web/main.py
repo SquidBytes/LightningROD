@@ -75,7 +75,7 @@ def localtime_filter(dt, tz_str: str = "UTC", fmt: str | None = None):
         dt = dt.replace(tzinfo=UTC)
     try:
         converted = dt.astimezone(ZoneInfo(tz_str))
-    except (KeyError, Exception):
+    except Exception:
         converted = dt  # Fall back to original if invalid tz
     if fmt:
         return converted.strftime(fmt)
@@ -102,6 +102,13 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="LightningROD", version=APP_VERSION, lifespan=lifespan)
     app.mount("/static", StaticFiles(directory="web/static"), name="static")
+
+    # Demo-mode write protection. Only mounted when DEMO_MODE=true at startup;
+    # production deploys never register this middleware. Blocks DELETE/PUT/PATCH
+    # with a 403 JSON body and lets safe methods pass through unchanged.
+    if os.environ.get("DEMO_MODE", "").lower() == "true":
+        from web.middleware.demo_mode import DemoModeMiddleware
+        app.add_middleware(DemoModeMiddleware)
 
     # Lightweight version endpoint — useful for healthchecks, deploy scripts,
     # and quickly confirming which build is running behind a reverse proxy.
@@ -166,6 +173,7 @@ def create_app() -> FastAPI:
             env.globals["tooltips"] = TOOLTIPS
             env.globals["developer_mode"] = developer_mode.is_enabled
             env.globals["app_version"] = APP_VERSION
+            env.globals["demo_mode"] = os.environ.get("DEMO_MODE", "").lower() == "true"
             env.filters["localtime"] = localtime_filter
             env.filters["cvt_dist"] = _cvt(convert_distance)
             env.filters["cvt_temp"] = _cvt(convert_temp)

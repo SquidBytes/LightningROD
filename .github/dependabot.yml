@@ -42,7 +42,7 @@ updates:
           - minor
           - patch
 
-  # ----- Docker base images (docker/Dockerfile / docker/Dockerfile.standalone) -----
+  # ----- Docker base images (docker/Dockerfile) -----
   - package-ecosystem: docker
     directory: "/docker"
     target-branch: "dev"
