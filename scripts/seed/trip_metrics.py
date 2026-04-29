@@ -27,6 +27,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.reference import EVLocationLookup
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle import EVVehicle
 from scripts.seed.base import ContractDrivenSeeder, load_declared_contracts
@@ -37,6 +38,43 @@ _DEMO_VIN = "1FT6W1EV0NWG00000"
 _NUM_TRIPS = 70
 _WINDOW_DAYS = 90
 _IDEMPOTENCY_THRESHOLD = 60
+
+
+def _pick_trip_locations(
+    rng: random.Random,
+    home_id: int | None,
+    work_id: int | None,
+    public_ids: list[int],
+) -> tuple[int | None, int | None]:
+    """Choose start/end location IDs with a Home↔Work commute bias.
+
+    Distribution (when all locations seeded):
+      ~50% Home↔Work commute (direction varies)
+      ~20% Home → public charger (or reverse)
+      ~15% Work → public charger (or reverse)
+      ~15% same-location round trip / errand (Home→Home, Work→Work)
+    Returns (None, None) when neither anchor is available.
+    """
+    if home_id is None and work_id is None:
+        return (None, None)
+
+    roll = rng.random()
+    if home_id is not None and work_id is not None and roll < 0.50:
+        # commute
+        if rng.random() < 0.5:
+            return (home_id, work_id)
+        return (work_id, home_id)
+    if public_ids and roll < 0.85:
+        anchor = home_id if (home_id and rng.random() < 0.55) else work_id
+        public = rng.choice(public_ids)
+        if anchor is None:
+            anchor = public_ids[0]
+        if rng.random() < 0.5:
+            return (anchor, public)
+        return (public, anchor)
+    # round trip — pick whichever anchor we have
+    anchor = home_id or work_id
+    return (anchor, anchor)
 
 
 async def seed(db: AsyncSession) -> int:
@@ -74,6 +112,23 @@ async def seed(db: AsyncSession) -> int:
 
     rng = random.Random(42)
     seeder = ContractDrivenSeeder(declared=load_declared_contracts(), rng=rng)
+
+    # Resolve seeded location IDs so trips can attribute start/end FKs.
+    # Falls through with empty list if locations.seed() hasn't run; trips
+    # will then have NULL location FKs (acceptable degradation).
+    loc_rows = (
+        await db.execute(
+            select(EVLocationLookup.id, EVLocationLookup.location_name)
+        )
+    ).all()
+    loc_by_name: dict[str, int] = {r.location_name: r.id for r in loc_rows}
+    home_id = loc_by_name.get("Home")
+    work_id = loc_by_name.get("Work")
+    public_ids = [
+        v
+        for k, v in loc_by_name.items()
+        if k not in ("Home", "Work")
+    ]
 
     now = datetime.now(UTC)
     window_start = now - timedelta(days=_WINDOW_DAYS)
@@ -127,6 +182,17 @@ async def seed(db: AsyncSession) -> int:
         acceleration_score = round(rng.uniform(50.0, 100.0), 1)
         deceleration_score = round(rng.uniform(50.0, 100.0), 1)
 
+        # --- Brake torque (Nm) — average over the trip. Higher on shorter,
+        # busier urban runs; lower on long highway efficiency runs. Falls in
+        # 100–800 Nm for a F-150 Lightning's regenerative + friction blend.
+        brake_torque = round(rng.uniform(120.0, 750.0), 1)
+
+        # --- Start/end location FKs — bias toward a Home↔Work commute pattern,
+        # with ~20% of trips routing through a public charger location.
+        start_location_id, end_location_id = _pick_trip_locations(
+            rng, home_id, work_id, public_ids
+        )
+
         row = EVTripMetrics(
             trip_id=uuid.uuid4(),
             device_id=device_id,
@@ -147,6 +213,9 @@ async def seed(db: AsyncSession) -> int:
             acceleration_score=acceleration_score,
             deceleration_score=deceleration_score,
             electrical_efficiency=efficiency_km_per_kwh,
+            brake_torque=brake_torque,
+            start_location_id=start_location_id,
+            end_location_id=end_location_id,
             is_complete=True,
             source_system="seed",
             ingest_schema_version=2,
