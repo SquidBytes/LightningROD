@@ -4,10 +4,12 @@ name: CodeQL
 # Alerts show up under Security → Code scanning on the public repo.
 # Free on public repos.
 on:
+  # Integration branches only. PR events load this file from the BASE
+  # branch, so feature/version branches still get scanned via PR.
   push:
-    branches: [main, "v*"]
+    branches: [main, dev]
   pull_request:
-    branches: [main, "v*"]
+    branches: [main, dev]
   schedule:
     # Weekly scan at 04:27 UTC on Mondays — catches vulnerabilities
     # introduced by dependency changes that slipped between pushes.
