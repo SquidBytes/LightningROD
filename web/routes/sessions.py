@@ -966,10 +966,11 @@ async def check_duplicate(
         return HTMLResponse("")
 
     # Return warning banner
+    user_tz = await get_app_setting(db, "user_timezone", "UTC")
     return templates.TemplateResponse(
         request,
         "sessions/partials/duplicate_warning.html",
-        {"matches": filtered},
+        {"matches": filtered, "user_tz": user_tz},
     )
 
 
