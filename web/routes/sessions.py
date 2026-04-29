@@ -3,7 +3,7 @@
 import json
 import math
 import uuid
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request
@@ -35,7 +35,7 @@ from web.queries.vehicles import (
     get_active_vehicle,
     get_all_vehicles,
 )
-from web.unit_system import to_metric_distance
+from web.unit_system import parse_user_local_to_utc, to_metric_distance
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -358,13 +358,16 @@ async def create_session(
     unit_ctx = await get_unit_context(db)
     distance_added_km = to_metric_distance(distance_added, unit_ctx["distance_unit"]) if distance_added else None
 
+    # User's configured timezone — submitted date/time form values are
+    # interpreted in this zone before being converted to UTC for storage.
+    create_user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
+
     # Validate required fields
     if not session_date:
         errors["session_date"] = "Date is required."
     else:
         try:
-            time_part = session_time or "00:00"
-            parsed_date = datetime.fromisoformat(f"{session_date}T{time_part}").replace(tzinfo=UTC)
+            parsed_date = parse_user_local_to_utc(session_date, session_time, create_user_tz)
         except ValueError:
             errors["session_date"] = "Invalid date format. Use YYYY-MM-DD."
 
@@ -395,12 +398,11 @@ async def create_session(
     # Support both old form name (duration_minutes) and new modal name (charge_duration_minutes)
     effective_duration = duration_minutes if duration_minutes is not None else charge_duration_minutes
 
-    # Parse session_end_utc if end_date provided
+    # Parse session_end_utc if end_date provided — same TZ handling as start.
     session_end_utc = None
     if end_date:
-        end_time_part = end_time or "00:00"
         try:
-            session_end_utc = datetime.fromisoformat(f"{end_date}T{end_time_part}").replace(tzinfo=UTC)
+            session_end_utc = parse_user_local_to_utc(end_date, end_time, create_user_tz)
         except ValueError:
             pass
 
@@ -618,18 +620,22 @@ async def update_session(
         session.charge_duration_seconds = charge_duration_minutes * 60
     if energy_kwh is not None:
         session.energy_kwh = energy_kwh
+    # Parse start/end timestamps in the user's configured timezone — the modal
+    # pre-fills these inputs via the |localtime filter, so the submitted value
+    # is local-time, not UTC.
+    edit_user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
     if session_date:
-        time_part = session_time or "00:00"
         try:
-            new_start = datetime.fromisoformat(f"{session_date}T{time_part}").replace(tzinfo=UTC)
-            session.session_start_utc = new_start
+            session.session_start_utc = parse_user_local_to_utc(
+                session_date, session_time, edit_user_tz
+            )
         except ValueError:
             pass  # Keep existing value on parse error
     if end_date:
-        end_time_part = end_time or "00:00"
         try:
-            new_end = datetime.fromisoformat(f"{end_date}T{end_time_part}").replace(tzinfo=UTC)
-            session.session_end_utc = new_end
+            session.session_end_utc = parse_user_local_to_utc(
+                end_date, end_time, edit_user_tz
+            )
         except ValueError:
             pass
     if max_power is not None:
