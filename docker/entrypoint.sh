@@ -56,5 +56,5 @@ else
     uv run alembic upgrade head
 fi
 
-echo "Starting LightningROD..."
-exec uv run uvicorn web.main:app --host 0.0.0.0 --port 8000
+echo "Starting LightningROD on port ${PORT:-8000}..."
+exec uv run uvicorn web.main:app --host 0.0.0.0 --port "${PORT:-8000}"

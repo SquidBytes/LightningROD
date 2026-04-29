@@ -55,6 +55,6 @@ EXPOSE 8000
 # Liveness + readiness via /healthz (returns 503 if the DB is unreachable).
 # Uses Python stdlib so no extra packages are needed in the slim image.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).status == 200 else 1)" || exit 1
+    CMD python -c "import os, urllib.request, sys; sys.exit(0 if urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT','8000')}/healthz\", timeout=3).status == 200 else 1)" || exit 1
 
 ENTRYPOINT ["./docker/entrypoint.sh"]
