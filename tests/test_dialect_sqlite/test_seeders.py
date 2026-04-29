@@ -25,9 +25,6 @@ def test_seed_main_dry_run_runs_clean():
         text=True,
         timeout=180,
     )
-    # seed pipeline writes a contracts-gap report to a relative path under
-    # .planning/spikes/; that file IO is best-effort and may warn on a clean
-    # sandbox. Accept rc=0; surface anything else with full output for triage.
     assert cp.returncode == 0, (
         f"scripts.seed.main --all --dry-run failed with rc={cp.returncode}\n"
         f"STDOUT:\n{cp.stdout}\n"

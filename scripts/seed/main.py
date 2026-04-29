@@ -34,10 +34,16 @@ RUN_ORDER = [
 ]
 
 
-async def run_all(*, refresh_timestamps: bool, dry_run: bool) -> dict:
+async def run_all(
+    *, refresh_timestamps: bool, dry_run: bool, gap_report: Path | None = None
+) -> dict:
     """Orchestrate all seed modules in one transaction.
 
     Returns a dict keyed by module name -> rows inserted/affected.
+
+    If *gap_report* is provided, a markdown report of FieldContract gaps is
+    written to that path (resolved relative to the current working directory).
+    Otherwise gaps are summarized in the log only.
     """
     from db.engine import AsyncSessionLocal
     from scripts.seed.base import (
@@ -90,22 +96,21 @@ async def run_all(*, refresh_timestamps: bool, dry_run: bool) -> dict:
             await db.rollback()
             raise
 
-    # 4) Write contracts-gap report (outside the txn — file IO only)
+    # 4) Detect FieldContract gaps (outside the txn — file IO only)
     declared = load_declared_contracts()
     seeder = ContractDrivenSeeder(declared=declared, expected=VS_EXPECTED)
-    # Trigger gap recording for every expected contract
     for c in VS_EXPECTED:
         seeder.value_for(c.target_db_table, c.target_db_column)
-    gap_path = Path(".planning/spikes/seed-system-rebuild/CONTRACTS-GAP.md")
-    # Resolve relative to repo root — main module runs from app-public.
-    # Path(__file__) = .../LightningROD/app-public/scripts/seed/main.py
-    # .parent.parent.parent       = .../app-public/
-    # .parent.parent.parent.parent = .../LightningROD/
-    repo_parent = Path(__file__).resolve().parent.parent.parent.parent
-    resolved_gap = repo_parent / gap_path
-    logger.info("Gap report path resolved to: %s", resolved_gap)
-    write_contracts_gap_report(seeder.gaps_report(), resolved_gap)
-    logger.info("Wrote contracts-gap report -> %s", resolved_gap)
+    gaps = seeder.gaps_report()
+
+    if gap_report is not None:
+        write_contracts_gap_report(gaps, gap_report)
+        logger.info("Wrote contracts-gap report (%d gap(s)) -> %s", len(gaps), gap_report)
+    elif gaps:
+        logger.info(
+            "%d FieldContract gap(s) detected — pass --gap-report PATH to write report",
+            len(gaps),
+        )
 
     return counts
 
@@ -181,6 +186,18 @@ def main() -> None:
         help="Print what would be done without modifying the database",
     )
 
+    parser.add_argument(
+        "--gap-report",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Write a markdown FieldContract gap report to PATH (resolved "
+            "relative to the current working directory). If omitted, gaps "
+            "are summarized in the log only."
+        ),
+    )
+
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -196,6 +213,7 @@ def main() -> None:
             run_all(
                 refresh_timestamps=args.refresh_timestamps,
                 dry_run=args.dry_run,
+                gap_report=args.gap_report,
             )
         )
         total = sum(counts.values())
