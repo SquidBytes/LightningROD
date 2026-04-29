@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import Date, cast, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.dialect import date_trunc_compat
@@ -269,7 +269,7 @@ async def query_degradation_data(
 
     Returns list of dicts with keys: date, max_capacity.
     """
-    date_col = cast(EVBatteryStatus.recorded_at, Date)
+    date_col = date_trunc_compat("day", EVBatteryStatus.recorded_at, dialect=db.bind.dialect)
 
     stmt = (
         select(
@@ -391,8 +391,9 @@ async def query_degradation_by_mileage(
     Returns list of dicts: {odometer, max_capacity, date, recorded_at}.
     Empty list if no valid data after merge.
     """
-    # Daily max capacity with latest timestamp per day
-    date_col = cast(EVBatteryStatus.recorded_at, Date)
+    # Daily max capacity with latest timestamp per day. Use date_trunc_compat
+    # for portability — `cast(col, Date)` reads back as integer-year on SQLite.
+    date_col = date_trunc_compat("day", EVBatteryStatus.recorded_at, dialect=db.bind.dialect)
     cap_stmt = (
         select(
             date_col.label("date"),
