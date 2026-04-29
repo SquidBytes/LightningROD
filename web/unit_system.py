@@ -201,3 +201,37 @@ def parse_user_local_to_utc(
         except Exception:
             tz = UTC
     return naive.replace(tzinfo=tz).astimezone(UTC)
+
+
+def format_user_local(dt, tz_str: str | None, fmt: str) -> str:
+    """Format a UTC datetime as a string in the user's configured timezone.
+
+    Outbound counterpart of ``parse_user_local_to_utc``: stored UTC values are
+    converted to the user's TZ before ``strftime``. Used by server-side Plotly
+    hover/tooltip builders so timestamps render in user-local time.
+
+    Args:
+        dt: A datetime (timezone-aware UTC, or naive — naive is assumed UTC,
+            matching the canonical-storage convention). May also be a date,
+            in which case TZ conversion is a no-op.
+        tz_str: IANA timezone (e.g. ``"America/New_York"``). Falls back to UTC
+            when None, empty, or unrecognised.
+        fmt: ``strftime`` format string.
+
+    Returns:
+        Formatted string. If ``dt`` lacks ``strftime``, ``str(dt)`` is returned
+        unchanged (defensive — matches prior inline guards).
+    """
+    if not hasattr(dt, "strftime"):
+        return str(dt)
+    # date objects (no tzinfo) can't be tz-converted; format as-is.
+    if not isinstance(dt, datetime):
+        return dt.strftime(fmt)
+    tz: tzinfo = UTC
+    if tz_str:
+        try:
+            tz = ZoneInfo(tz_str)
+        except Exception:
+            tz = UTC
+    aware = dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+    return aware.astimezone(tz).strftime(fmt)
