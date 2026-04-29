@@ -5,9 +5,9 @@ name: CodeQL
 # Free on public repos.
 on:
   push:
-    branches: [main, "v*"]
+    branches: [main, dev, "v*"]
   pull_request:
-    branches: [main, "v*"]
+    branches: [main, dev, "v*"]
   schedule:
     # Weekly scan at 04:27 UTC on Mondays — catches vulnerabilities
     # introduced by dependency changes that slipped between pushes.
