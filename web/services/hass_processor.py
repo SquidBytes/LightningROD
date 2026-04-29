@@ -1088,28 +1088,24 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     original_timestamp = _parse_iso_datetime(attrs.get("timeStamp"))
 
     # Thermal context.
-    # ha-fordpass reports batteryTemperature + outsidetemp on the
-    # energytransferlogentry payload in °C (fixture-audited). Route through
-    # adapter contracts so to_metric is the single conversion path.
-    # Payload exposes single values; start/end mirror until HA emits discrete snapshots.
-    batt_contract = ha_fordpass.lookup_contract(
-        "sensor.fordpass_{vin}_energytransferlogentry",
-        "batteryTemperature",
-    )
-    amb_contract = ha_fordpass.lookup_contract(
-        "sensor.fordpass_{vin}_energytransferlogentry",
-        "outsidetemp",
-    )
-    raw_batt = attrs.get("batteryTemperature")
-    raw_amb = attrs.get("outsidetemp")
-    if batt_contract is not None:
-        battery_temp = ha_fordpass.convert(batt_contract, raw_batt, new_state, ha_config)
-    else:
-        battery_temp = _convert_with_uom(raw_batt, "degC", "battery_temp", slug)
-    if amb_contract is not None:
-        ambient_temp = ha_fordpass.convert(amb_contract, raw_amb, new_state, ha_config)
-    else:
-        ambient_temp = _convert_with_uom(raw_amb, "degC", "ambient_temp", slug)
+    # FIELD_CONTRACTS for batteryTemperature / outsidetemp live on the
+    # elvehcharging / outsidetemp entity patterns, not energytransferlogentry,
+    # so contract-lookup against this payload returns None by design. The
+    # adapter's per-device caches (_last_charging_battery_temp, _last_outsidetemp)
+    # are populated by the elvehcharging / outsidetemp handlers prior to this
+    # event firing and are the canonical source for charging-session thermals.
+    # Fall back to the energytransferlogentry payload when caches are empty
+    # (e.g. fixture-driven tests that only inject the charging-session event).
+    battery_temp = ha_fordpass._last_charging_battery_temp.get(device_id)
+    ambient_temp = ha_fordpass._last_outsidetemp.get(device_id)
+    if battery_temp is None:
+        raw_batt = attrs.get("batteryTemperature")
+        if raw_batt is not None:
+            battery_temp = _convert_with_uom(raw_batt, "degC", "battery_temp", slug)
+    if ambient_temp is None:
+        raw_amb = attrs.get("outsidetemp")
+        if raw_amb is not None:
+            ambient_temp = _convert_with_uom(raw_amb, "degC", "ambient_temp", slug)
     battery_temp_start = battery_temp
     battery_temp_end = battery_temp
     ambient_temp_start = ambient_temp
