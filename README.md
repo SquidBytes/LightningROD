@@ -4,23 +4,26 @@ Self-hosted charging analytics for Ford electric vehicles. Track charging sessio
 
 Built for the Ford F-150 Lightning, but should work with any Ford EV.
 
+Designed to support automatic data ingestion from Home Assistant via [ha-fordpass](https://github.com/marq24/ha-fordpass), CSV import, and manual entry.
+
 > [!IMPORTANT]
 > This is a work in progress. Do not use this as the only data storage.
 
-Supports automatic data ingestion from Home Assistant via [ha-fordpass](https://github.com/marq24/ha_fordpass), CSV import, and manual entry.
+### **DEMO** 
+
+An interactive read-only demo is available: https://lightningrod.onrender.com  
+**Note**: The  service may need time to wake up.
 
 > [!NOTE]
 > **This is my own personal project**
 > I am using it for a fun side project, and for learning.
 
-"The goal is to make this adaptable for different users and data types, but much of it is tailored to my specific data and storage methods."
-
 If you would like to, please consider buying me a coffee.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/SquidBytes)
 
-> [!NOTE]
-> AI (primarily Claude) was used to build this project — see the [AI Usage Disclaimer](https://squidbytes.github.io/LightningROD/ai-disclaimer/) for how, why, and where I drew the lines.
+
+> **Note:** AI (primarily Claude) was used to build this project — see the [AI Usage Disclaimer](https://squidbytes.github.io/LightningROD/ai-disclaimer/) for more information
 
 
 ## Features
@@ -36,21 +39,21 @@ If you would like to, please consider buying me a coffee.
 
 ## Project Goals
 
-### Data Ingestion**
+### Data Ingestion
 - **HomeAssistant**
   - [x] ha-fordpass
   - [ ] EVSE
     - Ford Charge Station Pro
     - Open Charge Point Protocol EVSE's
 - **Manual Entry**
-- **Import**
+- **Import** (Charging sessions)
   - [x] CSV
   - [ ] XLSX
   - [ ] EVSE App exports
 - **OBD Reader**
   - WiCAN Pro
   - OBDLink MX+
-- **Comma.ai**
+- **Comma.ai** (Will require hardware)
   - BluePilot
   - comma four
   - comma 3X
