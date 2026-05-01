@@ -235,7 +235,7 @@ async def test_ha_session_cross_source_flags_duplicate(db_session):
     )).scalars().all()
 
     assert len(rows) == 2, "Cross-source match should insert flagged duplicate"
-    ha_row = [r for r in rows if r.source_system == "home_assistant"][0]
+    ha_row = [r for r in rows if r.source_system == "ha_fordpass"][0]
     assert ha_row.duplicate_of_id == existing.id
     assert ha_row.needs_review is True
     assert ha_row.review_type == "duplicate"

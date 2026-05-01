@@ -663,13 +663,37 @@ async def start_hass_service() -> None:
 
     Reads settings from app_settings table and launches the client as a background task.
     """
+    from sqlalchemy import select
+
     from db.engine import AsyncSessionLocal
+    from db.models.data_source_config import DataSourceConfig
     from web.queries.settings import get_app_settings_dict
 
     async with AsyncSessionLocal() as db:
         cfg = await get_app_settings_dict(
             db, ["ha_url", "ha_token", "ha_auto_connect"]
         )
+
+        # Transitional credential-source shim: legacy app_settings
+        # ha_url/ha_token keys are deleted by the p31 migration. Fall
+        # back to the data_source_configs row when those keys are
+        # absent so runtime credential-load behaviour is unchanged.
+        # The shim disappears once this whole function is rewired to
+        # read directly from data_source_configs.
+        if not cfg.get("ha_url") or not cfg.get("ha_token"):
+            result = await db.execute(
+                select(DataSourceConfig.config_json).where(
+                    DataSourceConfig.source_name == "ha_fordpass",
+                    DataSourceConfig.instance_label == "default",
+                )
+            )
+            row = result.scalar_one_or_none()
+            if row:
+                cfg["ha_url"] = cfg.get("ha_url") or row.get("ha_url", "")
+                cfg["ha_token"] = cfg.get("ha_token") or row.get("ha_token", "")
+                if not cfg.get("ha_auto_connect"):
+                    ac = row.get("ha_auto_connect", True)
+                    cfg["ha_auto_connect"] = "true" if ac else "false"
 
     ha_url = cfg.get("ha_url", "").strip()
     ha_token = cfg.get("ha_token", "").strip()

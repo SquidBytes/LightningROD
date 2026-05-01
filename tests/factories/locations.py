@@ -42,7 +42,7 @@ class LocationFactory(BaseFactory):
             "latitude": cls._random_float(45.45, 45.55, 6),
             "longitude": cls._random_float(-122.70, -122.55, 6),
             "recorded_at": cls._random_datetime(days_back=7),
-            "source_system": "home_assistant",
+            "source_system": "ha_fordpass",
         }
         defaults.update(overrides)
         location = EVLocation(**defaults)

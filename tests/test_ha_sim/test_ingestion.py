@@ -100,7 +100,7 @@ async def test_charging_session_ingestion(db_session):
     assert session.charge_type == "DC"
     assert session.start_soc == 15.0
     assert session.end_soc == 80.0
-    assert session.source_system == "home_assistant"
+    assert session.source_system == "ha_fordpass"
 
 
 @pytest.mark.asyncio
@@ -172,7 +172,7 @@ async def test_trip_ingestion(db_session):
     assert trip.distance is not None
     assert abs(float(trip.distance) - 22.5 * 1.60934) < 0.1
     assert float(trip.duration) == 35.0
-    assert trip.source_system == "homeassistant"
+    assert trip.source_system == "ha_fordpass"
 
 
 @pytest.mark.asyncio
@@ -218,7 +218,7 @@ async def test_battery_status_ingestion(db_session):
     # resolver never silently defaults to "mi". A later metrics.xevBatteryRange
     # event would back-fill via cross-reference.
     assert battery.hv_battery_range is None
-    assert battery.source_system == "home_assistant"
+    assert battery.source_system == "ha_fordpass"
 
 
 @pytest.mark.asyncio
@@ -246,4 +246,4 @@ async def test_gps_location_ingestion(db_session):
     assert loc is not None, "GPS location not created"
     assert float(loc.latitude) == pytest.approx(38.9072, abs=0.001)
     assert float(loc.longitude) == pytest.approx(-77.0369, abs=0.001)
-    assert loc.source_system == "home_assistant"
+    assert loc.source_system == "ha_fordpass"

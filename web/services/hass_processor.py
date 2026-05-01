@@ -211,7 +211,7 @@ async def _flush_vehicle_status(device_id: str, db) -> None:
     record = EVVehicleStatus(
         device_id=device_id,
         recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         **fields,
     )
     db.add(record)
@@ -230,7 +230,7 @@ async def _flush_battery_status(device_id: str, db) -> None:
     record = EVBatteryStatus(
         device_id=device_id,
         recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
         **fields,
     )
@@ -762,7 +762,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         end_time=end_time,
                         recorded_at=datetime.now(UTC),
                         is_complete=True,
-                        source_system="homeassistant",
+                        source_system="ha_fordpass",
                         original_timestamp=event_ts,
                         ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
                         **trip_fields,
@@ -889,7 +889,7 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
             latitude=lat,
             longitude=lon,
             gps_accuracy=gps_accuracy,
-            source_system="home_assistant",
+            source_system="ha_fordpass",
         )
         db.add(new_loc)
         logger.debug("Stored GPS snapshot for %s", device_id)
@@ -1133,7 +1133,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
             if energy_kwh is not None and match_energy is not None:
                 tolerance = abs(float(match_energy)) * 0.1 if float(match_energy) != 0 else 0.5
                 if abs(float(energy_kwh) - float(match_energy)) <= tolerance:
-                    if match_source == "home_assistant":
+                    if match_source == "ha_fordpass":
                         # Same source duplicate -- skip silently (existing behavior)
                         logger.info(
                             "Duplicate HA session detected (start=%s, energy=%.3f kWh), skipping",
@@ -1145,7 +1145,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
                         duplicate_of_id = match_id
                         break
             elif energy_kwh is None and match_energy is None:
-                if match_source == "home_assistant":
+                if match_source == "ha_fordpass":
                     logger.info("Duplicate HA session detected (start=%s, no energy), skipping", session_start_utc)
                     return
                 else:
@@ -1158,7 +1158,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     network_id = None
     if network_name and network_name.upper() != "UNKNOWN":
         from web.queries.settings import resolve_network
-        network_id = await resolve_network(db, network_name=network_name, source_system="home_assistant")
+        network_id = await resolve_network(db, network_name=network_name, source_system="ha_fordpass")
 
     # -----------------------------------------------------------------------
     # Location resolution
@@ -1174,7 +1174,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         network_id=network_id,
         location_name=location_name,
         address_dict=address_dict,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         _location_data=location_data,
         _network_name_raw=network_name,
     )
@@ -1184,7 +1184,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # -----------------------------------------------------------------------
     session = EVChargingSession(
         device_id=device_id,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         charge_type=charge_type,
         location_name=location_name,
         location_id=location_id,
@@ -1333,7 +1333,7 @@ async def _ensure_vehicle_exists(device_id: str, entity_id: str, db) -> None:
     """Ensure an EVVehicle record exists for this device_id.
 
     If no vehicle record exists, creates one with display_name=device_id,
-    source_system='home_assistant'. Auto-activates only when no active vehicle
+    source_system='ha_fordpass'. Auto-activates only when no active vehicle
     is currently set.
     """
     from sqlalchemy import select
@@ -1354,7 +1354,7 @@ async def _ensure_vehicle_exists(device_id: str, entity_id: str, db) -> None:
         display_name=device_id,
         device_id=device_id,
         vin=device_id,  # For FordPass, device_id IS the VIN
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
     db.add(vehicle)
     try:

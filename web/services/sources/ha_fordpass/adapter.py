@@ -864,7 +864,7 @@ async def _handle_metrics_entity(
     record = EVBatteryStatus(
         device_id=device_id,
         recorded_at=recorded_at,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         hv_battery_range=hv_range,
         hv_battery_max_range=hv_max_range,
         hv_battery_soc=hv_soc,
@@ -1015,7 +1015,7 @@ async def _handle_events_entity(
         cabin_temp=cabin,
         outside_air_temp=outside_air,
         is_complete=True,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         original_timestamp=recorded_at,
         ingest_schema_version=INGEST_SCHEMA_VERSION,
     )
@@ -1055,7 +1055,7 @@ async def _handle_elvehcharging_entity(
     record = EVBatteryStatus(
         device_id=device_id,
         recorded_at=_parse_event_ts(new_state) or datetime.now(UTC),
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         hv_battery_temperature=battery_temp,
         ingest_schema_version=INGEST_SCHEMA_VERSION,
     )
@@ -1167,7 +1167,7 @@ async def _handle_energy_transfer_entity(
 
     session = EVChargingSession(
         device_id=device_id,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         charge_type=_normalize_charger_type(charge_type_raw),
         location_name=location_name,
         session_start_utc=session_start_utc,
