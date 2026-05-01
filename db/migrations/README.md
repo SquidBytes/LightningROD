@@ -12,18 +12,20 @@ It runs on both PostgreSQL and SQLite — it uses `sa.DateTime(timezone=True)`,
 TypeDecorator from `db/types.py`, and declares both `postgresql_where=` and
 `sqlite_where=` on partial indexes.
 
-### Pulling against an existing PostgreSQL dev database
+### Pulling against an existing PostgreSQL database
 
-You must stamp the database to the new revision **before** running
-`alembic upgrade head`. Otherwise the squashed migration refuses to run —
-it raises a `RuntimeError` when it detects existing tables without a
-matching stamp, naming the exact command to fix the situation.
+The Docker entrypoint auto-recovers any DB stamped at a squashed-away
+revision — no action needed.
+
+For non-Docker upgrades (CI, bare-metal Alembic), stamp once before
+upgrading. Use `--purge` if `alembic upgrade` errors with
+`Can't locate revision identified by '<rev>'` (Alembic graph-walks from
+the deleted current rev otherwise):
 
 ```bash
 cd app-public
-uv run alembic stamp p30_squashed_initial
-# Now you can pull and continue normally
-uv run alembic upgrade head    # no-op if already at head
+uv run alembic stamp p30_squashed_initial --purge
+uv run alembic upgrade head
 ```
 
 ### Starting fresh (new dev DB, demo deploys, CI)

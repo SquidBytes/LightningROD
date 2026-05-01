@@ -10,7 +10,7 @@ outside_temperature and cabin_temperature are KEPT — they are the only
 time-series source for trip temperature charts (ev_trip_metrics has only
 per-trip aggregates).
 
-Revision ID: p30_drop_vehicle_status_legacy_columns
+Revision ID: p30_drop_vstatus_legacy_cols
 Revises: p30_squashed_initial
 Create Date: 2026-04-27
 """
@@ -19,7 +19,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "p30_drop_vehicle_status_legacy_columns"
+revision: str = "p30_drop_vstatus_legacy_cols"
 down_revision: str | Sequence[str] | None = "p30_squashed_initial"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

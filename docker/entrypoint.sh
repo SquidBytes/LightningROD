@@ -28,6 +28,23 @@ if [ -n "$SQLITE_PATH" ]; then
     mkdir -p "$(dirname "$SQLITE_PATH")"
 fi
 
+# Auto-recover DBs stamped at a revision the codebase no longer contains
+# (v0.3.x squash residue, or pre-rename of p30_drop_vstatus_legacy_cols).
+# Stamp forward with --purge to skip the graph walk; no-op otherwise.
+ALEMBIC_CURRENT_OUTPUT=$(uv run alembic current 2>&1 || true)
+BAD_REV=$(printf '%s\n' "$ALEMBIC_CURRENT_OUTPUT" \
+    | sed -nE "s/.*Can't locate revision identified by '([^']+)'.*/\1/p" \
+    | head -n1)
+if [ -n "$BAD_REV" ]; then
+    if [ "$BAD_REV" = "p30_drop_vehicle_status_legacy_columns" ]; then
+        STAMP_TARGET="p30_drop_vstatus_legacy_cols"
+    else
+        STAMP_TARGET="p30_squashed_initial"
+    fi
+    echo "Stamping stale alembic_version='$BAD_REV' -> '$STAMP_TARGET'."
+    uv run alembic stamp "$STAMP_TARGET" --purge
+fi
+
 # If DEMO_MODE=true and no marker file is present, re-seed at boot.
 # Marker keeps it idempotent across uvicorn restarts within the same
 # container life.
