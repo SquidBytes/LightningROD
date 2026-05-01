@@ -4,7 +4,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
@@ -1282,70 +1282,76 @@ async def data_sources_tab(
     )
 
 
-@router.get("/settings/hass", response_class=HTMLResponse)
-async def hass_settings_partial(
+@router.post("/settings/data-sources/{source_name}", response_class=HTMLResponse)
+async def save_data_source(
+    source_name: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Return HASS configuration partial with current values."""
-    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
-    # Mask token for display: show only last 8 chars
-    token = settings.get("ha_token", "")
-    masked_token = ""
-    if token:
-        if len(token) > 8:
-            masked_token = "*" * (len(token) - 8) + token[-8:]
-        else:
-            masked_token = token
+    """Save per-source config; one handler covers the whole registry."""
+    descriptor = next(
+        (d for d in SOURCE_REGISTRY if d.source_name == source_name), None
+    )
+    if descriptor is None:
+        raise HTTPException(status_code=404, detail=f"Unknown source: {source_name}")
+
+    form = dict(await request.form())
+
+    # Masked-token preprocess — preserves the regression-locked invariant: if
+    # the user submits the masked placeholder, do NOT overwrite the stored
+    # token. Apply this BEFORE model_validate so the masked string never
+    # becomes the persisted value.
+    if "ha_token" in form and form["ha_token"].startswith("*"):
+        existing = await _load_existing_config(db, descriptor)
+        form["ha_token"] = existing.ha_token if existing else ""
+
+    # Boolean coercion for HTML checkbox: unchecked → absent from form,
+    # checked → "true" or "on" (browser-dependent).
+    form["ha_auto_connect"] = form.get("ha_auto_connect", "") in ("true", "on", "1")
+
+    # Empty optional string → None (Pydantic optional)
+    if form.get("ha_vin_override", "") == "":
+        form["ha_vin_override"] = None
+
+    try:
+        config = descriptor.config_schema.model_validate(form)
+    except ValidationError as e:
+        health, last_seen = _card_health_inputs(descriptor)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/data_source_card.html",
+            {
+                "card": {
+                    "descriptor": descriptor,
+                    "config": None,
+                    "partial_config": form,
+                    "masked_token": form.get("ha_token", ""),
+                    "health": health,
+                    "last_seen": last_seen,
+                },
+                "errors": e.errors(),
+            },
+            status_code=422,
+        )
+
+    await _upsert_data_source_config(db, descriptor, config)
+
+    health, last_seen = _card_health_inputs(descriptor)
     return templates.TemplateResponse(
         request,
-        "settings/partials/hass_settings.html",
-        {"hass": settings, "masked_token": masked_token},
+        "settings/partials/data_source_card.html",
+        {
+            "card": {
+                "descriptor": descriptor,
+                "config": config,
+                "partial_config": None,
+                "masked_token": _mask_token(config.ha_token),
+                "health": health,
+                "last_seen": last_seen,
+            },
+            "saved": True,
+        },
     )
-
-
-@router.post("/settings/hass", response_class=HTMLResponse)
-async def save_hass_settings(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    ha_url: str = Form(""),
-    ha_token: str = Form(""),
-    ha_vin_override: str = Form(""),
-    ha_unit_system: str = Form("auto"),
-    ha_auto_connect: str | None = Form(None),
-):
-    """Save HASS configuration to app_settings."""
-    if ha_url:
-        # Strip trailing slash for consistency
-        ha_url = ha_url.rstrip("/")
-    await set_app_setting(db, "ha_url", ha_url)
-    # Only overwrite token if a new value was provided (not the masked placeholder)
-    if ha_token and not ha_token.startswith("*"):
-        await set_app_setting(db, "ha_token", ha_token)
-    await set_app_setting(db, "ha_vin_override", ha_vin_override)
-    if ha_unit_system not in ("auto", "metric", "imperial"):
-        ha_unit_system = "auto"
-    await set_app_setting(db, "ha_unit_system", ha_unit_system)
-    await set_app_setting(
-        db, "ha_auto_connect", "true" if ha_auto_connect is not None else "false"
-    )
-
-    # Re-read saved values for display
-    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
-    token = settings.get("ha_token", "")
-    masked_token = ""
-    if token:
-        if len(token) > 8:
-            masked_token = "*" * (len(token) - 8) + token[-8:]
-        else:
-            masked_token = token
-
-    response = templates.TemplateResponse(
-        request,
-        "settings/partials/hass_settings.html",
-        {"hass": settings, "masked_token": masked_token, "saved": True},
-    )
-    return response
 
 
 @router.post("/settings/hass/home-location", response_class=HTMLResponse)
