@@ -67,13 +67,13 @@ def render_markdown(groups: list[tuple[str, list[FieldContract]]]) -> str:
         lines.append("|---|---|---|---|---|---|---|")
         sorted_contracts = sorted(
             contracts,
-            key=lambda c: (c.source_entity_pattern, c.source_attribute),
+            key=lambda c: (c.source_locator.pattern, c.source_attribute),
         )
         for c in sorted_contracts:
             # Escape pipe characters in notes so they don't break the table.
             notes = (c.notes or "").replace("|", "\\|").replace("\n", " ")
             lines.append(
-                f"| `{c.source_entity_pattern}` "
+                f"| `{c.source_locator.pattern}` "
                 f"| `{c.source_attribute}` "
                 f"| `{c.source_unit}` "
                 f"| `{c.target_db_table}` "

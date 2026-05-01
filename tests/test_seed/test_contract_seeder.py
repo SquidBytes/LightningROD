@@ -13,7 +13,7 @@ from scripts.seed.base import (
     realistic_value,
     write_contracts_gap_report,
 )
-from web.services.units.contracts import FieldContract
+from web.services.units.contracts import FieldContract, SourceLocator, SourceLocatorKind
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -21,7 +21,7 @@ from web.services.units.contracts import FieldContract
 
 def _fc(table: str, column: str, unit: str, notes: str | None = None) -> FieldContract:
     return FieldContract(
-        source_entity_pattern="sensor.test_*",
+        source_locator=SourceLocator("sensor.test_*", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="value",
         source_unit=unit,
         target_db_table=table,

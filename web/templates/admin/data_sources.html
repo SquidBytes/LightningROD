@@ -58,7 +58,7 @@
                 <tbody>
                     {% for row in group.rows %}
                     <tr>
-                        <td><code class="text-xs">{{ row.contract.source_entity_pattern if row.contract else row.detection.entity_pattern }}</code></td>
+                        <td><code class="text-xs">{{ row.contract.source_locator.pattern if row.contract else row.detection.entity_pattern }}</code></td>
                         <td><code class="text-xs">{{ row.contract.source_attribute if row.contract else row.detection.attribute }}</code></td>
                         <td>
                             <code class="text-xs">{{ row.contract.source_unit if row.contract else '' }}</code>

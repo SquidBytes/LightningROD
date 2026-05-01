@@ -314,7 +314,7 @@ def write_contracts_gap_report(gaps: list[FieldContract], path: Path) -> None:
             notes_val = repr(fc.notes) if fc.notes else '"<fill in>"'
             lines.append("```python")
             lines.append("FieldContract(")
-            lines.append('    source_entity_pattern="<fill in>",')
+            lines.append('    source_locator=SourceLocator("<fill in>", SourceLocatorKind.HA_ENTITY_ID),')
             lines.append('    source_attribute="<fill in>",')
             lines.append('    source_unit="<fill in>",')
             lines.append(f'    target_db_table="{fc.target_db_table}",')

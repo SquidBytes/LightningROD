@@ -36,7 +36,7 @@ _ADAPTER_MODULES: list[tuple[str, str]] = [
 
 def _contract_key(c: FieldContract) -> str:
     """Key convention matches ha_fordpass.adapter._record_last_seen."""
-    return f"{c.source_entity_pattern}|{c.source_attribute}"
+    return f"{c.source_locator.pattern}|{c.source_attribute}"
 
 
 def _load_groups() -> list[dict[str, Any]]:
@@ -67,9 +67,9 @@ def _load_groups() -> list[dict[str, Any]]:
         rows = []
         covered: set[tuple[str, str]] = set()
         for c in sorted(
-            contracts, key=lambda x: (x.source_entity_pattern, x.source_attribute)
+            contracts, key=lambda x: (x.source_locator.pattern, x.source_attribute)
         ):
-            key = (c.source_entity_pattern, c.source_attribute)
+            key = (c.source_locator.pattern, c.source_attribute)
             covered.add(key)
             rows.append(
                 {
