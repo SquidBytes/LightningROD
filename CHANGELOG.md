@@ -11,6 +11,10 @@ For feature documentation, see the docs site at
 
 ### Changed
 
+- SQLite is the default for docker/docker-compose.standalone.yml
+  - Standard docker-compose still uses Postgres DB
+  - `DATABASE_URL` in `.env` is now an optional override
+
 ### Fixed
 
 ### Removed
