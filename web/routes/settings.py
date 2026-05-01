@@ -7,10 +7,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
+from db.models.data_source_config import DataSourceConfig
 from db.models.reference import EVChargerStall, EVChargingNetwork, EVLocationLookup
 from web import developer_mode as dev_mode_module
 from web.dependencies import get_db
@@ -52,6 +54,9 @@ from web.queries.vehicles import (
     update_vehicle,
 )
 from web.services.csv_parser import get_db_field_options
+from web.services.hass_client import hass_service
+from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
+from web.services.sources.registry import REGISTRY as SOURCE_REGISTRY
 from web.services.vehicles.registry import VehicleRegistry
 from web.unit_system import (
     convert_fuel_efficiency,
@@ -130,8 +135,8 @@ async def settings_index(
         active_tab = "import"
     elif tab == "networks":
         active_tab = "networks"
-    elif tab == "hass":
-        active_tab = "hass"
+    elif tab == "data_sources":
+        active_tab = "data_sources"
     else:
         active_tab = "general"
 
@@ -1155,6 +1160,126 @@ HASS_SETTINGS_KEYS = [
     "home_longitude",
     "home_location_name",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Data Sources tab — registry-driven per-source config cards
+# ---------------------------------------------------------------------------
+
+
+def _mask_token(token: str) -> str:
+    """Return a masked rendering of a stored token: asterisks + last 8 chars."""
+    if not token:
+        return ""
+    if len(token) > 8:
+        return "*" * (len(token) - 8) + token[-8:]
+    return token
+
+
+def _last_event_timeago(adapter_module) -> str | None:
+    """Return human-readable 'X min ago' string or None if cache empty."""
+    from datetime import UTC, datetime
+
+    cache = getattr(adapter_module, "_last_seen_raw", {})
+    if not cache:
+        return None
+    most_recent_iso = max(entry["seen_at"] for entry in cache.values())
+    most_recent_dt = datetime.fromisoformat(most_recent_iso)
+    delta = datetime.now(UTC) - most_recent_dt
+    seconds = int(delta.total_seconds())
+    if seconds < 60:
+        return f"{seconds}s ago"
+    if seconds < 3600:
+        return f"{seconds // 60} min ago"
+    if seconds < 86400:
+        return f"{seconds // 3600}h ago"
+    return f"{seconds // 86400}d ago"
+
+
+async def _load_existing_config(db: AsyncSession, descriptor):
+    """Load existing data_source_configs row for descriptor, return Pydantic instance or None."""
+    result = await db.execute(
+        select(DataSourceConfig).where(
+            DataSourceConfig.source_name == descriptor.source_name,
+            DataSourceConfig.instance_label == "default",
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    return descriptor.config_schema.model_validate(row.config_json)
+
+
+async def _upsert_data_source_config(db: AsyncSession, descriptor, config) -> None:
+    """UPDATE the (descriptor.source_name, 'default') row's config_json.
+
+    The row was created by the data-source-foundation migration; this handler
+    only ever updates it.
+    """
+    from datetime import UTC, datetime
+
+    result = await db.execute(
+        select(DataSourceConfig).where(
+            DataSourceConfig.source_name == descriptor.source_name,
+            DataSourceConfig.instance_label == "default",
+        )
+    )
+    row = result.scalar_one()
+    row.config_json = config.model_dump()
+    row.updated_at = datetime.now(UTC)
+    await db.commit()
+
+
+def _card_health_inputs(descriptor) -> tuple[dict, str | None]:
+    """Return (health_dict, last_seen_str) for the badge — only ha_fordpass today."""
+    if descriptor.source_name == "ha_fordpass":
+        return hass_service.health, _last_event_timeago(ha_fordpass_adapter)
+    return {}, None
+
+
+@router.get("/settings/data-sources", response_class=HTMLResponse)
+async def data_sources_tab(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    saved: bool = False,
+):
+    """Render the registry-driven Data Sources tab partial."""
+    cards = []
+    for descriptor in SOURCE_REGISTRY:
+        result = await db.execute(
+            select(DataSourceConfig).where(
+                DataSourceConfig.source_name == descriptor.source_name,
+                DataSourceConfig.instance_label == "default",
+            )
+        )
+        row = result.scalar_one_or_none()
+        config = None
+        partial_config = None
+        if row is not None:
+            try:
+                config = descriptor.config_schema.model_validate(row.config_json)
+            except ValidationError:
+                # Seed rows ship with empty ha_url/ha_token until the operator
+                # configures the source. Surface stored values into the form
+                # without exposing them as a fully-validated config object.
+                partial_config = row.config_json or {}
+        health, last_seen = _card_health_inputs(descriptor)
+        cards.append(
+            {
+                "descriptor": descriptor,
+                "config": config,
+                "partial_config": partial_config,
+                "masked_token": _mask_token(config.ha_token) if config else "",
+                "health": health,
+                "last_seen": last_seen,
+            }
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/data_sources_tab.html",
+        {"cards": cards, "saved": saved},
+    )
 
 
 @router.get("/settings/hass", response_class=HTMLResponse)
