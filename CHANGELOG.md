@@ -11,11 +11,14 @@ For feature documentation, see the docs site at
 
 ### Changed
 
-- SQLite is the default for docker/docker-compose.standalone.yml
-  - Standard docker-compose still uses Postgres DB
-  - `DATABASE_URL` in `.env` is now an optional override
+- SQLite is the default for docker/docker-compose.standalone.yml; standard
+  compose still uses Postgres. `DATABASE_URL` in `.env` is now an optional
+  override.
 
 ### Fixed
+
+- Docker entrypoint auto-recovers v0.3.x databases stamped at squashed-away
+  revisions. Non-Docker upgraders: see `db/migrations/README.md`.
 
 ### Removed
 
