@@ -1,6 +1,7 @@
 """Route handlers for settings."""
 
 import json
+from dataclasses import asdict
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -42,7 +43,6 @@ from web.queries.settings import (
     update_subscription,
 )
 from web.queries.vehicles import (
-    VEHICLE_PRESETS,
     create_vehicle,
     delete_vehicle,
     get_active_vehicle,
@@ -52,12 +52,22 @@ from web.queries.vehicles import (
     update_vehicle,
 )
 from web.services.csv_parser import get_db_field_options
+from web.services.vehicles.registry import VehicleRegistry
 from web.unit_system import (
     convert_fuel_efficiency,
     convert_fuel_volume,
     to_metric_fuel_efficiency,
     to_metric_fuel_volume,
 )
+
+
+def _vehicle_presets_for_template() -> list[dict]:
+    """Return the Ford preset rows as plain dicts for template + JSON serialization.
+
+    Cascade JS reads dict-keyed JSON; asdict round-trip preserves the wire shape.
+    """
+    profile = VehicleRegistry.get("Ford")
+    return [asdict(r) for r in profile.presets()] if profile else []
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -87,8 +97,8 @@ async def _vehicle_management_context(db: AsyncSession) -> dict:
     return {
         "vehicles": vehicles,
         "active_vehicle": active_vehicle,
-        "vehicle_presets": VEHICLE_PRESETS,
-        "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+        "vehicle_presets": _vehicle_presets_for_template(),
+        "vehicle_presets_json": json.dumps(_vehicle_presets_for_template()),
     }
 
 
@@ -183,7 +193,7 @@ async def new_vehicle_form(
         {
             **unit_ctx,
             "vehicle": None,
-            "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+            "vehicle_presets_json": json.dumps(_vehicle_presets_for_template()),
             "ice_fuel_efficiency_display": None,
             "ice_fuel_tank_capacity_display": None,
         },
@@ -277,7 +287,7 @@ async def edit_vehicle_form(
             "vehicle": vehicle,
             "ice_fuel_efficiency_display": ice_fuel_efficiency_display,
             "ice_fuel_tank_capacity_display": ice_fuel_tank_capacity_display,
-            "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+            "vehicle_presets_json": json.dumps(_vehicle_presets_for_template()),
         },
     )
 
