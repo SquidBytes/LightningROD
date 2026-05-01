@@ -22,16 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
 from web.queries.vehicles import get_active_vehicle, get_all_vehicles
+from web.services.sources.registry import REGISTRY
 from web.services.units import detection
 from web.services.units.contracts import FieldContract
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="web/templates")
-
-# Explicit manifest. Keep in sync with scripts/gen_data_sources_doc.py.
-_ADAPTER_MODULES: list[tuple[str, str]] = [
-    ("ha_fordpass", "web.services.sources.ha_fordpass.adapter"),
-]
 
 
 def _contract_key(c: FieldContract) -> str:
@@ -60,8 +56,9 @@ def _load_groups() -> list[dict[str, Any]]:
         (r.entity_pattern, r.attribute): r for r in detection.snapshot()
     }
 
-    for source_name, module_path in _ADAPTER_MODULES:
-        module = importlib.import_module(module_path)
+    for descriptor in REGISTRY:
+        source_name = descriptor.source_name
+        module = importlib.import_module(descriptor.adapter_module)
         contracts: list[FieldContract] = list(getattr(module, "FIELD_CONTRACTS", []))
         last_seen: dict[str, dict[str, Any]] = dict(getattr(module, "_last_seen_raw", {}))
         rows = []
