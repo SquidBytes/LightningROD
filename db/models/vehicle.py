@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Numeric, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
@@ -37,6 +37,11 @@ class EVVehicle(Base):
     vin: Mapped[str | None] = mapped_column(String, unique=True)
     device_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     source_system: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    primary_source_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("data_source_configs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # ICE comparison fields — configure what gas vehicle this EV replaces.
     # Stored metric: efficiency in L/100km, tank capacity in liters.
