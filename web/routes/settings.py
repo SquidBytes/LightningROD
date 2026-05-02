@@ -1300,10 +1300,14 @@ async def save_data_source(
     # Masked-token preprocess — preserves the regression-locked invariant: if
     # the user submits the masked placeholder, do NOT overwrite the stored
     # token. Apply this BEFORE model_validate so the masked string never
-    # becomes the persisted value.
-    if "ha_token" in form and form["ha_token"].startswith("*"):
+    # becomes the persisted value. We compare against the rendered mask of
+    # the stored token (asterisks + last 8 chars) so any other input —
+    # including a real token starting with `*` — is treated as a legitimate
+    # update.
+    if "ha_token" in form:
         existing = await _load_existing_config(db, descriptor)
-        form["ha_token"] = existing.ha_token if existing else ""
+        if existing and form["ha_token"] == _mask_token(existing.ha_token):
+            form["ha_token"] = existing.ha_token
 
     # Boolean coercion for HTML checkbox: unchecked → absent from form,
     # checked → "true" or "on" (browser-dependent).
