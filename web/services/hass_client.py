@@ -377,11 +377,30 @@ class HASSClient:
 
         Returns (ha_url, headers) tuple or None when credentials are missing.
         """
+        from sqlalchemy import select
+
         from db.engine import AsyncSessionLocal
+        from db.models.data_source_config import DataSourceConfig
         from web.queries.settings import get_app_settings_dict
 
         async with AsyncSessionLocal() as db:
             cfg = await get_app_settings_dict(db, ["ha_url", "ha_token"])
+
+            # Transitional credential-source shim: legacy app_settings
+            # ha_url/ha_token keys are deleted by the p31 migration. Fall
+            # back to the data_source_configs row when those keys are
+            # absent so REST helpers keep working post-migration.
+            if not cfg.get("ha_url") or not cfg.get("ha_token"):
+                result = await db.execute(
+                    select(DataSourceConfig.config_json).where(
+                        DataSourceConfig.source_name == "ha_fordpass",
+                        DataSourceConfig.instance_label == "default",
+                    )
+                )
+                row = result.scalar_one_or_none()
+                if row:
+                    cfg["ha_url"] = cfg.get("ha_url") or row.get("ha_url", "")
+                    cfg["ha_token"] = cfg.get("ha_token") or row.get("ha_token", "")
 
         ha_url = cfg.get("ha_url", "").rstrip("/")
         ha_token = cfg.get("ha_token", "")
