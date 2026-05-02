@@ -1178,8 +1178,11 @@ def _last_event_timeago(adapter_module) -> str | None:
     cache = getattr(adapter_module, "_last_seen_raw", {})
     if not cache:
         return None
-    most_recent_iso = max(entry["seen_at"] for entry in cache.values())
-    most_recent_dt = datetime.fromisoformat(most_recent_iso)
+    try:
+        most_recent_iso = max(entry["seen_at"] for entry in cache.values())
+        most_recent_dt = datetime.fromisoformat(most_recent_iso)
+    except (KeyError, ValueError, TypeError):
+        return None
     delta = datetime.now(UTC) - most_recent_dt
     seconds = int(delta.total_seconds())
     if seconds < 60:
