@@ -95,27 +95,35 @@ def upgrade() -> None:
         ).fetchall()
         existing = {r[0]: (r[1] or "") for r in rows}
 
-        dsc_tbl = sa.table(
-            "data_source_configs",
-            sa.column("source_name", sa.String),
-            sa.column("instance_label", sa.String),
-            sa.column("config_json", JSONStorage()),
-            sa.column("enabled", sa.Boolean),
-        )
-        op.bulk_insert(
-            dsc_tbl,
-            [
-                {
-                    "source_name": "ha_fordpass",
-                    "instance_label": "default",
-                    "config_json": {
-                        "ha_url": existing.get("ha_url", ""),
-                        "ha_token": existing.get("ha_token", ""),
-                    },
-                    "enabled": True,
-                }
-            ],
-        )
+        # Only seed when there's something to seed. On a fresh install
+        # the legacy app_settings rows don't exist, and inserting a row
+        # with empty ha_url/ha_token couples the "fresh install shows
+        # blank form" UX to HAFordpassConfig's min_length=1 validation.
+        # The Settings tab handler renders an empty form when no row is
+        # present, so deferring the insert to first-save keeps the
+        # dependency explicit.
+        if existing.get("ha_url") or existing.get("ha_token"):
+            dsc_tbl = sa.table(
+                "data_source_configs",
+                sa.column("source_name", sa.String),
+                sa.column("instance_label", sa.String),
+                sa.column("config_json", JSONStorage()),
+                sa.column("enabled", sa.Boolean),
+            )
+            op.bulk_insert(
+                dsc_tbl,
+                [
+                    {
+                        "source_name": "ha_fordpass",
+                        "instance_label": "default",
+                        "config_json": {
+                            "ha_url": existing.get("ha_url", ""),
+                            "ha_token": existing.get("ha_token", ""),
+                        },
+                        "enabled": True,
+                    }
+                ],
+            )
 
     # ---------------------------------------------------------------
     # (c) Rewrite source_system 'home_assistant' -> 'ha_fordpass'
