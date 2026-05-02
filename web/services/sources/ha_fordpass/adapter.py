@@ -985,7 +985,7 @@ async def _handle_events_entity(
 
     # Match-and-enrich: if an _elveh row already exists for this trip, update
     # the canonical temperature fields rather than inserting a duplicate.
-    from web.services.hass_processor import _find_matching_trip
+    from web.services.sources.ha_fordpass.handlers import _find_matching_trip
 
     existing = await _find_matching_trip(db, device_id, distance, energy)
     if existing is not None:
