@@ -1151,11 +1151,6 @@ async def delete_subscription_route(
 
 
 HASS_SETTINGS_KEYS = [
-    "ha_url",
-    "ha_token",
-    "ha_vin_override",
-    "ha_unit_system",
-    "ha_auto_connect",
     "home_latitude",
     "home_longitude",
     "home_location_name",
@@ -1354,80 +1349,6 @@ async def save_data_source(
                 "last_seen": last_seen,
             },
             "saved": True,
-        },
-    )
-
-
-@router.post("/settings/hass/home-location", response_class=HTMLResponse)
-async def save_home_location_settings(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    home_location_name: str = Form(""),
-    home_latitude: str = Form(""),
-    home_longitude: str = Form(""),
-):
-    """Save home location settings to app_settings."""
-    await set_app_setting(db, "home_location_name", home_location_name)
-    await set_app_setting(db, "home_latitude", home_latitude)
-    await set_app_setting(db, "home_longitude", home_longitude)
-
-    # Re-read saved values for display
-    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
-    token = settings.get("ha_token", "")
-    masked_token = ""
-    if token:
-        if len(token) > 8:
-            masked_token = "*" * (len(token) - 8) + token[-8:]
-        else:
-            masked_token = token
-
-    return templates.TemplateResponse(
-        request,
-        "settings/partials/hass_settings.html",
-        {"hass": settings, "masked_token": masked_token, "saved": True},
-    )
-
-
-@router.post("/settings/hass/home-location/sync", response_class=HTMLResponse)
-async def sync_home_location_from_ha(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    """Force-overwrite the home location from HA config (latitude/longitude/location_name)."""
-    from web.services.hass_client import hass_service
-
-    if not hass_service.health.get("connected"):
-        # Re-render the form with an error banner
-        settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
-        token = settings.get("ha_token", "")
-        masked_token = (
-            ("*" * (len(token) - 8) + token[-8:]) if len(token) > 8 else token
-        ) if token else ""
-        return templates.TemplateResponse(
-            request,
-            "settings/partials/hass_settings.html",
-            {
-                "hass": settings,
-                "masked_token": masked_token,
-                "home_sync_error": "Must be connected to HA to sync home location.",
-            },
-        )
-
-    applied = await hass_service.sync_home_location_from_config()
-
-    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
-    token = settings.get("ha_token", "")
-    masked_token = (
-        ("*" * (len(token) - 8) + token[-8:]) if len(token) > 8 else token
-    ) if token else ""
-
-    return templates.TemplateResponse(
-        request,
-        "settings/partials/hass_settings.html",
-        {
-            "hass": settings,
-            "masked_token": masked_token,
-            "home_sync_applied": applied,
         },
     )
 
