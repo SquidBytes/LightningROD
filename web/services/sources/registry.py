@@ -13,6 +13,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
+from web.services.sources.ha_gas_price.config import HAGasPriceConfig
 
 
 @dataclass(frozen=True)
@@ -31,5 +32,12 @@ REGISTRY: list[DataSourceDescriptor] = [
         adapter_module="web.services.sources.ha_fordpass.adapter",
         config_schema=HAFordpassConfig,
         setup_flow="ha_websocket",
+    ),
+    DataSourceDescriptor(
+        source_name="ha_gas_price",
+        display_name="Home Assistant (Gas Price Sensors)",
+        adapter_module="web.services.sources.ha_gas_price.adapter",
+        config_schema=HAGasPriceConfig,
+        setup_flow="static",
     ),
 ]
