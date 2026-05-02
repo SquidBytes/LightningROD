@@ -4,7 +4,7 @@
         <span class="text-base-content font-semibold">
             {% if trip.end_time %}{{ trip.end_time|localtime(user_tz|default('UTC'), "%b %-d, %Y") }}{% else %}Unknown Date{% endif %}
         </span>
-        {% if trip.source_system == 'home_assistant' %}
+        {% if trip.source_system == 'ha_fordpass' %}
             <span class="badge badge-accent badge-sm">HASS</span>
         {% elif trip.source_system == 'manual' %}
             <span class="badge badge-info badge-sm">Manual</span>
