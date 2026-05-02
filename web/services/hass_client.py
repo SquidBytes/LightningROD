@@ -701,17 +701,24 @@ async def start_hass_service() -> None:
         # read directly from data_source_configs.
         if not cfg.get("ha_url") or not cfg.get("ha_token"):
             result = await db.execute(
-                select(DataSourceConfig.config_json).where(
+                select(
+                    DataSourceConfig.config_json,
+                    DataSourceConfig.enabled,
+                ).where(
                     DataSourceConfig.source_name == "ha_fordpass",
                     DataSourceConfig.instance_label == "default",
                 )
             )
-            row = result.scalar_one_or_none()
-            if row:
-                cfg["ha_url"] = cfg.get("ha_url") or row.get("ha_url", "")
-                cfg["ha_token"] = cfg.get("ha_token") or row.get("ha_token", "")
+            row = result.first()
+            # Honour the per-source `enabled` toggle when falling back to
+            # data_source_configs. A disabled source must not auto-connect
+            # even if credentials are present.
+            if row and row.enabled:
+                config_json = row.config_json or {}
+                cfg["ha_url"] = cfg.get("ha_url") or config_json.get("ha_url", "")
+                cfg["ha_token"] = cfg.get("ha_token") or config_json.get("ha_token", "")
                 if not cfg.get("ha_auto_connect"):
-                    ac = row.get("ha_auto_connect", True)
+                    ac = config_json.get("ha_auto_connect", True)
                     cfg["ha_auto_connect"] = "true" if ac else "false"
 
     ha_url = cfg.get("ha_url", "").strip()
