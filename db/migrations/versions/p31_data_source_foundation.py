@@ -144,9 +144,13 @@ def upgrade() -> None:
     )
     if bind_dialect == "sqlite":
         if context.is_offline_mode():
-            # batch_alter_table cannot reflect without a live connection;
-            # emit the column add only. FK constraint is still applied
-            # on online runs.
+            # WARNING: SQLite offline-generated SQL omits the FK constraint
+            # because batch_alter_table needs a live connection for table
+            # reflection. PostgreSQL offline mode handles the FK correctly.
+            # Do NOT use offline SQL for SQLite production targets — the
+            # generated schema would have the column without the
+            # fk_ev_vehicles_primary_source_id constraint and SQLAlchemy
+            # does not validate runtime FKs against schema FKs.
             op.add_column(
                 "ev_vehicles",
                 sa.Column("primary_source_id", sa.Integer(), nullable=True),
