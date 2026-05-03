@@ -330,11 +330,11 @@ FIELD_CONTRACTS: list[FieldContract] = [
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="speed",
-        source_unit="km/h",
+        source_unit="kmh",
         ha_unit_system_converted=True,
         target_db_table="ev_vehicle_status",
         target_db_column="speed",
-        target_unit="km/h",
+        target_unit="kmh",
         notes=(
             "Instantaneous vehicle speed; ha-fordpass localizes per "
             "unit_system. Zero when parked."
