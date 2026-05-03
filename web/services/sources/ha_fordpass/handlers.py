@@ -418,12 +418,23 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
             device_id=device_id,
         )
 
-    # Map slug to field. Numeric + distance/temp converters route through
+    def _speed_converter(v):
+        return _resolve_and_convert(
+            raw_value=v,
+            entity_id=entity_id,
+            attribute="",
+            new_state=new_state,
+            ha_config=ha_config,
+            field_type="speed",
+            device_id=device_id,
+        )
+
+    # Map slug to field. Numeric + distance/temp/speed converters route through
     # web.services.units.to_metric via _convert_with_uom; string / _safe_float
     # converters remain pure.
     slug_field_map = {
         "odometer": ("odometer", _distance_converter),
-        "speed": ("speed", _distance_converter),
+        "speed": ("speed", _speed_converter),
         "acceleratorpedalposition": ("accelerator_position", _safe_float),
         "brakepedalstatus": ("brake_status", str),
         "braketorque": ("brake_torque", _safe_float),
