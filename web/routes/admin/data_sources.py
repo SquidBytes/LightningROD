@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
 from web.queries.vehicles import get_active_vehicle, get_all_vehicles
+from web.services.ingestion import supervisor
 from web.services.sources.registry import REGISTRY
 from web.services.units import detection
 from web.services.units.contracts import FieldContract
@@ -104,5 +105,6 @@ async def data_sources_page(
             "active_vehicle": active_vehicle,
             "all_vehicles": all_vehicles,
             "groups": _load_groups(),
+            "runtimes": supervisor.health(),
         },
     )

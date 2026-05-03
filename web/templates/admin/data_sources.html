@@ -29,6 +29,61 @@
         </div>
     </div>
 
+    <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-3">Runtimes</h2>
+        <p class="text-base-content/70 text-sm mb-3">
+            Live ingestion runtime health. One row per enabled
+            <code class="text-xs">data_source_configs</code> entry. The supervisor
+            spawns one runtime per row at startup and on settings save; the table
+            below mirrors the connection-state badge on the Settings &rarr; Data
+            Sources card at debugger-grade detail.
+        </p>
+        {% if runtimes %}
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Instance</th>
+                        <th>State</th>
+                        <th>Events</th>
+                        <th>Last Event (UTC)</th>
+                        <th>Errors</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rt in runtimes %}
+                    <tr>
+                        <td><code class="text-xs">{{ rt.source_name }}</code></td>
+                        <td>{{ rt.instance_label }}</td>
+                        <td>
+                            {% if rt.connection_state == 'connected' %}
+                                <span class="badge badge-success badge-xs">{{ rt.connection_state }}</span>
+                            {% elif rt.connection_state in ('connecting', 'reconnecting') %}
+                                <span class="badge badge-warning badge-xs">{{ rt.connection_state }}</span>
+                            {% else %}
+                                <span class="badge badge-error badge-xs">{{ rt.connection_state }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ rt.events_processed }}</td>
+                        <td>
+                            {% if rt.last_event_at %}
+                                <code class="text-xs">{{ rt.last_event_at }}</code>
+                            {% else %}
+                                <span class="text-base-content/40 text-xs">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ rt.errors }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-base-content/60 text-sm">No runtimes spawned (no enabled data_source_configs rows).</p>
+        {% endif %}
+    </section>
+
     {% for group in groups %}
     <section class="mb-8">
         <h2 class="text-xl font-semibold mb-3">{{ group.source_name }}</h2>
