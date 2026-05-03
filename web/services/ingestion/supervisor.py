@@ -107,7 +107,15 @@ class IngestionSupervisor:
     # ----- Internal -----
 
     async def _start_one(self, row: DataSourceConfig) -> None:
-        """Validate config_json, build the runtime, schedule its start coroutine."""
+        """Validate config_json, build the runtime, schedule its start coroutine.
+
+        Membership in ``_RUNTIME_CLASSES`` is the single source of truth for
+        "this supervisor knows how to spawn this source_name". Adding a new
+        source means adding a row to ``_RUNTIME_CLASSES`` AND a matching
+        per-source construction branch below — there is no defensive
+        fall-through that silently skips unrecognized source_names while
+        leaving them in the registry.
+        """
         runtime_cls = _RUNTIME_CLASSES.get(row.source_name)
         if runtime_cls is None:
             logger.info(
@@ -140,9 +148,14 @@ class IngestionSupervisor:
                 instance_label=row.instance_label,
             )
         else:
-            # Future source_name handlers branch here.
-            logger.warning("Unrecognized source_name=%s; skipping", row.source_name)
-            return
+            # _RUNTIME_CLASSES has an entry for row.source_name but _start_one
+            # has no per-source construction branch — a contributor added the
+            # registry entry without wiring up the build step. Fail loudly.
+            raise RuntimeError(
+                f"_RUNTIME_CLASSES contains source_name={row.source_name!r} "
+                "but _start_one has no construction branch for it. Add an "
+                "elif branch above next to the matching registry entry."
+            )
 
         self._runtimes[row.id] = rt
         self._tasks[row.id] = asyncio.create_task(
