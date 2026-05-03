@@ -7,9 +7,9 @@ handling is explicit and testable.
 
 ### No runtime unit auto-detection
 This module does NOT import or reference the legacy FordPass preferred-unit
-flags (previously carried on ha_config and the hass_processor value-normalizer
-helper). Every conversion here flows
-through a FIELD_CONTRACTS entry with a declared `source_unit`.
+flags (previously carried on ha_config and the legacy value-normalizer
+helper now superseded by `web.services.units.to_metric`). Every conversion
+here flows through a FIELD_CONTRACTS entry with a declared `source_unit`.
 
 ### Prefer documented-metric entities
 Reads from:
@@ -436,7 +436,7 @@ def _record_last_seen(
 
 
 # ---------------------------------------------------------------------------
-# Lookup + conversion helpers (consumed by hass_processor.py in Task 2)
+# Lookup + conversion helpers (consumed by ha_fordpass.handlers slug handlers)
 # ---------------------------------------------------------------------------
 
 INGEST_SCHEMA_VERSION = 2  # mark every new adapter-driven row
@@ -697,7 +697,7 @@ def convert(
 
 
 # ---------------------------------------------------------------------------
-# Safe-float helper (re-exported from hass_processor for parity)
+# Safe-float helper (kept here for parity with the ingestion._helpers copy)
 # ---------------------------------------------------------------------------
 
 def _safe_float(val: Any) -> float | None:
@@ -746,8 +746,8 @@ async def process_event(
     _metrics -> writes ev_battery_status row (range / max_range)
     _events -> writes ev_trip_metrics row (from xev-key-off-trip-segment-data)
     _energytransferlogentry -> writes ev_charging_session row
-    everything else -> no-op (handled by hass_processor's legacy handlers,
-    or explicitly ignored)
+    everything else -> no-op (handled by the ha_fordpass slug handlers, or
+    explicitly ignored)
     `ha_config` is forwarded to `convert()` so contracts flagged
     `ha_unit_system_converted` can resolve the effective source unit
     per-event from HA's configured unit_system.
@@ -777,8 +777,8 @@ async def process_event(
         elif suffix == "outsidetemp":
             await _handle_outsidetemp_entity(entity_id, new_state, device_id, db, ha_config)
         else:
-            # Not an adapter-owned entity. Silent return — hass_processor
-            # handles legacy per-slug routing for vehicle status, GPS, etc.
+            # Not an adapter-owned entity. Silent return — the ha_fordpass
+            # slug handlers cover per-slug routing for vehicle status, GPS, etc.
             return
     except UnknownSourceUnit as exc:
         # convert() already absorbs this; belt-and-braces in case a caller
@@ -1245,8 +1245,9 @@ def _format_address(addr: dict | None) -> str | None:
     return ", ".join(parts) if parts else None
 
 
-# Mirrors hass_processor._CHARGER_TYPE_MAP so the adapter's charging-session
-# path is drop-in compatible. Kept local to avoid a back-import.
+# Mirrors the ha_fordpass.handlers _CHARGER_TYPE_MAP so the adapter's
+# charging-session path is drop-in compatible. Kept local to avoid a
+# back-import.
 _CHARGER_TYPE_MAP = {
     "AC": "AC", "AC_BASIC": "AC", "AC_LEVEL_1": "AC", "AC_LEVEL_2": "AC",
     "AC LEVEL 1": "AC", "AC LEVEL 2": "AC", "LEVEL_1": "AC", "LEVEL_2": "AC",

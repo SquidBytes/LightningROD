@@ -129,13 +129,14 @@ async def test_event_delivery(ha_simulator: HASimulator):
 
 @pytest.mark.asyncio
 async def test_hass_client_connects_to_simulator():
-    """Verify HASSClient can connect to the simulator and complete full handshake.
+    """Verify the runtime can connect to the simulator and complete the full handshake.
 
-    Tests the integration between hass_client.py and the simulator by running
-    the full connect -> auth -> config -> states -> subscribe sequence, then
-    verifying health state and disconnecting cleanly.
+    Drives the runtime through the full connect -> auth -> config -> states ->
+    subscribe sequence, verifies health state, and disconnects cleanly. The
+    test injects a captured-events handler so it can observe a single
+    state_changed event without going through a real DB write.
     """
-    from web.services.hass_client import HASSClient
+    from web.services.ingestion.ha_websocket import HAWebSocketRuntime
 
     events_received = []
 
@@ -145,10 +146,11 @@ async def test_hass_client_connects_to_simulator():
     sim = HASimulator(port=0)
     await sim.start()
 
-    client = HASSClient()
-    client_task = asyncio.create_task(
-        client.start(sim.ws_url, "test-token-valid", event_handler)
+    client = HAWebSocketRuntime(
+        config_id=0, ha_url=sim.ws_url, ha_token="test-token-valid"
     )
+    client._event_handler = event_handler
+    client_task = asyncio.create_task(client.start())
 
     try:
         # Wait for connection (up to 3s)
@@ -157,10 +159,10 @@ async def test_hass_client_connects_to_simulator():
             if client.health["connected"]:
                 break
 
-        assert client.health["connected"], "HASSClient failed to connect to simulator"
+        assert client.health["connected"], "Runtime failed to connect to simulator"
         assert client.health["connection_state"] == "connected"
 
-        # Inject an event and verify client receives it via handler
+        # Inject an event and verify the runtime receives it via the handler
         await asyncio.sleep(0.1)
         await sim.inject_event(
             "sensor.fordpass_TESTVIN_soc",
@@ -184,25 +186,26 @@ async def test_hass_client_connects_to_simulator():
 
 @pytest.mark.asyncio
 async def test_hass_client_auth_rejected():
-    """Verify HASSClient stops when given an invalid token (no reconnect loop)."""
-    from web.services.hass_client import HASSClient
+    """Verify the runtime stops when given an invalid token (no reconnect loop)."""
+    from web.services.ingestion.ha_websocket import HAWebSocketRuntime
 
     sim = HASimulator(port=0)
     await sim.start()
 
-    client = HASSClient()
+    client = HAWebSocketRuntime(
+        config_id=0, ha_url=sim.ws_url, ha_token="bad-token"
+    )
 
     async def noop_handler(entity_id, old_state, new_state, ha_config):
         pass
 
+    client._event_handler = noop_handler
+
     # Start with bad token -- should fail auth and stop (no infinite reconnect)
     try:
-        await asyncio.wait_for(
-            client.start(sim.ws_url, "bad-token", noop_handler),
-            timeout=5.0,
-        )
+        await asyncio.wait_for(client.start(), timeout=5.0)
     except TimeoutError:
-        pytest.fail("HASSClient did not stop after auth rejection within 5s")
+        pytest.fail("Runtime did not stop after auth rejection within 5s")
 
     assert not client.health["connected"]
     assert client.health["last_error"] == "auth_invalid"

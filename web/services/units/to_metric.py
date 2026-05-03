@@ -1,8 +1,8 @@
 """Pure unit-to-metric conversion.
 
-Replaces web/services/hass_processor.normalize_value. The key difference:
-`to_metric` dispatches on an explicit, declared `source_unit` string supplied
-by the caller (typically an adapter's FIELD_CONTRACTS entry). There is no
+Replaces the legacy normalize_value helper. The key difference: `to_metric`
+dispatches on an explicit, declared `source_unit` string supplied by the
+caller (typically an adapter's FIELD_CONTRACTS entry). There is no
 process-global flag, no runtime unit detection, and no silent fallback.
 Unknown source_unit raises UnknownSourceUnit so callers can log full context
 and fail loudly.
