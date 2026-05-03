@@ -1195,7 +1195,13 @@ def _last_event_timeago(adapter_module) -> str | None:
 
 
 async def _load_existing_config(db: AsyncSession, descriptor):
-    """Load existing data_source_configs row for descriptor, return Pydantic instance or None."""
+    """Load existing data_source_configs row for descriptor, return Pydantic instance or None.
+
+    Returns None for both missing rows and rows whose stored config_json fails
+    schema validation (e.g. the pre-WR-05 seed shape with empty ha_url/ha_token).
+    Mirrors the defensive validation the GET handler does so the masked-token
+    preprocess can safely skip when there's no usable existing token to compare.
+    """
     result = await db.execute(
         select(DataSourceConfig).where(
             DataSourceConfig.source_name == descriptor.source_name,
@@ -1205,14 +1211,17 @@ async def _load_existing_config(db: AsyncSession, descriptor):
     row = result.scalar_one_or_none()
     if row is None:
         return None
-    return descriptor.config_schema.model_validate(row.config_json)
+    try:
+        return descriptor.config_schema.model_validate(row.config_json)
+    except ValidationError:
+        return None
 
 
 async def _upsert_data_source_config(db: AsyncSession, descriptor, config) -> None:
-    """UPDATE the (descriptor.source_name, 'default') row's config_json.
+    """Persist config: UPDATE the existing row, INSERT one if missing.
 
-    The row was created by the data-source-foundation migration; this handler
-    only ever updates it.
+    Post-WR-05 the migration only seeds when legacy app_settings carried real
+    values, so a fresh install reaches first-save with no row at all.
     """
     from datetime import UTC, datetime
 
@@ -1222,9 +1231,18 @@ async def _upsert_data_source_config(db: AsyncSession, descriptor, config) -> No
             DataSourceConfig.instance_label == "default",
         )
     )
-    row = result.scalar_one()
-    row.config_json = config.model_dump()
-    row.updated_at = datetime.now(UTC)
+    row = result.scalar_one_or_none()
+    if row is None:
+        row = DataSourceConfig(
+            source_name=descriptor.source_name,
+            instance_label="default",
+            config_json=config.model_dump(),
+            enabled=True,
+        )
+        db.add(row)
+    else:
+        row.config_json = config.model_dump()
+        row.updated_at = datetime.now(UTC)
     await db.commit()
 
 

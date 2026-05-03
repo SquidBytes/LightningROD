@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from db.models.data_source_config import DataSourceConfig
+from web.routes.settings import _mask_token
 
 pytestmark = pytest.mark.db
 
@@ -71,24 +72,25 @@ async def test_post_data_source_saves_real_token(client, db_session):
 
 async def test_post_data_source_masked_token_preserves_existing(client, db_session):
     """POST with a masked-token placeholder must NOT overwrite the stored token."""
+    original_token = "originaltoken1234"
     row = await _seed_default(
         db_session,
         ha_url="http://x",
-        ha_token="originaltoken1234",
+        ha_token=original_token,
     )
 
     response = await client.post(
         "/settings/data-sources/ha_fordpass",
         data={
             "ha_url": "http://x",
-            "ha_token": "*********token1234",
+            "ha_token": _mask_token(original_token),
             "ha_unit_system": "auto",
             "ha_auto_connect": "true",
         },
     )
     assert response.status_code == 200
     await db_session.refresh(row)
-    assert row.config_json["ha_token"] == "originaltoken1234"
+    assert row.config_json["ha_token"] == original_token
 
 
 async def test_post_data_source_validation_error(client, db_session):
@@ -103,6 +105,46 @@ async def test_post_data_source_validation_error(client, db_session):
     )
     assert response.status_code == 422
     assert "ha_url" in response.text
+
+
+async def test_post_data_source_inserts_row_on_fresh_install(client, db_session):
+    """Fresh install: no seed row exists, first save INSERTs one.
+
+    Locks the upsert behavior introduced after WR-05 stopped seeding the
+    ha_fordpass:default row when no legacy app_settings ha_url/ha_token
+    were present to copy from.
+    """
+    from sqlalchemy import delete
+
+    await db_session.execute(
+        delete(DataSourceConfig).where(
+            DataSourceConfig.source_name == "ha_fordpass",
+            DataSourceConfig.instance_label == "default",
+        )
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        "/settings/data-sources/ha_fordpass",
+        data={
+            "ha_url": "http://homeassistant.local:8123",
+            "ha_token": "freshinstalltoken",
+            "ha_unit_system": "auto",
+            "ha_auto_connect": "true",
+        },
+    )
+    assert response.status_code == 200
+
+    result = await db_session.execute(
+        select(DataSourceConfig).where(
+            DataSourceConfig.source_name == "ha_fordpass",
+            DataSourceConfig.instance_label == "default",
+        )
+    )
+    row = result.scalar_one()
+    assert row.config_json["ha_token"] == "freshinstalltoken"
+    assert row.config_json["ha_url"] == "http://homeassistant.local:8123"
+    assert row.enabled is True
 
 
 async def test_post_unknown_source_404(client):

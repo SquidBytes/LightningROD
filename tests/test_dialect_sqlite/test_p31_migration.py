@@ -1,7 +1,7 @@
 """SQLite-backend assertions for the p31 data-source-foundation migration.
 
 Verifies the post-migration shape of:
-  - data_source_configs (one seeded row, JSONStorage payload)
+  - data_source_configs (table created, no row seeded on fresh install)
   - source_system value standardization across tables that carry it
   - app_settings legacy ha_url/ha_token keys removed
   - ev_vehicles.primary_source_id FK column reachable
@@ -15,19 +15,20 @@ from db.models import DataSourceConfig, EVVehicle
 
 
 @pytest.mark.db
-async def test_p31_seed_row_present(db_session: AsyncSession):
+async def test_p31_no_seed_row_on_fresh_install(db_session: AsyncSession):
+    """WR-05: when app_settings has no legacy ha_url/ha_token, no row is seeded.
+
+    The fresh-install SQLite test DB has no legacy keys to copy from, so the
+    ha_fordpass:default row should not exist. The table itself must exist
+    (asserted by the count() executing against it without error).
+    """
     result = await db_session.execute(
         select(DataSourceConfig).where(
             DataSourceConfig.source_name == "ha_fordpass",
             DataSourceConfig.instance_label == "default",
         )
     )
-    row = result.scalar_one_or_none()
-    assert row is not None
-    assert isinstance(row.config_json, dict)
-    assert "ha_url" in row.config_json
-    assert "ha_token" in row.config_json
-    assert row.enabled is True
+    assert result.scalar_one_or_none() is None
 
 
 @pytest.mark.db
