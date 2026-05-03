@@ -1,4 +1,4 @@
-"""Query helpers for vehicles."""
+"""Vehicle registry queries and active-vehicle helpers."""
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError

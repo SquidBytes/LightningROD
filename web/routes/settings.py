@@ -1,4 +1,4 @@
-"""Route handlers for settings."""
+"""Settings routes for app options, vehicles, networks, and data sources."""
 
 import json
 from dataclasses import asdict
@@ -1220,8 +1220,8 @@ async def _load_existing_config(db: AsyncSession, descriptor):
 async def _upsert_data_source_config(db: AsyncSession, descriptor, config) -> None:
     """Persist config: UPDATE the existing row, INSERT one if missing.
 
-    Post-WR-05 the migration only seeds when legacy app_settings carried real
-    values, so a fresh install reaches first-save with no row at all.
+    Fresh installs can reach first-save with no existing config row, while
+    migrated installs usually update the seeded row.
     """
     from datetime import UTC, datetime
 

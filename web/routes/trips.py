@@ -1,4 +1,4 @@
-"""Route handlers for trips."""
+"""Driving-session list and trip-detail routes."""
 
 import math
 from datetime import date

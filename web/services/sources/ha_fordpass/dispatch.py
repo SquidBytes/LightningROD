@@ -4,9 +4,7 @@
 entrypoint. Slug handlers themselves live in `handlers.py` and self-register
 via the decorator at import time.
 
-The `dispatch_slug` entrypoint replaces the slug-branch portion of the
-legacy free-function dispatcher. The gas-price branch lives in the
-`ha_gas_price` source adapter.
+The gas-price branch lives in the `ha_gas_price` source adapter.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Package for db.models modules."""
+"""SQLAlchemy model package."""
 
 # Import Base and ALL model classes so Alembic's autogenerate sees all tables.
 # CRITICAL: Every model module must be imported here. If a module is missing,

@@ -1,4 +1,4 @@
-"""Module for engine."""
+"""Async SQLAlchemy engine and session factory."""
 from urllib.parse import urlparse
 
 from sqlalchemy import event
@@ -22,17 +22,14 @@ else:
 engine = create_async_engine(settings.database_url, **_kwargs)
 
 
-# Dialect captured at engine-construction time so the listener can no-op cleanly
-# on PG without inspecting the engine each call. Using the public Dialect.name
-# attribute is more robust than sniffing the DBAPI wrapper's __module__ string,
-# which is "sqlalchemy.dialects.sqlite.aiosqlite" (NOT "aiosqlite") under
-# SQLAlchemy 2.0's async adapter — startswith("aiosqlite") would silently fail.
+# Dialect captured at engine construction so the listener can no-op cleanly
+# on PostgreSQL without inspecting the engine on every connection.
 _DIALECT_IS_SQLITE = engine.sync_engine.dialect.name == "sqlite"
 
 
 @event.listens_for(engine.sync_engine, "connect")
 def _set_sqlite_pragmas(dbapi_connection, connection_record):
-    """No-op on PG, PRAGMAs on SQLite. Detected via engine dialect name."""
+    """Enable SQLite safety/performance PRAGMAs on each DBAPI connection."""
     if not _DIALECT_IS_SQLITE:
         return
     cursor = dbapi_connection.cursor()

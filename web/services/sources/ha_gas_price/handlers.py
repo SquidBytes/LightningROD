@@ -1,9 +1,6 @@
 """ha-gas-price event handler.
 
 Writes a GasPriceReading + refreshes monthly averages in GasPriceHistory.
-The leading underscore on the legacy private name is dropped on relocation
-because the function is now the public entry the adapter exposes; the
-underscore was a hass_processor-module convention.
 """
 
 from __future__ import annotations

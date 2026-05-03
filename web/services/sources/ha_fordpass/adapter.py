@@ -28,7 +28,7 @@ warning log. The adapter never silently assumes metric.
 Trip fields (distance, energy_consumed, ambient/cabin/outside_air temps, etc)
 come from `sensor.fordpass_{vin}_events.customEvents`, not from
 `sensor.fordpass_{vin}_elveh` attributes. The elveh attribute UoM
-semantics are unreliable (2026-03-21 bug, commit abd736b). Battery-related
+semantics are unreliable for unit-bearing trip fields. Battery-related
 attributes (voltage/amperage/kW/capacity) ARE read from elveh because they are
 SI-already (V, A, kW) and need no conversion — they carry no FIELD_CONTRACTS
 entry for that reason (see `tests/test_unit/test_contract_coverage.py`

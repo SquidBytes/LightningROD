@@ -1,4 +1,4 @@
-"""Database models for vehicle."""
+"""Registered vehicle model."""
 
 from datetime import datetime
 
@@ -15,7 +15,7 @@ class EVVehicle(Base):
 
     Each vehicle has a unique device_id that links it to charging sessions,
     battery status, and trip metrics. The integer PK is used in URLs to
-    keep VINs out of the address bar (VEH-04).
+    keep VINs out of the address bar.
     """
 
     __tablename__ = "ev_vehicles"
@@ -36,11 +36,8 @@ class EVVehicle(Base):
     battery_gross_capacity_kwh: Mapped[float | None] = mapped_column(Numeric)
     vin: Mapped[str | None] = mapped_column(String, unique=True)
     # Free-form cross-source identifier, not necessarily a VIN. The
-    # ha_fordpass adapter writes device_id == VIN (FordPass entity_ids
-    # embed the VIN); future non-VIN sources (e.g. OBD by Bluetooth MAC,
-    # ha-bluelink for Hyundai/Kia) MAY set device_id != vin. No runtime
-    # check enforces this — see .planning/CONVENTIONS.md "device_id
-    # convention".
+    # ha_fordpass adapter writes device_id == VIN because FordPass entity_ids
+    # embed the VIN; other sources may use provider ids or adapter ids.
     device_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     source_system: Mapped[str | None] = mapped_column(String(100), nullable=True)
     primary_source_id: Mapped[int | None] = mapped_column(

@@ -207,9 +207,8 @@ def _resolve_and_convert(
 ) -> float | None:
     """Resolve the source unit via HA signals, then convert via to_metric.
 
-    Convenience wrapper used by the legacy vehicle-status and battery-status
-    handlers. Hides the resolve -> convert -> record chain so handler code
-    stays readable.
+    Convenience wrapper for vehicle-status and battery-status handlers. Hides
+    the resolve -> convert -> record chain so handler code stays readable.
     """
     if raw_value is None:
         return None

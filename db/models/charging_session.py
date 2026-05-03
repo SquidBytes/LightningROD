@@ -1,4 +1,4 @@
-"""Database models for charging session."""
+"""Charging session model."""
 
 import uuid
 from datetime import datetime
@@ -27,10 +27,7 @@ TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVChargingSession(Base):
-    """EV charging session records (30 columns).
-
-    Source: 002_create_target_tables.sql, ev_charging_session table.
-    """
+    """One EV charging session with cost, location, EVSE, and telemetry fields."""
 
     __tablename__ = "ev_charging_session"
 
@@ -115,9 +112,8 @@ class EVChargingSession(Base):
     review_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # 'duplicate', 'auto_association', NULL
 
     # Charging-session thermal context
-    # °C, NULL when the HA payload doesn't carry a temp reading. Start/end mirror
-    # the same value today because HA exposes single-value snapshots — see
-    # hass_processor.handle_energy_transfer for the mirroring comment.
+    # °C, NULL when the HA payload does not carry a temp reading. Start/end
+    # mirror the same value today because HA exposes single-value snapshots.
     battery_temp_start: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     battery_temp_end: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     ambient_temp_start: Mapped[float | None] = mapped_column(Numeric, nullable=True)
@@ -130,9 +126,8 @@ class EVChargingSession(Base):
     )
     original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
-    # Pipeline schema version. NULL = legacy rows from the suspect conversion
-    # era around 2026-03-21 (commit abd736b). Value 2 = adapter-driven ingest
-    # with declared source units.
+    # Pipeline schema version. NULL = older rows with uncertain unit provenance.
+    # Value 2 = adapter-driven ingest with declared source units.
     ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (

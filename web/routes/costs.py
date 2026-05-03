@@ -1,4 +1,4 @@
-"""Route handlers for costs."""
+"""Charging-cost analytics routes."""
 
 from typing import Annotated
 

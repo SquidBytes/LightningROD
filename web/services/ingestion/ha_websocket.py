@@ -1,21 +1,8 @@
-"""HA WebSocket runtime — connects, authenticates, subscribes to state_changed,
-and fans out events through the supervisor-managed dispatch chain.
+"""Home Assistant WebSocket runtime for ingestion events.
 
-Refactor of the legacy `web/services/hass_client.py:HASSClient`. Every
-method body is preserved with the following deltas:
-
-  - Constructor takes ``config_id``, ``ha_url``, ``ha_token`` (plus optional
-    ``source_name`` / ``instance_label`` so the supervisor can resolve the
-    runtime by name).
-  - ``start()`` matches the IngestionRuntime Protocol — no positional args.
-    Credentials come from the constructor; the event handler defaults to
-    ``self._dispatch`` (gas-price first, slug second) so production code
-    does not have to wire a callback. Tests can override ``_event_handler``
-    to capture events at the WebSocket frame boundary.
-  - ``_dispatch`` is a method on the runtime (per the multi-instance
-    runtime decision) so ``config_id`` is ergonomic — no callback threading.
-  - The legacy ``_load_credentials`` and ``data_source_configs`` fallback
-    shims are gone; the supervisor reads the config row natively.
+Each instance connects to one HA server, subscribes to ``state_changed``,
+and fans events out to source adapters. Credentials are supplied by the
+ingestion supervisor from ``data_source_configs``.
 """
 
 from __future__ import annotations
@@ -307,7 +294,7 @@ class HAWebSocketRuntime:
         new_state: dict,
         ha_config: dict,
     ) -> None:
-        """Internal default handler — bridges the legacy 4-arg shape to ``_dispatch``.
+        """Internal default handler used by the HA frame consumer.
 
         Production code paths drive every event through ``_dispatch`` so the
         gas-price / slug fan-out is the only ingestion path. Tests that need
@@ -318,9 +305,9 @@ class HAWebSocketRuntime:
     async def _dispatch(self, entity_id: str, new_state: dict) -> None:
         """Per-event fan-out: try the gas-price adapter first, then ha_fordpass slug.
 
-        Replaces the legacy free-function dispatcher. The two-session-per-event
-        pattern is preserved (one for the gas-price branch, one for the slug
-        branch); single-session optimization is deliberately deferred.
+        The two-session-per-event pattern keeps gas-price writes and FordPass
+        slug writes isolated; single-session optimization is deliberately
+        deferred.
         """
         from db.engine import AsyncSessionLocal
         from web.services.sources.ha_fordpass.dispatch import dispatch_slug

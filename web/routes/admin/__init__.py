@@ -1,1 +1,1 @@
-"""Package for web.routes.admin modules."""
+"""Admin and diagnostic route modules."""

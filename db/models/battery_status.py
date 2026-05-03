@@ -1,4 +1,4 @@
-"""Database models for battery status."""
+"""Battery telemetry snapshot model."""
 
 from datetime import datetime
 
@@ -12,10 +12,7 @@ TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVBatteryStatus(Base):
-    """EV HV and LV battery status snapshots (21 columns).
-
-    Source: 002_create_target_tables.sql, ev_battery_status table.
-    """
+    """HV/LV battery telemetry captured over time."""
 
     __tablename__ = "ev_battery_status"
 
@@ -56,9 +53,8 @@ class EVBatteryStatus(Base):
     )
     original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
-    # Pipeline schema version. NULL = legacy rows from the suspect conversion
-    # era around 2026-03-21 (commit abd736b). Value 2 = adapter-driven ingest
-    # with declared source units.
+    # Pipeline schema version. NULL = older rows with uncertain unit provenance.
+    # Value 2 = adapter-driven ingest with declared source units.
     ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (

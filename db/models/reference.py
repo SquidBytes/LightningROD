@@ -1,4 +1,4 @@
-"""Database models for reference."""
+"""Reference models for charging networks, subscriptions, and locations."""
 
 from datetime import date, datetime
 
@@ -24,11 +24,7 @@ TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVChargingNetwork(Base):
-    """Static charging network configuration.
-
-    Source: 003_create_reference_tables.sql, ev_charging_networks table.
-    Not a pipeline target — manually maintained or auto-created from HA data.
-    """
+    """Charging network configuration, manually maintained or auto-created."""
 
     __tablename__ = "ev_charging_networks"
 
@@ -66,11 +62,7 @@ class EVNetworkSubscription(Base):
 
 
 class EVLocationLookup(Base):
-    """Known location definitions for EV charging and parking.
-
-    Source: 003_create_reference_tables.sql, ev_location_lookup table.
-    Manually maintained or auto-created from HA/CSV data.
-    """
+    """Known charging or parking location, manually maintained or auto-created."""
 
     __tablename__ = "ev_location_lookup"
 

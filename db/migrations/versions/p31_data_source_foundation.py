@@ -1,4 +1,4 @@
-"""Phase 31 data-source foundation: combined data move + value standardization.
+"""Create structured data-source configs and standardize source names.
 
 Atomically:
   (a) Create data_source_configs (JSONStorage config_json, UNIQUE on
@@ -43,7 +43,7 @@ TABLES_WITH_SOURCE_SYSTEM: tuple[str, ...] = (
 
 
 def upgrade() -> None:
-    """Apply data-source foundation moves atomically."""
+    """Apply the data-source schema and data moves atomically."""
     # ---------------------------------------------------------------
     # (a) Create data_source_configs.
     # ---------------------------------------------------------------

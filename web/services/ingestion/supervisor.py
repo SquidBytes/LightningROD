@@ -50,10 +50,8 @@ class IngestionSupervisor:
     async def start_all(self) -> None:
         """Read enabled ``data_source_configs`` rows and spawn one runtime per row.
 
-        Replaces the legacy module-level ``start_hass_service``. The legacy
-        function read app_settings keys directly with a fallback shim that
-        read from ``data_source_configs``; this method reads the table
-        natively — no shim, no app_settings dependency.
+        Config rows are the only credential source; ``app_settings`` is not
+        consulted for ingestion runtime startup.
         """
         async with AsyncSessionLocal() as db:
             result = await db.execute(

@@ -1,4 +1,4 @@
-"""Module for main."""
+"""FastAPI application factory, routes, filters, and lifespan hooks."""
 
 import os
 from contextlib import asynccontextmanager

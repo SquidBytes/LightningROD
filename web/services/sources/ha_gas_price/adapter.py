@@ -13,8 +13,8 @@ the admin diagnostic page (`web/routes/admin/data_sources.py`).
 
 The runtime's per-event fan-out calls `try_handle_event` first; on False
 return, the runtime falls through to slug-based ha_fordpass dispatch. The
-fan-out collapses the legacy `process_state_change` gas-sensor branch
-(read entity_ids, then dispatch to the gas writer) into one entry point.
+fan-out reads configured entity_ids and dispatches matching events to the
+gas writer in one entry point.
 """
 
 from __future__ import annotations

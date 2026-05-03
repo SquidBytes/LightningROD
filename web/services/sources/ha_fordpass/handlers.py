@@ -4,9 +4,7 @@ FordPass entity_ids embed the VIN (`sensor.fordpass_<vin>_<slug>`); this
 adapter writes `device_id = vin` for the auto-created EVVehicle row.
 Future non-VIN sources (e.g. OBD by Bluetooth MAC, ha-bluelink for
 Hyundai/Kia) MAY set `device_id != vin`. There is no runtime VIN-regex
-check on writes — `device_id` is a free-form cross-source identifier
-(see `db/models/vehicle.py` `EVVehicle.device_id` and
-`.planning/CONVENTIONS.md` "device_id convention").
+check on writes — `device_id` is a free-form cross-source identifier.
 
 Pending-state batching dicts (`_pending_vehicle_status`,
 `_pending_battery_status`, `_last_trip_values`) are rekeyed on
@@ -38,13 +36,12 @@ from web.services.units.to_metric import UnknownSourceUnit, to_metric
 
 logger = logging.getLogger("lightningrod.sources.ha_fordpass.handlers")
 
-# FordPass entity_id regex — relocated from the legacy hass_client module
-# (FordPass-specific). Used by `extract_slug` and `get_device_id`.
+# FordPass-specific entity_id regex used by `extract_slug` and `get_device_id`.
 _FORDPASS_ENTITY_RE = re.compile(r"^sensor\.fordpass_([a-zA-Z0-9]+)_")
 
 
 # ---------------------------------------------------------------------------
-# Pending-state batching dicts (D-02b option (b): tuple-keyed)
+# Pending-state batching dicts keyed by (config_id, device_id)
 # ---------------------------------------------------------------------------
 
 # Accumulates fields until flushed (on 'lastrefresh' or timeout).
