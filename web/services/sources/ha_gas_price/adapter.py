@@ -79,9 +79,13 @@ def invalidate_gas_sensor_cache() -> None:
 async def try_handle_event(entity_id: str, new_state: dict, db) -> bool:
     """Per-event entry point used by the HA WebSocket runtime's dispatch.
 
-    Returns True if entity_id matched a configured gas sensor and the event
-    was processed (or skipped as non-numeric). Returns False otherwise —
-    the runtime falls through to slug-based ha_fordpass dispatch.
+    Returns True only when a gas-price row is written (or staged on `db`
+    for the caller to commit). Returns False when the event is not
+    actionable — entity_id does not match a configured sensor, state is
+    non-numeric, or the parsed price is non-positive. The runtime falls
+    through to slug-based ha_fordpass dispatch on False; this is a safe
+    no-op for gas-sensor entity_ids since `extract_slug` returns None
+    for non-fordpass entities.
 
     Reads the configured entity_ids (cached) and delegates to
     `handle_gas_sensor_event`. Short-circuits to False when neither

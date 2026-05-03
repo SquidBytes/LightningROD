@@ -29,8 +29,13 @@ async def handle_gas_sensor_event(
 ) -> bool:
     """Handle a gas price sensor event if entity_id matches configured sensors.
 
-    Returns True if the event was handled (entity_id matched), False otherwise.
-    Non-numeric state values are skipped gracefully.
+    Returns True only when a row is written (or staged for write on the
+    caller's session). Returns False when the event is not actionable —
+    either the entity_id does not match a configured sensor, the state is
+    non-numeric, or the parsed price is non-positive. Returning False on
+    matched-but-unactionable lets the dispatcher skip an empty commit and
+    fall through to slug dispatch, which is a safe no-op for gas-sensor
+    entity_ids (extract_slug returns None for non-fordpass entities).
     """
     if entity_id != station_entity and entity_id != average_entity:
         return False
@@ -38,12 +43,12 @@ async def handle_gas_sensor_event(
     state_val = _get_state_value(new_state)
     if state_val is None or state_val in ("unknown", "unavailable", ""):
         logger.debug("Gas sensor %s has non-numeric state '%s', skipping", entity_id, state_val)
-        return True  # Matched but not actionable
+        return False
 
     price = _safe_float(state_val)
     if price is None or price <= 0:
         logger.debug("Gas sensor %s value not a valid price: '%s', skipping", entity_id, state_val)
-        return True
+        return False
 
     recorded_at = _get_event_timestamp(new_state) or datetime.now(UTC)
 
