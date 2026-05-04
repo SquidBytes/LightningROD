@@ -7,6 +7,7 @@ from db.models.base import Base
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.data_source_config import DataSourceConfig
+from db.models.ice_vehicle import IceVehicle
 from db.models.location import EVLocation
 from db.models.reference import (
     AppSettings,
@@ -34,6 +35,7 @@ __all__ = [
     "EVLocationLookup",
     "EVStatistics",
     "EVVehicle",
+    "IceVehicle",
     "AppSettings",
     "GasPriceHistory",
     "GasPriceReading",
