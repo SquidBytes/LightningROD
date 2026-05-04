@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.ice_vehicle import IceVehicle
 from db.models.reference import AppSettings
 from db.models.vehicle import EVVehicle
 from db.portable_insert import portable_insert
@@ -50,14 +51,20 @@ async def seed(db: AsyncSession) -> int:
         battery_option="Standard Range",
         battery_capacity_kwh=98.0,
         battery_gross_capacity_kwh=108.0,
-        # ICE comparison: same year/model/trim ICE F-150 XLT 2.7L EcoBoost (4WD)
-        # EPA combined ~21 MPG → 11.2 L/100km. 23-gal standard tank → 87.0 L.
-        ice_label="2024 Ford F-150 XLT 2.7L EcoBoost",
-        ice_fuel_efficiency=11.2,
-        ice_fuel_tank_capacity=87.0,
         source_system="seed",
     )
     db.add(vehicle)
     await db.flush()
     await _set_active_vehicle(db, vehicle.id)
+
+    # Default ICE comparison row: same year/model/trim ICE F-150 XLT 2.7L EcoBoost (4WD)
+    # EPA combined ~21 MPG → 11.2 L/100km. 23-gal standard tank → 87.0 L.
+    ice = IceVehicle(
+        label="2024 Ford F-150 XLT 2.7L EcoBoost",
+        fuel_efficiency_l_per_100km=11.2,
+        tank_capacity_l=87.0,
+        is_default=True,
+    )
+    db.add(ice)
+    await db.flush()
     return 1

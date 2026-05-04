@@ -46,12 +46,6 @@ class EVVehicle(Base):
         nullable=True,
     )
 
-    # ICE comparison fields — configure what gas vehicle this EV replaces.
-    # Stored metric: efficiency in L/100km, tank capacity in liters.
-    ice_fuel_efficiency: Mapped[float | None] = mapped_column(Numeric)  # L/100km
-    ice_fuel_tank_capacity: Mapped[float | None] = mapped_column(Numeric)  # liters
-    ice_label: Mapped[str | None] = mapped_column(String)
-
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=func.now()
     )
