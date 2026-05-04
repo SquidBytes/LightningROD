@@ -6,6 +6,7 @@ Tests gas comparison and network rate comparison calculations.
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import delete
 
 from db.models.charging_session import EVChargingSession
 from db.models.ice_vehicle import IceVehicle
@@ -23,6 +24,10 @@ async def _setup_comparison_data(db):
     Test values are chosen so the internal imperial-equivalent math (25 MPG,
     15 gal tank, 360 mi total) remains clean.
     """
+    # Clear ice_vehicles to keep partial unique index on is_default predictable
+    # across tests when SQLite + savepoint isolation leaks committed rows.
+    await db.execute(delete(IceVehicle))
+    await db.flush()
     # 25 MPG -> L/100km: 235.215 / 25 = 9.4086
     # 15 gal -> liters: 15 * 3.78541 = 56.78115
     vehicle = EVVehicle(
@@ -159,6 +164,8 @@ async def test_network_comparison(db_session):
 
 async def test_gas_comparison_empty(db_session):
     """ICE vehicle configured but no sessions -> returns zeros."""
+    await db_session.execute(delete(IceVehicle))
+    await db_session.flush()
     vehicle = EVVehicle(
         device_id="EMPTY_VIN",
         display_name="Empty Vehicle",
