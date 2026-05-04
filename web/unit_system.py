@@ -109,6 +109,17 @@ def convert_fuel_volume(liters: float | None, distance_unit: str) -> float | Non
     return float(liters) * GAL_PER_LITER if _normalize_distance_unit(distance_unit) == "us" else float(liters)
 
 
+def convert_price_per_volume(price_per_l: float | None, distance_unit: str) -> float | None:
+    """Convert $/L (DB) to display price-per-volume unit ($/gal or $/L).
+
+    US locale: multiply by LITER_PER_GAL to get $/gal.
+    Metric locale: identity passthrough.
+    """
+    if price_per_l is None:
+        return None
+    return float(price_per_l) * LITER_PER_GAL if _normalize_distance_unit(distance_unit) == "us" else float(price_per_l)
+
+
 def convert_speed(kmh: float | None, distance_unit: str) -> float | None:
     """Convert km/h (DB) to display unit (mph or km/h)."""
     if kmh is None:
@@ -154,6 +165,17 @@ def to_metric_fuel_volume(value: float | None, distance_unit: str) -> float | No
     if value is None:
         return None
     return float(value) * LITER_PER_GAL if _normalize_distance_unit(distance_unit) == "us" else float(value)
+
+
+def to_metric_price_per_volume(value: float | None, distance_unit: str) -> float | None:
+    """Convert user-entered price-per-volume to $/L for storage.
+
+    US locale: input is $/gal; multiply by GAL_PER_LITER to get $/L.
+    Metric locale: input is already $/L (identity passthrough).
+    """
+    if value is None:
+        return None
+    return float(value) * GAL_PER_LITER if _normalize_distance_unit(distance_unit) == "us" else float(value)
 
 
 def to_metric_temp(value: float | None, temp_unit: str) -> float | None:

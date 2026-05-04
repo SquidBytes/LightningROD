@@ -61,12 +61,15 @@ async def _setup_comparison_data(db):
     db.add(net)
     await db.flush()
 
-    # Gas price for June 2025 — station $4.00, average $4.20
+    # Gas price for June 2025 — station $4.00/gal, average $4.20/gal.
+    # Storage is metric ($/L); divide by LITER_PER_GAL to invert the read-side
+    # multiplication in comparisons._find_gas_price.
+    LITER_PER_GAL = 3.78541
     gas_price = GasPriceHistory(
         year=2025,
         month=6,
-        station_price=4.00,
-        average_price=4.20,
+        station_price=4.00 / LITER_PER_GAL,
+        average_price=4.20 / LITER_PER_GAL,
         source="manual",
     )
     db.add(gas_price)

@@ -13,7 +13,7 @@ from web.queries.costs import (
     compute_session_cost,
     get_networks_by_name,
 )
-from web.unit_system import GAL_PER_LITER, MI_PER_KM
+from web.unit_system import GAL_PER_LITER, LITER_PER_GAL, MI_PER_KM
 
 
 def _find_gas_price(
@@ -22,14 +22,19 @@ def _find_gas_price(
     """Find the gas price entry for (year, month) or nearest earlier month.
 
     Prices must be sorted by (year DESC, month DESC).
-    Returns (station_price, average_price). Defaults to (3.50, 3.50) if no entries.
+    Returns (station_price, average_price) in $/gal. Defaults to (3.50, 3.50)
+    if no entries. Storage is $/L (post-Phase-33 migration); the multiply by
+    LITER_PER_GAL converts at the read boundary so the gallons-based cost
+    math at the call site stays unchanged.
     """
     for entry in prices:
         if (entry.year, entry.month) <= (year, month):
             station = float(entry.station_price) if entry.station_price is not None else None
             average = float(entry.average_price) if entry.average_price is not None else None
-            return (station, average)
-    # No entry found — use default
+            station_per_gal = station * LITER_PER_GAL if station is not None else None
+            average_per_gal = average * LITER_PER_GAL if average is not None else None
+            return (station_per_gal, average_per_gal)
+    # No entry found — use default ($/gal)
     return (3.50, 3.50)
 
 

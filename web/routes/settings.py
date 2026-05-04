@@ -69,8 +69,10 @@ from web.services.vehicles.registry import VehicleRegistry
 from web.unit_system import (
     convert_fuel_efficiency,
     convert_fuel_volume,
+    convert_price_per_volume,
     to_metric_fuel_efficiency,
     to_metric_fuel_volume,
+    to_metric_price_per_volume,
 )
 
 
@@ -1669,13 +1671,35 @@ async def hass_disconnect(
 
 
 async def _gas_price_history_context(db: AsyncSession) -> dict:
-    """Build context for gas_price_history.html partial."""
+    """Build context for gas_price_history.html partial.
+
+    Storage is metric ($/L). This builder pre-formats display values for the
+    template so the cell-rendering loop reads `price.station_price_display`
+    (already in user-display units, e.g. $/gal in US locale).
+    """
     from datetime import datetime
 
-    gas_prices = await get_all_gas_prices(db)
+    rows = await get_all_gas_prices(db)
     sensor_keys = ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"]
     sensor_settings = await get_app_settings_dict(db, sensor_keys)
+    unit_ctx = await get_unit_context(db)
+    distance_unit = unit_ctx["distance_unit"]
+    gas_prices = []
+    for r in rows:
+        station_metric = float(r.station_price) if r.station_price is not None else None
+        average_metric = float(r.average_price) if r.average_price is not None else None
+        gas_prices.append({
+            "id": r.id,
+            "year": r.year,
+            "month": r.month,
+            "source": r.source,
+            "station_price_metric": station_metric,
+            "station_price_display": convert_price_per_volume(station_metric, distance_unit),
+            "average_price_metric": average_metric,
+            "average_price_display": convert_price_per_volume(average_metric, distance_unit),
+        })
     return {
+        **unit_ctx,
         "gas_prices": gas_prices,
         "sensor_settings": sensor_settings,
         "now": datetime.now(),
@@ -1705,7 +1729,13 @@ async def add_gas_price(
     station_price: float | None = Form(None),
     average_price: float | None = Form(None),
 ):
-    await upsert_gas_price(db, year, month, station_price=station_price, average_price=average_price)
+    """Add or update a gas price entry. Form values in display units; stored as $/L."""
+    unit_ctx = await get_unit_context(db)
+    station_metric = to_metric_price_per_volume(station_price, unit_ctx["distance_unit"])
+    average_metric = to_metric_price_per_volume(average_price, unit_ctx["distance_unit"])
+    await upsert_gas_price(
+        db, year, month, station_price=station_metric, average_price=average_metric
+    )
     ctx = await _gas_price_history_context(db)
     ctx["saved"] = True
     return templates.TemplateResponse(

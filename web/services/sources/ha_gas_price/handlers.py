@@ -13,6 +13,7 @@ from web.services.ingestion._helpers import (
     _get_state_value,
     _safe_float,
 )
+from web.unit_system import GAL_PER_LITER
 
 logger = logging.getLogger("lightningrod.sources.ha_gas_price.handlers")
 
@@ -47,6 +48,10 @@ async def handle_gas_sensor_event(
         logger.debug("Gas sensor %s value not a valid price: '%s', skipping", entity_id, state_val)
         return False
 
+    # UNIT-02: HA gas sensors report $/gal (US-locale assumption per RESEARCH A1).
+    # Convert to $/L before storing so all gas-price storage is metric.
+    price_metric = price * GAL_PER_LITER
+
     recorded_at = _get_event_timestamp(new_state) or datetime.now(UTC)
 
     from web.queries.gas_prices import (
@@ -55,8 +60,11 @@ async def handle_gas_sensor_event(
         upsert_gas_price,
     )
 
-    await store_gas_price_reading(db, entity_id, price, recorded_at)
-    logger.info("Gas price reading stored: entity=%s, price=%.3f, at=%s", entity_id, price, recorded_at)
+    await store_gas_price_reading(db, entity_id, price_metric, recorded_at)
+    logger.info(
+        "Gas price reading stored: entity=%s, price=%.4f $/L (raw=%.3f $/gal), at=%s",
+        entity_id, price_metric, price, recorded_at,
+    )
 
     # Compute monthly averages and upsert into gas_price_history
     month_avg = await compute_monthly_averages(db, entity_id)

@@ -21,6 +21,8 @@ from websockets.exceptions import (
     WebSocketException,
 )
 
+from web.unit_system import GAL_PER_LITER
+
 logger = logging.getLogger("lightningrod.hass")
 
 
@@ -673,6 +675,10 @@ class HAWebSocketRuntime:
         if price <= 0:
             return False
 
+        # UNIT-02: HA gas sensors report $/gal (US-locale assumption per RESEARCH A1).
+        # Convert to $/L before storing so all gas-price storage is metric.
+        price_metric = price * GAL_PER_LITER
+
         ts_raw = state_obj.get("last_changed") or state_obj.get("last_updated")
         if not ts_raw:
             return False
@@ -691,7 +697,7 @@ class HAWebSocketRuntime:
 
         async with AsyncSessionLocal() as db:
             return await store_gas_price_reading_if_new(
-                db, entity_id, price, recorded_at
+                db, entity_id, price_metric, recorded_at
             )
 
     async def _refresh_gas_monthly_history(self, entity_id: str) -> None:
