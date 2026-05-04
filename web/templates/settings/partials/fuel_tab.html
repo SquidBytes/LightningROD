@@ -8,14 +8,8 @@
 <p class="text-base-content/60 text-sm mb-6">Configure ICE vehicles for gas savings comparison and track historical fuel prices.</p>
 
 <div class="space-y-6">
-    {# ICE Vehicles management — Plan 04 replaces the placeholder div with the real partial include #}
-    <div id="ice-vehicle-management-card" class="card bg-base-200">
-        <div class="card-body">
-            <h2 class="card-title text-base font-semibold">ICE Vehicles</h2>
-            <p class="text-base-content/60 text-sm">Manage internal-combustion vehicles used for gas savings comparison. Mark one as default for new charging sessions.</p>
-            <div class="text-base-content/40 text-sm py-4">ICE vehicle management is being wired in. Available shortly.</div>
-        </div>
-    </div>
+    {# ICE Vehicles management table — partial owns the card chrome #}
+    {% include "settings/partials/ice_vehicle_management.html" %}
 
     {# Display Options card (relocated from General tab body) #}
     <div class="card bg-base-200 max-w-lg">
