@@ -1720,6 +1720,23 @@ async def gas_price_history(
     )
 
 
+@router.get("/settings/fuel-price-trend", response_class=HTMLResponse)
+async def fuel_price_trend_chart(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return Plotly HTML for the Fuel Price Trend chart card.
+
+    Lazy-loaded via HTMX from settings/partials/fuel_tab.html on Fuel tab activation.
+    Reads metric storage; converts to user-display units before plotting.
+    """
+    from web.queries.gas_prices import build_fuel_price_trend_chart
+
+    unit_ctx = await get_unit_context(db)
+    chart_html = await build_fuel_price_trend_chart(db, unit_ctx["distance_unit"])
+    return HTMLResponse(content=chart_html)
+
+
 @router.post("/settings/gas-prices", response_class=HTMLResponse)
 async def add_gas_price(
     request: Request,

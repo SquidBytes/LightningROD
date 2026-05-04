@@ -73,8 +73,8 @@
             {% for price in gas_prices %}
             <tr>
                 <td>{{ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][price.month - 1] }} {{ price.year }}</td>
-                <td>{% if price.station_price is not none %}${{ "%.2f"|format(price.station_price) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
-                <td>{% if price.average_price is not none %}${{ "%.2f"|format(price.average_price) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
+                <td>{% if price.station_price_display is not none %}${{ "%.2f"|format(price.station_price_display) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
+                <td>{% if price.average_price_display is not none %}${{ "%.2f"|format(price.average_price_display) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
                 <td><span class="badge badge-sm badge-ghost">{{ price.source or 'manual' }}</span></td>
                 <td>
                     <button hx-delete="/settings/gas-prices/{{ price.id }}"
