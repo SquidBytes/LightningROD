@@ -137,6 +137,8 @@ async def settings_index(
         active_tab = "networks"
     elif tab == "data_sources":
         active_tab = "data_sources"
+    elif tab == "fuel":
+        active_tab = "fuel"
     else:
         active_tab = "general"
 

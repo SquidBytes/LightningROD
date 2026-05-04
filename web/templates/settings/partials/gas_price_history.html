@@ -32,7 +32,7 @@
                        class="input input-sm input-bordered w-full">
             </label>
             <label class="form-control">
-                <div class="label"><span class="label-text text-xs">Station Price</span></div>
+                <div class="label"><span class="label-text text-xs">Station Price ({{ units.fuel_volume_label }})</span></div>
                 <div class="flex items-center gap-1">
                     <span class="text-base-content/40 text-sm">$</span>
                     <input type="number" name="station_price" step="0.01" min="0"
@@ -41,7 +41,7 @@
                 </div>
             </label>
             <label class="form-control">
-                <div class="label"><span class="label-text text-xs">Average Price</span></div>
+                <div class="label"><span class="label-text text-xs">Average Price ({{ units.fuel_volume_label }})</span></div>
                 <div class="flex items-center gap-1">
                     <span class="text-base-content/40 text-sm">$</span>
                     <input type="number" name="average_price" step="0.01" min="0"
@@ -63,8 +63,8 @@
         <thead>
             <tr>
                 <th>Month/Year</th>
-                <th>Station Price</th>
-                <th>Average Price</th>
+                <th>Station ({{ units.fuel_volume_label }})</th>
+                <th>Average ({{ units.fuel_volume_label }})</th>
                 <th>Source</th>
                 <th></th>
             </tr>
@@ -98,6 +98,6 @@
    shows the manually-editable monthly history. Link over for the sensor wiring. #}
 <div class="mt-6 pt-4 border-t border-base-content/10 text-xs text-base-content/60">
     Home Assistant gas sensors are configured and tested on the
-    <a href="/settings?tab=hass" class="link link-hover">Home Assistant tab</a>.
+    <a href="/settings?tab=data_sources" class="link link-hover">Data Sources tab</a>.
     Historical readings from those sensors appear in the monthly table above.
 </div>

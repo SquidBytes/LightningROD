@@ -1,0 +1,65 @@
+{# Fuel tab body — card stack
+   - ICE Vehicles management table (Plan 04 fills the include)
+   - Display Options (relocated from General tab — Save button label override)
+   - Gas Price History (relocated from gas_settings.html lazy-load)
+   - Fuel Price Trend chart (lazy-loaded — Plan 05 wires the endpoint)
+#}
+
+<p class="text-base-content/60 text-sm mb-6">Configure ICE vehicles for gas savings comparison and track historical fuel prices.</p>
+
+<div class="space-y-6">
+    {# ICE Vehicles management — Plan 04 replaces the placeholder div with the real partial include #}
+    <div id="ice-vehicle-management-card" class="card bg-base-200">
+        <div class="card-body">
+            <h2 class="card-title text-base font-semibold">ICE Vehicles</h2>
+            <p class="text-base-content/60 text-sm">Manage internal-combustion vehicles used for gas savings comparison. Mark one as default for new charging sessions.</p>
+            <div class="text-base-content/40 text-sm py-4">ICE vehicle management is being wired in. Available shortly.</div>
+        </div>
+    </div>
+
+    {# Display Options card (relocated from General tab body) #}
+    <div class="card bg-base-200 max-w-lg">
+        <div class="card-body">
+            <h2 class="card-title text-base font-semibold">Display Options</h2>
+            <p class="text-base-content/60 text-sm -mt-1">Toggle which comparison sections appear on the costs page.</p>
+            <div id="gas-settings" class="mt-2">
+                {% include "settings/partials/gas_settings.html" %}
+            </div>
+        </div>
+    </div>
+
+    {# Gas Price History card #}
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h2 class="card-title text-base font-semibold">Gas Price History</h2>
+            <p class="text-base-content/60 text-sm -mt-1">Track gas prices over time with two tracks: Station (your regular station) and Average (regional average). Both calculate the savings range on the Costs page.</p>
+            <div id="gas-price-history-section" class="mt-2"
+                 hx-get="/settings/gas-prices"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <span class="loading loading-spinner loading-sm"></span>
+            </div>
+        </div>
+    </div>
+
+    {# Fuel Price Trend chart card — endpoint wired by Plan 05 #}
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+                <span>Fuel Price Trend</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.fuel_price_trend if tooltips and tooltips.get('fuel_price_trend') else 'Station and regional average fuel prices over time, displayed in your configured units.' }}"
+                      aria-label="Fuel Price Trend tooltip">&#9432;</span>
+            </h3>
+            <div id="fuel-price-trend-chart"
+                 hx-get="/settings/fuel-price-trend"
+                 hx-trigger="revealed"
+                 hx-swap="innerHTML">
+                <div class="flex justify-center py-8">
+                    <span class="loading loading-spinner loading-md text-base-content/30"></span>
+                </div>
+            </div>
+            <p class="text-xs text-base-content/40 mt-2">Prices stored in metric and displayed in your configured units.</p>
+        </div>
+    </div>
+</div>
