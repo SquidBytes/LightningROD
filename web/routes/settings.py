@@ -21,6 +21,14 @@ from web.queries.gas_prices import (
     get_all_gas_prices,
     upsert_gas_price,
 )
+from web.queries.ice_vehicles import (
+    create_ice_vehicle,
+    delete_ice_vehicle,
+    get_all_ice_vehicles,
+    get_ice_vehicle_by_id,
+    set_default_ice_vehicle,
+    update_ice_vehicle,
+)
 from web.queries.settings import (
     create_location,
     create_network,
@@ -107,6 +115,26 @@ async def _vehicle_management_context(db: AsyncSession) -> dict:
     }
 
 
+async def _ice_vehicle_management_context(db: AsyncSession) -> dict:
+    """Build context for ice_vehicle_management.html — rows with display-unit values pre-converted."""
+    rows = await get_all_ice_vehicles(db)
+    unit_ctx = await get_unit_context(db)
+    ice_rows = []
+    for r in rows:
+        fuel_metric = float(r.fuel_efficiency_l_per_100km) if r.fuel_efficiency_l_per_100km else None
+        tank_metric = float(r.tank_capacity_l) if r.tank_capacity_l else None
+        ice_rows.append({
+            "id": r.id,
+            "label": r.label,
+            "fuel_efficiency_metric": fuel_metric,
+            "fuel_efficiency_display": convert_fuel_efficiency(fuel_metric, unit_ctx["distance_unit"]),
+            "tank_capacity_l": tank_metric,
+            "tank_capacity_display": convert_fuel_volume(tank_metric, unit_ctx["distance_unit"]),
+            "is_default": r.is_default,
+        })
+    return {**unit_ctx, "ice_vehicles": ice_rows}
+
+
 SETTINGS_KEYS = [
     "comparison_gas_enabled",
     "comparison_network_enabled",
@@ -128,6 +156,7 @@ async def settings_index(
 ):
     net_ctx = await _network_management_context(db)
     veh_ctx = await _vehicle_management_context(db)
+    ice_ctx = await _ice_vehicle_management_context(db)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
     if tab == "vehicles":
         active_tab = "vehicles"
@@ -158,6 +187,7 @@ async def settings_index(
             **unit_ctx,
             **net_ctx,
             **veh_ctx,
+            **ice_ctx,
             **import_ctx,
             "settings": settings,
             "active_page": "settings",
@@ -201,8 +231,6 @@ async def new_vehicle_form(
             **unit_ctx,
             "vehicle": None,
             "vehicle_presets_json": json.dumps(_vehicle_presets_for_template()),
-            "ice_fuel_efficiency_display": None,
-            "ice_fuel_tank_capacity_display": None,
         },
     )
 
@@ -221,9 +249,6 @@ async def create_vehicle_route(
     battery_gross_capacity_kwh: float | None = Form(None),
     vin: str | None = Form(None),
     device_id: str | None = Form(None),
-    ice_fuel_efficiency: float | None = Form(None),
-    ice_fuel_tank_capacity: float | None = Form(None),
-    ice_label: str | None = Form(None),
 ):
     if not display_name or not display_name.strip():
         from fastapi.responses import JSONResponse
@@ -231,14 +256,6 @@ async def create_vehicle_route(
             status_code=422,
             content={"detail": "Display name is required"},
         )
-    # User-entered ICE values are in display units — convert to metric for storage
-    unit_ctx = await get_unit_context(db)
-    ice_fuel_efficiency_metric = to_metric_fuel_efficiency(
-        ice_fuel_efficiency, unit_ctx["distance_unit"]
-    )
-    ice_fuel_tank_capacity_metric = to_metric_fuel_volume(
-        ice_fuel_tank_capacity, unit_ctx["distance_unit"]
-    )
     await create_vehicle(
         db,
         display_name=display_name.strip(),
@@ -251,9 +268,6 @@ async def create_vehicle_route(
         battery_gross_capacity_kwh=battery_gross_capacity_kwh,
         vin=vin or None,
         device_id=device_id or None,
-        ice_fuel_efficiency=ice_fuel_efficiency_metric,
-        ice_fuel_tank_capacity=ice_fuel_tank_capacity_metric,
-        ice_label=ice_label or None,
     )
     veh_ctx = await _vehicle_management_context(db)
     return templates.TemplateResponse(
@@ -269,31 +283,17 @@ async def edit_vehicle_form(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Return the vehicle edit modal form with vehicle data + presets.
-
-    ICE values are stored metric (L/100km, liters). Convert to display units
-    for pre-filling the form.
-    """
+    """Return the vehicle edit modal form with vehicle data + presets."""
     vehicle = await get_vehicle_by_id(db, vehicle_id)
     if vehicle is None:
         return HTMLResponse(status_code=404)
     unit_ctx = await get_unit_context(db)
-    ice_fuel_efficiency_display = convert_fuel_efficiency(
-        float(vehicle.ice_fuel_efficiency) if vehicle.ice_fuel_efficiency else None,
-        unit_ctx["distance_unit"],
-    )
-    ice_fuel_tank_capacity_display = convert_fuel_volume(
-        float(vehicle.ice_fuel_tank_capacity) if vehicle.ice_fuel_tank_capacity else None,
-        unit_ctx["distance_unit"],
-    )
     return templates.TemplateResponse(
         request,
         "settings/partials/vehicle_edit_modal.html",
         {
             **unit_ctx,
             "vehicle": vehicle,
-            "ice_fuel_efficiency_display": ice_fuel_efficiency_display,
-            "ice_fuel_tank_capacity_display": ice_fuel_tank_capacity_display,
             "vehicle_presets_json": json.dumps(_vehicle_presets_for_template()),
         },
     )
@@ -314,9 +314,6 @@ async def update_vehicle_route(
     battery_gross_capacity_kwh: float | None = Form(None),
     vin: str | None = Form(None),
     device_id: str | None = Form(None),
-    ice_fuel_efficiency: float | None = Form(None),
-    ice_fuel_tank_capacity: float | None = Form(None),
-    ice_label: str | None = Form(None),
 ):
     if not display_name or not display_name.strip():
         from fastapi.responses import JSONResponse
@@ -324,14 +321,6 @@ async def update_vehicle_route(
             status_code=422,
             content={"detail": "Display name is required"},
         )
-    # User-entered ICE values are in display units — convert to metric for storage
-    unit_ctx = await get_unit_context(db)
-    ice_fuel_efficiency_metric = to_metric_fuel_efficiency(
-        ice_fuel_efficiency, unit_ctx["distance_unit"]
-    )
-    ice_fuel_tank_capacity_metric = to_metric_fuel_volume(
-        ice_fuel_tank_capacity, unit_ctx["distance_unit"]
-    )
     await update_vehicle(
         db,
         vehicle_id,
@@ -345,9 +334,6 @@ async def update_vehicle_route(
         battery_gross_capacity_kwh=battery_gross_capacity_kwh,
         vin=vin or None,
         device_id=device_id or None,
-        ice_fuel_efficiency=ice_fuel_efficiency_metric,
-        ice_fuel_tank_capacity=ice_fuel_tank_capacity_metric,
-        ice_label=ice_label or None,
     )
     veh_ctx = await _vehicle_management_context(db)
     response = templates.TemplateResponse(
@@ -391,6 +377,168 @@ async def activate_vehicle_route(
         request,
         "settings/partials/vehicle_management.html",
         veh_ctx,
+    )
+
+
+# ---------------------------------------------------------------------------
+# ICE Vehicle CRUD routes
+# ---------------------------------------------------------------------------
+
+
+@router.get("/settings/ice-vehicles/new", response_class=HTMLResponse)
+async def new_ice_vehicle_form(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the ICE vehicle add modal body."""
+    unit_ctx = await get_unit_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/ice_vehicle_edit_modal.html",
+        {
+            **unit_ctx,
+            "ice": None,
+            "fuel_efficiency_display": None,
+            "tank_capacity_display": None,
+        },
+    )
+
+
+@router.post("/settings/ice-vehicles", response_class=HTMLResponse)
+async def create_ice_vehicle_route(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    label: str = Form(""),
+    fuel_efficiency_display: float | None = Form(None),
+    tank_capacity_display: float | None = Form(None),
+    is_default: bool = Form(False),
+):
+    """Create an ICE vehicle. Form values are in display units; converted to metric here."""
+    if not label or not label.strip():
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=422, content={"detail": "Label is required"})
+    unit_ctx = await get_unit_context(db)
+    fuel_metric = to_metric_fuel_efficiency(fuel_efficiency_display, unit_ctx["distance_unit"])
+    tank_metric = to_metric_fuel_volume(tank_capacity_display, unit_ctx["distance_unit"])
+    if fuel_metric is None:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=422, content={"detail": "Combined fuel economy is required"})
+    await create_ice_vehicle(
+        db,
+        label=label.strip(),
+        fuel_efficiency_l_per_100km=fuel_metric,
+        tank_capacity_l=tank_metric,
+        is_default=is_default,
+    )
+    ctx = await _ice_vehicle_management_context(db)
+    response = templates.TemplateResponse(
+        request,
+        "settings/partials/ice_vehicle_management.html",
+        ctx,
+    )
+    response.headers["HX-Trigger"] = "closeIceVehicleModal"
+    return response
+
+
+@router.get("/settings/ice-vehicles/{ice_id}/edit", response_class=HTMLResponse)
+async def edit_ice_vehicle_form(
+    ice_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the ICE vehicle edit modal body with display-unit values pre-converted."""
+    row = await get_ice_vehicle_by_id(db, ice_id)
+    if row is None:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"detail": "ICE vehicle not found"})
+    unit_ctx = await get_unit_context(db)
+    fuel_metric = float(row.fuel_efficiency_l_per_100km) if row.fuel_efficiency_l_per_100km else None
+    tank_metric = float(row.tank_capacity_l) if row.tank_capacity_l else None
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/ice_vehicle_edit_modal.html",
+        {
+            **unit_ctx,
+            "ice": row,
+            "fuel_efficiency_display": convert_fuel_efficiency(fuel_metric, unit_ctx["distance_unit"]),
+            "tank_capacity_display": convert_fuel_volume(tank_metric, unit_ctx["distance_unit"]),
+        },
+    )
+
+
+@router.put("/settings/ice-vehicles/{ice_id}", response_class=HTMLResponse)
+async def update_ice_vehicle_route(
+    ice_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    label: str = Form(""),
+    fuel_efficiency_display: float | None = Form(None),
+    tank_capacity_display: float | None = Form(None),
+    is_default: bool = Form(False),
+):
+    """Update an ICE vehicle. Form values are in display units; converted to metric here."""
+    row = await get_ice_vehicle_by_id(db, ice_id)
+    if row is None:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"detail": "ICE vehicle not found"})
+    if not label or not label.strip():
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=422, content={"detail": "Label is required"})
+    unit_ctx = await get_unit_context(db)
+    fuel_metric = to_metric_fuel_efficiency(fuel_efficiency_display, unit_ctx["distance_unit"])
+    tank_metric = to_metric_fuel_volume(tank_capacity_display, unit_ctx["distance_unit"])
+    if fuel_metric is None:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=422, content={"detail": "Combined fuel economy is required"})
+    await update_ice_vehicle(
+        db,
+        ice_id,
+        label=label.strip(),
+        fuel_efficiency_l_per_100km=fuel_metric,
+        tank_capacity_l=tank_metric,
+        is_default=is_default,
+    )
+    ctx = await _ice_vehicle_management_context(db)
+    response = templates.TemplateResponse(
+        request,
+        "settings/partials/ice_vehicle_management.html",
+        ctx,
+    )
+    response.headers["HX-Trigger"] = "closeIceVehicleModal"
+    return response
+
+
+@router.delete("/settings/ice-vehicles/{ice_id}", response_class=HTMLResponse)
+async def delete_ice_vehicle_route(
+    ice_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an ICE vehicle. Refuses to delete the default row when others exist."""
+    success = await delete_ice_vehicle(db, ice_id)
+    ctx = await _ice_vehicle_management_context(db)
+    if not success:
+        ctx["delete_error"] = "Cannot delete the default ICE vehicle. Set a different default first."
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/ice_vehicle_management.html",
+        ctx,
+    )
+
+
+@router.post("/settings/ice-vehicles/{ice_id}/set-default", response_class=HTMLResponse)
+async def set_default_ice_vehicle_route(
+    ice_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Promote one ICE row to default; demote all others."""
+    await set_default_ice_vehicle(db, ice_id)
+    ctx = await _ice_vehicle_management_context(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/ice_vehicle_management.html",
+        ctx,
     )
 
 
