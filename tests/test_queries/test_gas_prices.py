@@ -175,3 +175,28 @@ async def test_compute_monthly_averages_filters_by_entity_id(db_session):
     )
     averages = await compute_monthly_averages(db_session, entity_id="sensor.nope")
     assert averages == {}
+
+
+# ---------------------------------------------------------------------------
+# UNIT-02 metric-storage stubs (Wave 0 scaffold — Plan 05 fills bodies)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.db
+async def test_gas_price_metric_storage_round_trip():
+    """UNIT-02: upsert_gas_price stores values verbatim (caller pre-converts to $/L).
+
+    Wave 3: Plan 05 fills in. Asserts upsert_gas_price(year, month, station_price=1.058)
+    reads back as 1.058 — i.e., the query layer does NOT secretly convert.
+    Conversion responsibility lives in the route handler / event handler.
+    """
+    pytest.skip("Wave 3: Plan 05 verifies metric storage round-trip with conversion at the boundary")
+
+
+@pytest.mark.db
+async def test_gas_price_history_returns_metric_values():
+    """UNIT-02: list_gas_prices returns raw metric ($/L) values; route handler does display conversion.
+
+    Wave 3: Plan 05 fills in.
+    """
+    pytest.skip("Wave 3: Plan 05 verifies query-layer returns raw metric values")
