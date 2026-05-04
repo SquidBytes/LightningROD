@@ -190,7 +190,7 @@ async def resolve_location(
     location_name: str | None = None,
     location_type: str | None = None,
     address_dict: dict | None = None,
-    source_system: str = "home_assistant",
+    source_system: str = "ha_fordpass",
     _location_data: dict | None = None,
     _network_name_raw: str | None = None,
 ) -> int | None:
@@ -210,7 +210,7 @@ async def resolve_location(
         location_name: name for the location
         location_type: explicit type override
         address_dict: dict with city/state/country from HA
-        source_system: origin identifier (default "home_assistant")
+        source_system: origin identifier (default "ha_fordpass")
         _location_data: raw HA location dict for home detection
         _network_name_raw: raw network name from HA for home detection
     """

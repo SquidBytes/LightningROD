@@ -1,4 +1,4 @@
-"""Query helpers for sessions."""
+"""Charging-session list, detail, and mutation queries."""
 
 from datetime import UTC, datetime, timedelta
 

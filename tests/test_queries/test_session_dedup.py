@@ -178,7 +178,7 @@ async def test_query_sessions_currently_includes_duplicate_flagged_rows(db_sessi
         db_session,
         device_id=vehicle.device_id,
         energy_kwh=25.0,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         duplicate_of_id=canonical.id,
         needs_review=True,
         review_type="duplicate",

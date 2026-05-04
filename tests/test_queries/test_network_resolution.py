@@ -52,7 +52,7 @@ async def test_resolve_network_auto_creates_unverified_row(db_session):
     new_id = await resolve_network(
         db_session,
         network_name="BrandNewNetwork",
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
     assert new_id is not None
 
@@ -66,7 +66,7 @@ async def test_resolve_network_auto_creates_unverified_row(db_session):
     )).scalar_one()
     assert created.network_name == "BrandNewNetwork"
     assert created.is_verified is False
-    assert created.source_system == "home_assistant"
+    assert created.source_system == "ha_fordpass"
 
 
 async def test_resolve_network_case_insensitive_match(db_session):
@@ -154,7 +154,7 @@ async def test_resolve_location_auto_creates_with_attached_network(db_session):
         longitude=-74.0060,
         network_name="SomeNewProvider",
         location_name="Downtown Charger",
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
     assert loc_id is not None
 
@@ -189,7 +189,7 @@ async def test_resolve_location_reuses_existing_within_100m(db_session):
         latitude=40.0,
         longitude=-74.0,
         is_verified=False,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
 
     before = (await db_session.execute(
@@ -201,7 +201,7 @@ async def test_resolve_location_reuses_existing_within_100m(db_session):
         db_session,
         latitude=40.0001,
         longitude=-74.0,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
     assert resolved == existing.id
 
@@ -223,7 +223,7 @@ async def test_resolve_location_creates_new_when_outside_radius(db_session):
         latitude=40.01,
         longitude=-74.0,
         location_name="Other Place",
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
     assert resolved is not None
 
@@ -285,7 +285,7 @@ async def test_duplicate_networks_can_be_surfaced_by_lowercased_name(db_session)
         network_name="FooNet", is_verified=False, source_system="csv_import"
     )
     n2 = EVChargingNetwork(
-        network_name="foonet ", is_verified=False, source_system="home_assistant"
+        network_name="foonet ", is_verified=False, source_system="ha_fordpass"
     )
     db_session.add_all([n1, n2])
     await db_session.flush()
@@ -317,7 +317,7 @@ async def test_resolve_network_returns_verified_when_name_matches(db_session):
         db_session, network_name="CuratedUniqueCoOp", is_verified=True
     )
     resolved = await resolve_network(
-        db_session, network_name="curateduniquecoop", source_system="home_assistant"
+        db_session, network_name="curateduniquecoop", source_system="ha_fordpass"
     )
     assert resolved == verified.id
 

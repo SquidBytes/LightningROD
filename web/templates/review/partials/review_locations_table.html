@@ -62,7 +62,7 @@
                     <span class="badge badge-sm badge-ghost">{{ loc_session_counts.get(loc.id, 0) }}</span>
                 </td>
                 <td>
-                    {% if loc.source_system == 'home_assistant' %}
+                    {% if loc.source_system == 'ha_fordpass' %}
                     <span class="badge badge-sm badge-info">HA</span>
                     {% elif loc.source_system == 'csv_import' %}
                     <span class="badge badge-sm badge-accent">CSV</span>

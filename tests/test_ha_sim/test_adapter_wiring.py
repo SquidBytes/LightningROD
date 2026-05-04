@@ -14,11 +14,9 @@ from sqlalchemy import select
 from db.models.battery_status import EVBatteryStatus
 from db.models.trip_metrics import EVTripMetrics
 from tests.factories.vehicles import VehicleFactory
-from web.services import hass_processor
-from web.services.hass_processor import (
-    SENSOR_HANDLERS,
-    extract_slug,
-)
+from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+from web.services.sources.ha_fordpass.dispatch import SENSOR_HANDLERS
+from web.services.sources.ha_fordpass.handlers import extract_slug
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
@@ -50,13 +48,13 @@ async def _dispatch_event(entity_id: str, new_state: dict, db) -> None:
 @pytest.fixture(autouse=True)
 def _clear_state():
     """Clear pending batches so tests don't bleed into each other."""
-    hass_processor._pending_battery_status.clear()
-    hass_processor._pending_battery_status_ts.clear()
-    hass_processor._last_trip_values.clear()
+    fordpass_handlers._pending_battery_status.clear()
+    fordpass_handlers._pending_battery_status_ts.clear()
+    fordpass_handlers._last_trip_values.clear()
     yield
-    hass_processor._pending_battery_status.clear()
-    hass_processor._pending_battery_status_ts.clear()
-    hass_processor._last_trip_values.clear()
+    fordpass_handlers._pending_battery_status.clear()
+    fordpass_handlers._pending_battery_status_ts.clear()
+    fordpass_handlers._last_trip_values.clear()
 
 
 def _make_metrics_event(device_id: str) -> tuple[str, dict]:

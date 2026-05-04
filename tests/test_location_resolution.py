@@ -178,7 +178,7 @@ async def test_resolve_location_geo_match_returns_existing_id():
     from web.queries.locations import resolve_location
 
     existing = _make_mock_location(
-        id=42, latitude=40.0, longitude=-74.0, source_system="home_assistant"
+        id=42, latitude=40.0, longitude=-74.0, source_system="ha_fordpass"
     )
     mock_db = _make_mock_db(locations=[existing])
 
@@ -195,7 +195,7 @@ async def test_resolve_location_address_fallback_returns_existing_id():
 
     existing = _make_mock_location(
         id=55, address="123 Main Street", latitude=None, longitude=None,
-        source_system="home_assistant"
+        source_system="ha_fordpass"
     )
     mock_db = _make_mock_db(locations=[existing])
 
@@ -223,7 +223,7 @@ async def test_resolve_location_auto_creates_when_no_match():
     assert mock_db.add.called
     new_loc = mock_db.add.call_args[0][0]
     assert new_loc.is_verified is False
-    assert new_loc.source_system == "home_assistant"
+    assert new_loc.source_system == "ha_fordpass"
     assert new_loc.location_name == "Test Charger"
 
 
@@ -255,7 +255,7 @@ async def test_resolve_location_enriches_null_fields():
 
     existing = _make_mock_location(
         id=20, latitude=40.0, longitude=-74.0,
-        source_system="home_assistant", address=None, location_name="Test"
+        source_system="ha_fordpass", address=None, location_name="Test"
     )
     mock_db = _make_mock_db(locations=[existing])
 
@@ -328,7 +328,7 @@ async def test_resolve_location_home_detection_with_settings():
         latitude=40.00001, longitude=-74.00001,
         location_name="SAVED",
         location_type="home",
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         _location_data={"location_name": "SAVED", "location_id": "0"},
         _network_name_raw="UNKNOWN",
     )

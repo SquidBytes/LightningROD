@@ -1,4 +1,4 @@
-"""Query helpers for costs."""
+"""Charging cost calculations, summaries, and charts."""
 
 from datetime import UTC, datetime, timedelta
 from typing import Any

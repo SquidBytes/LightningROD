@@ -1,4 +1,4 @@
-"""Query helpers for settings."""
+"""Application settings, networks, and preset lookup queries."""
 
 import json
 from typing import Any

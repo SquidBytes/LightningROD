@@ -1,2 +1,1 @@
-"""Package for web.services modules."""
-
+"""Application service layer."""

@@ -1,15 +1,18 @@
-"""Route handlers for settings."""
+"""Settings routes for app options, vehicles, networks, and data sources."""
 
 import json
+from dataclasses import asdict
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
+from db.models.data_source_config import DataSourceConfig
 from db.models.reference import EVChargerStall, EVChargingNetwork, EVLocationLookup
 from web import developer_mode as dev_mode_module
 from web.dependencies import get_db
@@ -42,7 +45,6 @@ from web.queries.settings import (
     update_subscription,
 )
 from web.queries.vehicles import (
-    VEHICLE_PRESETS,
     create_vehicle,
     delete_vehicle,
     get_active_vehicle,
@@ -52,12 +54,25 @@ from web.queries.vehicles import (
     update_vehicle,
 )
 from web.services.csv_parser import get_db_field_options
+from web.services.ingestion import supervisor
+from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
+from web.services.sources.registry import REGISTRY as SOURCE_REGISTRY
+from web.services.vehicles.registry import VehicleRegistry
 from web.unit_system import (
     convert_fuel_efficiency,
     convert_fuel_volume,
     to_metric_fuel_efficiency,
     to_metric_fuel_volume,
 )
+
+
+def _vehicle_presets_for_template() -> list[dict]:
+    """Return the Ford preset rows as plain dicts for template + JSON serialization.
+
+    Cascade JS reads dict-keyed JSON; asdict round-trip preserves the wire shape.
+    """
+    profile = VehicleRegistry.get("Ford")
+    return [asdict(r) for r in profile.presets()] if profile else []
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -87,8 +102,8 @@ async def _vehicle_management_context(db: AsyncSession) -> dict:
     return {
         "vehicles": vehicles,
         "active_vehicle": active_vehicle,
-        "vehicle_presets": VEHICLE_PRESETS,
-        "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+        "vehicle_presets": _vehicle_presets_for_template(),
+        "vehicle_presets_json": json.dumps(_vehicle_presets_for_template()),
     }
 
 
@@ -120,8 +135,8 @@ async def settings_index(
         active_tab = "import"
     elif tab == "networks":
         active_tab = "networks"
-    elif tab == "hass":
-        active_tab = "hass"
+    elif tab == "data_sources":
+        active_tab = "data_sources"
     else:
         active_tab = "general"
 
@@ -183,7 +198,7 @@ async def new_vehicle_form(
         {
             **unit_ctx,
             "vehicle": None,
-            "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+            "vehicle_presets_json": json.dumps(_vehicle_presets_for_template()),
             "ice_fuel_efficiency_display": None,
             "ice_fuel_tank_capacity_display": None,
         },
@@ -277,7 +292,7 @@ async def edit_vehicle_form(
             "vehicle": vehicle,
             "ice_fuel_efficiency_display": ice_fuel_efficiency_display,
             "ice_fuel_tank_capacity_display": ice_fuel_tank_capacity_display,
-            "vehicle_presets_json": json.dumps(VEHICLE_PRESETS),
+            "vehicle_presets_json": json.dumps(_vehicle_presets_for_template()),
         },
     )
 
@@ -1136,153 +1151,227 @@ async def delete_subscription_route(
 
 
 HASS_SETTINGS_KEYS = [
-    "ha_url",
-    "ha_token",
-    "ha_vin_override",
-    "ha_unit_system",
-    "ha_auto_connect",
     "home_latitude",
     "home_longitude",
     "home_location_name",
 ]
 
 
-@router.get("/settings/hass", response_class=HTMLResponse)
-async def hass_settings_partial(
+# ---------------------------------------------------------------------------
+# Data Sources tab — registry-driven per-source config cards
+# ---------------------------------------------------------------------------
+
+
+def _mask_token(token: str) -> str:
+    """Return a masked rendering of a stored token: asterisks + last 8 chars."""
+    if not token:
+        return ""
+    if len(token) > 8:
+        return "*" * (len(token) - 8) + token[-8:]
+    return token
+
+
+def _last_event_timeago(adapter_module) -> str | None:
+    """Return human-readable 'X min ago' string or None if cache empty."""
+    from datetime import UTC, datetime
+
+    cache = getattr(adapter_module, "_last_seen_raw", {})
+    if not cache:
+        return None
+    try:
+        most_recent_iso = max(entry["seen_at"] for entry in cache.values())
+        most_recent_dt = datetime.fromisoformat(most_recent_iso)
+    except (KeyError, ValueError, TypeError):
+        return None
+    delta = datetime.now(UTC) - most_recent_dt
+    seconds = int(delta.total_seconds())
+    if seconds < 60:
+        return f"{seconds}s ago"
+    if seconds < 3600:
+        return f"{seconds // 60} min ago"
+    if seconds < 86400:
+        return f"{seconds // 3600}h ago"
+    return f"{seconds // 86400}d ago"
+
+
+async def _load_existing_config(db: AsyncSession, descriptor):
+    """Load existing data_source_configs row for descriptor, return Pydantic instance or None.
+
+    Returns None for both missing rows and rows whose stored config_json fails
+    schema validation (e.g. the pre-WR-05 seed shape with empty ha_url/ha_token).
+    Mirrors the defensive validation the GET handler does so the masked-token
+    preprocess can safely skip when there's no usable existing token to compare.
+    """
+    result = await db.execute(
+        select(DataSourceConfig).where(
+            DataSourceConfig.source_name == descriptor.source_name,
+            DataSourceConfig.instance_label == "default",
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    try:
+        return descriptor.config_schema.model_validate(row.config_json)
+    except ValidationError:
+        return None
+
+
+async def _upsert_data_source_config(db: AsyncSession, descriptor, config) -> None:
+    """Persist config: UPDATE the existing row, INSERT one if missing.
+
+    Fresh installs can reach first-save with no existing config row, while
+    migrated installs usually update the seeded row.
+    """
+    from datetime import UTC, datetime
+
+    result = await db.execute(
+        select(DataSourceConfig).where(
+            DataSourceConfig.source_name == descriptor.source_name,
+            DataSourceConfig.instance_label == "default",
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        row = DataSourceConfig(
+            source_name=descriptor.source_name,
+            instance_label="default",
+            config_json=config.model_dump(),
+            enabled=True,
+        )
+        db.add(row)
+    else:
+        row.config_json = config.model_dump()
+        row.updated_at = datetime.now(UTC)
+    await db.commit()
+
+
+def _card_health_inputs(descriptor) -> tuple[dict, str | None]:
+    """Return (health_dict, last_seen_str) for the badge — only ha_fordpass today."""
+    if descriptor.source_name == "ha_fordpass":
+        rt = supervisor.get_runtime("ha_fordpass", "default")
+        health = rt.health if rt is not None else {}
+        return health, _last_event_timeago(ha_fordpass_adapter)
+    return {}, None
+
+
+@router.get("/settings/data-sources", response_class=HTMLResponse)
+async def data_sources_tab(
     request: Request,
     db: AsyncSession = Depends(get_db),
+    saved: bool = False,
 ):
-    """Return HASS configuration partial with current values."""
-    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
-    # Mask token for display: show only last 8 chars
-    token = settings.get("ha_token", "")
-    masked_token = ""
-    if token:
-        if len(token) > 8:
-            masked_token = "*" * (len(token) - 8) + token[-8:]
-        else:
-            masked_token = token
-    return templates.TemplateResponse(
-        request,
-        "settings/partials/hass_settings.html",
-        {"hass": settings, "masked_token": masked_token},
-    )
-
-
-@router.post("/settings/hass", response_class=HTMLResponse)
-async def save_hass_settings(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    ha_url: str = Form(""),
-    ha_token: str = Form(""),
-    ha_vin_override: str = Form(""),
-    ha_unit_system: str = Form("auto"),
-    ha_auto_connect: str | None = Form(None),
-):
-    """Save HASS configuration to app_settings."""
-    if ha_url:
-        # Strip trailing slash for consistency
-        ha_url = ha_url.rstrip("/")
-    await set_app_setting(db, "ha_url", ha_url)
-    # Only overwrite token if a new value was provided (not the masked placeholder)
-    if ha_token and not ha_token.startswith("*"):
-        await set_app_setting(db, "ha_token", ha_token)
-    await set_app_setting(db, "ha_vin_override", ha_vin_override)
-    if ha_unit_system not in ("auto", "metric", "imperial"):
-        ha_unit_system = "auto"
-    await set_app_setting(db, "ha_unit_system", ha_unit_system)
-    await set_app_setting(
-        db, "ha_auto_connect", "true" if ha_auto_connect is not None else "false"
-    )
-
-    # Re-read saved values for display
-    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
-    token = settings.get("ha_token", "")
-    masked_token = ""
-    if token:
-        if len(token) > 8:
-            masked_token = "*" * (len(token) - 8) + token[-8:]
-        else:
-            masked_token = token
-
-    response = templates.TemplateResponse(
-        request,
-        "settings/partials/hass_settings.html",
-        {"hass": settings, "masked_token": masked_token, "saved": True},
-    )
-    return response
-
-
-@router.post("/settings/hass/home-location", response_class=HTMLResponse)
-async def save_home_location_settings(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    home_location_name: str = Form(""),
-    home_latitude: str = Form(""),
-    home_longitude: str = Form(""),
-):
-    """Save home location settings to app_settings."""
-    await set_app_setting(db, "home_location_name", home_location_name)
-    await set_app_setting(db, "home_latitude", home_latitude)
-    await set_app_setting(db, "home_longitude", home_longitude)
-
-    # Re-read saved values for display
-    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
-    token = settings.get("ha_token", "")
-    masked_token = ""
-    if token:
-        if len(token) > 8:
-            masked_token = "*" * (len(token) - 8) + token[-8:]
-        else:
-            masked_token = token
-
-    return templates.TemplateResponse(
-        request,
-        "settings/partials/hass_settings.html",
-        {"hass": settings, "masked_token": masked_token, "saved": True},
-    )
-
-
-@router.post("/settings/hass/home-location/sync", response_class=HTMLResponse)
-async def sync_home_location_from_ha(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    """Force-overwrite the home location from HA config (latitude/longitude/location_name)."""
-    from web.services.hass_client import hass_service
-
-    if not hass_service.health.get("connected"):
-        # Re-render the form with an error banner
-        settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
-        token = settings.get("ha_token", "")
-        masked_token = (
-            ("*" * (len(token) - 8) + token[-8:]) if len(token) > 8 else token
-        ) if token else ""
-        return templates.TemplateResponse(
-            request,
-            "settings/partials/hass_settings.html",
+    """Render the registry-driven Data Sources tab partial."""
+    cards = []
+    for descriptor in SOURCE_REGISTRY:
+        result = await db.execute(
+            select(DataSourceConfig).where(
+                DataSourceConfig.source_name == descriptor.source_name,
+                DataSourceConfig.instance_label == "default",
+            )
+        )
+        row = result.scalar_one_or_none()
+        config = None
+        partial_config = None
+        if row is not None:
+            try:
+                config = descriptor.config_schema.model_validate(row.config_json)
+            except ValidationError:
+                # Seed rows ship with empty ha_url/ha_token until the operator
+                # configures the source. Surface stored values into the form
+                # without exposing them as a fully-validated config object.
+                partial_config = row.config_json or {}
+        health, last_seen = _card_health_inputs(descriptor)
+        cards.append(
             {
-                "hass": settings,
-                "masked_token": masked_token,
-                "home_sync_error": "Must be connected to HA to sync home location.",
-            },
+                "descriptor": descriptor,
+                "config": config,
+                "partial_config": partial_config,
+                "masked_token": _mask_token(config.ha_token) if config else "",
+                "health": health,
+                "last_seen": last_seen,
+            }
         )
 
-    applied = await hass_service.sync_home_location_from_config()
-
-    settings = await get_app_settings_dict(db, HASS_SETTINGS_KEYS)
-    token = settings.get("ha_token", "")
-    masked_token = (
-        ("*" * (len(token) - 8) + token[-8:]) if len(token) > 8 else token
-    ) if token else ""
-
     return templates.TemplateResponse(
         request,
-        "settings/partials/hass_settings.html",
+        "settings/partials/data_sources_tab.html",
+        {"cards": cards, "saved": saved},
+    )
+
+
+@router.post("/settings/data-sources/{source_name}", response_class=HTMLResponse)
+async def save_data_source(
+    source_name: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Save per-source config; one handler covers the whole registry."""
+    descriptor = next(
+        (d for d in SOURCE_REGISTRY if d.source_name == source_name), None
+    )
+    if descriptor is None:
+        raise HTTPException(status_code=404, detail=f"Unknown source: {source_name}")
+
+    form = dict(await request.form())
+
+    # Masked-token preprocess — preserves the regression-locked invariant: if
+    # the user submits the masked placeholder, do NOT overwrite the stored
+    # token. Apply this BEFORE model_validate so the masked string never
+    # becomes the persisted value. We compare against the rendered mask of
+    # the stored token (asterisks + last 8 chars) so any other input —
+    # including a real token starting with `*` — is treated as a legitimate
+    # update.
+    if "ha_token" in form:
+        existing = await _load_existing_config(db, descriptor)
+        if existing and form["ha_token"] == _mask_token(existing.ha_token):
+            form["ha_token"] = existing.ha_token
+
+    # Boolean coercion for HTML checkbox: unchecked → absent from form,
+    # checked → "true" or "on" (browser-dependent).
+    form["ha_auto_connect"] = form.get("ha_auto_connect", "") in ("true", "on", "1")
+
+    # Empty optional string → None (Pydantic optional)
+    if form.get("ha_vin_override", "") == "":
+        form["ha_vin_override"] = None
+
+    try:
+        config = descriptor.config_schema.model_validate(form)
+    except ValidationError as e:
+        health, last_seen = _card_health_inputs(descriptor)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/data_source_card.html",
+            {
+                "card": {
+                    "descriptor": descriptor,
+                    "config": None,
+                    "partial_config": form,
+                    "masked_token": form.get("ha_token", ""),
+                    "health": health,
+                    "last_seen": last_seen,
+                },
+                "errors": e.errors(),
+            },
+            status_code=422,
+        )
+
+    await _upsert_data_source_config(db, descriptor, config)
+
+    health, last_seen = _card_health_inputs(descriptor)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/data_source_card.html",
         {
-            "hass": settings,
-            "masked_token": masked_token,
-            "home_sync_applied": applied,
+            "card": {
+                "descriptor": descriptor,
+                "config": config,
+                "partial_config": None,
+                "masked_token": _mask_token(config.ha_token),
+                "health": health,
+                "last_seen": last_seen,
+            },
+            "saved": True,
         },
     )
 
@@ -1290,11 +1379,10 @@ async def sync_home_location_from_ha(
 @router.get("/settings/hass/status", response_class=HTMLResponse)
 async def hass_status(request: Request):
     """Return HASS connection status partial for polling."""
-    from web.services.hass_client import hass_service
-
-    health = hass_service.health
-    detected_vin = getattr(hass_service, "detected_vin", None)
-    ha_config = getattr(hass_service, "_ha_config", None)
+    runtime = supervisor.get_runtime("ha_fordpass", "default")
+    health = runtime.health if runtime is not None else {}
+    detected_vin = getattr(runtime, "detected_vin", None) if runtime is not None else None
+    ha_config = getattr(runtime, "_ha_config", None) if runtime is not None else None
     unit_system = None
     if ha_config and "unit_system" in ha_config:
         unit_system = ha_config["unit_system"]
@@ -1310,15 +1398,29 @@ async def hass_status(request: Request):
 
 
 @router.post("/settings/hass/reconnect", response_class=HTMLResponse)
-async def hass_reconnect(request: Request):
-    """Stop and restart the HASS websocket service."""
-    from web.services.hass_client import hass_service, start_hass_service
+async def hass_reconnect(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Stop and restart the HASS websocket runtime via the supervisor.
 
-    await hass_service.stop()
-    await start_hass_service()
-    health = hass_service.health
-    detected_vin = getattr(hass_service, "detected_vin", None)
-    ha_config = getattr(hass_service, "_ha_config", None)
+    Looks up the ha_fordpass:default config row, asks the supervisor to
+    restart that runtime in place. The supervisor stops the existing runtime
+    (if any), re-reads config_json from the row, and spawns a fresh runtime.
+    """
+    result = await db.execute(
+        select(DataSourceConfig).where(
+            DataSourceConfig.source_name == "ha_fordpass",
+            DataSourceConfig.instance_label == "default",
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is not None:
+        await supervisor.restart_runtime(row.id)
+    runtime = supervisor.get_runtime("ha_fordpass", "default")
+    health = runtime.health if runtime is not None else {}
+    detected_vin = getattr(runtime, "detected_vin", None) if runtime is not None else None
+    ha_config = getattr(runtime, "_ha_config", None) if runtime is not None else None
     unit_system = None
     if ha_config and "unit_system" in ha_config:
         unit_system = ha_config["unit_system"]
@@ -1340,14 +1442,13 @@ async def hass_backfill(request: Request):
     Pulls as much charging session and gas sensor history as HA will return
     (no artificial time cap). Duplicates are automatically skipped.
     """
-    from web.services.hass_client import hass_service
-
-    if not hass_service.health.get("connected"):
+    runtime = supervisor.get_runtime("ha_fordpass", "default")
+    if runtime is None or not runtime.health.get("connected"):
         return HTMLResponse(
             '<div class="alert alert-error text-sm">Must be connected to HA to backfill.</div>'
         )
 
-    result = await hass_service.backfill_history(days=None)
+    result = await runtime.backfill_history(days=None)
 
     if result.get("error"):
         return HTMLResponse(
@@ -1385,12 +1486,27 @@ async def hass_backfill(request: Request):
 
 
 @router.post("/settings/hass/disconnect", response_class=HTMLResponse)
-async def hass_disconnect(request: Request):
-    """Stop the HASS websocket service."""
-    from web.services.hass_client import hass_service
-
-    await hass_service.stop()
-    health = hass_service.health
+async def hass_disconnect(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Stop the HASS websocket runtime via the supervisor."""
+    result = await db.execute(
+        select(DataSourceConfig).where(
+            DataSourceConfig.source_name == "ha_fordpass",
+            DataSourceConfig.instance_label == "default",
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is not None:
+        await supervisor.stop_runtime(row.id)
+    # Final health snapshot — the runtime may already be gone.
+    runtime = supervisor.get_runtime("ha_fordpass", "default")
+    health = (
+        runtime.health
+        if runtime is not None
+        else {"connection_state": "disconnected", "connected": False}
+    )
     return templates.TemplateResponse(
         request,
         "settings/partials/hass_status.html",
@@ -1477,13 +1593,13 @@ async def _hass_gas_sensors_context(
     from sqlalchemy import func as sa_func
 
     from db.models.reference import GasPriceHistory, GasPriceReading
-    from web.services.hass_client import hass_service
 
     sensor_keys = ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"]
     sensor_settings = await get_app_settings_dict(db, sensor_keys)
 
     sensor_states: dict = {"station": None, "average": None}
     if check_live:
+        runtime = supervisor.get_runtime("ha_fordpass", "default")
         for role, key in (
             ("station", "gas_sensor_station_entity_id"),
             ("average", "gas_sensor_average_entity_id"),
@@ -1491,7 +1607,9 @@ async def _hass_gas_sensors_context(
             entity_id = (sensor_settings.get(key) or "").strip()
             if not entity_id:
                 continue
-            state_obj = await hass_service.fetch_entity_state(entity_id)
+            if runtime is None:
+                continue
+            state_obj = await runtime.fetch_entity_state(entity_id)
             if not state_obj:
                 continue
             raw_val = state_obj.get("state")
@@ -1558,7 +1676,7 @@ async def save_hass_gas_sensors(
     await set_app_setting(
         db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or ""
     )
-    from web.services.hass_processor import invalidate_gas_sensor_cache
+    from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
     invalidate_gas_sensor_cache()
     ctx = await _hass_gas_sensors_context(db, check_live=True, gas_saved=True)
     return templates.TemplateResponse(
@@ -1578,7 +1696,7 @@ async def save_gas_sensors(
 ):
     await set_app_setting(db, "gas_sensor_station_entity_id", gas_sensor_station_entity_id or "")
     await set_app_setting(db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or "")
-    from web.services.hass_processor import invalidate_gas_sensor_cache
+    from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
     invalidate_gas_sensor_cache()
     ctx = await _gas_price_history_context(db)
     ctx["saved"] = True

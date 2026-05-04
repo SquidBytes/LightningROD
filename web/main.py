@@ -1,4 +1,4 @@
-"""Module for main."""
+"""FastAPI application factory, routes, filters, and lifespan hooks."""
 
 import os
 from contextlib import asynccontextmanager
@@ -89,13 +89,12 @@ async def lifespan(app: FastAPI):
         await seed_charger_templates(session)
         val = await get_app_setting(session, "developer_mode", "false")
         developer_mode.set_enabled(val == "true")
-    # Start HASS service (if configured)
-    from web.services.hass_client import start_hass_service
-    await start_hass_service()
+    # Start ingestion runtimes (one per enabled data_source_configs row)
+    from web.services.ingestion import supervisor
+    await supervisor.start_all()
     yield
-    # Shutdown: stop HASS service, dispose engine
-    from web.services.hass_client import hass_service
-    await hass_service.stop()
+    # Shutdown: stop runtimes, dispose engine
+    await supervisor.stop_all()
     await engine.dispose()
 
 

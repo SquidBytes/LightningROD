@@ -1,4 +1,4 @@
-"""Pure function unit tests for hass_processor.
+"""Pure function unit tests for ha_fordpass.handlers.
 Tests slug extraction, device_id resolution, value parsing, address formatting,
 and other pure helper functions that do NOT require a database connection.
 cleanup: tests for the deleted legacy value-normalizer helper and
@@ -10,11 +10,11 @@ The 2026-03-21 auto-detect unit system logic is gone ; see
 
 import pytest
 
-from web.services.hass_processor import (
+from web.services.ingestion._helpers import _safe_float
+from web.services.sources.ha_fordpass.handlers import (
     _format_address,
     _normalize_charge_type,
     _parse_iso_datetime,
-    _safe_float,
     extract_slug,
     get_device_id,
 )

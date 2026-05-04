@@ -1,4 +1,4 @@
-"""Database models for base."""
+"""Declarative base class for SQLAlchemy models."""
 
 from sqlalchemy.orm import DeclarativeBase
 

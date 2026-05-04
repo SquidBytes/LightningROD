@@ -1,6 +1,6 @@
 """Dev-only audit for PostgreSQL-only SQL constructs in production code.
 
-Run from app-public/:
+Run from the repository root:
 
     uv run python scripts/audit_dialect_portability.py
 

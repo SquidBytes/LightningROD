@@ -1,4 +1,4 @@
-"""Query helpers for comparisons."""
+"""EV-to-ICE comparison calculations and chart helpers."""
 
 
 from sqlalchemy import select

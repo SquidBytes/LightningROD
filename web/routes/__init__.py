@@ -1,2 +1,1 @@
-"""Package for web.routes modules."""
-
+"""FastAPI route modules."""

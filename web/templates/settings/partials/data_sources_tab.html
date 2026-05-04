@@ -1,0 +1,9 @@
+{% if saved %}
+<div class="alert alert-success text-sm mb-3">Settings saved.</div>
+{% endif %}
+
+<div class="space-y-4">
+    {% for card in cards %}
+        {% include "settings/partials/data_source_card.html" with context %}
+    {% endfor %}
+</div>

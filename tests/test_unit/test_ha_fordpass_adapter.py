@@ -63,11 +63,11 @@ def test_elveh_tripDistanceTraveled_not_read():
     """
     elveh_trip_reads = [
         c for c in FIELD_CONTRACTS
-        if "elveh" in c.source_entity_pattern
+        if "elveh" in c.source_locator.pattern
         and "tripDistance" in c.source_attribute
     ]
     assert not elveh_trip_reads, (
         "adapter reads trip distance from elveh attributes: "
-        f"{[(c.source_entity_pattern, c.source_attribute) for c in elveh_trip_reads]}. "
+        f"{[(c.source_locator.pattern, c.source_attribute) for c in elveh_trip_reads]}. "
         "Trip data must come from sensor.{vin}_events.xev-key-off-trip-segment-data."
     )

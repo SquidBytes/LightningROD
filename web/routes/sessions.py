@@ -1,4 +1,4 @@
-"""Route handlers for sessions."""
+"""Charging-session CRUD, filtering, import, and drawer routes."""
 
 import json
 import math

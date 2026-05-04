@@ -1,4 +1,4 @@
-"""Route handlers for performance."""
+"""Charging-performance analytics routes."""
 
 from typing import Annotated
 

@@ -20,7 +20,8 @@ from tests.test_ha_sim.simulator import (
     make_events_trip_event,
     make_trip_event,
 )
-from web.services.hass_processor import SENSOR_HANDLERS, extract_slug
+from web.services.sources.ha_fordpass.dispatch import SENSOR_HANDLERS
+from web.services.sources.ha_fordpass.handlers import extract_slug
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
@@ -235,7 +236,7 @@ async def test_ha_session_cross_source_flags_duplicate(db_session):
     )).scalars().all()
 
     assert len(rows) == 2, "Cross-source match should insert flagged duplicate"
-    ha_row = [r for r in rows if r.source_system == "home_assistant"][0]
+    ha_row = [r for r in rows if r.source_system == "ha_fordpass"][0]
     assert ha_row.duplicate_of_id == existing.id
     assert ha_row.needs_review is True
     assert ha_row.review_type == "duplicate"
@@ -269,8 +270,8 @@ async def test_trip_identical_events_dedupe(db_session):
     # Clear the module-level _last_trip_values cache to simulate a second
     # delivery that is NOT suppressed by in-memory state (forcing the DB-level
     # dedup check to be the one under test).
-    from web.services import hass_processor
-    hass_processor._last_trip_values.clear()
+    from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+    fordpass_handlers._last_trip_values.clear()
 
     _, state2 = make_trip_event(
         device_id=_TEST_DEVICE_ID,
@@ -396,8 +397,8 @@ async def test_elveh_first_then_events_enriches_temps(db_session):
     assert len(rows_after_elveh) == 1, "elveh should insert one row"
 
     # Clear in-memory cache so the events handler isn't suppressed
-    from web.services import hass_processor
-    hass_processor._last_trip_values.clear()
+    from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+    fordpass_handlers._last_trip_values.clear()
 
     # --- events fires second ----------------------------------------------
     events_entity_id, events_state = make_events_trip_event(

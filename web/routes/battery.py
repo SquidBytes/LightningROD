@@ -1,4 +1,4 @@
-"""Route handlers for battery."""
+"""Battery analytics page and HTMX chart endpoints."""
 
 from typing import Annotated
 

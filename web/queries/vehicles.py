@@ -1,6 +1,4 @@
-"""Query helpers for vehicles."""
-
-from typing import Any
+"""Vehicle registry queries and active-vehicle helpers."""
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -8,113 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.vehicle import EVVehicle
 from web.queries.settings import get_app_setting, set_app_setting
-
-# Structured vehicle presets for cascading combo-box auto-fill.
-#
-# Each entry carries BOTH the usable and gross pack capacity because the two
-# values serve different calculations:
-#
-#   - battery_usable_kwh -> what energy_kwh can be compared against (drive
-#     efficiency, gas-equivalent fallback in comparisons.py). This is the
-#     "driver-facing" number you see on marketing material.
-#   - battery_gross_kwh  -> total installed cell capacity. FordPass reports
-#     this via the `maximumBatteryCapacity` attribute, and battery health /
-#     degradation math on /battery must compare against it (otherwise a fresh
-#     pack reads >100% health).
-#
-# Row shape:
-#   make, model, trim_level, battery_option, battery_usable_kwh,
-#   battery_gross_kwh, year_min, year_max (year_min == year_max for one row
-#   per model year). The earlier (trim, year_min, year_max) shape is
-#   gone — plan 27-03 split trim into trim_level + battery_option.
-#
-# Authoritative source: RESEARCH.md §2 (Lightning, 34 rows) + §3 (Mach-E,
-# 29 rows). Keep this list synced with that table when battery specs shift.
-VEHICLE_PRESETS: list[dict[str, Any]] = [
-    # -----------------------------------------------------------------
-    # Ford F-150 Lightning — 34 rows, MY2022-MY2026 (RESEARCH.md §2)
-    # -----------------------------------------------------------------
-    # MY2022 — 7 rows
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Pro",      "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2022, "year_max": 2022},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Pro",      "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2022, "year_max": 2022},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "XLT",      "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2022, "year_max": 2022},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "XLT",      "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2022, "year_max": 2022},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Lariat",   "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2022, "year_max": 2022},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Lariat",   "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2022, "year_max": 2022},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Platinum", "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2022, "year_max": 2022},
-    # MY2023 — 7 rows
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Pro",      "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2023, "year_max": 2023},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Pro",      "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2023, "year_max": 2023},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "XLT",      "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2023, "year_max": 2023},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "XLT",      "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2023, "year_max": 2023},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Lariat",   "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2023, "year_max": 2023},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Lariat",   "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2023, "year_max": 2023},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Platinum", "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2023, "year_max": 2023},
-    # MY2024 — 8 rows (Flash debuts)
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Pro",      "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Pro",      "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "XLT",      "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "XLT",      "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Flash",    "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Lariat",   "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Lariat",   "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Platinum", "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2024, "year_max": 2024},
-    # MY2025 — 8 rows (Flash uses lower-capacity ER-123 pack per RESEARCH §2)
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Pro",      "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Pro",      "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "XLT",      "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "XLT",      "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Flash",    "battery_option": "Extended Range", "battery_usable_kwh": 123.0, "battery_gross_kwh": 135.0, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Lariat",   "battery_option": "Standard Range", "battery_usable_kwh": 98.0,  "battery_gross_kwh": 108.0, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Lariat",   "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Platinum", "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2025, "year_max": 2025},
-    # MY2026 — 5 rows (SR discontinued fleet-wide; Pro/XLT/Flash on ER-123, Lariat/Platinum retain full ER)
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Pro",      "battery_option": "Extended Range", "battery_usable_kwh": 123.0, "battery_gross_kwh": 135.0, "year_min": 2026, "year_max": 2026},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "XLT",      "battery_option": "Extended Range", "battery_usable_kwh": 123.0, "battery_gross_kwh": 135.0, "year_min": 2026, "year_max": 2026},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Flash",    "battery_option": "Extended Range", "battery_usable_kwh": 123.0, "battery_gross_kwh": 135.0, "year_min": 2026, "year_max": 2026},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Lariat",   "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2026, "year_max": 2026},
-    {"make": "Ford", "model": "F-150 Lightning", "trim_level": "Platinum", "battery_option": "Extended Range", "battery_usable_kwh": 131.0, "battery_gross_kwh": 143.0, "year_min": 2026, "year_max": 2026},
-
-    # -----------------------------------------------------------------
-    # Ford Mustang Mach-E — 29 rows, MY2021-MY2026 (RESEARCH.md §3)
-    # -----------------------------------------------------------------
-    # MY2021 — 5 rows (NCM SR 68/75.7, ER 88/98.8)
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Select",             "battery_option": "Standard Range", "battery_usable_kwh": 68.0, "battery_gross_kwh": 75.7, "year_min": 2021, "year_max": 2021},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Standard Range", "battery_usable_kwh": 68.0, "battery_gross_kwh": 75.7, "year_min": 2021, "year_max": 2021},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Extended Range", "battery_usable_kwh": 88.0, "battery_gross_kwh": 98.8, "year_min": 2021, "year_max": 2021},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "California Route 1", "battery_option": "Extended Range", "battery_usable_kwh": 88.0, "battery_gross_kwh": 98.8, "year_min": 2021, "year_max": 2021},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "GT",                 "battery_option": "Extended Range", "battery_usable_kwh": 88.0, "battery_gross_kwh": 98.8, "year_min": 2021, "year_max": 2021},
-    # MY2022 — 5 rows (same packs as MY2021)
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Select",             "battery_option": "Standard Range", "battery_usable_kwh": 68.0, "battery_gross_kwh": 75.7, "year_min": 2022, "year_max": 2022},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Standard Range", "battery_usable_kwh": 68.0, "battery_gross_kwh": 75.7, "year_min": 2022, "year_max": 2022},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Extended Range", "battery_usable_kwh": 88.0, "battery_gross_kwh": 98.8, "year_min": 2022, "year_max": 2022},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "California Route 1", "battery_option": "Extended Range", "battery_usable_kwh": 88.0, "battery_gross_kwh": 98.8, "year_min": 2022, "year_max": 2022},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "GT",                 "battery_option": "Extended Range", "battery_usable_kwh": 88.0, "battery_gross_kwh": 98.8, "year_min": 2022, "year_max": 2022},
-    # MY2023 — 5 rows (LFP SR 70/72 transition, ER usable grows to 91)
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Select",             "battery_option": "Standard Range", "battery_usable_kwh": 70.0, "battery_gross_kwh": 72.0, "year_min": 2023, "year_max": 2023},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Standard Range", "battery_usable_kwh": 70.0, "battery_gross_kwh": 72.0, "year_min": 2023, "year_max": 2023},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2023, "year_max": 2023},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "California Route 1", "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2023, "year_max": 2023},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "GT",                 "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2023, "year_max": 2023},
-    # MY2024 — 5 rows (LFP SR 72/73, Cal Route 1 discontinued, Rally debuts)
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Select",             "battery_option": "Standard Range", "battery_usable_kwh": 72.0, "battery_gross_kwh": 73.0, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Standard Range", "battery_usable_kwh": 72.0, "battery_gross_kwh": 73.0, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "GT",                 "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2024, "year_max": 2024},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Rally",              "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2024, "year_max": 2024},
-    # MY2025 — 5 rows (same as MY2024)
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Select",             "battery_option": "Standard Range", "battery_usable_kwh": 72.0, "battery_gross_kwh": 73.0, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Standard Range", "battery_usable_kwh": 72.0, "battery_gross_kwh": 73.0, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "GT",                 "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2025, "year_max": 2025},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Rally",              "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2025, "year_max": 2025},
-    # MY2026 — 5 rows (same as MY2025)
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Select",             "battery_option": "Standard Range", "battery_usable_kwh": 72.0, "battery_gross_kwh": 73.0, "year_min": 2026, "year_max": 2026},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Standard Range", "battery_usable_kwh": 72.0, "battery_gross_kwh": 73.0, "year_min": 2026, "year_max": 2026},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Premium",            "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2026, "year_max": 2026},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "GT",                 "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2026, "year_max": 2026},
-    {"make": "Ford", "model": "Mustang Mach-E", "trim_level": "Rally",              "battery_option": "Extended Range", "battery_usable_kwh": 91.0, "battery_gross_kwh": 98.8, "year_min": 2026, "year_max": 2026},
-]
+from web.services.vehicles.registry import VehicleRegistry
 
 
 def lookup_battery_values(
@@ -125,18 +17,22 @@ def lookup_battery_values(
     battery_option: str,
 ) -> tuple[float, float] | None:
     """Return (battery_usable_kwh, battery_gross_kwh) for a preset match or None.
+
     Match rule: exact equality on make/model/trim_level/battery_option, and
-    year_min <= year <= year_max. Consumed by cascade auto-fill.
+    year_min <= year <= row.year_max. Consumed by cascade auto-fill.
     """
-    for row in VEHICLE_PRESETS:
+    profile = VehicleRegistry.get(make)
+    if profile is None:
+        return None
+    for row in profile.presets():
         if (
-            row["make"] == make
-            and row["model"] == model
-            and row["trim_level"] == trim_level
-            and row["battery_option"] == battery_option
-            and row["year_min"] <= year <= row["year_max"]
+            row.make == make
+            and row.model == model
+            and row.trim_level == trim_level
+            and row.battery_option == battery_option
+            and row.year_min <= year <= row.year_max
         ):
-            return (row["battery_usable_kwh"], row["battery_gross_kwh"])
+            return (row.battery_usable_kwh, row.battery_gross_kwh)
     return None
 
 

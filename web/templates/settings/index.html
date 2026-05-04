@@ -98,10 +98,10 @@
         {% include "settings/partials/import_tab.html" %}
     </div>
 
-    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Home Assistant" {{ 'checked' if active_tab == 'hass' }} />
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Data Sources" {{ 'checked' if active_tab == 'data_sources' }} />
     <div role="tabpanel" class="tab-content pt-6">
-        <div id="hass-settings-content"
-             hx-get="/settings/hass"
+        <div id="data-sources-tab-content"
+             hx-get="/settings/data-sources"
              hx-trigger="intersect once"
              hx-swap="innerHTML">
             <span class="loading loading-spinner loading-md"></span>
