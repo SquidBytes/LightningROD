@@ -26,7 +26,11 @@ async def _seed_default(db_session, *, ha_url: str, ha_token: str, **extra):
 
 
 async def test_get_data_sources_tab_renders_one_card(client, db_session):
-    """GET /settings/data-sources renders one card per REGISTRY entry with masked token."""
+    """GET /settings/data-sources renders the unified Home Assistant card.
+
+    ha_fordpass + ha_gas_price are consolidated into a single card with
+    "FordPass" and "Gas Price Sensors" sub-sections.
+    """
     await _seed_default(
         db_session,
         ha_url="http://homeassistant.local:8123",
@@ -36,7 +40,9 @@ async def test_get_data_sources_tab_renders_one_card(client, db_session):
     response = await client.get("/settings/data-sources")
     assert response.status_code == 200
     body = response.text
-    assert "Home Assistant (FordPass)" in body
+    assert ">Home Assistant<" in body
+    assert ">FordPass<" in body
+    assert ">Gas Price Sensors<" in body
     assert "http://homeassistant.local:8123" in body
     # Masked token: last 8 chars visible, prior chars asterisks
     assert "********12345678" in body or "***12345678" in body

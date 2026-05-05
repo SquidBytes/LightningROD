@@ -1414,8 +1414,13 @@ async def data_sources_tab(
     saved: bool = False,
 ):
     """Render the registry-driven Data Sources tab partial."""
+    # ha_gas_price is folded into the unified Home Assistant card (rendered
+    # for ha_fordpass) — its sensor-entity-id inputs save to app_settings via
+    # the FordPass save handler, so we skip rendering it as its own card.
     cards = []
     for descriptor in SOURCE_REGISTRY:
+        if descriptor.source_name == "ha_gas_price":
+            continue
         result = await db.execute(
             select(DataSourceConfig).where(
                 DataSourceConfig.source_name == descriptor.source_name,
@@ -1434,16 +1439,26 @@ async def data_sources_tab(
                 # without exposing them as a fully-validated config object.
                 partial_config = row.config_json or {}
         health, last_seen = _card_health_inputs(descriptor)
-        cards.append(
-            {
-                "descriptor": descriptor,
-                "config": config,
-                "partial_config": partial_config,
-                "masked_token": _mask_token(config.ha_token) if config else "",
-                "health": health,
-                "last_seen": last_seen,
-            }
-        )
+        card_ctx = {
+            "descriptor": descriptor,
+            "config": config,
+            "partial_config": partial_config,
+            "masked_token": _mask_token(config.ha_token) if config else "",
+            "health": health,
+            "last_seen": last_seen,
+        }
+        if descriptor.source_name == "ha_fordpass":
+            gas_settings = await get_app_settings_dict(
+                db,
+                ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"],
+            )
+            card_ctx["gas_sensor_station_entity_id"] = gas_settings.get(
+                "gas_sensor_station_entity_id", ""
+            )
+            card_ctx["gas_sensor_average_entity_id"] = gas_settings.get(
+                "gas_sensor_average_entity_id", ""
+            )
+        cards.append(card_ctx)
 
     return templates.TemplateResponse(
         request,
@@ -1487,6 +1502,12 @@ async def save_data_source(
     if form.get("ha_vin_override", "") == "":
         form["ha_vin_override"] = None
 
+    # Pull the gas-sensor entity-id fields off the form before HAFordpassConfig
+    # validation — they belong to ha_gas_price's config schema (today stored in
+    # app_settings) and would fail HAFordpassConfig validation if left in.
+    gas_station_entity = form.pop("gas_sensor_station_entity_id", "") or ""
+    gas_average_entity = form.pop("gas_sensor_average_entity_id", "") or ""
+
     try:
         config = descriptor.config_schema.model_validate(form)
     except ValidationError as e:
@@ -1502,6 +1523,8 @@ async def save_data_source(
                     "masked_token": form.get("ha_token", ""),
                     "health": health,
                     "last_seen": last_seen,
+                    "gas_sensor_station_entity_id": gas_station_entity,
+                    "gas_sensor_average_entity_id": gas_average_entity,
                 },
                 "errors": e.errors(),
             },
@@ -1509,6 +1532,14 @@ async def save_data_source(
         )
 
     await _upsert_data_source_config(db, descriptor, config)
+
+    if source_name == "ha_fordpass":
+        await set_app_setting(db, "gas_sensor_station_entity_id", gas_station_entity)
+        await set_app_setting(db, "gas_sensor_average_entity_id", gas_average_entity)
+        from web.services.sources.ha_gas_price.adapter import (
+            invalidate_gas_sensor_cache,
+        )
+        invalidate_gas_sensor_cache()
 
     health, last_seen = _card_health_inputs(descriptor)
     return templates.TemplateResponse(
@@ -1522,6 +1553,8 @@ async def save_data_source(
                 "masked_token": _mask_token(config.ha_token),
                 "health": health,
                 "last_seen": last_seen,
+                "gas_sensor_station_entity_id": gas_station_entity,
+                "gas_sensor_average_entity_id": gas_average_entity,
             },
             "saved": True,
         },

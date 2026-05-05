@@ -35,3 +35,9 @@ site/
 
 # Local
 notes/
+
+# Local SQLite dev DB (created by setupLR.sh --sqlite)
+lr-dev.db
+lr-dev.db-wal
+lr-dev.db-shm
+lr-dev.db.seeded
