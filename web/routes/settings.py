@@ -1505,8 +1505,8 @@ async def save_data_source(
     # Pull the gas-sensor entity-id fields off the form before HAFordpassConfig
     # validation — they belong to ha_gas_price's config schema (today stored in
     # app_settings) and would fail HAFordpassConfig validation if left in.
-    gas_station_entity = form.pop("gas_sensor_station_entity_id", "") or ""
-    gas_average_entity = form.pop("gas_sensor_average_entity_id", "") or ""
+    gas_station_entity = str(form.pop("gas_sensor_station_entity_id", "") or "")
+    gas_average_entity = str(form.pop("gas_sensor_average_entity_id", "") or "")
 
     try:
         config = descriptor.config_schema.model_validate(form)
