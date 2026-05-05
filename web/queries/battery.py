@@ -30,12 +30,12 @@ _CURVE_CACHE: dict[str, dict] = {}
 # ---------------------------------------------------------------------------
 
 
-def build_battery_time_filter(range_str: str):
-    """Return a SQLAlchemy where clause for EVBatteryStatus.recorded_at.
+def _battery_time_cutoff(range_str: str) -> datetime | None:
+    """Return the cutoff datetime for a given range string, or None for 'all'.
 
-    Same logic as costs.build_time_filter but targets EVBatteryStatus.recorded_at.
-    Returns None for 'all' (no filter).
-    Accepts: '7d', '30d', '90d', 'ytd', '1y', 'all'
+    Shared math used by both EVBatteryStatus and EVVehicleStatus filters so a
+    single mapping ('7d' -> 7 days ago, etc.) drives every battery-page query.
+    Accepts: '7d', '30d', '90d', 'ytd', '1y', 'all'.
     """
     if not range_str or range_str == "all":
         return None
@@ -43,18 +43,26 @@ def build_battery_time_filter(range_str: str):
     now = datetime.now(UTC)
 
     if range_str == "7d":
-        cutoff = now - timedelta(days=7)
-    elif range_str == "30d":
-        cutoff = now - timedelta(days=30)
-    elif range_str == "90d":
-        cutoff = now - timedelta(days=90)
-    elif range_str == "ytd":
-        cutoff = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    elif range_str == "1y":
-        cutoff = now - timedelta(days=365)
-    else:
-        return None
+        return now - timedelta(days=7)
+    if range_str == "30d":
+        return now - timedelta(days=30)
+    if range_str == "90d":
+        return now - timedelta(days=90)
+    if range_str == "ytd":
+        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    if range_str == "1y":
+        return now - timedelta(days=365)
+    return None
 
+
+def build_battery_time_filter(range_str: str):
+    """Return a SQLAlchemy where clause for EVBatteryStatus.recorded_at.
+
+    Returns None for 'all' (no filter).
+    """
+    cutoff = _battery_time_cutoff(range_str)
+    if cutoff is None:
+        return None
     return EVBatteryStatus.recorded_at >= cutoff
 
 
@@ -295,6 +303,125 @@ async def query_degradation_data(
     return [
         {"date": row.date, "max_capacity": float(row.max_capacity)}
         for row in result.all()
+    ]
+
+
+async def query_battery_temp_timeline(
+    db: AsyncSession,
+    time_range: str = "7d",
+    device_id: str | None = None,
+) -> list[dict]:
+    """Battery pack temperature timeline for the battery-temp chart.
+
+    Mirrors the SOC timeline shape: filters out NULL hv_battery_temperature,
+    orders ASC so the most-recent reading sits on the right edge, and applies
+    adaptive 30min/1h/2h downsampling above 800 rows.
+    Returns list of dicts with keys: recorded_at, hv_battery_temperature.
+    """
+    stmt = (
+        select(
+            EVBatteryStatus.recorded_at,
+            EVBatteryStatus.hv_battery_temperature,
+        )
+        .where(EVBatteryStatus.hv_battery_temperature.isnot(None))
+        .order_by(EVBatteryStatus.recorded_at)
+    )
+
+    time_filter = build_battery_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVBatteryStatus.device_id == device_id)
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    if not rows:
+        return []
+
+    df = pd.DataFrame(rows, columns=["recorded_at", "hv_battery_temperature"])
+    df["hv_battery_temperature"] = df["hv_battery_temperature"].astype(float)
+
+    if len(df) > 800:
+        df = df.set_index("recorded_at")
+        if len(df) > 5000:
+            bucket = "2h"
+        elif len(df) > 2000:
+            bucket = "1h"
+        else:
+            bucket = "30min"
+        df = (
+            df.resample(bucket)
+            .agg({"hv_battery_temperature": "mean"})
+            .dropna(subset=["hv_battery_temperature"])
+            .reset_index()
+        )
+
+    return [
+        {
+            "recorded_at": row["recorded_at"],
+            "hv_battery_temperature": float(row["hv_battery_temperature"]),
+        }
+        for _, row in df.iterrows()
+    ]
+
+
+async def query_outside_temp_timeline(
+    db: AsyncSession,
+    time_range: str = "7d",
+    device_id: str | None = None,
+) -> list[dict]:
+    """Outside-air temperature timeline sourced from EVVehicleStatus.
+
+    Reuses the shared cutoff math from _battery_time_cutoff (build_battery_time_filter
+    is bound to EVBatteryStatus). Returns list of dicts with keys:
+    recorded_at, outside_temperature.
+    """
+    stmt = (
+        select(
+            EVVehicleStatus.recorded_at,
+            EVVehicleStatus.outside_temperature,
+        )
+        .where(EVVehicleStatus.outside_temperature.isnot(None))
+        .order_by(EVVehicleStatus.recorded_at)
+    )
+
+    cutoff = _battery_time_cutoff(time_range)
+    if cutoff is not None:
+        stmt = stmt.where(EVVehicleStatus.recorded_at >= cutoff)
+    if device_id:
+        stmt = stmt.where(EVVehicleStatus.device_id == device_id)
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    if not rows:
+        return []
+
+    df = pd.DataFrame(rows, columns=["recorded_at", "outside_temperature"])
+    df["outside_temperature"] = df["outside_temperature"].astype(float)
+
+    if len(df) > 800:
+        df = df.set_index("recorded_at")
+        if len(df) > 5000:
+            bucket = "2h"
+        elif len(df) > 2000:
+            bucket = "1h"
+        else:
+            bucket = "30min"
+        df = (
+            df.resample(bucket)
+            .agg({"outside_temperature": "mean"})
+            .dropna(subset=["outside_temperature"])
+            .reset_index()
+        )
+
+    return [
+        {
+            "recorded_at": row["recorded_at"],
+            "outside_temperature": float(row["outside_temperature"]),
+        }
+        for _, row in df.iterrows()
     ]
 
 
@@ -629,6 +756,113 @@ def build_soc_timeline_chart(
         margin=dict(l=20, r=20, t=20, b=20),
         xaxis=dict(title=""),
         yaxis=dict(title="SOC %", range=[0, 100]),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified",
+        hoverlabel=_HOVER_LABEL,
+    )
+
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+def build_battery_temp_chart(
+    temp_data: list[dict],
+    outside_data: list[dict],
+    charging_regions: list[tuple],
+    temp_factor_f: bool = False,
+    temp_label: str = "°C",
+) -> str | None:
+    """Dual-line battery + outside temp chart with charging-region overlays.
+
+    Mirrors build_soc_timeline_chart: connectgaps=False to render gaps as
+    breaks, and charging-region rectangles batched into a single
+    update_layout(shapes=...) call (loop form is O(n^2)).
+
+    Args:
+        temp_data: rows from query_battery_temp_timeline.
+        outside_data: rows from query_outside_temp_timeline.
+        charging_regions: list of (start_ts, end_ts) timestamp tuples (NOT
+            index tuples) — the route handler resolves SOC indices to
+            timestamps before calling this so x-coords align even though
+            battery-temp and SOC time series have different cadences.
+        temp_factor_f: when True, °C values are converted to °F before plot.
+        temp_label: axis-title unit label (e.g. "°C" or "°F").
+
+    Returns Plotly chart HTML, or None when no data on either trace.
+    """
+    if not temp_data and not outside_data:
+        return None
+
+    pio.templates.default = "plotly_dark"
+    fig = go.Figure()
+
+    def _conv(c):
+        if c is None:
+            return None
+        return (float(c) * 9.0 / 5.0) + 32.0 if temp_factor_f else float(c)
+
+    if temp_data:
+        batt_x = [pt["recorded_at"] for pt in temp_data]
+        batt_y = [_conv(pt["hv_battery_temperature"]) for pt in temp_data]
+        fig.add_trace(
+            go.Scatter(
+                x=batt_x,
+                y=batt_y,
+                mode="lines",
+                name="Battery",
+                line=dict(color="#47A8E5", width=2),
+                connectgaps=False,
+                hoverinfo="x+y+name",
+            )
+        )
+
+    if outside_data:
+        out_x = [pt["recorded_at"] for pt in outside_data]
+        out_y = [_conv(pt["outside_temperature"]) for pt in outside_data]
+        fig.add_trace(
+            go.Scatter(
+                x=out_x,
+                y=out_y,
+                mode="lines",
+                name="Outside Air",
+                line=dict(color="#94a3b8", width=2, dash="dash"),
+                connectgaps=False,
+                hoverinfo="x+y+name",
+            )
+        )
+
+    # Charging-region overlays — batched shapes (NEVER loop add_vrect).
+    # charging_regions is a list of (start_ts, end_ts) timestamp tuples so
+    # x-coords align with the temp series even when the SOC and temp time
+    # bases differ.
+    region_shapes = [
+        dict(
+            type="rect",
+            xref="x",
+            yref="paper",
+            x0=start_ts,
+            x1=end_ts,
+            y0=0,
+            y1=1,
+            fillcolor="rgba(74, 222, 128, 0.25)",
+            layer="below",
+            line=dict(width=0),
+        )
+        for start_ts, end_ts in charging_regions
+    ]
+    if region_shapes:
+        fig.update_layout(shapes=region_shapes)
+
+    fig.update_layout(
+        height=350,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
+        margin=dict(l=20, r=20, t=30, b=20),
+        xaxis=dict(title=""),
+        yaxis=dict(title=f"Temperature ({temp_label})"),
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",
