@@ -8,11 +8,6 @@
 
 {# Tab bar using DaisyUI CSS-only radio tabs with adjacent tab-content #}
 <div role="tablist" class="tabs tabs-bordered">
-    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Vehicles" {{ 'checked' if active_tab == 'vehicles' }} />
-    <div role="tabpanel" class="tab-content pt-6">
-        {% include "settings/partials/vehicle_management.html" %}
-    </div>
-
     <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="General" {{ 'checked' if active_tab == 'general' }} />
     <div role="tabpanel" class="tab-content pt-6">
         <div class="space-y-6">
@@ -77,9 +72,9 @@
         </div>
     </div>
 
-    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Fuel" {{ 'checked' if active_tab == 'fuel' }} />
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Vehicles" {{ 'checked' if active_tab == 'vehicles' }} />
     <div role="tabpanel" class="tab-content pt-6">
-        {% include "settings/partials/fuel_tab.html" %}
+        {% include "settings/partials/vehicle_management.html" %}
     </div>
 
     <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Networks" {{ 'checked' if active_tab == 'networks' }} />
@@ -87,7 +82,12 @@
         {% include "settings/partials/network_management.html" %}
     </div>
 
-    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="CSV Import" {{ 'checked' if active_tab == 'import' }} />
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Fuel" {{ 'checked' if active_tab == 'fuel' }} />
+    <div role="tabpanel" class="tab-content pt-6">
+        {% include "settings/partials/fuel_tab.html" %}
+    </div>
+
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Import" {{ 'checked' if active_tab == 'import' }} />
     <div role="tabpanel" class="tab-content pt-6">
         {% include "settings/partials/import_tab.html" %}
     </div>
