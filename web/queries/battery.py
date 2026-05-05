@@ -699,6 +699,7 @@ def build_charge_curve_chart(
     data: dict,
     ref_curve: list[dict] | None = None,
     avg_curve: list[dict] | None = None,
+    charge_type: str | None = None,
 ) -> str:
     """Build charge curve chart with SOC% on X-axis, kW on Y-axis (industry standard).
 
@@ -709,11 +710,23 @@ def build_charge_curve_chart(
         data: Dict from query_charge_curve with detailed, fallback, session keys.
         ref_curve: Reference charge curve points [{soc, kw}, ...] from JSON.
         avg_curve: Average charge curve points [{soc, kw}, ...] from query.
+        charge_type: 'AC' or 'DC' (or None). AC sessions cap the y-axis at
+            25 kW and suppress the synthetic-DC reference overlay; DC keeps
+            the 200 kW cap and the reference curve.
 
     Returns HTML string. Empty string if no data at all.
     """
     if not data or not data.get("session"):
         return ""
+
+    # AC sessions never benefit from the synthetic-DC reference curve and need
+    # a tighter y-axis range to read at all. Apply the branch BEFORE traces
+    # are added so the AC ref_curve is dropped at the source, not just hidden.
+    if charge_type == "AC":
+        y_max = 25.0
+        ref_curve = None
+    else:
+        y_max = 200.0
 
     detailed = data.get("detailed", [])
     fallback = data.get("fallback", {})
@@ -814,7 +827,7 @@ def build_charge_curve_chart(
         font_color="#e5e7eb",
         margin=dict(l=20, r=20, t=30, b=20),
         xaxis=dict(title="SOC %", range=[0, 100]),
-        yaxis=dict(title="Charging Power (kW)"),
+        yaxis=dict(title="Charging Power (kW)", range=[0, y_max]),
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",

@@ -86,10 +86,17 @@ async def battery(
         avg_curve = await query_average_charge_curve(db, device_id=active_device_id)
         if session:
             curve_data = await query_charge_curve(db, session_id=session)
-            chart = build_charge_curve_chart(curve_data, ref_curve=ref_curve, avg_curve=avg_curve)
+            sess_obj = curve_data.get("session") if isinstance(curve_data, dict) else None
+            charge_type = getattr(sess_obj, "charge_type", None) if sess_obj is not None else None
+            chart = build_charge_curve_chart(
+                curve_data,
+                ref_curve=ref_curve,
+                avg_curve=avg_curve,
+                charge_type=charge_type,
+            )
             if chart:
                 return HTMLResponse(chart)
-        return HTMLResponse('<p class="text-base-content/40 text-sm py-8 text-center">Select a session to view its charge curve.</p>')
+        return HTMLResponse('<p class="text-base-content/40 text-sm py-8 text-center">No charging sessions in this time range.</p>')
 
     if section == "lv_battery":
         lv_data = await query_lv_battery_timeline(db, time_range=time_range, device_id=active_device_id)
@@ -126,6 +133,11 @@ async def battery(
             })
 
     active_session = session
+    if not active_session and recent_sessions:
+        # Default to the most recent session of any charge_type when no
+        # ?session= override is present. recent_sessions is ordered by
+        # session_start_utc DESC inside query_recent_sessions_for_picker.
+        active_session = recent_sessions[0]["id"]
 
     # Summary card values (health-focused)
     summary = {
@@ -138,6 +150,7 @@ async def battery(
         "range_delta": None,
         "lv_voltage": None,
         "lv_level": None,
+        "battery_temp": None,
     }
 
     # Latest battery status for summary
@@ -188,6 +201,21 @@ async def battery(
         if lv_latest:
             summary["lv_voltage"] = float(lv_latest.lv_battery_voltage)
             summary["lv_level"] = float(lv_latest.lv_battery_level) if lv_latest.lv_battery_level else None
+
+    # Latest battery pack temperature for the headline card. Uses a separate
+    # query to avoid inheriting hv_battery_capacity.isnot(None) from latest_stmt
+    # — elvehcharging-only writes (no capacity) would otherwise be excluded.
+    batt_temp_stmt = (
+        select(EVBatteryStatus.hv_battery_temperature)
+        .where(EVBatteryStatus.hv_battery_temperature.isnot(None))
+        .order_by(EVBatteryStatus.recorded_at.desc())
+        .limit(1)
+    )
+    if active_device_id:
+        batt_temp_stmt = batt_temp_stmt.where(EVBatteryStatus.device_id == active_device_id)
+    batt_temp_row = (await db.execute(batt_temp_stmt)).first()
+    if batt_temp_row and batt_temp_row.hv_battery_temperature is not None:
+        summary["battery_temp"] = float(batt_temp_row.hv_battery_temperature)
 
     # Degradation, charge curve, and 12v charts are NOT computed here --
     # they are lazy-loaded via HTMX hx-trigger="revealed"
