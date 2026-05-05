@@ -926,11 +926,15 @@ async def _handle_events_entity(
 
     # Trip data is in attrs["customEvents"]["xev-key-off-trip-segment-data"]["oemData"]["trip_data"]["stringArrayValue"].
     # Each element of stringArrayValue is a JSON-encoded dict. Take the last valid one.
+    # `updateTime` is a SIBLING key to `oemData` inside xev-key-off-trip-segment-data
+    # and serves as the canonical input for the deterministic trip_id hash.
     trip: dict | None = None
+    update_time_iso: str | None = None
     custom_events = attrs.get("customEvents") or {}
     if isinstance(custom_events, dict):
         xev = custom_events.get("xev-key-off-trip-segment-data") or {}
         if isinstance(xev, dict):
+            update_time_iso = xev.get("updateTime")
             raw_array = (
                 ((xev.get("oemData") or {}).get("trip_data") or {})
                 .get("stringArrayValue") or []
@@ -1006,8 +1010,39 @@ async def _handle_events_entity(
 
     recorded_at = _parse_event_ts(new_state) or datetime.now(UTC)
 
-    # Match-and-enrich: if an _elveh row already exists for this trip, update
-    # the canonical temperature fields rather than inserting a duplicate.
+    # Deterministic-id lookup first: if a row exists with the same uuid5(NS,
+    # device_id|tripUpdateTime) the events payload is the second delivery for
+    # the same physical trip — enrich rather than insert. This bypasses the
+    # rounding-drift sensitivity of the legacy predicate match.
+    deterministic_id = compute_trip_id(device_id, update_time_iso)
+    if deterministic_id is not None:
+        from sqlalchemy import select as _select
+
+        existing = (await db.execute(
+            _select(EVTripMetrics)
+            .where(EVTripMetrics.trip_id == deterministic_id)
+            .limit(1)
+        )).scalar_one_or_none()
+        if existing is not None:
+            if ambient is not None:
+                existing.ambient_temp = ambient
+            if cabin is not None:
+                existing.cabin_temp = cabin
+            if outside_air is not None:
+                existing.outside_air_temp = outside_air
+            if existing.odometer_end is None and existing.end_time is not None:
+                existing.odometer_end = await _closest_odometer(db, device_id, existing.end_time)
+            if existing.odometer_start is None and existing.start_time is not None:
+                existing.odometer_start = await _closest_odometer(db, device_id, existing.start_time)
+            logger.info(
+                "ha_fordpass: enriched trip row %s for %s via deterministic id",
+                existing.id,
+                device_id,
+            )
+            return
+
+    # Match-and-enrich fallback: legacy predicate match for trips whose source
+    # didn't carry tripUpdateTime (no deterministic id available).
     from web.services.sources.ha_fordpass.handlers import _find_matching_trip
 
     existing = await _find_matching_trip(db, device_id, distance, energy)
@@ -1026,12 +1061,14 @@ async def _handle_events_entity(
         )
         return
 
+    odometer_end = await _closest_odometer(db, device_id, recorded_at)
+
     record = EVTripMetrics(
-        # Explicit uuid4 fallback — model no longer carries a default. The
-        # deterministic uuid5(NS, device_id|tripUpdateTime) path lands in the
-        # follow-up plan; today's events payload doesn't yet expose updateTime
-        # to the ingest path so we keep uuid4 here for now.
-        trip_id=uuid.uuid4(),
+        # Deterministic uuid5 when tripUpdateTime is available; uuid4 fallback
+        # otherwise. The fallback rows can't be matched across sources but the
+        # row-level UNIQUE(trip_id) constraint still guards against double
+        # inserts of the same payload.
+        trip_id=deterministic_id or uuid.uuid4(),
         device_id=device_id,
         start_time=None,
         end_time=recorded_at,
@@ -1042,6 +1079,7 @@ async def _handle_events_entity(
         ambient_temp=ambient,
         cabin_temp=cabin,
         outside_air_temp=outside_air,
+        odometer_end=odometer_end,
         is_complete=True,
         source_system="ha_fordpass",
         original_timestamp=recorded_at,
@@ -1258,6 +1296,53 @@ def _parse_iso(val: Any) -> datetime | None:
         return datetime.fromisoformat(val)
     except (ValueError, TypeError):
         return None
+
+
+async def _closest_odometer(
+    db: AsyncSession, device_id: str, target_time: datetime | None
+) -> float | None:
+    """Closest ev_vehicle_status.odometer reading near `target_time`.
+
+    Pulls a ±2h window of readings for the device and picks the one whose
+    `recorded_at` is nearest to `target_time` by absolute timedelta. Dialect
+    portable: no SQL `abs(extract(epoch ...))` math (PG-only) and no
+    `julianday` (SQLite-only) — Python does the picking.
+    """
+    if not device_id or target_time is None:
+        return None
+
+    from datetime import timedelta
+
+    from sqlalchemy import select as _select
+
+    from db.models.vehicle_status import EVVehicleStatus
+
+    window_start = target_time - timedelta(hours=2)
+    window_end = target_time + timedelta(hours=2)
+
+    stmt = (
+        _select(EVVehicleStatus.recorded_at, EVVehicleStatus.odometer)
+        .where(EVVehicleStatus.device_id == device_id)
+        .where(EVVehicleStatus.odometer.isnot(None))
+        .where(EVVehicleStatus.recorded_at >= window_start)
+        .where(EVVehicleStatus.recorded_at <= window_end)
+    )
+    rows = (await db.execute(stmt)).all()
+    if not rows:
+        return None
+
+    # SQLite returns naive datetimes via aiosqlite; PG returns tz-aware.
+    # Coerce both sides to UTC-aware before subtraction so the comparison
+    # works on either backend.
+    target_aware = target_time if target_time.tzinfo else target_time.replace(tzinfo=UTC)
+
+    def _delta(r):
+        recorded = r.recorded_at
+        recorded_aware = recorded if recorded.tzinfo else recorded.replace(tzinfo=UTC)
+        return abs((recorded_aware - target_aware).total_seconds())
+
+    closest = min(rows, key=_delta)
+    return float(closest.odometer) if closest.odometer is not None else None
 
 
 def _format_address(addr: dict | None) -> str | None:
