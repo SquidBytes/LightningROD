@@ -106,3 +106,51 @@ def test_aria_label_present():
     """Gauge advertises score via aria-label for screen readers."""
     html = _render(60)
     assert 'aria-label="Driving score: 60 of 100"' in html
+
+
+def _render_with_duration(duration):
+    """Render trip_row.html with only the duration field populated."""
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
+    env.filters["cvt_dist"] = lambda v, u: v
+    env.filters["cvt_temp"] = lambda v, u: v
+    env.filters["cvt_eff"] = lambda v, u: v
+    env.filters["localtime"] = lambda v, tz, fmt="%Y-%m-%d": str(v)
+    tpl = env.get_template("driving/sessions/partials/trip_row.html")
+    trip = SimpleNamespace(
+        id=1,
+        driving_score=None,
+        end_time=None,
+        distance=None,
+        duration=duration,
+        outside_air_temp=None,
+        cabin_temp=None,
+        ambient_temp=None,
+        energy_consumed=None,
+        efficiency=None,
+        range_regenerated=None,
+    )
+    return tpl.render(
+        trip=trip,
+        total=1,
+        page=1,
+        per_page=25,
+        row_index=0,
+        units={"distance_label": "mi", "range_label": "mi", "temp_label": "°F", "efficiency_label": "mi/kWh"},
+        distance_unit="us",
+        temp_unit="us",
+        user_tz="UTC",
+    )
+
+
+def test_row_duration_uses_seconds_not_minutes():
+    """Regression-lock: 3600s must render '1h 0m' in the desktop row, not '60h 0m'."""
+    html = _render_with_duration(3600)
+    assert "1h 0m" in html
+    assert "60h" not in html
+
+
+def test_row_duration_under_an_hour():
+    """45 minutes (2700 seconds) → '45m', no hour token."""
+    html = _render_with_duration(2700)
+    assert "45m" in html
+    assert "0h" not in html

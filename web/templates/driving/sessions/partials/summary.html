@@ -112,7 +112,7 @@
                         <p class="text-sm text-base-content/60">
                             {% if trip.distance is not none %}{{ "%.1f"|format(trip.distance|cvt_dist(distance_unit)) }} {{ units.distance_label }}{% endif %}
                             {% if trip.duration is not none %}
-                                &middot; {{ (trip.duration | int) // 60 }}h {{ (trip.duration | int) % 60 }}m
+                                &middot; {{ (trip.duration | int) // 3600 }}h {{ ((trip.duration | int) % 3600) // 60 }}m
                             {% endif %}
                         </p>
                     </div>
