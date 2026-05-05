@@ -374,45 +374,52 @@ def make_trip_event(
     efficiency: float = 3.2,
     energy_consumed: float = 4.8,
     driving_score: float = 85.0,
+    update_time_iso: str | None = None,
 ) -> tuple[str, dict]:
     """Generate an elveh event with trip attributes.
 
-    Returns (entity_id, new_state) matching hass_processor's elveh branch.
+    Returns (entity_id, new_state) matching the elveh handler. When
+    `update_time_iso` is provided it surfaces as `tripUpdateTime` in the
+    attribute dict so the deterministic-id pre-lookup can match against an
+    events-entity row carrying the same value.
     """
     entity_id = f"sensor.fordpass_{device_id}_elveh"
     now = _now_iso()
+    attrs = {
+        # Production HA emits unit_of_measurement for the elveh state.
+        # Detection resolver requires a signal; no more silent "mi" default.
+        "unit_of_measurement": "mi",
+        "batteryVoltage": 390.0,
+        "batteryAmperage": 5.0,
+        "batterykW": 1.95,
+        "maximumBatteryCapacity": 91.0,
+        "batteryActualCharge": 75.0,
+        "motorVoltage": 350.0,
+        "motorAmperage": 3.0,
+        "motorkW": 1.05,
+        "maximumBatteryRange": 250.0,
+        # Trip attributes
+        "tripDistanceTraveled": distance_miles,
+        "tripDuration": duration_minutes,
+        "tripEnergyConsumed": energy_consumed,
+        "tripEfficiency": efficiency,
+        "tripDrivingScore": driving_score,
+        "tripSpeed": 80.0,
+        "tripAcceleration": 75.0,
+        "tripDeceleration": 70.0,
+        "tripAmbientTemp": 72.0,
+        "tripOutsideAirAmbientTemp": 68.0,
+        "tripCabinTemp": 70.0,
+        "tripRangeRegenerated": 2.5,
+        "tripElectricalEfficiency": 3.1,
+    }
+    if update_time_iso is not None:
+        attrs["tripUpdateTime"] = update_time_iso
     new_state = {
         "state": str(round(distance_miles * 3.0, 1)),  # Approx range in miles
         "last_changed": now,
         "last_updated": now,
-        "attributes": {
-            # Production HA emits unit_of_measurement for the elveh state.
-            # Detection resolver requires a signal; no more silent "mi" default.
-            "unit_of_measurement": "mi",
-            "batteryVoltage": 390.0,
-            "batteryAmperage": 5.0,
-            "batterykW": 1.95,
-            "maximumBatteryCapacity": 91.0,
-            "batteryActualCharge": 75.0,
-            "motorVoltage": 350.0,
-            "motorAmperage": 3.0,
-            "motorkW": 1.05,
-            "maximumBatteryRange": 250.0,
-            # Trip attributes
-            "tripDistanceTraveled": distance_miles,
-            "tripDuration": duration_minutes,
-            "tripEnergyConsumed": energy_consumed,
-            "tripEfficiency": efficiency,
-            "tripDrivingScore": driving_score,
-            "tripSpeed": 80.0,
-            "tripAcceleration": 75.0,
-            "tripDeceleration": 70.0,
-            "tripAmbientTemp": 72.0,
-            "tripOutsideAirAmbientTemp": 68.0,
-            "tripCabinTemp": 70.0,
-            "tripRangeRegenerated": 2.5,
-            "tripElectricalEfficiency": 3.1,
-        },
+        "attributes": attrs,
     }
     return entity_id, new_state
 
@@ -425,12 +432,19 @@ def make_events_trip_event(
     ambient_temp_c: float = 18.0,
     cabin_temp_c: float = 21.0,
     outside_air_temp_c: float = 17.0,
+    update_time_iso: str | None = None,
 ) -> tuple[str, dict]:
     """Generate a sensor.fordpass_{vin}_events event with trip segment data.
 
     Returns (entity_id, new_state) matching adapter._handle_events_entity.
     distance_km and energy_wh use the canonical units that the FIELD_CONTRACTS
     specify (km passthrough, Wh -> kWh conversion).
+
+    `update_time_iso` is emitted as a sibling to `oemData` inside the
+    xev-key-off-trip-segment-data block, matching the production payload
+    shape. Defaulting to `_now_iso()` keeps every existing test green by
+    giving each call a fresh timestamp; tests that exercise deterministic
+    dedup MUST pass the SAME `update_time_iso` to multiple constructors.
     """
     entity_id = f"sensor.fordpass_{device_id}_events"
     now = _now_iso()
@@ -441,6 +455,7 @@ def make_events_trip_event(
         "attributes": {
             "customEvents": {
                 "xev-key-off-trip-segment-data": {
+                    "updateTime": update_time_iso or now,
                     "oemData": {
                         "trip_data": {
                             "stringArrayValue": [

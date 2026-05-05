@@ -160,3 +160,87 @@ async def test_events_event_writes_trip_metrics(db_session):
     # energy_consumed: 7600 Wh -> 7.6 kWh
     assert float(trip.energy_consumed) == pytest.approx(7.6, abs=0.05)
     assert trip.ingest_schema_version == 2
+
+
+@pytest.mark.asyncio
+async def test_odometer_at_trip_boundaries(db_session):
+    """Trip ingest pulls odometer_start/end from the closest ev_vehicle_status
+    rows around the trip's start_time and end_time.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from db.models.vehicle_status import EVVehicleStatus
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+
+    end_t = datetime(2026, 4, 28, 14, 30, tzinfo=UTC)
+    start_t = end_t - timedelta(minutes=25)
+
+    # Seed odometer time-series readings around the trip boundaries.
+    # Closest-to-start should be at t-5min (12345.0); closest-to-end at t+1min (12368.0).
+    seeds = [
+        (start_t - timedelta(minutes=5), 12345.0),
+        (start_t + timedelta(minutes=2), 12350.0),
+        (end_t - timedelta(minutes=10), 12360.0),
+        (end_t + timedelta(minutes=1), 12368.0),
+        (end_t + timedelta(minutes=10), 12370.0),
+    ]
+    for ts, odo in seeds:
+        db_session.add(
+            EVVehicleStatus(
+                device_id=_TEST_DEVICE_ID,
+                recorded_at=ts,
+                odometer=odo,
+                source_system="ha_fordpass",
+            )
+        )
+    await db_session.flush()
+
+    # Synthesize an events trip where the inner JSON carries no start_time
+    # (the events handler derives start_time from duration). Force start/end
+    # by writing the ev_trip_metrics row directly through the adapter path.
+    import json as _json
+
+    entity_id = f"sensor.fordpass_{_TEST_DEVICE_ID}_events"
+    new_state = {
+        "entity_id": entity_id,
+        "state": "ok",
+        "last_changed": end_t.isoformat(),
+        "last_updated": end_t.isoformat(),
+        "attributes": {
+            "customEvents": {
+                "xev-key-off-trip-segment-data": {
+                    "updateTime": end_t.isoformat(),
+                    "oemData": {
+                        "trip_data": {
+                            "stringArrayValue": [
+                                _json.dumps({
+                                    "distance_traveled": 12.0,
+                                    "energy_consumed": 4500,
+                                    "trip_duration": (end_t - start_t).total_seconds(),
+                                    "ambient_temperature": 16.0,
+                                    "cabin_temperature": 21.0,
+                                    "outside_air_ambient_temperature": 15.0,
+                                })
+                            ]
+                        }
+                    },
+                }
+            }
+        },
+    }
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    trip = (await db_session.execute(
+        select(EVTripMetrics)
+        .where(EVTripMetrics.device_id == _TEST_DEVICE_ID)
+        .order_by(EVTripMetrics.id.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+    assert trip is not None
+    # The events handler today writes start_time=None; odometer_start may be
+    # NULL when start_time is missing — that's expected. odometer_end MUST
+    # be populated since end_time is the recorded event timestamp.
+    assert trip.odometer_end is not None, "odometer_end must be populated from closest reading"
+    assert float(trip.odometer_end) == pytest.approx(12368.0)
