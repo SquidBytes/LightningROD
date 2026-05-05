@@ -144,7 +144,7 @@
 </div>
 
 <!-- Regen Recovery: kWh bars (main) -->
-<div class="card bg-base-200 mb-4" id="driving-regen-bar-card">
+<div class="card bg-base-200" id="driving-regen-bar-card">
     <div class="card-body">
         <h3 class="card-title text-sm font-medium text-base-content/60 mb-1 flex items-center gap-1">
             <span>Regen Recovery</span>
@@ -163,19 +163,6 @@
                 <p class="text-base-content/60 text-sm">No regen data for this range.</p>
                 <p class="text-base-content/40 text-xs mt-1">Populates when trips with range_regenerated are ingested.</p>
             </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Regen Recovery: % per trip (mini) -->
-<div class="card bg-base-200" id="driving-regen-pct-card">
-    <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-1">Regen %</h3>
-        <p class="text-xs text-base-content/40 mb-3">Regen kWh as a share of trip energy consumed.</p>
-        {% if regen_pct_chart %}
-            <div class="plotly-chart-wrap">{{ regen_pct_chart | safe }}</div>
-        {% else %}
-            <p class="text-base-content/40 text-sm py-4 text-center">No regen data for this range.</p>
         {% endif %}
     </div>
 </div>
