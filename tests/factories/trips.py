@@ -1,5 +1,7 @@
 """Factory for EVTripMetrics model instances."""
 
+import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
@@ -20,6 +22,7 @@ class TripFactory(BaseFactory):
         end_time = cls._random_datetime(days_back=14)
 
         defaults = {
+            "trip_id": uuid.uuid4(),
             "device_id": "TEST_VIN_001",
             "distance": distance,
             "duration": duration,
