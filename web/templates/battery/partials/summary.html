@@ -94,6 +94,26 @@
     </div>
 </div>
 
+<!-- Battery Temperature -->
+<div class="card bg-base-200 mb-4">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+            <span>Battery Temperature</span>
+            <span class="cursor-help tooltip tooltip-bottom"
+                  data-tip="{{ tooltips.battery_temp_over_time }}"
+                  aria-label="{{ tooltips.battery_temp_over_time }}">ⓘ</span>
+        </h3>
+        <div id="battery-temp-chart"
+             hx-get="/battery?section=battery_temp&range={{ active_range }}"
+             hx-trigger="revealed"
+             hx-swap="innerHTML">
+            <div class="flex justify-center py-8">
+                <span class="loading loading-spinner loading-md text-base-content/30"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Charge Curve -->
 <div class="card bg-base-200 mb-4">
     <div class="card-body">
