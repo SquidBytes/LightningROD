@@ -1,6 +1,7 @@
 """Driving-session list and trip-detail routes."""
 
 import math
+import uuid
 from datetime import date
 from typing import Annotated
 
@@ -31,6 +32,7 @@ from web.queries.vehicles import (
     get_active_vehicle,
     get_all_vehicles,
 )
+from web.services.sources.ha_fordpass.adapter import LIGHTNINGROD_TRIP_NAMESPACE
 from web.unit_system import MI_PER_KM, parse_user_local_to_utc, to_metric_distance
 
 router = APIRouter()
@@ -342,7 +344,18 @@ async def create_trip(
     active_vehicle = await get_active_vehicle(db)
     device_id = active_vehicle.device_id if active_vehicle else "manual"
 
+    # Compute deterministic trip_id over the user-supplied fields. The model
+    # default was dropped in the trip-overhaul migration; manual-trip writes
+    # now own their dedup invariant. Two manual entries with identical
+    # (device_id, parsed_date, distance) intentionally collide so re-submitting
+    # the same data is a no-op rather than silently doubling rows.
+    manual_trip_id = uuid.uuid5(
+        LIGHTNINGROD_TRIP_NAMESPACE,
+        f"manual|{device_id}|{parsed_date.isoformat()}|{distance_km or 0}",
+    )
+
     new_trip = EVTripMetrics(
+        trip_id=manual_trip_id,
         device_id=device_id,
         end_time=parsed_date,
         start_time=parsed_date,

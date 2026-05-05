@@ -725,7 +725,15 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         device_id,
                     )
                 else:
+                    import uuid as _uuid
+
                     trip_record = EVTripMetrics(
+                        # Explicit uuid4 fallback — the model default was
+                        # dropped. Deterministic uuid5 wiring (using
+                        # tripUpdateTime when present) lands in the follow-up
+                        # plan; this fallback keeps today's elveh-only paths
+                        # writing a valid row.
+                        trip_id=_uuid.uuid4(),
                         device_id=device_id,
                         start_time=start_time,
                         end_time=end_time,

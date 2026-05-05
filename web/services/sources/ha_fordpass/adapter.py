@@ -71,6 +71,7 @@ which assumed the field was always km and produced 165.8 on imperial-HA events.
 
 import json
 import logging
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -81,6 +82,28 @@ from web.services.units.contracts import FieldContract, SourceLocator, SourceLoc
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
 
 logger = logging.getLogger("lightningrod.sources.ha_fordpass")
+
+
+# ---------------------------------------------------------------------------
+# Trip-id namespace for cross-source dedup
+# ---------------------------------------------------------------------------
+# DO NOT CHANGE — invalidating this UUID invalidates every existing
+# deterministic trip_id and breaks the dedup invariant. Mirrored verbatim
+# in db/migrations/versions/p34_battery_trips_overhaul.py.
+LIGHTNINGROD_TRIP_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-4a5b-9c8d-7e6f5a4b3c20")
+
+
+def compute_trip_id(device_id: str, trip_update_time: str | None) -> uuid.UUID | None:
+    """Deterministic trip_id for cross-source dedup.
+
+    Hash inputs: device_id + tripUpdateTime. Returns None when either input
+    is missing; callers fall back to the legacy `_find_matching_trip`
+    predicate match in that case.
+    """
+    if not device_id or not trip_update_time:
+        return None
+    canonical = f"{device_id}|{trip_update_time}"
+    return uuid.uuid5(LIGHTNINGROD_TRIP_NAMESPACE, canonical)
 
 # Dedicated logger for per-field unit-conversion traces. Separate from the
 # module logger so it can be toggled independently at runtime:
@@ -1004,6 +1027,11 @@ async def _handle_events_entity(
         return
 
     record = EVTripMetrics(
+        # Explicit uuid4 fallback — model no longer carries a default. The
+        # deterministic uuid5(NS, device_id|tripUpdateTime) path lands in the
+        # follow-up plan; today's events payload doesn't yet expose updateTime
+        # to the ingest path so we keep uuid4 here for now.
+        trip_id=uuid.uuid4(),
         device_id=device_id,
         start_time=None,
         end_time=recorded_at,

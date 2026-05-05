@@ -29,8 +29,11 @@ class EVTripMetrics(Base):
 
     # Primary identifier
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Default removed — adapter computes uuid5(NS, device_id|tripUpdateTime)
+    # before insert; manual-trip route computes its own uuid5 over user fields.
+    # DB-level UNIQUE constraint on trip_id is added by the p34 migration.
     trip_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), default=uuid.uuid4, nullable=False
+        Uuid(as_uuid=True), nullable=False
     )
     device_id: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -42,6 +45,8 @@ class EVTripMetrics(Base):
     # Distance and time
     distance: Mapped[float | None] = mapped_column(Numeric)
     duration: Mapped[float | None] = mapped_column(Numeric)
+    odometer_start: Mapped[float | None] = mapped_column(Numeric)
+    odometer_end: Mapped[float | None] = mapped_column(Numeric)
 
     # Energy
     energy_consumed: Mapped[float | None] = mapped_column(Numeric)

@@ -22,12 +22,14 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import create_async_engine
+
 from db.migrations.versions.p34_battery_trips_overhaul import (
     LIGHTNINGROD_TRIP_NAMESPACE,
+    _coerce_datetime,
     consolidate_trip_groups,
     rewrite_trip_ids_to_legacy_form,
 )
-from sqlalchemy.ext.asyncio import create_async_engine
 
 pytestmark = pytest.mark.unit
 
@@ -234,9 +236,10 @@ async def test_consolidation_merges_three_duplicate_rows():
     # (whichever survivor was kept, its end_time + device_id determine the new id)
     survivor_id = uuid.UUID(bytes=row.trip_id) if isinstance(row.trip_id, bytes) else uuid.UUID(row.trip_id)
     # The survivor's end_time may be any of the three; recompute from the row.
+    end_iso = _coerce_datetime(row.end_time).isoformat()
     expected = uuid.uuid5(
         LIGHTNINGROD_TRIP_NAMESPACE,
-        f"legacy|TESTVIN1|{row.end_time}",
+        f"legacy|TESTVIN1|{end_iso}",
     )
     assert survivor_id == expected
 
@@ -286,9 +289,10 @@ async def test_consolidation_preserves_non_duplicates():
 
     for row in rows:
         survivor_id = uuid.UUID(bytes=row.trip_id) if isinstance(row.trip_id, bytes) else uuid.UUID(row.trip_id)
+        end_iso = _coerce_datetime(row.end_time).isoformat()
         expected = uuid.uuid5(
             LIGHTNINGROD_TRIP_NAMESPACE,
-            f"legacy|{row.device_id}|{row.end_time}",
+            f"legacy|{row.device_id}|{end_iso}",
         )
         assert survivor_id == expected, (
             f"Non-duplicate row for {row.device_id} did not get deterministic id"
