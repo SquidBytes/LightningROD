@@ -1,5 +1,5 @@
 <!-- Summary Cards -->
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+<div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
 
     <!-- Est. Degradation (radial gauge) -->
     <div class="card bg-base-200">
@@ -53,51 +53,21 @@
         </div>
     </div>
 
-    <!-- Range -->
+    <!-- Battery Temp -->
     <div class="card bg-base-200">
         <div class="card-body">
             <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
-                <span>Range</span>
+                <span>Battery Temp</span>
                 <span class="cursor-help tooltip tooltip-bottom"
-                      data-tip="{{ tooltips.battery_range }}"
-                      aria-label="{{ tooltips.battery_range }}">ⓘ</span>
+                      data-tip="{{ tooltips.battery_pack_temp }}"
+                      aria-label="{{ tooltips.battery_pack_temp }}">ⓘ</span>
             </p>
-            {% if summary.latest_range is not none %}
-                <p class="text-2xl font-bold">{{ "%.0f"|format(summary.latest_range) }} <span class="text-base font-normal text-base-content/60">{{ units.range_label }}</span></p>
-                {% if summary.rated_range is not none %}
-                    <p class="text-sm text-base-content/60 mt-1">
-                        vs {{ "%.0f"|format(summary.rated_range) }} {{ units.range_label }} new
-                        {% if summary.range_delta is not none %}
-                            <span class="text-error">({{ "%.0f"|format(summary.range_delta) }} {{ units.range_label }})</span>
-                        {% endif %}
-                    </p>
-                {% else %}
-                    <p class="text-sm text-base-content/60 mt-1">Latest recorded range</p>
-                {% endif %}
+            {% if summary.battery_temp is not none %}
+                <p class="text-2xl font-bold">{{ "%.0f"|format(summary.battery_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}</p>
+                <p class="text-xs text-base-content/40 mt-1">Current pack temperature</p>
             {% else %}
                 <p class="text-2xl font-semibold text-base-content/30">--</p>
-                <p class="text-xs text-base-content/30 mt-1">Requires range data</p>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- 12V Battery -->
-    <div class="card bg-base-200">
-        <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
-                <span>12V Battery</span>
-                <span class="cursor-help tooltip tooltip-bottom"
-                      data-tip="{{ tooltips.battery_12v }}"
-                      aria-label="{{ tooltips.battery_12v }}">ⓘ</span>
-            </p>
-            {% if summary.lv_voltage is not none %}
-                <p class="text-2xl font-bold">{{ "%.1f"|format(summary.lv_voltage) }} <span class="text-base font-normal text-base-content/60">V</span></p>
-                {% if summary.lv_level is not none %}
-                    <p class="text-sm text-base-content/60 mt-1">Level: {{ "%.0f"|format(summary.lv_level) }}%</p>
-                {% endif %}
-            {% else %}
-                <p class="text-2xl font-semibold text-base-content/30">--</p>
-                <p class="text-xs text-base-content/30 mt-1">No 12V data available</p>
+                <p class="text-xs text-base-content/30 mt-1">No temperature data available</p>
             {% endif %}
         </div>
     </div>
@@ -165,7 +135,7 @@
             </div>
         {% else %}
             <div id="charge-curve-content">
-                <p class="text-base-content/40 text-sm py-8 text-center">Select a session above to view its charge curve.</p>
+                <p class="text-base-content/40 text-sm py-8 text-center">No charging sessions in this time range.</p>
             </div>
         {% endif %}
         {% if ref_curve_name %}

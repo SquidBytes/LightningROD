@@ -75,6 +75,12 @@ TOOLTIPS: dict[str, str] = {
     "battery_degradation_trend": (
         "How gross pack capacity trends as odometer miles accumulate, using reported capacity snapshots."
     ),
+    "battery_pack_temp": (
+        "Current battery pack temperature reported by the vehicle."
+    ),
+    "battery_temp_over_time": (
+        "Battery and outside air temperature over time, with charging sessions shown as shaded regions."
+    ),
     # --- driving_sessions (/driving/sessions) ---
     "driving_sessions_total_trips": (
         "Count of trips recorded in the selected date range."
