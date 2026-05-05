@@ -33,6 +33,17 @@
                 </div>
             </div>
 
+            <!-- Display Options -->
+            <div class="card bg-base-200 max-w-lg">
+                <div class="card-body">
+                    <h2 class="card-title text-base font-semibold">Display Options</h2>
+                    <p class="text-base-content/60 text-sm -mt-1">Toggle which comparison sections appear on the Costs page.</p>
+                    <div id="gas-settings" class="mt-2">
+                        {% include "settings/partials/gas_settings.html" %}
+                    </div>
+                </div>
+            </div>
+
             <!-- Developer Tools (hidden in demo mode) -->
             {% if not demo_mode %}
             <div class="card bg-base-200 max-w-lg border border-warning/20">

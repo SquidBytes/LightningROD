@@ -1952,11 +1952,15 @@ async def update_unit_settings(
     await set_app_setting(db, "distance_unit", distance_unit)
     await set_app_setting(db, "temp_unit", temp_unit)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "settings/partials/unit_settings.html",
         {"settings": settings, "saved": True},
     )
+    # Unit changes affect every page — force a full client-side refresh so
+    # cached partials (Fuel tab, Costs page, charts) re-render in new units.
+    response.headers["HX-Refresh"] = "true"
+    return response
 
 
 @router.post("/settings/timezone", response_class=HTMLResponse)
@@ -2016,8 +2020,11 @@ async def update_developer_mode(
     await set_app_setting(db, "developer_mode", "true" if enabled else "false")
     dev_mode_module.set_enabled(enabled)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "settings/partials/developer_settings.html",
         {"settings": settings, "saved": True},
     )
+    # Toggling developer mode adds/removes nav items — force full refresh.
+    response.headers["HX-Refresh"] = "true"
+    return response
