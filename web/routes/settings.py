@@ -375,11 +375,15 @@ async def activate_vehicle_route(
 ):
     await set_active_vehicle(db, vehicle_id)
     veh_ctx = await _vehicle_management_context(db)
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "settings/partials/vehicle_management.html",
         veh_ctx,
     )
+    # Active vehicle drives sidebar/header indicator and per-vehicle data on
+    # other pages — refresh so they pick up the new selection.
+    response.headers["HX-Refresh"] = "true"
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -1972,11 +1976,14 @@ async def update_timezone_setting(
     """Save the user's preferred display timezone."""
     await set_app_setting(db, "user_timezone", user_timezone)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "settings/partials/timezone_settings.html",
         {"settings": settings, "saved": True},
     )
+    # Timezone affects every timestamp on every page — full refresh.
+    response.headers["HX-Refresh"] = "true"
+    return response
 
 
 @router.post("/settings/toggles", response_class=HTMLResponse)
