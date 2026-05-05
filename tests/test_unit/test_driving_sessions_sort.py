@@ -83,9 +83,12 @@ def _render_full_index(sort_by="date", sort_dir="desc"):
     env.filters["cvt_temp"] = lambda v, u: v
     env.filters["cvt_eff"] = lambda v, u: v
     env.filters["localtime"] = lambda v, tz, fmt="%Y-%m-%d": str(v)
-    # Stub url_for so {% extends 'base.html' %} doesn't blow up.
+    # Stub FastAPI/template globals so {% extends 'base.html' %} doesn't blow up.
     env.globals["url_for"] = lambda *a, **kw: ""
     env.globals["request"] = type("R", (), {"url": type("U", (), {"path": "/driving/sessions"})()})()
+    env.globals["developer_mode"] = lambda: False
+    env.globals["demo_mode"] = lambda: False
+    env.globals["app_version"] = lambda: "test"
     tpl = env.get_template("driving/sessions/index.html")
     return tpl.render(
         trips=[],

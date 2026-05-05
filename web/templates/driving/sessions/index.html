@@ -22,33 +22,6 @@
       {% include "partials/filter_bar.html" %}
     {% endwith %}
 
-    <!-- Sort controls -->
-    <div class="flex items-center gap-2 mb-4">
-        <span class="text-base-content/60 text-sm">Sort by:</span>
-        <div class="join">
-            {% set sort_options = [("date", "Date"), ("distance", "Distance"), ("efficiency", "Efficiency"), ("temperature", "Temp"), ("score", "Score")] %}
-            {% for value, label in sort_options %}
-            <button type="button"
-                onclick="setTripSort('{{ value }}')"
-                class="join-item btn btn-sm {% if sort_by == value %}btn-primary{% else %}btn-ghost{% endif %}"
-                data-sort-btn="{{ value }}"
-            >{{ label }}</button>
-            {% endfor %}
-        </div>
-        <button type="button"
-            onclick="toggleSortDir()"
-            class="btn btn-ghost btn-sm btn-square"
-            title="Toggle sort direction"
-            id="sort-dir-btn"
-        >
-            {% if sort_dir == 'asc' %}
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
-            {% else %}
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
-            {% endif %}
-        </button>
-    </div>
-
     <!-- Drawer wrapper for trip detail panel -->
     <div class="drawer drawer-end">
         <input id="trip-drawer" type="checkbox" class="drawer-toggle" />
@@ -109,30 +82,6 @@
 <div id="toast-container" class="fixed top-4 right-4 z-[70] space-y-2"></div>
 
 <script>
-// Hidden inputs for sort state (inside filter-form)
-(function() {
-    var form = document.getElementById('filter-form');
-    if (!form) return;
-
-    // Add sort hidden inputs if not present
-    if (!form.querySelector('[name="sort"]')) {
-        var sortInput = document.createElement('input');
-        sortInput.type = 'hidden';
-        sortInput.name = 'sort';
-        sortInput.id = 'trip_sort_input';
-        sortInput.value = '{{ sort_by }}';
-        form.appendChild(sortInput);
-    }
-    if (!form.querySelector('[name="dir"]')) {
-        var dirInput = document.createElement('input');
-        dirInput.type = 'hidden';
-        dirInput.name = 'dir';
-        dirInput.id = 'trip_dir_input';
-        dirInput.value = '{{ sort_dir }}';
-        form.appendChild(dirInput);
-    }
-})();
-
 // Auto-open drawer when HTMX loads content into it
 document.body.addEventListener('htmx:afterSettle', function(evt) {
     if (evt.target.id === 'trip-drawer-body') {
@@ -140,7 +89,7 @@ document.body.addEventListener('htmx:afterSettle', function(evt) {
     }
 });
 
-// Phase 26: Escape key closes the Trips drawer when it is open
+// Escape key closes the Trips drawer when it is open
 document.addEventListener('keydown', function(e) {
     if (e.key !== 'Escape') return;
     var drawer = document.getElementById('trip-drawer');
@@ -148,32 +97,6 @@ document.addEventListener('keydown', function(e) {
         drawer.checked = false;
     }
 });
-
-function setTripSort(value) {
-    document.getElementById('trip_sort_input').value = value;
-    // Reset to page 1
-    var pageInput = document.getElementById('page_input');
-    if (pageInput) pageInput.value = '1';
-    // Update button states
-    document.querySelectorAll('[data-sort-btn]').forEach(function(btn) {
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-ghost');
-    });
-    var activeBtn = document.querySelector('[data-sort-btn="' + value + '"]');
-    if (activeBtn) {
-        activeBtn.classList.remove('btn-ghost');
-        activeBtn.classList.add('btn-primary');
-    }
-    htmx.trigger(document.body, 'filterChanged');
-}
-
-function toggleSortDir() {
-    var dirInput = document.getElementById('trip_dir_input');
-    dirInput.value = dirInput.value === 'asc' ? 'desc' : 'asc';
-    var pageInput = document.getElementById('page_input');
-    if (pageInput) pageInput.value = '1';
-    htmx.trigger(document.body, 'filterChanged');
-}
 
 function showToast(message, type) {
     var container = document.getElementById('toast-container');

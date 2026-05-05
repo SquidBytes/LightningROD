@@ -46,14 +46,19 @@ async def trips(
     request: Request,
     db: AsyncSession = Depends(get_db),
     range: str | None = "30d",
-    sort: str | None = "date",
-    dir: str | None = "desc",
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+    sort: str | None = None,
+    dir: str | None = None,
     page: int = 1,
     hx_request: Annotated[str | None, Header()] = None,
 ):
     time_range = range or "30d"
-    sort_by = sort or "date"
-    sort_dir = dir or "desc"
+    # Accept the new sort_by/sort_dir form fields; fall back to the legacy
+    # sort/dir aliases so deep-linked URLs from before the column-header
+    # switch keep working.
+    sort_by = sort_by or sort or "date"
+    sort_dir = sort_dir or dir or "desc"
 
     # Vehicle scoping
     active_device_id = await get_active_device_id(db)
