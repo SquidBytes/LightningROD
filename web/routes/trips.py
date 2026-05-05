@@ -196,6 +196,7 @@ async def trip_environment_chart(
         vehicle_df,
         temp_factor_f=(unit_ctx["temp_unit"] == "us"),
         temp_label=unit_ctx["units"]["temp_label"],
+        trip=trip,
     )
     if not chart_html:
         return HTMLResponse(
@@ -228,6 +229,7 @@ async def trip_drive_chart(
         distance_factor=distance_factor,
         range_label=unit_ctx["units"]["range_label"],
         speed_label=unit_ctx["units"]["speed_label"],
+        trip=trip,
     )
     if not chart_html:
         return HTMLResponse(
