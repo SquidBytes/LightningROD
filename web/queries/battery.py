@@ -114,6 +114,9 @@ async def query_soc_timeline(
             )
             .where(EVBatteryStatus.hv_battery_soc.isnot(None))
             .group_by(bucket_col)
+            # SOC ordering regression lock: ASC keeps the most-recent reading
+            # on the right edge of the chart. Do not flip without coordinating
+            # the chart-builder hover/legend logic.
             .order_by(bucket_col)
         )
         if time_filter is not None:
@@ -132,7 +135,8 @@ async def query_soc_timeline(
             for row in result.all()
         ]
 
-    # Fetch all rows for smaller datasets
+    # Fetch all rows for smaller datasets. SOC ordering regression lock:
+    # ASC order keeps the most-recent reading on the right edge of the chart.
     stmt = select(
         EVBatteryStatus.recorded_at,
         EVBatteryStatus.hv_battery_soc,
@@ -479,65 +483,6 @@ async def query_degradation_by_mileage(
             "recorded_at": row["latest_ts"],
         }
         for _, row in merged.iterrows()
-    ]
-
-
-async def query_lv_battery_timeline(
-    db: AsyncSession,
-    time_range: str = "7d",
-    device_id: str | None = None,
-) -> list[dict]:
-    """Query 12v battery voltage and level timeline with adaptive downsampling.
-
-    Returns list of dicts: {recorded_at, voltage, level}.
-    """
-    stmt = (
-        select(
-            EVBatteryStatus.recorded_at,
-            EVBatteryStatus.lv_battery_voltage,
-            EVBatteryStatus.lv_battery_level,
-        )
-        .where(EVBatteryStatus.lv_battery_voltage.isnot(None))
-        .order_by(EVBatteryStatus.recorded_at)
-    )
-
-    time_filter = build_battery_time_filter(time_range)
-    if time_filter is not None:
-        stmt = stmt.where(time_filter)
-    if device_id:
-        stmt = stmt.where(EVBatteryStatus.device_id == device_id)
-
-    result = await db.execute(stmt)
-    rows = result.all()
-
-    if not rows:
-        return []
-
-    df = pd.DataFrame(rows, columns=["recorded_at", "voltage", "level"])
-
-    # Adaptive downsampling matching SOC timeline thresholds
-    if len(df) > 800:
-        df = df.set_index("recorded_at")
-        if len(df) > 5000:
-            bucket = "2h"
-        elif len(df) > 2000:
-            bucket = "1h"
-        else:
-            bucket = "30min"
-        df = (
-            df.resample(bucket)
-            .agg({"voltage": "mean", "level": "mean"})
-            .dropna(subset=["voltage"])
-            .reset_index()
-        )
-
-    return [
-        {
-            "recorded_at": row["recorded_at"],
-            "voltage": float(row["voltage"]) if pd.notna(row["voltage"]) else None,
-            "level": float(row["level"]) if pd.notna(row["level"]) else None,
-        }
-        for _, row in df.iterrows()
     ]
 
 
@@ -1105,65 +1050,6 @@ def build_degradation_chart(
         yaxis=dict(title="Battery Capacity (kWh)"),
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        hovermode="x unified",
-        hoverlabel=_HOVER_LABEL,
-    )
-
-    return _wrap_chart(
-        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
-    )
-
-
-def build_lv_battery_chart(data: list[dict], user_tz: str | None = None) -> str:
-    """Build 12v battery voltage-over-time line chart.
-
-    ``user_tz`` is an IANA timezone for hover-tooltip formatting; falls back
-    to UTC when None/unset.
-    Returns HTML string. Empty string if no data.
-    """
-    if not data:
-        return ""
-
-    pio.templates.default = "plotly_dark"
-    fig = go.Figure()
-
-    timestamps = [row["recorded_at"] for row in data]
-    voltages = [row.get("voltage") for row in data]
-
-    # Build hover text with level info
-    hover_texts = []
-    for row in data:
-        ts = row["recorded_at"]
-        ts_str = format_user_local(ts, user_tz, "%b %d, %Y %H:%M")
-        parts = [f"<b>{ts_str}</b>"]
-        v = row.get("voltage")
-        if v is not None:
-            parts.append(f"Voltage: {v:.2f}V")
-        lvl = row.get("level")
-        if lvl is not None:
-            parts.append(f"Level: {lvl:.0f}%")
-        hover_texts.append("<br>".join(parts))
-
-    fig.add_trace(
-        go.Scatter(
-            x=timestamps,
-            y=voltages,
-            mode="lines",
-            name="12V Voltage",
-            line=dict(color="#a78bfa", width=2),
-            hovertext=hover_texts,
-            hoverinfo="text",
-        )
-    )
-
-    fig.update_layout(
-        height=250,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#e5e7eb",
-        margin=dict(l=20, r=20, t=20, b=20),
-        yaxis=dict(title="Voltage (V)"),
-        showlegend=False,
         hovermode="x unified",
         hoverlabel=_HOVER_LABEL,
     )

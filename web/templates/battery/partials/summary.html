@@ -163,20 +163,6 @@
     </div>
 </div>
 
-<!-- 12V Battery Voltage Trend -->
-<div class="card bg-base-200 mb-4">
-    <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">12V Battery Voltage</h3>
-        <div hx-get="/battery?section=lv_battery&range={{ active_range }}"
-             hx-trigger="revealed"
-             hx-swap="innerHTML">
-            <div class="flex justify-center py-8">
-                <span class="loading loading-spinner loading-md text-base-content/30"></span>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Click-to-drill: SOC timeline click selects session in charge curve picker -->
 {% if soc_chart and sessions_list %}
 <script>

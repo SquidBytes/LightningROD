@@ -13,14 +13,12 @@ from web.dependencies import get_db
 from web.queries.battery import (
     build_charge_curve_chart,
     build_degradation_chart,
-    build_lv_battery_chart,
     build_soc_timeline_chart,
     detect_charging_regions,
     load_reference_charge_curve,
     query_average_charge_curve,
     query_charge_curve,
     query_degradation_by_mileage,
-    query_lv_battery_timeline,
     query_recent_sessions_for_picker,
     query_soc_timeline,
 )
@@ -97,13 +95,6 @@ async def battery(
             if chart:
                 return HTMLResponse(chart)
         return HTMLResponse('<p class="text-base-content/40 text-sm py-8 text-center">No charging sessions in this time range.</p>')
-
-    if section == "lv_battery":
-        lv_data = await query_lv_battery_timeline(db, time_range=time_range, device_id=active_device_id)
-        chart = build_lv_battery_chart(lv_data, user_tz=user_tz)
-        if chart:
-            return HTMLResponse(chart)
-        return HTMLResponse('<p class="text-base-content/40 text-sm py-8 text-center">No 12V battery data available.</p>')
 
     # Full page or HTMX filter change: compute only SOC timeline + summary cards
     all_vehicles = await get_all_vehicles(db)
@@ -224,7 +215,6 @@ async def battery(
         "soc_chart": soc_chart,
         "degradation_chart": None,
         "charge_curve_chart": None,
-        "lv_chart": None,
         "ref_curve_name": ref_curve_data["name"] if ref_curve_data else None,
         "summary": summary,
         "sessions_list": recent_sessions,
