@@ -101,11 +101,16 @@ async def test_unique_trip_id_constraint_blocks_duplicate(db_session):
 
 
 def _create_legacy_table(sync_conn) -> None:
-    """Create ev_trip_metrics in its pre-p34 shape (no odometer cols, no UNIQUE)."""
+    """Create ev_trip_metrics in its pre-p34 shape (no odometer cols, no UNIQUE).
+
+    trip_id is CHAR(32) on SQLite — that is what SQLAlchemy's Uuid(as_uuid=True)
+    type produces (32-char hex, no dashes), and matches what the live schema
+    contains.
+    """
     sync_conn.execute(sa.text("""
         CREATE TABLE ev_trip_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            trip_id BLOB NOT NULL,
+            trip_id CHAR(32) NOT NULL,
             device_id VARCHAR NOT NULL,
             start_time TIMESTAMP,
             end_time TIMESTAMP,
@@ -159,7 +164,7 @@ async def test_consolidation_merges_three_duplicate_rows():
             # Row 1: events-canonical (has temps, no scores)
             _insert_row(
                 sync,
-                trip_id=uuid.uuid4().bytes,
+                trip_id=uuid.uuid4().hex,
                 device_id="TESTVIN1",
                 end_time=end_t,
                 distance=24.9,
@@ -173,7 +178,7 @@ async def test_consolidation_merges_three_duplicate_rows():
             # Row 2: elveh-canonical (has scores + regen, no temps)
             _insert_row(
                 sync,
-                trip_id=uuid.uuid4().bytes,
+                trip_id=uuid.uuid4().hex,
                 device_id="TESTVIN1",
                 end_time=end_t + timedelta(seconds=30),  # 30s drift, same group
                 distance=24.91,  # rounding drift
@@ -188,7 +193,7 @@ async def test_consolidation_merges_three_duplicate_rows():
             # Row 3: third partial duplicate (mostly empty)
             _insert_row(
                 sync,
-                trip_id=uuid.uuid4().bytes,
+                trip_id=uuid.uuid4().hex,
                 device_id="TESTVIN1",
                 end_time=end_t + timedelta(seconds=15),
                 distance=24.9,
@@ -234,7 +239,7 @@ async def test_consolidation_merges_three_duplicate_rows():
 
     # Survivor's trip_id is deterministic uuid5(NS, "legacy|device|end_time_iso")
     # (whichever survivor was kept, its end_time + device_id determine the new id)
-    survivor_id = uuid.UUID(bytes=row.trip_id) if isinstance(row.trip_id, bytes) else uuid.UUID(row.trip_id)
+    survivor_id = uuid.UUID(row.trip_id)
     # The survivor's end_time may be any of the three; recompute from the row.
     end_iso = _coerce_datetime(row.end_time).isoformat()
     expected = uuid.uuid5(
@@ -256,7 +261,7 @@ async def test_consolidation_preserves_non_duplicates():
         def _seed(sync):
             _insert_row(
                 sync,
-                trip_id=uuid.uuid4().bytes,
+                trip_id=uuid.uuid4().hex,
                 device_id="VEH_A",
                 end_time=end_t,
                 distance=10.0,
@@ -265,7 +270,7 @@ async def test_consolidation_preserves_non_duplicates():
             )
             _insert_row(
                 sync,
-                trip_id=uuid.uuid4().bytes,
+                trip_id=uuid.uuid4().hex,
                 device_id="VEH_B",
                 end_time=end_t,
                 distance=10.0,
@@ -288,7 +293,7 @@ async def test_consolidation_preserves_non_duplicates():
     assert len(rows) == 2
 
     for row in rows:
-        survivor_id = uuid.UUID(bytes=row.trip_id) if isinstance(row.trip_id, bytes) else uuid.UUID(row.trip_id)
+        survivor_id = uuid.UUID(row.trip_id)
         end_iso = _coerce_datetime(row.end_time).isoformat()
         expected = uuid.uuid5(
             LIGHTNINGROD_TRIP_NAMESPACE,
@@ -297,3 +302,54 @@ async def test_consolidation_preserves_non_duplicates():
         assert survivor_id == expected, (
             f"Non-duplicate row for {row.device_id} did not get deterministic id"
         )
+
+
+@pytest.mark.asyncio
+async def test_rewritten_trip_ids_are_orm_readable_on_sqlite():
+    """Regression-lock: after rewrite_trip_ids_to_legacy_form, the column must
+    still round-trip through SQLAlchemy's Uuid result processor.
+
+    The earlier bug: _bind_uuid_value bound raw 16-byte UUIDs on SQLite, but
+    SQLA's Uuid(as_uuid=True) type stores hex strings (CHAR(32)). The column
+    became unreadable through the ORM, breaking any page that selected from
+    ev_trip_metrics.
+    """
+    from db.models.base import Base
+    from db.models.trip_metrics import EVTripMetrics
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    end_t = datetime(2026, 4, 28, 14, 30, tzinfo=UTC)
+
+    async with engine.begin() as conn:
+        # Build the table from the live ORM mapping (matches production schema).
+        await conn.run_sync(Base.metadata.create_all)
+
+        def _seed(sync):
+            _insert_row(
+                sync,
+                trip_id=uuid.uuid4().hex,
+                device_id="VEH_X",
+                end_time=end_t,
+                distance=10.0,
+                energy_consumed=3.0,
+                is_complete=1,
+            )
+
+        await conn.run_sync(_seed)
+        await conn.run_sync(rewrite_trip_ids_to_legacy_form)
+
+    # Read back through the ORM — this is the exact path /driving/sessions takes.
+    async with engine.begin() as conn:
+        rows = (await conn.execute(sa.select(EVTripMetrics))).all()
+
+    await engine.dispose()
+
+    assert len(rows) == 1
+    # The Uuid result_processor must have produced a real uuid.UUID, not raised.
+    trip_id = rows[0].trip_id
+    assert isinstance(trip_id, uuid.UUID), (
+        f"Expected uuid.UUID, got {type(trip_id).__name__}: {trip_id!r}"
+    )
+    end_iso = _coerce_datetime(end_t).isoformat()
+    expected = uuid.uuid5(LIGHTNINGROD_TRIP_NAMESPACE, f"legacy|VEH_X|{end_iso}")
+    assert trip_id == expected

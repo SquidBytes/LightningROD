@@ -247,13 +247,15 @@ def consolidate_trip_groups(sync_conn) -> None:
 def _bind_uuid_value(sync_conn, new_id: uuid.UUID) -> Any:
     """Adapt a uuid.UUID to the dialect-native binding shape.
 
-    SQLAlchemy's Uuid type stores UUIDs as 16 raw bytes on SQLite and as the
-    native UUID type on PostgreSQL. Raw `sa.text(...)` bind params bypass the
-    typed-column dispatch, so we mirror the same shape manually here.
+    SQLAlchemy's Uuid(as_uuid=True) type stores UUIDs as a 32-character hex
+    string (CHAR(32)) on SQLite and as the native UUID type on PostgreSQL.
+    Raw `sa.text(...)` bind params bypass the typed-column dispatch, so we
+    mirror the same shape manually here — anything else (e.g. raw bytes on
+    SQLite) makes the column unreadable through the ORM result processor.
     """
     dialect_name = sync_conn.dialect.name
     if dialect_name == "sqlite":
-        return new_id.bytes
+        return new_id.hex
     return new_id  # asyncpg / psycopg2 accept uuid.UUID directly
 
 
