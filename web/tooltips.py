@@ -54,33 +54,19 @@ TOOLTIPS: dict[str, str] = {
         "Total kWh delivered across every session counted in this cost total."
     ),
     # --- battery (/battery) ---
-    "battery_degradation": (
-        "Estimated battery health as current capacity divided by the vehicle's rated pack capacity."
-    ),
-    "battery_pack_capacity": (
-        "Gross usable kWh the battery currently reports, compared against its factory-rated capacity."
-    ),
-    "battery_range": (
-        "Latest driving range the vehicle reports, compared against its original rated range."
-    ),
-    "battery_12v": (
-        "Voltage of the low-voltage accessory battery; healthy range is typically 12.4 to 12.8 volts."
-    ),
-    "battery_soc": (
-        "Battery state of charge over time; click a charging region to see its charge curve."
-    ),
-    "battery_charge_curve": (
-        "Power delivered over time for the selected session, showing the vehicle's charging taper shape."
-    ),
-    "battery_degradation_trend": (
-        "How gross pack capacity trends as odometer miles accumulate, using reported capacity snapshots."
-    ),
-    "battery_pack_temp": (
-        "Current battery pack temperature reported by the vehicle."
-    ),
-    "battery_temp_over_time": (
-        "Battery and outside air temperature over time, with charging sessions shown as shaded regions."
-    ),
+    "battery_degradation": "Pack health vs factory capacity.",
+    "battery_pack_capacity": "Gross kWh the pack currently reports.",
+    "battery_range": "Latest range vs original rated range.",
+    "battery_12v": "12V accessory battery voltage.",
+    "battery_soc": "State of charge with charging regions shaded.",
+    "battery_charge_curve": "Power delivered over the selected charging session.",
+    "battery_degradation_trend": "Capacity trend as miles accumulate.",
+    "battery_pack_temp": "Latest pack temperature.",
+    "battery_temp_over_time": "Battery vs outside-air temp over time.",
+    "battery_telemetry": "Latest HV-pack readings with 7-day trend.",
+    "battery_voltage": "HV-pack voltage.",
+    "battery_amperage": "HV-pack current draw (negative = charging).",
+    "battery_power": "HV-pack power (negative = charging).",
     # --- driving_sessions (/driving/sessions) ---
     "driving_sessions_total_trips": (
         "Count of trips recorded in the selected date range."

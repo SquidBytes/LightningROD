@@ -1,8 +1,8 @@
 <!-- Summary Cards -->
-<div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
 
-    <!-- Est. Degradation (radial gauge) -->
-    <div class="card bg-base-200">
+    <!-- Est. Degradation + Pack Capacity (combined) -->
+    <div class="card bg-base-200 lg:col-span-1">
         <div class="card-body items-center text-center">
             <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2 flex items-center gap-1 justify-center">
                 <span>Est. Degradation</span>
@@ -16,36 +16,18 @@
                      role="progressbar">
                     {{ "%.0f"|format(summary.health_pct) }}%
                 </div>
-                <p class="text-xs text-base-content/40 mt-1">Estimated from capacity data</p>
-            {% else %}
-                <p class="text-2xl font-semibold text-base-content/30">--</p>
-                <p class="text-xs text-base-content/30 mt-1">Requires capacity data</p>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Pack Capacity (gross - matches FordPass maximumBatteryCapacity) -->
-    <div class="card bg-base-200">
-        <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
-                <span>Pack Capacity</span>
-                <span class="cursor-help tooltip tooltip-bottom"
-                      data-tip="{{ tooltips.battery_pack_capacity }}"
-                      aria-label="{{ tooltips.battery_pack_capacity }}">ⓘ</span>
-            </p>
-            {% if summary.current_capacity is not none %}
-                <p class="text-2xl font-bold">{{ "%.1f"|format(summary.current_capacity) }} <span class="text-base font-normal text-base-content/60">kWh</span></p>
-                <p class="text-sm text-base-content/60 mt-1">
-                    vs {{ "%.1f"|format(summary.rated_capacity) }} kWh new
-                    {% if summary.capacity_delta is not none %}
-                        {% if summary.capacity_delta < 0 %}
-                            <span class="text-error">({{ "%.1f"|format(summary.capacity_delta) }} kWh)</span>
-                        {% else %}
-                            <span class="text-success">(+{{ "%.1f"|format(summary.capacity_delta) }} kWh)</span>
+                {% if summary.current_capacity is not none %}
+                    <p class="text-sm text-base-content/70 mt-2">
+                        {{ "%.1f"|format(summary.current_capacity) }} / {{ "%.1f"|format(summary.rated_capacity) }} kWh
+                        {% if summary.capacity_delta is not none %}
+                            {% if summary.capacity_delta < 0 %}
+                                <span class="text-error">({{ "%.1f"|format(summary.capacity_delta) }})</span>
+                            {% else %}
+                                <span class="text-success">(+{{ "%.1f"|format(summary.capacity_delta) }})</span>
+                            {% endif %}
                         {% endif %}
-                    {% endif %}
-                </p>
-                <p class="text-xs text-base-content/40 mt-1">Gross pack kWh as reported by the vehicle</p>
+                    </p>
+                {% endif %}
             {% else %}
                 <p class="text-2xl font-semibold text-base-content/30">--</p>
                 <p class="text-xs text-base-content/30 mt-1">Requires capacity data</p>
@@ -53,22 +35,47 @@
         </div>
     </div>
 
-    <!-- Battery Temp -->
-    <div class="card bg-base-200">
+    <!-- HV Pack Telemetry — 4-metric grid with sparklines + freshness -->
+    <div class="card bg-base-200 lg:col-span-2">
         <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
-                <span>Battery Temp</span>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-3 flex items-center gap-1">
+                <span>HV Pack Telemetry</span>
                 <span class="cursor-help tooltip tooltip-bottom"
-                      data-tip="{{ tooltips.battery_pack_temp }}"
-                      aria-label="{{ tooltips.battery_pack_temp }}">ⓘ</span>
+                      data-tip="{{ tooltips.battery_telemetry }}"
+                      aria-label="{{ tooltips.battery_telemetry }}">ⓘ</span>
             </p>
-            {% if summary.battery_temp is not none %}
-                <p class="text-2xl font-bold">{{ "%.0f"|format(summary.battery_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}</p>
-                <p class="text-xs text-base-content/40 mt-1">Current pack temperature</p>
-            {% else %}
-                <p class="text-2xl font-semibold text-base-content/30">--</p>
-                <p class="text-xs text-base-content/30 mt-1">No temperature data available</p>
-            {% endif %}
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {% set _slug_map = {
+                    'hv_battery_temperature': 'battery_pack_temp',
+                    'hv_battery_voltage':     'battery_voltage',
+                    'hv_battery_amperage':    'battery_amperage',
+                    'hv_battery_kw':          'battery_power',
+                } %}
+                {% for key, m in telemetry.items() %}
+                <div>
+                    <p class="text-[0.65rem] uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                        <span>{{ m.label }}</span>
+                        <span class="cursor-help tooltip tooltip-bottom"
+                              data-tip="{{ tooltips[_slug_map[key]] }}"
+                              aria-label="{{ tooltips[_slug_map[key]] }}">ⓘ</span>
+                    </p>
+                    {% if m.value is not none %}
+                        <p class="text-xl font-bold leading-tight">
+                            {{ m.fmt.format(m.value) }}<span class="text-sm font-normal text-base-content/60 ml-0.5">{{ m.unit }}</span>
+                        </p>
+                        {% if m.sparkline %}{{ m.sparkline | safe }}{% endif %}
+                        {% if m.recorded_at %}
+                            <p class="text-[0.65rem] text-base-content/40 mt-1">
+                                {{ m.recorded_at|localtime(user_tz|default('UTC'), "%b %-d %H:%M") }}
+                            </p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-xl font-semibold text-base-content/30">—</p>
+                        <p class="text-[0.65rem] text-base-content/30 mt-1">No recent data</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
         </div>
     </div>
 

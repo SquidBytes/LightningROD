@@ -425,6 +425,64 @@ async def query_outside_temp_timeline(
     ]
 
 
+_TELEMETRY_FIELDS: tuple[str, ...] = (
+    "hv_battery_temperature",
+    "hv_battery_voltage",
+    "hv_battery_amperage",
+    "hv_battery_kw",
+)
+
+
+async def query_battery_telemetry(
+    db: AsyncSession,
+    device_id: str | None = None,
+    days: int = 7,
+) -> dict:
+    """Latest value + recent sparkline series for HV-pack telemetry fields.
+
+    Returns a dict shaped:
+        {
+            "latest": {
+                "<field>": {"value": float, "recorded_at": datetime} | None,
+                ...
+            },
+            "series": {
+                "<field>": [{"recorded_at": dt, "value": float}, ...],
+                ...
+            },
+        }
+
+    A field's `latest` is None when no row in `days` carried a non-null reading.
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+
+    cols = [getattr(EVBatteryStatus, name) for name in _TELEMETRY_FIELDS]
+    stmt = (
+        select(EVBatteryStatus.recorded_at, *cols)
+        .where(EVBatteryStatus.recorded_at >= cutoff)
+        .order_by(EVBatteryStatus.recorded_at)
+    )
+    if device_id:
+        stmt = stmt.where(EVBatteryStatus.device_id == device_id)
+
+    rows = (await db.execute(stmt)).all()
+
+    series: dict[str, list[dict]] = {f: [] for f in _TELEMETRY_FIELDS}
+    latest: dict[str, dict | None] = {f: None for f in _TELEMETRY_FIELDS}
+
+    for row in rows:
+        ts = row.recorded_at
+        for field in _TELEMETRY_FIELDS:
+            value = getattr(row, field)
+            if value is None:
+                continue
+            v = float(value)
+            series[field].append({"recorded_at": ts, "value": v})
+            latest[field] = {"value": v, "recorded_at": ts}
+
+    return {"latest": latest, "series": series}
+
+
 async def query_recent_sessions_for_picker(
     db: AsyncSession,
     device_id: str | None = None,
@@ -593,7 +651,7 @@ async def query_degradation_by_mileage(
         odo_df,
         left_on="latest_ts",
         right_on="recorded_at",
-        tolerance=pd.Timedelta("4h"),
+        tolerance=timedelta(hours=4),
         direction="nearest",
     )
 
@@ -871,6 +929,60 @@ def build_battery_temp_chart(
 
     return _wrap_chart(
         fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+_SPARKLINE_CONFIG = {"displayModeBar": False, "staticPlot": True, "displaylogo": False}
+
+
+def build_metric_sparkline(
+    series: list[dict],
+    color: str = "#47A8E5",
+    height: int = 32,
+    transform=None,
+) -> str | None:
+    """Tiny inline sparkline for a single battery telemetry metric.
+
+    Renders a chrome-less line trace with no axes, hover, or modebar — designed
+    to sit under a numeric headline value at ~32px tall.
+
+    Args:
+        series: list of {"recorded_at", "value"} from query_battery_telemetry.
+        color: line color (hex).
+        height: pixel height of the chart.
+        transform: optional callable mapping each raw value (already a float)
+            to its displayed value, e.g. C-to-F conversion.
+
+    Returns Plotly HTML, or None when series has fewer than 2 points (a single
+    point can't draw a line).
+    """
+    if not series or len(series) < 2:
+        return None
+
+    pio.templates.default = "plotly_dark"
+    xs = [pt["recorded_at"] for pt in series]
+    ys = [transform(pt["value"]) if transform else pt["value"] for pt in series]
+
+    fig = go.Figure(
+        go.Scatter(
+            x=xs,
+            y=ys,
+            mode="lines",
+            line=dict(color=color, width=1.5),
+            hoverinfo="skip",
+        )
+    )
+    fig.update_layout(
+        height=height,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0, r=0, t=2, b=2),
+        xaxis=dict(visible=False, fixedrange=True),
+        yaxis=dict(visible=False, fixedrange=True),
+        showlegend=False,
+    )
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_SPARKLINE_CONFIG)
     )
 
 

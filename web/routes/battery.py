@@ -14,10 +14,12 @@ from web.queries.battery import (
     build_battery_temp_chart,
     build_charge_curve_chart,
     build_degradation_chart,
+    build_metric_sparkline,
     build_soc_timeline_chart,
     detect_charging_regions,
     load_reference_charge_curve,
     query_average_charge_curve,
+    query_battery_telemetry,
     query_battery_temp_timeline,
     query_charge_curve,
     query_degradation_by_mileage,
@@ -234,20 +236,87 @@ async def battery(
             summary["lv_voltage"] = float(lv_latest.lv_battery_voltage)
             summary["lv_level"] = float(lv_latest.lv_battery_level) if lv_latest.lv_battery_level else None
 
-    # Latest battery pack temperature for the headline card. Uses a separate
-    # query to avoid inheriting hv_battery_capacity.isnot(None) from latest_stmt
-    # — elvehcharging-only writes (no capacity) would otherwise be excluded.
-    batt_temp_stmt = (
-        select(EVBatteryStatus.hv_battery_temperature)
-        .where(EVBatteryStatus.hv_battery_temperature.isnot(None))
-        .order_by(EVBatteryStatus.recorded_at.desc())
-        .limit(1)
-    )
-    if active_device_id:
-        batt_temp_stmt = batt_temp_stmt.where(EVBatteryStatus.device_id == active_device_id)
-    batt_temp_row = (await db.execute(batt_temp_stmt)).first()
-    if batt_temp_row and batt_temp_row.hv_battery_temperature is not None:
-        summary["battery_temp"] = float(batt_temp_row.hv_battery_temperature)
+    # HV-pack telemetry block (Temp / Voltage / Amperage / kW) drives the
+    # headline mega-card. One query fans out into latest values + 7d sparklines
+    # for each metric.
+    telemetry_raw = await query_battery_telemetry(db, device_id=active_device_id, days=7)
+    telemetry_latest = telemetry_raw["latest"]
+    series = telemetry_raw["series"]
+
+    # Latest battery_temp also feeds back into `summary` for any legacy reader.
+    temp_latest = telemetry_latest.get("hv_battery_temperature")
+    if temp_latest is not None:
+        summary["battery_temp"] = temp_latest["value"]
+
+    # Convert pack-temp sparkline values into the user's display unit so the
+    # mini-line tracks the headline value (which is converted in-template).
+    def _c_to_user_unit(c: float) -> float:
+        return (c * 9.0 / 5.0) + 32.0 if unit_ctx["temp_unit"] == "us" else c
+
+    telemetry = {
+        "hv_battery_temperature": {
+            "label": "Pack Temp",
+            "value": (
+                _c_to_user_unit(temp_latest["value"]) if temp_latest else None
+            ),
+            "unit": unit_ctx["units"]["temp_label"],
+            "recorded_at": temp_latest["recorded_at"] if temp_latest else None,
+            "sparkline": build_metric_sparkline(
+                series["hv_battery_temperature"],
+                color="#fbbf24",
+                transform=_c_to_user_unit,
+            ),
+            "fmt": "{:.0f}",
+        },
+        "hv_battery_voltage": {
+            "label": "HV Voltage",
+            "value": (
+                telemetry_latest["hv_battery_voltage"]["value"]
+                if telemetry_latest["hv_battery_voltage"] else None
+            ),
+            "unit": "V",
+            "recorded_at": (
+                telemetry_latest["hv_battery_voltage"]["recorded_at"]
+                if telemetry_latest["hv_battery_voltage"] else None
+            ),
+            "sparkline": build_metric_sparkline(
+                series["hv_battery_voltage"], color="#a78bfa"
+            ),
+            "fmt": "{:.0f}",
+        },
+        "hv_battery_amperage": {
+            "label": "HV Amperage",
+            "value": (
+                telemetry_latest["hv_battery_amperage"]["value"]
+                if telemetry_latest["hv_battery_amperage"] else None
+            ),
+            "unit": "A",
+            "recorded_at": (
+                telemetry_latest["hv_battery_amperage"]["recorded_at"]
+                if telemetry_latest["hv_battery_amperage"] else None
+            ),
+            "sparkline": build_metric_sparkline(
+                series["hv_battery_amperage"], color="#34d399"
+            ),
+            "fmt": "{:+.1f}",
+        },
+        "hv_battery_kw": {
+            "label": "HV Power",
+            "value": (
+                telemetry_latest["hv_battery_kw"]["value"]
+                if telemetry_latest["hv_battery_kw"] else None
+            ),
+            "unit": "kW",
+            "recorded_at": (
+                telemetry_latest["hv_battery_kw"]["recorded_at"]
+                if telemetry_latest["hv_battery_kw"] else None
+            ),
+            "sparkline": build_metric_sparkline(
+                series["hv_battery_kw"], color="#47A8E5"
+            ),
+            "fmt": "{:+.1f}",
+        },
+    }
 
     # Degradation, charge curve, and 12v charts are NOT computed here --
     # they are lazy-loaded via HTMX hx-trigger="revealed"
@@ -258,6 +327,7 @@ async def battery(
         "charge_curve_chart": None,
         "ref_curve_name": ref_curve_data["name"] if ref_curve_data else None,
         "summary": summary,
+        "telemetry": telemetry,
         "sessions_list": recent_sessions,
         "session_time_windows": session_time_windows,
         "active_range": time_range,
