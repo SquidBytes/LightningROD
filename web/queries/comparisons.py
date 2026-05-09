@@ -1,10 +1,11 @@
-"""Query helpers for comparisons."""
+"""EV-to-ICE comparison calculations and chart helpers."""
 
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
+from db.models.ice_vehicle import IceVehicle
 from db.models.reference import GasPriceHistory
 from db.models.vehicle import EVVehicle
 from web.queries.costs import (
@@ -12,7 +13,7 @@ from web.queries.costs import (
     compute_session_cost,
     get_networks_by_name,
 )
-from web.unit_system import GAL_PER_LITER, MI_PER_KM
+from web.unit_system import GAL_PER_LITER, LITER_PER_GAL, MI_PER_KM
 
 
 def _find_gas_price(
@@ -21,14 +22,19 @@ def _find_gas_price(
     """Find the gas price entry for (year, month) or nearest earlier month.
 
     Prices must be sorted by (year DESC, month DESC).
-    Returns (station_price, average_price). Defaults to (3.50, 3.50) if no entries.
+    Returns (station_price, average_price) in $/gal. Defaults to (3.50, 3.50)
+    if no entries. Storage is $/L (post-Phase-33 migration); the multiply by
+    LITER_PER_GAL converts at the read boundary so the gallons-based cost
+    math at the call site stays unchanged.
     """
     for entry in prices:
         if (entry.year, entry.month) <= (year, month):
             station = float(entry.station_price) if entry.station_price is not None else None
             average = float(entry.average_price) if entry.average_price is not None else None
-            return (station, average)
-    # No entry found — use default
+            station_per_gal = station * LITER_PER_GAL if station is not None else None
+            average_per_gal = average * LITER_PER_GAL if average is not None else None
+            return (station_per_gal, average_per_gal)
+    # No entry found — use default ($/gal)
     return (3.50, 3.50)
 
 
@@ -53,6 +59,7 @@ async def query_gas_comparison(
     db: AsyncSession,
     device_id: str | None = None,
     vehicle: EVVehicle | None = None,
+    ice_vehicle: IceVehicle | None = None,
     time_range: str = "all",
 ) -> dict:
     """Compare actual EV charging cost to equivalent gasoline cost.
@@ -60,9 +67,9 @@ async def query_gas_comparison(
     Uses date-aware gas price lookup with two price tracks (station and average)
     to produce a savings range. Supports dual calculation paths:
     - Primary (distance-based): when session.distance_added > 0 and
-      vehicle.ice_fuel_efficiency set
+      ice_vehicle.fuel_efficiency_l_per_100km set
     - Fallback (percentage-based): when session.energy_kwh > 0 and vehicle has
-      battery_capacity_kwh and ice_fuel_tank_capacity
+      battery_capacity_kwh and ice_vehicle.tank_capacity_l
 
     All stored values are metric (km, L/100km, liters). Gas prices from external
     US sources are in $/gallon, so we convert distance to miles and efficiency
@@ -73,20 +80,21 @@ async def query_gas_comparison(
     - savings_low, savings_high, savings_pct_low, savings_pct_high
     - session_count, total_distance (km), ice_label, has_range
     """
-    # If no vehicle or no ICE config, return empty result
-    if vehicle is None or not vehicle.ice_fuel_efficiency:
+    # If no ICE vehicle configured, return empty result
+    if ice_vehicle is None or not ice_vehicle.fuel_efficiency_l_per_100km:
         return _empty_gas_result()
 
     # L/100km stored in DB -> convert to MPG for gas math
-    ice_l_per_100km = float(vehicle.ice_fuel_efficiency)
+    ice_l_per_100km = float(ice_vehicle.fuel_efficiency_l_per_100km)
     ice_mpg = 235.215 / ice_l_per_100km if ice_l_per_100km > 0 else None
     # The fallback gas-equivalent path below divides `session.energy_kwh` by
     # pack capacity to get a "percent of tank" figure. That only makes sense
     # against USABLE capacity — energy_kwh is what the charger actually put
-    # into the pack, not the gross cell headroom.
-    battery_kwh = float(vehicle.battery_capacity_kwh) if vehicle.battery_capacity_kwh else None
+    # into the pack, not the gross cell headroom. Battery is an EV concept;
+    # source remains the EVVehicle row.
+    battery_kwh = float(vehicle.battery_capacity_kwh) if vehicle and vehicle.battery_capacity_kwh else None
     # Tank capacity stored in liters -> convert to gallons for gas math
-    fuel_tank_liters = float(vehicle.ice_fuel_tank_capacity) if vehicle.ice_fuel_tank_capacity else None
+    fuel_tank_liters = float(ice_vehicle.tank_capacity_l) if ice_vehicle.tank_capacity_l else None
     fuel_tank_gal = fuel_tank_liters * GAL_PER_LITER if fuel_tank_liters else None
 
     # Load all gas price history into memory (small table)
@@ -193,7 +201,7 @@ async def query_gas_comparison(
         "savings_pct_high": savings_pct_high,
         "session_count": session_count,
         "total_distance": total_distance_km,  # km, metric base
-        "ice_label": vehicle.ice_label,
+        "ice_label": ice_vehicle.label,
         "has_range": has_range,
     }
 

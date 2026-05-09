@@ -1,4 +1,4 @@
-"""Route handlers for battery."""
+"""Battery analytics page and HTMX chart endpoints."""
 
 from typing import Annotated
 
@@ -11,16 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.battery_status import EVBatteryStatus
 from web.dependencies import get_db
 from web.queries.battery import (
+    build_battery_temp_chart,
     build_charge_curve_chart,
     build_degradation_chart,
-    build_lv_battery_chart,
+    build_metric_sparkline,
     build_soc_timeline_chart,
     detect_charging_regions,
     load_reference_charge_curve,
     query_average_charge_curve,
+    query_battery_telemetry,
+    query_battery_temp_timeline,
     query_charge_curve,
     query_degradation_by_mileage,
-    query_lv_battery_timeline,
+    query_outside_temp_timeline,
     query_recent_sessions_for_picker,
     query_soc_timeline,
 )
@@ -86,17 +89,55 @@ async def battery(
         avg_curve = await query_average_charge_curve(db, device_id=active_device_id)
         if session:
             curve_data = await query_charge_curve(db, session_id=session)
-            chart = build_charge_curve_chart(curve_data, ref_curve=ref_curve, avg_curve=avg_curve)
+            sess_obj = curve_data.get("session") if isinstance(curve_data, dict) else None
+            charge_type = getattr(sess_obj, "charge_type", None) if sess_obj is not None else None
+            chart = build_charge_curve_chart(
+                curve_data,
+                ref_curve=ref_curve,
+                avg_curve=avg_curve,
+                charge_type=charge_type,
+            )
             if chart:
                 return HTMLResponse(chart)
-        return HTMLResponse('<p class="text-base-content/40 text-sm py-8 text-center">Select a session to view its charge curve.</p>')
+        return HTMLResponse('<p class="text-base-content/40 text-sm py-8 text-center">No charging sessions in this time range.</p>')
 
-    if section == "lv_battery":
-        lv_data = await query_lv_battery_timeline(db, time_range=time_range, device_id=active_device_id)
-        chart = build_lv_battery_chart(lv_data, user_tz=user_tz)
-        if chart:
-            return HTMLResponse(chart)
-        return HTMLResponse('<p class="text-base-content/40 text-sm py-8 text-center">No 12V battery data available.</p>')
+    if section == "battery_temp":
+        temp_data = await query_battery_temp_timeline(
+            db, time_range=time_range, device_id=active_device_id,
+        )
+        outside_data = await query_outside_temp_timeline(
+            db, time_range=time_range, device_id=active_device_id,
+        )
+        # Reuse the SOC charging regions for the overlay. detect_charging_regions
+        # returns (start_idx, end_idx) tuples against soc_data_for_regions; the
+        # chart builder needs timestamp tuples so x-coords align with the temp
+        # series (independent cadences).
+        soc_data_for_regions = await query_soc_timeline(
+            db, time_range=time_range, device_id=active_device_id,
+        )
+        charging_regions_idx = detect_charging_regions(soc_data_for_regions)
+        n = len(soc_data_for_regions)
+        charging_regions_ts = [
+            (
+                soc_data_for_regions[s]["recorded_at"],
+                soc_data_for_regions[e]["recorded_at"],
+            )
+            for s, e in charging_regions_idx
+            if s < n and e < n
+        ]
+        temp_chart = build_battery_temp_chart(
+            temp_data,
+            outside_data,
+            charging_regions_ts,
+            temp_factor_f=(unit_ctx["temp_unit"] == "us"),
+            temp_label=unit_ctx["units"]["temp_label"],
+        )
+        if temp_chart:
+            return HTMLResponse(temp_chart)
+        return HTMLResponse(
+            '<p class="text-base-content/40 text-sm py-8 text-center">'
+            'No temperature data available for this time range.</p>'
+        )
 
     # Full page or HTMX filter change: compute only SOC timeline + summary cards
     all_vehicles = await get_all_vehicles(db)
@@ -126,6 +167,11 @@ async def battery(
             })
 
     active_session = session
+    if not active_session and recent_sessions:
+        # Default to the most recent session of any charge_type when no
+        # ?session= override is present. recent_sessions is ordered by
+        # session_start_utc DESC inside query_recent_sessions_for_picker.
+        active_session = recent_sessions[0]["id"]
 
     # Summary card values (health-focused)
     summary = {
@@ -138,6 +184,7 @@ async def battery(
         "range_delta": None,
         "lv_voltage": None,
         "lv_level": None,
+        "battery_temp": None,
     }
 
     # Latest battery status for summary
@@ -189,6 +236,85 @@ async def battery(
             summary["lv_voltage"] = float(lv_latest.lv_battery_voltage)
             summary["lv_level"] = float(lv_latest.lv_battery_level) if lv_latest.lv_battery_level else None
 
+    # HV-pack telemetry block (Temp / Voltage / Amperage / kW) drives the
+    # headline mega-card. One query fans out into latest values + 7d sparklines
+    # for each metric.
+    telemetry_raw = await query_battery_telemetry(db, device_id=active_device_id, days=7)
+    telemetry_latest = telemetry_raw["latest"]
+    series = telemetry_raw["series"]
+
+    # Latest battery_temp also feeds back into `summary` for any legacy reader.
+    temp_latest = telemetry_latest.get("hv_battery_temperature")
+    if temp_latest is not None:
+        summary["battery_temp"] = temp_latest["value"]
+
+    # Convert pack-temp sparkline values into the user's display unit so the
+    # mini-line tracks the headline value (which is converted in-template).
+    def _c_to_user_unit(c: float) -> float:
+        return (c * 9.0 / 5.0) + 32.0 if unit_ctx["temp_unit"] == "us" else c
+
+    def _val(field):
+        latest = telemetry_latest.get(field)
+        return latest["value"] if latest else None
+
+    def _ts(field):
+        latest = telemetry_latest.get(field)
+        return latest["recorded_at"] if latest else None
+
+    telemetry = {
+        "hv_battery_temperature": {
+            "label": "Pack Temp",
+            "value": _c_to_user_unit(_val("hv_battery_temperature")) if _val("hv_battery_temperature") is not None else None,
+            "unit": unit_ctx["units"]["temp_label"],
+            "recorded_at": _ts("hv_battery_temperature"),
+            "sparkline": build_metric_sparkline(
+                series["hv_battery_temperature"],
+                color="#fbbf24",
+                transform=_c_to_user_unit,
+                zero_line=True,
+            ),
+            "fmt": "{:.0f}",
+        },
+        "hv_battery_voltage": {
+            "label": "Voltage",
+            "value": _val("hv_battery_voltage"),
+            "unit": "V",
+            "recorded_at": _ts("hv_battery_voltage"),
+            "sparkline": build_metric_sparkline(
+                series["hv_battery_voltage"], color="#a78bfa",
+            ),
+            "fmt": "{:.0f}",
+        },
+        "hv_battery_amperage": {
+            "label": "Amperage",
+            "value": _val("hv_battery_amperage"),
+            "unit": "A",
+            "recorded_at": _ts("hv_battery_amperage"),
+            "sparkline": build_metric_sparkline(
+                series["hv_battery_amperage"], color="#34d399",
+                zero_line=True,
+            ),
+            "fmt": "{:+.1f}",
+        },
+        "hv_battery_kw": {
+            "label": "Power",
+            "value": _val("hv_battery_kw"),
+            "unit": "kW",
+            "recorded_at": _ts("hv_battery_kw"),
+            "sparkline": build_metric_sparkline(
+                series["hv_battery_kw"], color="#47A8E5",
+                zero_line=True,
+            ),
+            "fmt": "{:+.1f}",
+        },
+    }
+    # All four metrics ingest from the same EVBatteryStatus row, so any one
+    # populated recorded_at represents the whole card. Pick the freshest.
+    telemetry_latest_at = max(
+        (m["recorded_at"] for m in telemetry.values() if m["recorded_at"]),
+        default=None,
+    )
+
     # Degradation, charge curve, and 12v charts are NOT computed here --
     # they are lazy-loaded via HTMX hx-trigger="revealed"
     context = {
@@ -196,9 +322,10 @@ async def battery(
         "soc_chart": soc_chart,
         "degradation_chart": None,
         "charge_curve_chart": None,
-        "lv_chart": None,
         "ref_curve_name": ref_curve_data["name"] if ref_curve_data else None,
         "summary": summary,
+        "telemetry": telemetry,
+        "telemetry_latest_at": telemetry_latest_at,
         "sessions_list": recent_sessions,
         "session_time_windows": session_time_windows,
         "active_range": time_range,

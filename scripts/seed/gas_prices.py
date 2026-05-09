@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import GasPriceHistory, GasPriceReading
+from web.unit_system import to_metric_price_per_volume
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,13 @@ async def seed(db: AsyncSession) -> int:
         if key in existing_history:
             continue
 
-        station_price = round(rng.uniform(2.85, 4.20), 2)
-        average_price = round(station_price + rng.uniform(-0.15, 0.15), 2)
+        # Pick user-friendly $/gal numbers, then convert to $/L for canonical
+        # storage. Without this conversion the read path multiplies again at
+        # display, producing 3.78× drift.
+        station_price_gal = round(rng.uniform(2.85, 4.20), 2)
+        average_price_gal = round(station_price_gal + rng.uniform(-0.15, 0.15), 2)
+        station_price = to_metric_price_per_volume(station_price_gal, "us")
+        average_price = to_metric_price_per_volume(average_price_gal, "us")
 
         db.add(
             GasPriceHistory(
@@ -82,7 +88,7 @@ async def seed(db: AsyncSession) -> int:
         db.add(
             GasPriceReading(
                 entity_id=_ENTITY_ID,
-                price=round(rng.uniform(2.85, 4.20), 2),
+                price=to_metric_price_per_volume(round(rng.uniform(2.85, 4.20), 2), "us"),
                 recorded_at=datetime(
                     day.year, day.month, day.day, 12, 0, 0, tzinfo=UTC
                 ),

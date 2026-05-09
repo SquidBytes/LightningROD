@@ -1,4 +1,4 @@
-"""Database models for location."""
+"""Vehicle GPS location snapshot model."""
 
 from datetime import datetime
 
@@ -12,10 +12,7 @@ TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVLocation(Base):
-    """GPS location time series (13 columns).
-
-    Source: 002_create_target_tables.sql, ev_location table.
-    """
+    """GPS location point captured for a vehicle at a timestamp."""
 
     __tablename__ = "ev_location"
 

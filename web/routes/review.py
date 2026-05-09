@@ -1,4 +1,4 @@
-"""Route handlers for review."""
+"""Review queue routes for locations, networks, and duplicate sessions."""
 
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request

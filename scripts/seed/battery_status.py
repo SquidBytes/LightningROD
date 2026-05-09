@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import random
 from datetime import UTC, datetime, timedelta
+from typing import SupportsFloat, cast
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +32,10 @@ _RATED_CAPACITY_KWH = 108.0
 _TOTAL_DEGRADATION_KWH = 3.0
 
 logger = logging.getLogger(__name__)
+
+
+def _as_seed_float(value: object) -> float:
+    return float(cast(SupportsFloat, value))
 
 
 def _soc_to_range(soc: float) -> float:
@@ -193,7 +198,9 @@ async def seed(db: AsyncSession) -> int:
         soc_mid = (soc_start + soc_end) / 2.0
 
         # Temperatures: start cool, peak at midpoint, end slightly cooler
-        temp_start: float = float(seeder.value_for("ev_battery_status", "hv_battery_temperature"))
+        temp_start = _as_seed_float(
+            seeder.value_for("ev_battery_status", "hv_battery_temperature")
+        )
         temp_mid: float = round(temp_start + rng.uniform(2.0, 6.0), 1)
         temp_end: float = round(temp_start + rng.uniform(1.0, 3.0), 1)
 
@@ -207,9 +214,12 @@ async def seed(db: AsyncSession) -> int:
     # Walk the full timeline and add a reading every ~12 hours where there
     # is no nearby session anchor.
     if sessions:
-        timeline_start: datetime = sessions[0].session_start_utc  # type: ignore[assignment]
-        timeline_end: datetime = sessions[-1].session_end_utc or sessions[-1].session_start_utc  # type: ignore[assignment]
-        if timeline_start.tzinfo is None:
+        timeline_start = sessions[0].session_start_utc
+        timeline_end = sessions[-1].session_end_utc or sessions[-1].session_start_utc
+        if timeline_start is None or timeline_end is None:
+            timeline_start = None
+            timeline_end = None
+        elif timeline_start.tzinfo is None:
             timeline_start = timeline_start.replace(tzinfo=UTC)
         if timeline_end is not None and timeline_end.tzinfo is None:
             timeline_end = timeline_end.replace(tzinfo=UTC)
@@ -222,18 +232,23 @@ async def seed(db: AsyncSession) -> int:
                     t = ts if ts.tzinfo else ts.replace(tzinfo=UTC)
                     anchor_timestamps.append(t)
 
+        if timeline_start is None or timeline_end is None:
+            anchor_timestamps = []
+
         interval = timedelta(hours=12)
         # Jitter each tick by up to ±30 minutes for realism
-        cursor = timeline_start + timedelta(hours=rng.uniform(1, 6))
+        cursor = (timeline_start or datetime.now(UTC)) + timedelta(hours=rng.uniform(1, 6))
         between_count = 0
 
-        while cursor < timeline_end and between_count < 32:
+        while timeline_end is not None and cursor < timeline_end and between_count < 32:
             # Skip if within 30 minutes of any anchor
             too_close = any(abs((cursor - a).total_seconds()) < 1800 for a in anchor_timestamps)
             if not too_close:
                 # Parked state: gently drifting SoC (self-discharge ~0.3% per 12 hr)
                 soc_parked = round(rng.uniform(20.0, 90.0), 1)
-                temp_parked: float = float(seeder.value_for("ev_battery_status", "hv_battery_temperature"))
+                temp_parked = _as_seed_float(
+                    seeder.value_for("ev_battery_status", "hv_battery_temperature")
+                )
                 # ~25% of between-session readings simulate a driving moment so
                 # motor_* columns aren't entirely zero in the demo dataset.
                 driving = rng.random() < 0.25

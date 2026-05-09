@@ -96,12 +96,12 @@ async def driving_performance(
         min_points=temp_min_points, mode="trend",
     )
 
-    # Regen recovery — kWh bars (main) + regen-% line (mini).
+    # Regen recovery — kWh bars only. The mini "Regen %" card was retired
+    # because the project displays regen as range or kWh, never as a percent.
     regen_trips = await query_regen_per_trip(
         db, time_range=time_range, device_id=active_device_id
     )
     regen_kwh_chart = build_regen_recovery_chart(regen_trips, mode="kwh")
-    regen_pct_chart = build_regen_recovery_chart(regen_trips, mode="pct")
 
     # Total energy regenerated (kWh) — sum of per-trip derived regen_kwh.
     # Lives alongside total_regen (range) so the two headline cards show
@@ -118,7 +118,6 @@ async def driving_performance(
         "temperature_scatter_chart": temperature_scatter_chart,
         "temperature_trend_chart": temperature_trend_chart,
         "regen_kwh_chart": regen_kwh_chart,
-        "regen_pct_chart": regen_pct_chart,
         "active_range": time_range,
         "active_page": "driving_performance",
         "page_title": "Driving Analytics",

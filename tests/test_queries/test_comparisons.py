@@ -6,8 +6,10 @@ Tests gas comparison and network rate comparison calculations.
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import delete
 
 from db.models.charging_session import EVChargingSession
+from db.models.ice_vehicle import IceVehicle
 from db.models.reference import EVChargingNetwork, GasPriceHistory
 from db.models.vehicle import EVVehicle
 from web.queries.comparisons import query_gas_comparison, query_network_comparison
@@ -16,12 +18,16 @@ pytestmark = [pytest.mark.query, pytest.mark.db]
 
 
 async def _setup_comparison_data(db):
-    """Create vehicle, network, gas prices, and sessions with known values.
+    """Create vehicle, ICE comparison row, network, gas prices, and sessions.
 
-    Storage is metric: distance in km, ice_fuel_efficiency in L/100km,
-    ice_fuel_tank_capacity in liters. Test values are chosen so the internal
-    imperial-equivalent math (25 MPG, 15 gal tank, 360 mi total) remains clean.
+    Storage is metric: distance in km, fuel_efficiency_l_per_100km, tank_capacity_l.
+    Test values are chosen so the internal imperial-equivalent math (25 MPG,
+    15 gal tank, 360 mi total) remains clean.
     """
+    # Clear ice_vehicles to keep partial unique index on is_default predictable
+    # across tests when SQLite + savepoint isolation leaks committed rows.
+    await db.execute(delete(IceVehicle))
+    await db.flush()
     # 25 MPG -> L/100km: 235.215 / 25 = 9.4086
     # 15 gal -> liters: 15 * 3.78541 = 56.78115
     vehicle = EVVehicle(
@@ -33,11 +39,17 @@ async def _setup_comparison_data(db):
         trim_level="Premium",
         battery_option="Extended Range",
         battery_capacity_kwh=91.0,
-        ice_fuel_efficiency=9.4086,     # L/100km (25 MPG equivalent)
-        ice_fuel_tank_capacity=56.78115,  # liters (15 gal equivalent)
-        ice_label="2024 Ford Explorer 25 MPG",
     )
     db.add(vehicle)
+    await db.flush()
+
+    ice = IceVehicle(
+        label="2024 Ford Explorer 25 MPG",
+        fuel_efficiency_l_per_100km=9.4086,
+        tank_capacity_l=56.78115,
+        is_default=True,
+    )
+    db.add(ice)
     await db.flush()
 
     net = EVChargingNetwork(
@@ -49,12 +61,15 @@ async def _setup_comparison_data(db):
     db.add(net)
     await db.flush()
 
-    # Gas price for June 2025 — station $4.00, average $4.20
+    # Gas price for June 2025 — station $4.00/gal, average $4.20/gal.
+    # Storage is metric ($/L); divide by LITER_PER_GAL to invert the read-side
+    # multiplication in comparisons._find_gas_price.
+    LITER_PER_GAL = 3.78541
     gas_price = GasPriceHistory(
         year=2025,
         month=6,
-        station_price=4.00,
-        average_price=4.20,
+        station_price=4.00 / LITER_PER_GAL,
+        average_price=4.20 / LITER_PER_GAL,
         source="manual",
     )
     db.add(gas_price)
@@ -82,6 +97,7 @@ async def _setup_comparison_data(db):
 
     return {
         "vehicle": vehicle,
+        "ice": ice,
         "network": net,
         "sessions": sessions,
         "total_kwh": 120.0,
@@ -94,8 +110,11 @@ async def test_gas_comparison(db_session):
     db = db_session
     data = await _setup_comparison_data(db)
     vehicle = data["vehicle"]
+    ice = data["ice"]
 
-    result = await query_gas_comparison(db, vehicle=vehicle, time_range="all")
+    result = await query_gas_comparison(
+        db, vehicle=vehicle, ice_vehicle=ice, time_range="all"
+    )
 
     # EV costs: each session = kwh * 0.35 -> 14.00 + 10.50 + 17.50 = 42.00
     assert result["ev_total"] == pytest.approx(42.00, abs=0.01)
@@ -116,9 +135,11 @@ async def test_gas_comparison(db_session):
     assert result["ice_label"] == "2024 Ford Explorer 25 MPG"
 
 
-async def test_gas_comparison_no_vehicle(db_session):
-    """No vehicle -> returns zeros gracefully."""
-    result = await query_gas_comparison(db_session, vehicle=None, time_range="all")
+async def test_gas_comparison_no_ice_vehicle(db_session):
+    """No ICE vehicle -> returns zeros gracefully."""
+    result = await query_gas_comparison(
+        db_session, vehicle=None, ice_vehicle=None, time_range="all"
+    )
 
     assert result["ev_total"] == 0.0
     assert result["gas_total_low"] == 0.0
@@ -145,7 +166,9 @@ async def test_network_comparison(db_session):
 
 
 async def test_gas_comparison_empty(db_session):
-    """Vehicle with ICE config but no sessions -> returns zeros."""
+    """ICE vehicle configured but no sessions -> returns zeros."""
+    await db_session.execute(delete(IceVehicle))
+    await db_session.flush()
     vehicle = EVVehicle(
         device_id="EMPTY_VIN",
         display_name="Empty Vehicle",
@@ -153,13 +176,22 @@ async def test_gas_comparison_empty(db_session):
         make="Ford",
         model="Mustang Mach-E",
         battery_capacity_kwh=91.0,
-        ice_fuel_efficiency=9.4086,
-        ice_fuel_tank_capacity=56.78115,
     )
     db_session.add(vehicle)
     await db_session.flush()
 
-    result = await query_gas_comparison(db_session, vehicle=vehicle, time_range="all")
+    ice = IceVehicle(
+        label="Empty ICE",
+        fuel_efficiency_l_per_100km=9.4086,
+        tank_capacity_l=56.78115,
+        is_default=True,
+    )
+    db_session.add(ice)
+    await db_session.flush()
+
+    result = await query_gas_comparison(
+        db_session, vehicle=vehicle, ice_vehicle=ice, time_range="all"
+    )
 
     assert result["ev_total"] == 0.0
     assert result["gas_total_low"] == 0.0

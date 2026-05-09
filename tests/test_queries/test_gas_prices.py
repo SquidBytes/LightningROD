@@ -5,8 +5,9 @@ averaging, and deduped reading storage.
 from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy import select
 
-from db.models.reference import GasPriceReading
+from db.models.reference import GasPriceHistory, GasPriceReading
 from web.queries.gas_prices import (
     compute_monthly_averages,
     delete_gas_price,
@@ -32,6 +33,8 @@ async def test_upsert_gas_price_inserts_new_row(db_session):
     assert entry.id is not None
     assert entry.year == 2025
     assert entry.month == 6
+    assert entry.station_price is not None
+    assert entry.average_price is not None
     assert float(entry.station_price) == 4.00
     assert float(entry.average_price) == 4.20
 
@@ -44,6 +47,8 @@ async def test_upsert_gas_price_updates_existing_without_clobbering(db_session):
     updated = await upsert_gas_price(
         db_session, year=2025, month=7, station_price=4.30
     )
+    assert updated.station_price is not None
+    assert updated.average_price is not None
     assert float(updated.station_price) == 4.30
     assert float(updated.average_price) == 4.25  # preserved
 
@@ -175,3 +180,45 @@ async def test_compute_monthly_averages_filters_by_entity_id(db_session):
     )
     averages = await compute_monthly_averages(db_session, entity_id="sensor.nope")
     assert averages == {}
+
+
+# ---------------------------------------------------------------------------
+# UNIT-02 metric-storage stubs (Wave 0 scaffold — Plan 05 fills bodies)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.db
+async def test_gas_price_metric_storage_round_trip(db_session):
+    """UNIT-02: upsert_gas_price stores values verbatim (caller pre-converts to $/L).
+
+    Asserts upsert_gas_price(station_price=1.058) reads back as 1.058 —
+    the query layer does NOT secretly convert. Conversion responsibility
+    lives in the route handler / event handler.
+    """
+    await upsert_gas_price(
+        db_session, year=2025, month=6, station_price=1.058, average_price=1.110
+    )
+    result = await db_session.execute(
+        select(GasPriceHistory).where(
+            GasPriceHistory.year == 2025, GasPriceHistory.month == 6
+        )
+    )
+    row = result.scalar_one()
+    assert float(row.station_price) == pytest.approx(1.058, rel=1e-6)
+    assert float(row.average_price) == pytest.approx(1.110, rel=1e-6)
+
+
+@pytest.mark.db
+async def test_gas_price_history_returns_metric_values(db_session):
+    """UNIT-02: get_all_gas_prices returns raw metric ($/L) values; route handler does display conversion."""
+    await upsert_gas_price(
+        db_session, year=2025, month=4, station_price=1.057, average_price=1.110
+    )
+    rows = await get_all_gas_prices(db_session)
+    target = next((r for r in rows if r.year == 2025 and r.month == 4), None)
+    assert target is not None
+    assert target.station_price is not None
+    assert target.average_price is not None
+    # Query layer returns raw values verbatim — NO conversion.
+    assert float(target.station_price) == pytest.approx(1.057, rel=1e-6)
+    assert float(target.average_price) == pytest.approx(1.110, rel=1e-6)

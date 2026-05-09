@@ -44,7 +44,7 @@ from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle import EVVehicle
 from db.models.vehicle_status import EVVehicleStatus
 from scripts.seed.base import ContractDrivenSeeder, load_declared_contracts
-from web.services.units.contracts import FieldContract
+from web.services.units.contracts import FieldContract, SourceLocator, SourceLocatorKind
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ _IGNITION_PARKED = "off"
 
 EXPECTED_CONTRACTS: list[FieldContract] = [
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="odometer",
         source_unit="km",
         target_db_table=_TABLE,
@@ -78,7 +78,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes="Cumulative odometer reading (km). Monotonically increasing.",
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="vehicleSpeed",
         source_unit="km/h",
         target_db_table=_TABLE,
@@ -87,7 +87,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes="Instantaneous vehicle speed (km/h). Zero when parked.",
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="acceleratorPedalPosition",
         source_unit="%",
         target_db_table=_TABLE,
@@ -96,7 +96,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes="Accelerator pedal position (0–100%). Localized by ha-fordpass.",
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="brakeStatus",
         source_unit="str",
         target_db_table=_TABLE,
@@ -105,7 +105,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes='Brake pedal state: "applied" or "released".',
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="gearLeverPosition",
         source_unit="str",
         target_db_table=_TABLE,
@@ -114,7 +114,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes='Gear lever: "P" / "R" / "N" / "D".',
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="ignitionStatus",
         source_unit="str",
         target_db_table=_TABLE,
@@ -123,7 +123,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes='Ignition: "on" / "off" / "accessory".',
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="parkingBrakeStatus",
         source_unit="str",
         target_db_table=_TABLE,
@@ -132,7 +132,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes='Parking brake: "applied" / "released".',
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_outsidetemp",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_outsidetemp", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="ambientTemp",
         source_unit="degC",
         ha_unit_system_converted=True,
@@ -146,7 +146,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         ),
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_cabintemperature",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_cabintemperature", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="cabinTemperature",
         source_unit="degC",
         ha_unit_system_converted=True,
@@ -159,7 +159,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         ),
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="brakeTorque",
         source_unit="Nm",
         target_db_table=_TABLE,
@@ -168,7 +168,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes="Brake torque. SI passthrough; no localization in ha-fordpass.",
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="yawRate",
         source_unit="deg/s",
         target_db_table=_TABLE,
@@ -177,7 +177,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes="Yaw rate. Passthrough; no localization.",
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="acceleration",
         source_unit="m/s2",
         target_db_table=_TABLE,
@@ -189,7 +189,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
     # into the single JSONB ``tire_pressure`` column. Four contracts, one per
     # corner, share the same target column so the gap report shows all four.
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="tirePressure.frontLeft",
         source_unit="kPa",
         ha_unit_system_converted=True,
@@ -199,7 +199,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes="Front-left tire pressure; ha-fordpass localizes via units.pressure().",
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="tirePressure.frontRight",
         source_unit="kPa",
         ha_unit_system_converted=True,
@@ -209,7 +209,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes="Front-right tire pressure; ha-fordpass localizes via units.pressure().",
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="tirePressure.rearLeft",
         source_unit="kPa",
         ha_unit_system_converted=True,
@@ -219,7 +219,7 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
         notes="Rear-left tire pressure; ha-fordpass localizes via units.pressure().",
     ),
     FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="tirePressure.rearRight",
         source_unit="kPa",
         ha_unit_system_converted=True,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +12,20 @@ from db.models.reference import EVChargerStall, EVLocationLookup
 
 logger = logging.getLogger(__name__)
 
-_STALLS_SPEC = [
+
+class _StallSpec(TypedDict):
+    location_name: str
+    stall_label: str
+    charger_type: str
+    rated_kw: float
+    voltage: int
+    amperage: int | None
+    connector_type: str
+    notes: str
+    is_default: bool
+
+
+_STALLS_SPEC: list[_StallSpec] = [
     {
         "location_name": "Home",
         "stall_label": "Home L2",

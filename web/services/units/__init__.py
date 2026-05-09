@@ -1,2 +1,1 @@
-"""Package for web.services.units modules."""
-
+"""Unit contract, detection, and conversion helpers."""

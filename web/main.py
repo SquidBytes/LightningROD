@@ -1,10 +1,12 @@
-"""Module for main."""
+"""FastAPI application factory, routes, filters, and lifespan hooks."""
 
 import os
+from collections.abc import MutableMapping
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
@@ -89,13 +91,12 @@ async def lifespan(app: FastAPI):
         await seed_charger_templates(session)
         val = await get_app_setting(session, "developer_mode", "false")
         developer_mode.set_enabled(val == "true")
-    # Start HASS service (if configured)
-    from web.services.hass_client import start_hass_service
-    await start_hass_service()
+    # Start ingestion runtimes (one per enabled data_source_configs row)
+    from web.services.ingestion import supervisor
+    await supervisor.start_all()
     yield
-    # Shutdown: stop HASS service, dispose engine
-    from web.services.hass_client import hass_service
-    await hass_service.stop()
+    # Shutdown: stop runtimes, dispose engine
+    await supervisor.stop_all()
     await engine.dispose()
 
 
@@ -170,10 +171,11 @@ def create_app() -> FastAPI:
     for route_module in [dashboard, sessions, costs, performance, settings, csv_import, charging, review, battery, trips, driving_performance, admin_data_sources]:
         if hasattr(route_module, "templates"):
             env = route_module.templates.env
-            env.globals["tooltips"] = TOOLTIPS
-            env.globals["developer_mode"] = developer_mode.is_enabled
-            env.globals["app_version"] = APP_VERSION
-            env.globals["demo_mode"] = os.environ.get("DEMO_MODE", "").lower() == "true"
+            globals_map = cast(MutableMapping[str, Any], env.globals)
+            globals_map["tooltips"] = TOOLTIPS
+            globals_map["developer_mode"] = developer_mode.is_enabled
+            globals_map["app_version"] = APP_VERSION
+            globals_map["demo_mode"] = os.environ.get("DEMO_MODE", "").lower() == "true"
             env.filters["localtime"] = localtime_filter
             env.filters["cvt_dist"] = _cvt(convert_distance)
             env.filters["cvt_temp"] = _cvt(convert_temp)

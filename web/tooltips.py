@@ -75,6 +75,24 @@ TOOLTIPS: dict[str, str] = {
     "battery_degradation_trend": (
         "How gross pack capacity trends as odometer miles accumulate, using reported capacity snapshots."
     ),
+    "battery_temp_over_time": (
+        "Battery and outside air temperature over time, with charging sessions shown as shaded regions."
+    ),
+    "battery_telemetry": (
+        "Latest readings from the high-voltage pack with a 7-day trend line for each metric."
+    ),
+    "battery_pack_temp": (
+        "Battery pack temperature reported by the vehicle."
+    ),
+    "battery_voltage": (
+        "High-voltage pack voltage."
+    ),
+    "battery_amperage": (
+        "High-voltage pack current; the line at zero separates discharging (above) from charging (below)."
+    ),
+    "battery_power": (
+        "High-voltage pack power; the line at zero separates discharging (above) from charging (below)."
+    ),
     # --- driving_sessions (/driving/sessions) ---
     "driving_sessions_total_trips": (
         "Count of trips recorded in the selected date range."
@@ -87,6 +105,10 @@ TOOLTIPS: dict[str, str] = {
     ),
     "driving_sessions_total_energy": (
         "Sum of energy consumed across every trip in the selected date range."
+    ),
+    # --- settings/fuel ---
+    "fuel_price_trend": (
+        "Station and regional average fuel prices over time, in your configured units."
     ),
     # --- driving_performance (/driving/performance) ---
     "driving_performance_temp_scatter": (

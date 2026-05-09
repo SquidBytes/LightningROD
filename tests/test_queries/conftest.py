@@ -4,6 +4,7 @@ Each fixture creates KNOWN data with EXACT values for deterministic assertions.
 All fixtures return a dict with created objects and pre-computed expected values.
 """
 
+import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest_asyncio
@@ -375,6 +376,7 @@ async def trip_scenario(db_session):
     for i, td in enumerate(trip_data):
         end_time = BASE_DATE - timedelta(days=14 - i * 2)
         t = EVTripMetrics(
+            trip_id=uuid.uuid4(),
             device_id=DEVICE_ID,
             distance=td["distance"],
             duration=td["duration"],
@@ -525,6 +527,7 @@ async def trips_with_ambient_temp(db_session):
         distance = 40.0 + i * 8.0  # 40..112 km
         energy = 10.0 + i * 2.0  # 10..28 kWh
         t = EVTripMetrics(
+            trip_id=uuid.uuid4(),
             device_id=DEVICE_ID,
             distance=distance,
             duration=45.0,
@@ -558,6 +561,7 @@ async def trips_minimal_count(db_session):
     for i in range(3):
         end_time = now - timedelta(days=(3 - i))
         t = EVTripMetrics(
+            trip_id=uuid.uuid4(),
             device_id=DEVICE_ID,
             distance=50.0 + i * 10.0,
             duration=40.0,
@@ -598,6 +602,7 @@ async def trips_with_regen(db_session):
     for i, spec in enumerate(specs):
         end_time = now - timedelta(days=(3 - i))
         t = EVTripMetrics(
+            trip_id=uuid.uuid4(),
             device_id=DEVICE_ID,
             distance=spec["distance"],
             duration=60.0,

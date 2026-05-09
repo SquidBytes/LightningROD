@@ -1,4 +1,4 @@
-"""Query helpers for energy."""
+"""Energy and charging-performance aggregation helpers."""
 
 import statistics
 from datetime import UTC, datetime, timedelta

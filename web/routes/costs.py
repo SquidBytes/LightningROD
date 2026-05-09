@@ -1,4 +1,4 @@
-"""Route handlers for costs."""
+"""Charging-cost analytics routes."""
 
 from typing import Annotated
 
@@ -20,6 +20,7 @@ from web.queries.costs import (
     query_monthly_costs,
     query_subscription_savings,
 )
+from web.queries.ice_vehicles import get_default_ice_vehicle
 from web.queries.settings import (
     get_all_networks,
     get_app_settings_dict,
@@ -92,8 +93,13 @@ async def costs(
 
     if show_comparisons:
         if toggles.get("comparison_gas_enabled", "true") != "false":
+            default_ice = await get_default_ice_vehicle(db)
             gas_comparison = await query_gas_comparison(
-                db, device_id=active_device_id, vehicle=active_vehicle, time_range=range or "all"
+                db,
+                device_id=active_device_id,
+                vehicle=active_vehicle,
+                ice_vehicle=default_ice,
+                time_range=range or "all",
             )
 
         networks = all_networks

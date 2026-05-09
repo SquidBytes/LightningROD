@@ -61,7 +61,7 @@ def upgrade() -> None:
                 "found without an Alembic stamp matching p30_squashed_initial. "
                 "If this is an existing dev database, run: "
                 "uv run alembic stamp p30_squashed_initial "
-                "(see app-public/db/migrations/README.md). "
+                "(see db/migrations/README.md). "
                 "If this is a fresh database, drop it and re-run "
                 "alembic upgrade head."
             )

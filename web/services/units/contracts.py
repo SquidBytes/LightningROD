@@ -3,6 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
+
+
+class SourceLocatorKind(StrEnum):
+    """How a source locator's pattern string is interpreted by an adapter."""
+
+    HA_ENTITY_ID = "ha_entity_id"
+    # Reserved for future: HTTP_ENDPOINT = "http_endpoint", MQTT_TOPIC = "mqtt_topic"
+
+
+@dataclass(frozen=True)
+class SourceLocator:
+    """Typed locator for a contract's source — pattern + how to interpret it."""
+
+    pattern: str
+    kind: SourceLocatorKind
 
 
 @dataclass(frozen=True)
@@ -19,7 +35,7 @@ class FieldContract:
     energytransferlogentry, etc.).
     """
 
-    source_entity_pattern: str
+    source_locator: SourceLocator
     source_attribute: str
     source_unit: str
     target_db_table: str

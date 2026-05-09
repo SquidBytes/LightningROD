@@ -11,155 +11,113 @@
     hx-swap="outerHTML"
     hx-on::after-request="if(event.detail.successful) closeVehicleModal()"
 >
-    {# DaisyUI CSS-only radio tabs #}
-    <div role="tablist" class="tabs tabs-bordered mb-4">
-        <input type="radio" name="vehicle-tabs" role="tab" class="tab" aria-label="EV Details" checked />
-        <div role="tabpanel" class="tab-content pt-4">
-            {# Display Name (required) — full width #}
-            <label class="form-control mb-4">
-                <div class="label"><span class="label-text text-xs">Display Name *</span></div>
-                <input type="text" name="display_name" required
-                       value="{{ vehicle.display_name if vehicle else '' }}"
-                       placeholder="e.g. My Lightning"
-                       class="input input-sm input-bordered w-full">
-            </label>
+    {# Display Name (required) — full width #}
+    <label class="form-control mb-4">
+        <div class="label"><span class="label-text text-xs">Display Name *</span></div>
+        <input type="text" name="display_name" required
+               value="{{ vehicle.display_name if vehicle else '' }}"
+               placeholder="e.g. My Lightning"
+               class="input input-sm input-bordered w-full">
+    </label>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {# Make — combo-box with datalist #}
-                <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Make</span></div>
-                    <input type="text" name="make" id="vehicle-make"
-                           list="make-options"
-                           value="{{ vehicle.make or '' }}"
-                           placeholder="e.g. Ford"
-                           class="input input-sm input-bordered w-full"
-                           autocomplete="off">
-                    <datalist id="make-options"></datalist>
-                </label>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {# Make — combo-box with datalist #}
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">Make</span></div>
+            <input type="text" name="make" id="vehicle-make"
+                   list="make-options"
+                   value="{{ vehicle.make or '' }}"
+                   placeholder="e.g. Ford"
+                   class="input input-sm input-bordered w-full"
+                   autocomplete="off">
+            <datalist id="make-options"></datalist>
+        </label>
 
-                {# Model — combo-box with datalist #}
-                <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Model</span></div>
-                    <input type="text" name="model" id="vehicle-model"
-                           list="model-options"
-                           value="{{ vehicle.model or '' }}"
-                           placeholder="e.g. F-150 Lightning"
-                           class="input input-sm input-bordered w-full"
-                           autocomplete="off">
-                    <datalist id="model-options"></datalist>
-                </label>
+        {# Model — combo-box with datalist #}
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">Model</span></div>
+            <input type="text" name="model" id="vehicle-model"
+                   list="model-options"
+                   value="{{ vehicle.model or '' }}"
+                   placeholder="e.g. F-150 Lightning"
+                   class="input input-sm input-bordered w-full"
+                   autocomplete="off">
+            <datalist id="model-options"></datalist>
+        </label>
 
-                {# Trim Level — combo-box with datalist (e.g. Lariat, XLT, Premium) #}
-                <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Trim Level</span></div>
-                    <input type="text" name="trim_level" id="vehicle-trim-level"
-                           list="trim-level-options"
-                           value="{{ vehicle.trim_level or '' }}"
-                           placeholder="e.g. Lariat"
-                           class="input input-sm input-bordered w-full"
-                           autocomplete="off">
-                    <datalist id="trim-level-options"></datalist>
-                </label>
+        {# Trim Level — combo-box with datalist (e.g. Lariat, XLT, Premium) #}
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">Trim Level</span></div>
+            <input type="text" name="trim_level" id="vehicle-trim-level"
+                   list="trim-level-options"
+                   value="{{ vehicle.trim_level or '' }}"
+                   placeholder="e.g. Lariat"
+                   class="input input-sm input-bordered w-full"
+                   autocomplete="off">
+            <datalist id="trim-level-options"></datalist>
+        </label>
 
-                {# Battery Option — combo-box with datalist (e.g. Standard Range, Extended Range) #}
-                <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Battery Option</span></div>
-                    <input type="text" name="battery_option" id="vehicle-battery-option"
-                           list="battery-option-options"
-                           value="{{ vehicle.battery_option or '' }}"
-                           placeholder="e.g. Extended Range"
-                           class="input input-sm input-bordered w-full"
-                           autocomplete="off">
-                    <datalist id="battery-option-options"></datalist>
-                </label>
+        {# Battery Option — combo-box with datalist (e.g. Standard Range, Extended Range) #}
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">Battery Option</span></div>
+            <input type="text" name="battery_option" id="vehicle-battery-option"
+                   list="battery-option-options"
+                   value="{{ vehicle.battery_option or '' }}"
+                   placeholder="e.g. Extended Range"
+                   class="input input-sm input-bordered w-full"
+                   autocomplete="off">
+            <datalist id="battery-option-options"></datalist>
+        </label>
 
-                {# Year #}
-                <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Year</span></div>
-                    <input type="number" name="year" min="1990" max="2099"
-                           value="{{ vehicle.year or '' }}"
-                           placeholder="e.g. 2024"
-                           class="input input-sm input-bordered w-full">
-                </label>
+        {# Year #}
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">Year</span></div>
+            <input type="number" name="year" min="1990" max="2099"
+                   value="{{ vehicle.year or '' }}"
+                   placeholder="e.g. 2024"
+                   class="input input-sm input-bordered w-full">
+        </label>
 
-                {# Usable Battery Capacity kWh #}
-                <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Usable Capacity (kWh)</span></div>
-                    <input type="number" name="battery_capacity_kwh" id="vehicle-battery-kwh"
-                           step="0.1" min="0"
-                           value="{{ vehicle.battery_capacity_kwh or '' }}"
-                           placeholder="e.g. 98"
-                           class="input input-sm input-bordered w-full">
-                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Driver-facing capacity used for efficiency math.</span></div>
-                </label>
+        {# Usable Battery Capacity kWh #}
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">Usable Capacity (kWh)</span></div>
+            <input type="number" name="battery_capacity_kwh" id="vehicle-battery-kwh"
+                   step="0.1" min="0"
+                   value="{{ vehicle.battery_capacity_kwh or '' }}"
+                   placeholder="e.g. 98"
+                   class="input input-sm input-bordered w-full">
+            <div class="label"><span class="label-text-alt text-xs text-base-content/40">Driver-facing capacity used for efficiency math.</span></div>
+        </label>
 
-                {# Gross Battery Capacity kWh #}
-                <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Gross Pack Capacity (kWh)</span></div>
-                    <input type="number" name="battery_gross_capacity_kwh" id="vehicle-battery-gross-kwh"
-                           step="0.1" min="0"
-                           value="{{ vehicle.battery_gross_capacity_kwh or '' }}"
-                           placeholder="e.g. 108"
-                           class="input input-sm input-bordered w-full">
-                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Total pack kWh. Matches FordPass <code>maximumBatteryCapacity</code>; used for battery health math.</span></div>
-                </label>
+        {# Gross Battery Capacity kWh #}
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">Gross Pack Capacity (kWh)</span></div>
+            <input type="number" name="battery_gross_capacity_kwh" id="vehicle-battery-gross-kwh"
+                   step="0.1" min="0"
+                   value="{{ vehicle.battery_gross_capacity_kwh or '' }}"
+                   placeholder="e.g. 108"
+                   class="input input-sm input-bordered w-full">
+            <div class="label"><span class="label-text-alt text-xs text-base-content/40">Total pack kWh. Matches FordPass <code>maximumBatteryCapacity</code>; used for battery health math.</span></div>
+        </label>
 
-                {# VIN #}
-                <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">VIN</span></div>
-                    <input type="text" name="vin"
-                           value="{{ vehicle.vin or '' }}"
-                           placeholder="Optional"
-                           class="input input-sm input-bordered w-full">
-                </label>
+        {# VIN #}
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">VIN</span></div>
+            <input type="text" name="vin"
+                   value="{{ vehicle.vin or '' }}"
+                   placeholder="Optional"
+                   class="input input-sm input-bordered w-full">
+        </label>
 
-                {# Device ID — full width #}
-                <label class="form-control md:col-span-2">
-                    <div class="label"><span class="label-text text-xs">Device ID</span></div>
-                    <input type="text" name="device_id"
-                           value="{{ vehicle.device_id if vehicle else '' }}"
-                           placeholder="Auto-generated if blank"
-                           class="input input-sm input-bordered w-full">
-                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Used to link sensor data. Auto-generated for manual vehicles.</span></div>
-                </label>
-            </div>
-        </div>
-
-        <input type="radio" name="vehicle-tabs" role="tab" class="tab" aria-label="Gas Comparison" />
-        <div role="tabpanel" class="tab-content pt-4">
-            <p class="text-sm text-base-content/60 mb-4">Configure an ICE (gas) vehicle to compare costs against. These fields are used for gas savings calculations on the Costs page.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {# Fuel Economy (MPG or L/100km) #}
-                <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Combined {{ units.fuel_efficiency_label }}</span></div>
-                    <input type="number" name="ice_fuel_efficiency" step="0.1" min="0.1"
-                           value="{% if ice_fuel_efficiency_display is not none %}{{ '%.1f'|format(ice_fuel_efficiency_display) }}{% endif %}"
-                           placeholder="{% if distance_unit == 'us' %}e.g. 28{% else %}e.g. 8.4{% endif %}"
-                           class="input input-sm input-bordered w-full">
-                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">EPA combined fuel economy of the comparison vehicle.</span></div>
-                </label>
-
-                {# Fuel Tank Capacity (gal or L) #}
-                <label class="form-control">
-                    <div class="label"><span class="label-text text-xs">Fuel Tank Size ({{ units.fuel_volume_label }})</span></div>
-                    <input type="number" name="ice_fuel_tank_capacity" step="0.1" min="1"
-                           value="{% if ice_fuel_tank_capacity_display is not none %}{{ '%.1f'|format(ice_fuel_tank_capacity_display) }}{% endif %}"
-                           placeholder="{% if distance_unit == 'us' %}e.g. 14{% else %}e.g. 53{% endif %}"
-                           class="input input-sm input-bordered w-full">
-                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Used for percentage-based calculations when distance data is unavailable.</span></div>
-                </label>
-
-                {# ICE Vehicle Label #}
-                <label class="form-control md:col-span-2">
-                    <div class="label"><span class="label-text text-xs">ICE Vehicle Label</span></div>
-                    <input type="text" name="ice_label"
-                           value="{{ vehicle.ice_label or '' }}"
-                           placeholder="e.g. 2022 Honda Civic"
-                           class="input input-sm input-bordered w-full">
-                    <div class="label"><span class="label-text-alt text-xs text-base-content/40">Shown in comparison card header on Costs page. Falls back to "Gasoline" if blank.</span></div>
-                </label>
-            </div>
-        </div>
+        {# Device ID — full width #}
+        <label class="form-control md:col-span-2">
+            <div class="label"><span class="label-text text-xs">Device ID</span></div>
+            <input type="text" name="device_id"
+                   value="{{ vehicle.device_id if vehicle else '' }}"
+                   placeholder="Auto-generated if blank"
+                   class="input input-sm input-bordered w-full">
+            <div class="label"><span class="label-text-alt text-xs text-base-content/40">Used to link sensor data. Auto-generated for manual vehicles.</span></div>
+        </label>
     </div>
 
     {# Submit buttons #}

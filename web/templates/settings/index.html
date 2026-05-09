@@ -8,25 +8,9 @@
 
 {# Tab bar using DaisyUI CSS-only radio tabs with adjacent tab-content #}
 <div role="tablist" class="tabs tabs-bordered">
-    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Vehicles" {{ 'checked' if active_tab == 'vehicles' }} />
-    <div role="tabpanel" class="tab-content pt-6">
-        {% include "settings/partials/vehicle_management.html" %}
-    </div>
-
     <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="General" {{ 'checked' if active_tab == 'general' }} />
     <div role="tabpanel" class="tab-content pt-6">
         <div class="space-y-6">
-            <!-- Gas Comparison -->
-            <div class="card bg-base-200">
-                <div class="card-body">
-                    <h2 class="card-title text-base font-semibold">Gas Comparison</h2>
-                    <p class="text-base-content/60 text-sm -mt-1">Configure ICE vehicle comparison and gas price tracking.</p>
-                    <div id="gas-settings" class="mt-2">
-                        {% include "settings/partials/gas_settings.html" %}
-                    </div>
-                </div>
-            </div>
-
             <!-- Units -->
             <div class="card bg-base-200 max-w-lg">
                 <div class="card-body">
@@ -45,6 +29,17 @@
                     <p class="text-base-content/60 text-sm -mt-1">Set your local timezone for date and time display.</p>
                     <div id="timezone-settings" class="mt-2">
                         {% include "settings/partials/timezone_settings.html" %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Display Options -->
+            <div class="card bg-base-200 max-w-lg">
+                <div class="card-body">
+                    <h2 class="card-title text-base font-semibold">Display Options</h2>
+                    <p class="text-base-content/60 text-sm -mt-1">Toggle which comparison sections appear on the Costs page.</p>
+                    <div id="gas-settings" class="mt-2">
+                        {% include "settings/partials/gas_settings.html" %}
                     </div>
                 </div>
             </div>
@@ -88,20 +83,30 @@
         </div>
     </div>
 
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Vehicles" {{ 'checked' if active_tab == 'vehicles' }} />
+    <div role="tabpanel" class="tab-content pt-6">
+        {% include "settings/partials/vehicle_management.html" %}
+    </div>
+
     <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Networks" {{ 'checked' if active_tab == 'networks' }} />
     <div role="tabpanel" class="tab-content pt-6">
         {% include "settings/partials/network_management.html" %}
     </div>
 
-    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="CSV Import" {{ 'checked' if active_tab == 'import' }} />
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Fuel" {{ 'checked' if active_tab == 'fuel' }} />
+    <div role="tabpanel" class="tab-content pt-6">
+        {% include "settings/partials/fuel_tab.html" %}
+    </div>
+
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Import" {{ 'checked' if active_tab == 'import' }} />
     <div role="tabpanel" class="tab-content pt-6">
         {% include "settings/partials/import_tab.html" %}
     </div>
 
-    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Home Assistant" {{ 'checked' if active_tab == 'hass' }} />
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Data Sources" {{ 'checked' if active_tab == 'data_sources' }} />
     <div role="tabpanel" class="tab-content pt-6">
-        <div id="hass-settings-content"
-             hx-get="/settings/hass"
+        <div id="data-sources-tab-content"
+             hx-get="/settings/data-sources"
              hx-trigger="intersect once"
              hx-swap="innerHTML">
             <span class="loading loading-spinner loading-md"></span>
@@ -117,6 +122,21 @@
         </form>
         <div id="vehicle-modal-content">
             {# Modal content injected by openVehicleModal() #}
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+{# ICE Vehicle add/edit modal using DaisyUI dialog #}
+<dialog id="ice-vehicle-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">&#x2715;</button>
+        </form>
+        <div id="ice-vehicle-modal-content">
+            {# Modal content injected by openIceVehicleModal() #}
         </div>
     </div>
     <form method="dialog" class="modal-backdrop">
@@ -192,5 +212,31 @@ function openConvertModal(networkId) {
 
 // Listen for closeNetworkModal HX-Trigger event (fired by PUT on save)
 document.body.addEventListener('closeNetworkModal', closeNetworkModal);
+
+function openIceVehicleModal(iceId) {
+    if (iceId > 0) {
+        htmx.ajax('GET', '/settings/ice-vehicles/' + iceId + '/edit',
+            {target: '#ice-vehicle-modal-content', swap: 'innerHTML'});
+    } else {
+        htmx.ajax('GET', '/settings/ice-vehicles/new',
+            {target: '#ice-vehicle-modal-content', swap: 'innerHTML'});
+    }
+    document.getElementById('ice-vehicle-modal').showModal();
+}
+
+function closeIceVehicleModal() {
+    document.getElementById('ice-vehicle-modal').close();
+    document.getElementById('ice-vehicle-modal-content').innerHTML = '';
+}
+
+document.body.addEventListener('closeIceVehicleModal', closeIceVehicleModal);
+
+// Stall edit modal close helper — fixes the stall-edit-bug
+// (RESEARCH §Pitfall 3: dialog .close() alone doesn't clear stale innerHTML).
+function closeStallEditModal() {
+    document.getElementById('stall-edit-modal').close();
+    document.getElementById('stall-edit-modal-content').innerHTML = '';
+}
+document.body.addEventListener('closeStallEditModal', closeStallEditModal);
 </script>
 {% endblock %}

@@ -1,14 +1,15 @@
-"""Home Assistant WebSocket client service.
+"""Home Assistant WebSocket runtime for ingestion events.
 
-Connects to a Home Assistant instance via its WebSocket API, authenticates,
-fetches config and state snapshots, and subscribes to state_changed events.
-Auto-reconnects with exponential backoff on disconnect.
+Each instance connects to one HA server, subscribes to ``state_changed``,
+and fans events out to source adapters. Credentials are supplied by the
+ingestion supervisor from ``data_source_configs``.
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
 import logging
-import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -20,21 +21,47 @@ from websockets.exceptions import (
     WebSocketException,
 )
 
+from web.unit_system import GAL_PER_LITER
+
 logger = logging.getLogger("lightningrod.hass")
 
-# Pattern to extract VIN from FordPass entity IDs like sensor.fordpass_XXXXX_odometer
-_FORDPASS_ENTITY_RE = re.compile(r"^sensor\.fordpass_([a-zA-Z0-9]+)_")
+
+class _AuthInvalid(Exception):
+    """Internal exception for HA auth_invalid responses."""
+
+    pass
 
 
-class HASSClient:
-    """WebSocket client for Home Assistant state_changed event streaming."""
+class HAWebSocketRuntime:
+    """WebSocket runtime for Home Assistant ``state_changed`` event streaming.
 
-    def __init__(self) -> None:
+    One instance per enabled ``data_source_configs`` row where
+    ``source_name='ha_fordpass'``. The supervisor owns lifecycle and
+    spawns/stops runtimes as the config rows toggle.
+    """
+
+    def __init__(
+        self,
+        config_id: int,
+        ha_url: str,
+        ha_token: str,
+        *,
+        source_name: str = "ha_fordpass",
+        instance_label: str = "default",
+    ) -> None:
+        self.config_id = config_id
+        self.source_name = source_name
+        self.instance_label = instance_label
+        self._ha_url = ha_url
+        self._ha_token = ha_token
         self._ws: Any | None = None
         self._running: bool = False
         self._msg_id: int = 0
         self._ha_config: dict | None = None
         self._entity_states: dict[str, dict] = {}
+        # Default event handler is the runtime's own dispatch method; tests can
+        # override this attribute with a captured-events callback to inspect
+        # the WebSocket frame stream without going through DB writes.
         self._event_handler: Callable | None = None
         self._task: asyncio.Task | None = None
         self.detected_vin: str | None = None
@@ -58,19 +85,17 @@ class HASSClient:
         self._msg_id += 1
         return self._msg_id
 
-    async def start(
-        self,
-        ha_url: str,
-        ha_token: str,
-        event_handler: Callable,
-    ) -> None:
-        """Start the client: connect, authenticate, subscribe, and enter event loop.
+    async def start(self) -> None:
+        """Connect, authenticate, subscribe, and enter the event loop.
 
-        Reconnects automatically on failure (except auth errors).
+        Reconnects automatically on failure (except auth errors). Credentials
+        and the dispatch entry point are owned by the runtime; callers do not
+        thread them through.
         """
         self._running = True
-        self._event_handler = event_handler
-        logger.info("HASS client starting, target: %s", ha_url)
+        ha_url = self._ha_url
+        ha_token = self._ha_token
+        logger.info("HA runtime starting (config_id=%d, target=%s)", self.config_id, ha_url)
 
         while self._running:
             try:
@@ -84,7 +109,14 @@ class HASSClient:
                 self._health["connected"] = False
                 self._running = False
                 break
-            except (TimeoutError, ConnectionClosed, ConnectionClosedError, ConnectionError, OSError, WebSocketException) as exc:
+            except (
+                TimeoutError,
+                ConnectionClosed,
+                ConnectionClosedError,
+                ConnectionError,
+                OSError,
+                WebSocketException,
+            ) as exc:
                 self._health["connected"] = False
                 self._health["connection_state"] = "reconnecting"
                 self._health["errors"] += 1
@@ -93,21 +125,21 @@ class HASSClient:
                 if self._running:
                     await self._reconnect_loop(ha_url, ha_token)
             except asyncio.CancelledError:
-                logger.info("HASS client cancelled")
+                logger.info("HA runtime cancelled")
                 break
             except Exception as exc:
                 self._health["errors"] += 1
                 self._health["last_error"] = str(exc)
-                logger.exception("Unexpected error in HASS client: %s", exc)
+                logger.exception("Unexpected error in HA runtime: %s", exc)
                 if self._running:
                     await self._reconnect_loop(ha_url, ha_token)
 
         await self._close_ws()
-        logger.info("HASS client stopped")
+        logger.info("HA runtime stopped (config_id=%d)", self.config_id)
 
     async def stop(self) -> None:
-        """Stop the client gracefully."""
-        logger.info("HASS client stopping")
+        """Stop the runtime gracefully."""
+        logger.info("HA runtime stopping (config_id=%d)", self.config_id)
         self._running = False
         if self._task and not self._task.done():
             self._task.cancel()
@@ -144,7 +176,7 @@ class HASSClient:
         ws_url = ws_url + "/api/websocket"
 
         logger.info("Connecting to %s", ws_url)
-        self._ws = await websockets.connect(ws_url, max_size=16 * 1024 * 1024)  # 16MB - This can be made larger or set to NONE if we really want it that way... 
+        self._ws = await websockets.connect(ws_url, max_size=16 * 1024 * 1024)
 
         # Step 1: Receive auth_required
         msg = await self._recv_json()
@@ -175,9 +207,6 @@ class HASSClient:
                 unit_system.get("length", "unknown"),
                 self._ha_config.get("location_name", "unknown"),
             )
-            # Auto-populate the Home location from HA config (latitude/longitude
-            # live on get_config). Non-destructive: only fills in values that
-            # haven't been manually set in app_settings.
             await self._autopopulate_home_location_from_config()
 
         # Step 5: get_states
@@ -190,21 +219,16 @@ class HASSClient:
             logger.info("Loaded %d entity states from HA", len(self._entity_states))
             self._detect_vin()
 
-            # The elveh/outsidetemp startup probe that used to stash FordPass
-            # preferred distance + temperature units on ha_config has been
-            # DELETED. Unit handling now lives entirely in
-            # web/services/sources/ha_fordpass/adapter.py via FIELD_CONTRACTS +
-            # per-event UoM lookup.
-
-        # Step 6: Process initial snapshot through event handler
-        # This captures current state (e.g. last energytransferlogentry) as DB records
-        if self._event_handler and self._entity_states:
+        # Step 6: Process initial snapshot through the event handler.
+        # Captures current state (e.g. last energytransferlogentry) as DB records.
+        handler = self._event_handler or self._default_event_handler
+        if self._entity_states:
             snapshot_count = 0
             for entity_id, state_obj in self._entity_states.items():
                 if not entity_id.startswith("sensor.fordpass_"):
                     continue
                 try:
-                    await self._event_handler(entity_id, {}, state_obj, self._ha_config or {})
+                    await handler(entity_id, {}, state_obj, self._ha_config or {})
                     snapshot_count += 1
                 except Exception as exc:
                     logger.error("Snapshot processing error for %s: %s", entity_id, exc)
@@ -212,11 +236,13 @@ class HASSClient:
 
         # Step 7: subscribe to state_changed
         sub_id = self._next_msg_id()
-        await self._send_json({
-            "type": "subscribe_events",
-            "id": sub_id,
-            "event_type": "state_changed",
-        })
+        await self._send_json(
+            {
+                "type": "subscribe_events",
+                "id": sub_id,
+                "event_type": "state_changed",
+            }
+        )
         sub_msg = await self._recv_json()
         if sub_msg.get("success"):
             logger.info("Subscribed to state_changed events (subscription id=%d)", sub_id)
@@ -225,11 +251,12 @@ class HASSClient:
 
         self._health["connected"] = True
         self._health["connection_state"] = "connected"
-        self._health["last_error"] = None  
-        logger.info("HASS client fully connected and subscribed")
+        self._health["last_error"] = None
+        logger.info("HA runtime fully connected and subscribed (config_id=%d)", self.config_id)
 
     async def _event_loop(self) -> None:
-        """Read messages from websocket, dispatch state_changed events to handler."""
+        """Read messages from websocket, dispatch state_changed events to the handler."""
+        handler = self._event_handler or self._default_event_handler
         while self._running and self._ws is not None:
             msg = await self._recv_json()
             msg_type = msg.get("type")
@@ -242,31 +269,87 @@ class HASSClient:
                     old_state = data.get("old_state", {})
                     new_state = data.get("new_state", {})
 
-                    # Update local state cache
                     if new_state:
                         self._entity_states[entity_id] = new_state
 
                     self._health["events_processed"] += 1
                     self._health["last_event_at"] = datetime.now(UTC).isoformat()
 
-                    # Dispatch to handler
-                    if self._event_handler is not None:
-                        try:
-                            await self._event_handler(
-                                entity_id, old_state, new_state, self._ha_config or {}
-                            )
-                        except Exception as exc:
-                            logger.error(
-                                "Event handler error for %s: %s", entity_id, exc
-                            )
+                    try:
+                        await handler(entity_id, old_state, new_state, self._ha_config or {})
+                    except Exception as exc:
+                        logger.error(
+                            "Event handler error for %s: %s", entity_id, exc
+                        )
 
             elif msg_type == "result":
-                # Response to a command -- ignore for now
                 pass
             elif msg_type == "pong":
                 pass
             else:
                 logger.debug("Unhandled message type: %s", msg_type)
+
+    async def _default_event_handler(
+        self,
+        entity_id: str,
+        old_state: dict,
+        new_state: dict,
+        ha_config: dict,
+    ) -> None:
+        """Internal default handler used by the HA frame consumer.
+
+        Production code paths drive every event through ``_dispatch`` so the
+        gas-price / slug fan-out is the only ingestion path. Tests that need
+        to capture frame-level events can override ``self._event_handler``.
+        """
+        await self._dispatch(entity_id, new_state)
+
+    async def _dispatch(self, entity_id: str, new_state: dict) -> None:
+        """Per-event fan-out: try the gas-price adapter first, then ha_fordpass slug.
+
+        The two-session-per-event pattern keeps gas-price writes and FordPass
+        slug writes isolated; single-session optimization is deliberately
+        deferred.
+        """
+        from db.engine import AsyncSessionLocal
+        from web.services.sources.ha_fordpass.dispatch import dispatch_slug
+        from web.services.sources.ha_gas_price.adapter import try_handle_event
+
+        # Gas-price branch — match by configured entity_id, not slug pattern.
+        async with AsyncSessionLocal() as db:
+            try:
+                handled = await try_handle_event(entity_id, new_state, db)
+                if handled:
+                    await db.commit()
+                    return
+            except Exception as e:
+                await db.rollback()
+                logger.error(
+                    "Gas-price dispatch error for %s: %s",
+                    entity_id,
+                    e,
+                    exc_info=True,
+                )
+
+        # Slug-based ha_fordpass dispatch.
+        async with AsyncSessionLocal() as db:
+            try:
+                await dispatch_slug(
+                    entity_id,
+                    new_state,
+                    self._ha_config or {},
+                    db,
+                    config_id=self.config_id,
+                )
+                await db.commit()
+            except Exception as e:
+                await db.rollback()
+                logger.error(
+                    "ha_fordpass dispatch error for %s: %s",
+                    entity_id,
+                    e,
+                    exc_info=True,
+                )
 
     async def _reconnect_loop(self, ha_url: str, ha_token: str) -> None:
         """Exponential backoff reconnection: 1s, 2s, 4s, ... max 60s."""
@@ -295,6 +378,11 @@ class HASSClient:
 
     def _detect_vin(self) -> None:
         """Scan entity IDs for FordPass pattern to auto-detect VIN."""
+        # Deferred import — handlers transitively imports _helpers which
+        # imports the ingestion package; a top-level import here would create
+        # a cycle at module-load time.
+        from web.services.sources.ha_fordpass.handlers import _FORDPASS_ENTITY_RE
+
         for entity_id in self._entity_states:
             match = _FORDPASS_ENTITY_RE.match(entity_id)
             if match:
@@ -313,7 +401,6 @@ class HASSClient:
         assert self._ws is not None
         raw = await self._ws.recv()
         return json.loads(raw)
-
 
     async def _autopopulate_home_location_from_config(self) -> None:
         """Fill home_latitude/home_longitude/home_location_name from HA config.
@@ -373,18 +460,16 @@ class HASSClient:
         return applied
 
     async def _ha_rest_headers(self) -> tuple[str, dict[str, str]] | None:
-        """Load ha_url and ha_token from settings and return request headers+base.
+        """Return ``(ha_url, headers)`` for REST calls, or None if missing.
 
-        Returns (ha_url, headers) tuple or None when credentials are missing.
+        Credentials are owned by the runtime instance — there is no fallback
+        to ``app_settings`` or ``data_source_configs`` here. The supervisor
+        reads the config row at start time and feeds the values into the
+        constructor; if a token rotates, the supervisor is restarted via
+        ``restart_runtime`` (Settings POST handler).
         """
-        from db.engine import AsyncSessionLocal
-        from web.queries.settings import get_app_settings_dict
-
-        async with AsyncSessionLocal() as db:
-            cfg = await get_app_settings_dict(db, ["ha_url", "ha_token"])
-
-        ha_url = cfg.get("ha_url", "").rstrip("/")
-        ha_token = cfg.get("ha_token", "")
+        ha_url = (self._ha_url or "").rstrip("/")
+        ha_token = self._ha_token or ""
         if not ha_url or not ha_token:
             return None
         return (ha_url, {"Authorization": f"Bearer {ha_token}"})
@@ -439,7 +524,6 @@ class HASSClient:
         ha_url, headers = auth
 
         if start_time_iso is None:
-            # Default to ~10 years ago — HA will cap at its own recorder retention.
             start_time_iso = (
                 datetime.now(UTC) - timedelta(days=365 * 10)
             ).isoformat()
@@ -460,7 +544,6 @@ class HASSClient:
         if not history_data or not history_data[0]:
             return []
 
-        # history_data is [[state, state, ...]] — one list per filter_entity_id
         return history_data[0]
 
     async def backfill_history(self, days: int | None = None) -> dict:
@@ -470,12 +553,12 @@ class HASSClient:
           * the energytransferlogentry entity (charging sessions)
           * any gas sensors configured in app_settings (station / average)
 
-        When `days` is None the start time is set to 10 years ago, letting HA
-        return as much history as its recorder retains. Pass an int to cap.
+        When ``days`` is None the start time is set to 10 years ago, letting
+        HA return as much history as its recorder retains. Pass an int to cap.
 
         Duplicate prevention:
-          * Charging sessions: reuses the existing +/-30 min +/- 10% energy fuzzy
-            match inside handle_energy_transfer (no changes needed here).
+          * Charging sessions: reuses the existing +/-30 min +/- 10% energy
+            fuzzy match inside handle_energy_transfer (no changes needed here).
           * Gas readings: uses store_gas_price_reading_if_new which checks
             (entity_id, recorded_at) before inserting.
 
@@ -503,22 +586,22 @@ class HASSClient:
             "gas": {},
         }
 
+        handler = self._event_handler or self._default_event_handler
+
         # --- 1. Charging sessions ---
         vin = self.detected_vin or "unknown"
         energy_entity = f"sensor.fordpass_{vin}_energytransferlogentry"
         logger.info(
             "Backfill: fetching charging session history for %s (start=%s)",
-            energy_entity, start_time_iso or "all",
+            energy_entity,
+            start_time_iso or "all",
         )
         session_states = await self._fetch_entity_history(energy_entity, start_time_iso)
         for state_obj in session_states:
             if not state_obj.get("attributes"):
                 continue
             try:
-                if self._event_handler is not None:
-                    await self._event_handler(
-                        energy_entity, {}, state_obj, self._ha_config or {}
-                    )
+                await handler(energy_entity, {}, state_obj, self._ha_config or {})
                 result["sessions"]["processed"] += 1
             except Exception as exc:
                 logger.error("Backfill: session state error: %s", exc)
@@ -531,7 +614,8 @@ class HASSClient:
             result["gas"][entity_id] = counts
             logger.info(
                 "Backfill: fetching gas sensor history for %s (start=%s)",
-                entity_id, start_time_iso or "all",
+                entity_id,
+                start_time_iso or "all",
             )
             gas_states = await self._fetch_entity_history(entity_id, start_time_iso)
             for state_obj in gas_states:
@@ -547,13 +631,13 @@ class HASSClient:
                     )
                     counts["errors"] += 1
 
-            # After inserting readings, refresh monthly averages in history table.
             if counts["inserted"] > 0:
                 await self._refresh_gas_monthly_history(entity_id)
 
         logger.info(
             "Backfill complete: sessions=%s, gas=%s",
-            result["sessions"], result["gas"],
+            result["sessions"],
+            result["gas"],
         )
         return result
 
@@ -591,7 +675,10 @@ class HASSClient:
         if price <= 0:
             return False
 
-        # HA history states carry last_changed / last_updated as ISO strings.
+        # UNIT-02: HA gas sensors report $/gal (US-locale assumption per RESEARCH A1).
+        # Convert to $/L before storing so all gas-price storage is metric.
+        price_metric = price * GAL_PER_LITER
+
         ts_raw = state_obj.get("last_changed") or state_obj.get("last_updated")
         if not ts_raw:
             return False
@@ -610,7 +697,7 @@ class HASSClient:
 
         async with AsyncSessionLocal() as db:
             return await store_gas_price_reading_if_new(
-                db, entity_id, price, recorded_at
+                db, entity_id, price_metric, recorded_at
             )
 
     async def _refresh_gas_monthly_history(self, entity_id: str) -> None:
@@ -640,54 +727,3 @@ class HASSClient:
                     await upsert_gas_price(
                         db, year, month, average_price=avg, source="ha_sensor"
                     )
-
-
-class _AuthInvalid(Exception):
-    """Internal exception for HA auth_invalid responses."""
-    pass
-
-
-# Module-level singleton -- accessed by routes for status
-hass_service = HASSClient()
-
-
-async def _noop_handler(
-    entity_id: str, old_state: dict, new_state: dict, ha_config: dict
-) -> None:
-    """Placeholder event handler. Replaced by sensor processor in."""
-    pass
-
-
-async def start_hass_service() -> None:
-    """Start the HASS service if ha_url, ha_token, and ha_auto_connect are configured.
-
-    Reads settings from app_settings table and launches the client as a background task.
-    """
-    from db.engine import AsyncSessionLocal
-    from web.queries.settings import get_app_settings_dict
-
-    async with AsyncSessionLocal() as db:
-        cfg = await get_app_settings_dict(
-            db, ["ha_url", "ha_token", "ha_auto_connect"]
-        )
-
-    ha_url = cfg.get("ha_url", "").strip()
-    ha_token = cfg.get("ha_token", "").strip()
-    ha_auto_connect = cfg.get("ha_auto_connect", "").strip().lower()
-
-    if ha_auto_connect != "true":
-        logger.info("HASS auto-connect disabled, skipping service start")
-        return
-
-    if not ha_url or not ha_token:
-        logger.warning("HASS auto-connect enabled but ha_url or ha_token not set, skipping")
-        return
-
-    from web.services.hass_processor import process_state_change
-
-    logger.info("Starting HASS service (auto-connect enabled)")
-    task = asyncio.create_task(
-        hass_service.start(ha_url, ha_token, process_state_change),
-        name="hass-client",
-    )
-    hass_service._task = task

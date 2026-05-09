@@ -2,6 +2,7 @@
 import json
 
 import pytest
+
 from web.middleware.demo_mode import BLOCKED_METHODS, DemoModeMiddleware
 
 

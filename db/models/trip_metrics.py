@@ -1,4 +1,4 @@
-"""Database models for trip metrics."""
+"""Trip metrics model."""
 
 import uuid
 from datetime import datetime
@@ -23,17 +23,17 @@ TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVTripMetrics(Base):
-    """EV trip efficiency, energy, and scoring data (26 columns).
-
-    Source: 002_create_target_tables.sql, ev_trip_metrics table.
-    """
+    """EV trip efficiency, energy, location, and driving-score data."""
 
     __tablename__ = "ev_trip_metrics"
 
     # Primary identifier
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Default removed — adapter computes uuid5(NS, device_id|tripUpdateTime)
+    # before insert; manual-trip route computes its own uuid5 over user fields.
+    # DB-level UNIQUE constraint on trip_id is added by the p34 migration.
     trip_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), default=uuid.uuid4, nullable=False
+        Uuid(as_uuid=True), nullable=False
     )
     device_id: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -45,6 +45,8 @@ class EVTripMetrics(Base):
     # Distance and time
     distance: Mapped[float | None] = mapped_column(Numeric)
     duration: Mapped[float | None] = mapped_column(Numeric)
+    odometer_start: Mapped[float | None] = mapped_column(Numeric)
+    odometer_end: Mapped[float | None] = mapped_column(Numeric)
 
     # Energy
     energy_consumed: Mapped[float | None] = mapped_column(Numeric)
@@ -82,9 +84,8 @@ class EVTripMetrics(Base):
     )
     original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
-    # Pipeline schema version. NULL = legacy rows from the suspect conversion
-    # era around 2026-03-21 (commit abd736b). Value 2 = adapter-driven ingest
-    # with declared source units.
+    # Pipeline schema version. NULL = older rows with uncertain unit provenance.
+    # Value 2 = adapter-driven ingest with declared source units.
     ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (

@@ -47,7 +47,7 @@ async def test_location_verified_proximity_match_reused(db_session):
         latitude=40.00015,
         longitude=-74.00005,
         location_name="Ikea Charger",
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
 
     assert resolved_id == existing.id
@@ -94,7 +94,7 @@ async def test_location_gps_alias_takes_precedence(db_session):
         latitude=40.20003,
         longitude=-74.19998,
         location_name="Some Other Label",
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
     assert resolved_id == canonical.id
 
@@ -106,7 +106,7 @@ async def test_location_new_coords_create_unverified_location(db_session):
         latitude=41.5,
         longitude=-75.5,
         location_name="Brand New Station",
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
     assert resolved_id is not None
 
@@ -114,7 +114,7 @@ async def test_location_new_coords_create_unverified_location(db_session):
         select(EVLocationLookup).where(EVLocationLookup.id == resolved_id)
     )).scalar_one()
     assert row.is_verified is False
-    assert row.source_system == "home_assistant"
+    assert row.source_system == "ha_fordpass"
 
 
 # ---------------------------------------------------------------------------
@@ -178,11 +178,11 @@ async def test_network_alias_resolves_to_canonical(db_session):
 async def test_network_unknown_name_autocreates(db_session):
     """Unknown name creates an auto-unverified network row."""
     resolved_id = await resolve_network(
-        db_session, network_name="TotallyNewProvider", source_system="home_assistant"
+        db_session, network_name="TotallyNewProvider", source_system="ha_fordpass"
     )
     row = (await db_session.execute(
         select(EVChargingNetwork).where(EVChargingNetwork.id == resolved_id)
     )).scalar_one()
     assert row.network_name == "TotallyNewProvider"
     assert row.is_verified is False
-    assert row.source_system == "home_assistant"
+    assert row.source_system == "ha_fordpass"

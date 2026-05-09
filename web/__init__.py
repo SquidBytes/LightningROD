@@ -1,2 +1,1 @@
-"""Package for web modules."""
-
+"""Web application package."""

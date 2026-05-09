@@ -1,146 +1,107 @@
-"""Home Assistant sensor event processor.
+"""ha-fordpass HA WebSocket event handlers.
 
-Dispatches HA state_changed events to registered sensor handlers. Maps
-ha-fordpass entities to database records: charging sessions from
-energytransferlogentry, vehicle status snapshots, battery status updates,
-and trip metrics. Also handles gas price sensor events from arbitrary
-entity_ids configured in app_settings.
+FordPass entity_ids embed the VIN (`sensor.fordpass_<vin>_<slug>`); this
+adapter writes `device_id = vin` for the auto-created EVVehicle row.
+Future non-VIN sources (e.g. OBD by Bluetooth MAC, ha-bluelink for
+Hyundai/Kia) MAY set `device_id != vin`. There is no runtime VIN-regex
+check on writes — `device_id` is a free-form cross-source identifier.
 
-Unit conversion logic has been removed from this module. Conversion now
-routes through `web.services.sources.ha_fordpass.adapter` (FIELD_CONTRACTS
-registry) plus `web.services.units.to_metric`.
+Pending-state batching dicts (`_pending_vehicle_status`,
+`_pending_battery_status`, `_last_trip_values`) are rekeyed on
+`(config_id, device_id)` so N>1 ha_fordpass runtimes observing the same
+VIN never collide. The dispatcher injects `_config_id` into `ha_config`
+before invoking handlers; the `_key` helper centralizes tuple
+construction so handler bodies need not repeat the pattern.
 """
 
+from __future__ import annotations
+
 import logging
+import re
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from web.services.ingestion._helpers import (
+    _convert_with_uom,
+    _get_attributes,
+    _get_event_timestamp,
+    _get_state_value,
+    _resolve_and_convert,
+    _safe_float,
+)
 from web.services.sources.ha_fordpass import adapter as ha_fordpass
-from web.services.units import detection
+from web.services.sources.ha_fordpass.dispatch import handles
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
 
-logger = logging.getLogger("lightningrod.hass.processor")
+logger = logging.getLogger("lightningrod.sources.ha_fordpass.handlers")
+
+# FordPass-specific entity_id regex used by `extract_slug` and `get_device_id`.
+_FORDPASS_ENTITY_RE = re.compile(r"^sensor\.fordpass_([a-zA-Z0-9]+)_")
 
 
 # ---------------------------------------------------------------------------
-# Read-time unit_of_measurement helpers
+# Pending-state batching dicts keyed by (config_id, device_id)
 # ---------------------------------------------------------------------------
 
-def _read_time_uom(new_state: dict) -> str | None:
-    """Return the normalized source_unit from new_state.attributes.unit_of_measurement.
+# Accumulates fields until flushed (on 'lastrefresh' or timeout).
+# Keys are (config_id, device_id) tuples so N>1 runtimes observing the same
+# VIN do not collide. dict.clear() on these from a test fixture removes
+# every entry regardless of config_id, preserving per-test reset semantics.
+_pending_vehicle_status: dict[tuple[int, str], dict[str, Any]] = {}
+_pending_vehicle_status_ts: dict[tuple[int, str], float] = {}
 
-    Returns None when the event carries no UoM attribute. Callers use this
-    per-event value, never a process-global flag. When the result
-    is None the caller must decide whether to skip (preferred for unit-ful
-    fields) or passthrough (only for fields it knows are already metric).
+_pending_battery_status: dict[tuple[int, str], dict[str, Any]] = {}
+_pending_battery_status_ts: dict[tuple[int, str], float] = {}
+
+# Track last-seen trip values per (config_id, device_id) to detect new trips.
+_last_trip_values: dict[tuple[int, str], dict[str, Any]] = {}
+
+_FLUSH_TIMEOUT = 30  # seconds
+
+
+def _key(ha_config: dict, device_id: str) -> tuple[int, str]:
+    """Construct the (config_id, device_id) key from the smuggled config_id.
+
+    The dispatcher injects `_config_id` into `ha_config`; this helper reads
+    it (defaulting to 0 when absent — direct test invocations that bypass
+    the dispatcher get the (0, device_id) key) and returns the tuple used
+    by every pending-state dict access in this module.
     """
-    if not isinstance(new_state, dict):
-        return None
-    attrs = new_state.get("attributes") or {}
-    raw = attrs.get("unit_of_measurement")
-    if raw is None:
-        return None
-    return ha_fordpass._normalize_uom_string(raw)
+    return (int(ha_config.get("_config_id", 0)), device_id)
 
 
-def _convert_with_uom(
-    raw_value: Any,
-    source_unit: str | None,
-    field_name: str,
-    entity_id: str | None = None,
-    *,
-    entity_pattern: str | None = None,
-    attribute: str | None = None,
-    device_id: str | None = None,
-) -> float | None:
-    """Convert raw_value from source_unit to metric; log + return None on failure.
+# ---------------------------------------------------------------------------
+# Trip-field pure-converter helpers
+# ---------------------------------------------------------------------------
 
-    Used by handlers for fields not represented in FIELD_CONTRACTS today.
-    When `source_unit` is None, the event carries no UoM attribute. In that
-    case we first consult the unit-detection layer (which may have
-    cross-referenced a unit from a sibling entity), and if that also has no
-    answer we warn-log and return None.
 
-    `entity_pattern` / `attribute` are passed through to the detection layer
-    so unit-of-measurement observations for this source get recorded. If a
-    caller omits them we derive `entity_pattern` from `entity_id`, and fall
-    back to using `field_name` as the attribute key.
+def _score_or_null(val: Any) -> float | None:
+    """Convert a 0-100 driving-score-like field, treating 0 as 'unmeasured'.
+
+    ha-fordpass emits 0 when the underlying telemetry is missing rather than
+    omitting the attribute (its metrics_mapping carries `default=0`). Storing
+    that as a real low score paints empty trips red on the gauge UI; we
+    convert 0 → None at the adapter boundary so empty-state rendering stays
+    consistent.
     """
-    if raw_value is None:
+    raw = _safe_float(val)
+    if raw is None or raw == 0:
         return None
+    return raw
 
-    # Derive detection keys. Callers may pass entity_pattern/attribute
-    # explicitly; if not, derive them from entity_id + field_name.
-    if entity_pattern is None and entity_id is not None:
-        entity_pattern = ha_fordpass._entity_pattern(entity_id)
-    if attribute is None:
-        attribute = field_name or ""
 
-    if source_unit is None:
-        # Try the detection layer as a last-resort fallback.
-        resolved = None
-        if entity_pattern is not None:
-            resolved = detection.resolve_unit(entity_pattern, attribute or "")
-        if resolved is not None:
-            try:
-                converted = to_metric(raw_value, resolved)
-            except UnknownSourceUnit:
-                logger.warning(
-                    "detection.resolve_unit returned %r but to_metric rejected it "
-                    "on %s.%s (value=%r); skipping",
-                    resolved,
-                    entity_id or "<unknown>",
-                    field_name,
-                    raw_value,
-                )
-                return None
-            logger.debug(
-                "read-time UoM absent on %s.%s; detection layer resolved %r",
-                entity_id or "<unknown>",
-                field_name,
-                resolved,
-            )
-            return converted
-        logger.warning(
-            "read-time UoM missing on %s for field %s; skipping value %r "
-            "(adapter will not assume metric)",
-            entity_id or "<unknown>",
-            field_name,
-            raw_value,
-        )
-        if entity_pattern is not None:
-            detection.record_unknown(
-                entity_pattern,
-                attribute or "",
-                raw_value,
-                reason="no unit_of_measurement on event",
-                device_id=device_id,
-            )
-        return None
+def _duration_to_seconds_from_minutes(val: Any) -> float | None:
+    """Convert an elveh-shaped tripDuration (minutes) to canonical seconds.
 
-    try:
-        converted = to_metric(raw_value, source_unit)
-    except UnknownSourceUnit:
-        logger.warning(
-            "UnknownSourceUnit on %s.%s: value=%r source_unit=%r; skipping",
-            entity_id or "<unknown>",
-            field_name,
-            raw_value,
-            source_unit,
-        )
-        return None
-
-    if entity_pattern is not None:
-        detection.record_read_time(
-            entity_pattern,
-            attribute or "",
-            source_unit,
-            raw_value,
-            device_id=device_id,
-        )
-    return converted
+    Events-entity payloads emit trip_duration in seconds directly (handled
+    upstream); elveh attributes emit minutes. Storing both as seconds keeps
+    the drawer's `(duration // 3600)` / `(duration // 60) % 60` rendering
+    correct regardless of which source wrote the row.
+    """
+    raw = _safe_float(val)
+    return raw * 60.0 if raw is not None else None
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +109,7 @@ def _convert_with_uom(
 # ---------------------------------------------------------------------------
 
 
-def extract_slug(entity_id: str) -> str | None:
+def extract_slug(entity_id: str | None) -> str | None:
     """Extract sensor slug from entity_id pattern sensor.fordpass_{vin}_{slug}.
 
     Example: sensor.fordpass_1ftvw1el6pwg05841_soc -> soc
@@ -167,42 +128,90 @@ def extract_slug(entity_id: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Sensor handler registry
+# Helper: get device_id (VIN) from entity_id or ha_config
 # ---------------------------------------------------------------------------
 
-SENSOR_HANDLERS: dict[str, Callable] = {}
 
+def get_device_id(entity_id: str, ha_config: dict) -> str:
+    """Resolve device_id (VIN) from entity_id pattern or config override.
 
-def handles(*slugs):
-    """Decorator to register a handler for one or more sensor slugs."""
-    def decorator(fn):
-        for slug in slugs:
-            SENSOR_HANDLERS[slug] = fn
-        return fn
-    return decorator
+    Extracts VIN from sensor.fordpass_{vin}_{slug} pattern.
+    Falls back to ha_config override or 'unknown'.
+    """
+    # Check for VIN override in ha_config
+    vin_override = ha_config.get("_vin_override")
+    if vin_override:
+        return vin_override
+
+    # Extract from entity_id
+    if entity_id and entity_id.startswith("sensor.fordpass_"):
+        remainder = entity_id[len("sensor.fordpass_"):]
+        parts = remainder.split("_", 1)
+        if parts:
+            return parts[0]
+
+    return "unknown"
 
 
 # ---------------------------------------------------------------------------
-# Pending vehicle/battery status batching
+# Vehicle auto-create
 # ---------------------------------------------------------------------------
 
-# Accumulates fields until flushed (on 'lastrefresh' or timeout)
-_pending_vehicle_status: dict[str, dict[str, Any]] = {}
-_pending_vehicle_status_ts: dict[str, float] = {}  # device_id -> last_update epoch
 
-_pending_battery_status: dict[str, dict[str, Any]] = {}
-_pending_battery_status_ts: dict[str, float] = {}
+async def _ensure_vehicle_exists(device_id: str, entity_id: str, db) -> None:
+    """Ensure an EVVehicle record exists for this device_id.
 
-# Track last-seen trip values per device to detect new trips
-_last_trip_values: dict[str, dict[str, Any]] = {}
+    If no vehicle record exists, creates one with display_name=device_id,
+    source_system='ha_fordpass'. Auto-activates only when no active vehicle
+    is currently set.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.exc import IntegrityError
 
-_FLUSH_TIMEOUT = 30  # seconds
+    from db.models.vehicle import EVVehicle
+    from web.queries.settings import get_app_setting, set_app_setting
+
+    # Check if vehicle already exists
+    result = await db.execute(
+        select(EVVehicle.id).where(EVVehicle.device_id == device_id).limit(1)
+    )
+    if result.scalar_one_or_none() is not None:
+        return  # Already exists
+
+    # Create new vehicle record
+    vehicle = EVVehicle(
+        display_name=device_id,
+        device_id=device_id,
+        vin=device_id,  # For FordPass, device_id IS the VIN
+        source_system="ha_fordpass",
+    )
+    db.add(vehicle)
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Another concurrent request already created it
+        await db.rollback()
+        return
+
+    logger.info("Auto-created vehicle record for device_id=%s", device_id)
+
+    # Auto-activate only if no active vehicle is set
+    active_vid = await get_app_setting(db, "active_vehicle_id", "")
+    if not active_vid:
+        await set_app_setting(db, "active_vehicle_id", str(vehicle.id))
+        logger.info("Auto-activated vehicle %s (id=%d) -- no prior active vehicle", device_id, vehicle.id)
 
 
-async def _flush_vehicle_status(device_id: str, db) -> None:
+# ---------------------------------------------------------------------------
+# Pending-status flush helpers
+# ---------------------------------------------------------------------------
+
+
+async def _flush_vehicle_status(device_id: str, db, *, config_id: int = 0) -> None:
     """Write accumulated vehicle status fields as a single EVVehicleStatus row."""
-    fields = _pending_vehicle_status.pop(device_id, None)
-    _pending_vehicle_status_ts.pop(device_id, None)
+    key = (config_id, device_id)
+    fields = _pending_vehicle_status.pop(key, None)
+    _pending_vehicle_status_ts.pop(key, None)
     if not fields:
         return
 
@@ -211,17 +220,18 @@ async def _flush_vehicle_status(device_id: str, db) -> None:
     record = EVVehicleStatus(
         device_id=device_id,
         recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         **fields,
     )
     db.add(record)
     logger.debug("Flushed vehicle status for %s (%d fields)", device_id, len(fields))
 
 
-async def _flush_battery_status(device_id: str, db) -> None:
+async def _flush_battery_status(device_id: str, db, *, config_id: int = 0) -> None:
     """Write accumulated battery status fields as a single EVBatteryStatus row."""
-    fields = _pending_battery_status.pop(device_id, None)
-    _pending_battery_status_ts.pop(device_id, None)
+    key = (config_id, device_id)
+    fields = _pending_battery_status.pop(key, None)
+    _pending_battery_status_ts.pop(key, None)
     if not fields:
         return
 
@@ -230,12 +240,17 @@ async def _flush_battery_status(device_id: str, db) -> None:
     record = EVBatteryStatus(
         device_id=device_id,
         recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
         **fields,
     )
     db.add(record)
     logger.debug("Flushed battery status for %s (%d fields)", device_id, len(fields))
+
+
+# ---------------------------------------------------------------------------
+# Trip match helper (consumed by ha_fordpass/adapter.py)
+# ---------------------------------------------------------------------------
 
 
 async def _find_matching_trip(
@@ -283,113 +298,85 @@ async def _find_matching_trip(
     return result.scalar_one_or_none()
 
 
-def _safe_float(val) -> float | None:
-    """Safely convert a value to float, returning None on failure."""
-    if val is None:
+# ---------------------------------------------------------------------------
+# Pure helpers (FordPass-specific data shaping)
+# ---------------------------------------------------------------------------
+
+
+# Charger type normalization mapping — collapse all variants to AC/DC codes
+# matching csv_parser._normalize_charge_type. Level 1/2 granularity is
+# intentionally discarded: callers that need it can derive it from the EVSE
+# power/voltage columns.
+_CHARGER_TYPE_MAP = {
+    "AC": "AC",
+    "AC_BASIC": "AC",
+    "AC_LEVEL_1": "AC",
+    "AC_LEVEL_2": "AC",
+    "AC LEVEL 1": "AC",
+    "AC LEVEL 2": "AC",
+    "LEVEL_1": "AC",
+    "LEVEL_2": "AC",
+    "LEVEL 1": "AC",
+    "LEVEL 2": "AC",
+    "L1": "AC",
+    "L2": "AC",
+    "DC": "DC",
+    "DC_FAST": "DC",
+    "DC_DCFAST": "DC",
+    "DC_COMBO": "DC",
+    "DC FAST": "DC",
+    "DCFC": "DC",
+    "L3": "DC",
+    "LEVEL 3": "DC",
+}
+
+
+def _normalize_charge_type(raw: str | None) -> str | None:
+    """Normalize charger type string to 'AC' or 'DC'.
+
+    Returns None for empty input. Unrecognized values fall back to the raw
+    string (uppercased) so debugging still surfaces the unknown code.
+    """
+    if not raw:
+        return None
+    key = raw.strip().upper()
+    if not key:
+        return None
+    return _CHARGER_TYPE_MAP.get(key, key)
+
+
+def _format_address(addr: dict | None) -> str | None:
+    """Format address dict from energytransferlogentry location into a string."""
+    if not addr or not isinstance(addr, dict):
+        return None
+    parts = []
+    if addr.get("address1"):
+        parts.append(addr["address1"])
+    if addr.get("city"):
+        parts.append(addr["city"])
+    if addr.get("state"):
+        parts.append(addr["state"])
+    return ", ".join(parts) if parts else None
+
+
+def _parse_iso_datetime(val: str | None) -> datetime | None:
+    """Parse ISO 8601 datetime string, returning None on failure."""
+    if not val:
         return None
     try:
-        return float(val)
-    except (TypeError, ValueError):
+        # Handle Z suffix and various ISO formats
+        if val.endswith("Z"):
+            val = val[:-1] + "+00:00"
+        return datetime.fromisoformat(val)
+    except (ValueError, TypeError):
+        logger.warning("Failed to parse datetime: %s", val)
         return None
-
-
-def _get_state_value(new_state: dict) -> str | None:
-    """Extract state value from HA state object."""
-    if not new_state:
-        return None
-    return new_state.get("state")
-
-
-def _get_attributes(new_state: dict) -> dict:
-    """Extract attributes dict from HA state object."""
-    if not new_state:
-        return {}
-    return new_state.get("attributes", {})
-
-
-def _get_unit_system(ha_config: dict) -> dict:
-    """Extract HA unit system dict from config.
-
-    Returns a dict shaped {"length": ..., "temperature": ..., "volume": ...,
-    "mass": ...} when HA provides one, or an empty dict otherwise.
-
-    Consumers: `detection.resolve_source_unit()` uses this dict (plus
-    device_class) to infer a source unit when the event itself carries no
-    unit_of_measurement attribute.
-    """
-    if not isinstance(ha_config, dict):
-        return {}
-    us = ha_config.get("unit_system")
-    if isinstance(us, dict):
-        return dict(us)
-    # Older HA ships a flat "metric"/"imperial" string. Keep it addressable
-    # as a dict with a synthetic marker so the resolver can still see it.
-    if isinstance(us, str):
-        return {"_flat": us}
-    return {}
-
-
-def _resolve_and_convert(
-    *,
-    raw_value: Any,
-    entity_id: str,
-    attribute: str,
-    new_state: dict,
-    ha_config: dict,
-    field_type: str,
-    device_id: str | None,
-) -> float | None:
-    """Resolve the source unit via HA signals, then convert via to_metric.
-
-    Convenience wrapper used by the legacy vehicle-status and battery-status
-    handlers. Hides the resolve -> convert -> record chain so handler code
-    stays readable.
-    """
-    if raw_value is None:
-        return None
-    resolved_unit, method, confidence = detection.resolve_source_unit(
-        entity_id=entity_id,
-        attribute=attribute,
-        new_state=new_state,
-        ha_config=ha_config,
-        field_type=field_type,
-        raw_value=raw_value,
-        device_id=device_id,
-    )
-    return detection.convert_with_resolved_unit(
-        raw_value=raw_value,
-        resolved_unit=resolved_unit,
-        method=method,
-        confidence=confidence,
-        entity_id=entity_id,
-        attribute=attribute,
-    )
-
-
-def _get_event_timestamp(new_state: dict) -> datetime | None:
-    """Extract event timestamp from HA state object.
-
-    Tries last_changed, then last_updated, parsing ISO format with timezone.
-    Returns None if no valid timestamp found.
-    """
-    for key in ("last_changed", "last_updated"):
-        val = new_state.get(key) if new_state else None
-        if val:
-            try:
-                if isinstance(val, str):
-                    if val.endswith("Z"):
-                        val = val[:-1] + "+00:00"
-                    return datetime.fromisoformat(val)
-                if isinstance(val, datetime):
-                    return val
-            except (ValueError, TypeError):
-                continue
-    return None
 
 
 # ---------------------------------------------------------------------------
 # Adapter-delegated handler (metrics + events entities)
 # ---------------------------------------------------------------------------
+
 
 @handles("metrics", "events")
 async def handle_via_adapter(slug, new_state, ha_config, device_id, db):
@@ -407,6 +394,7 @@ async def handle_via_adapter(slug, new_state, ha_config, device_id, db):
 # ---------------------------------------------------------------------------
 # Vehicle status handler
 # ---------------------------------------------------------------------------
+
 
 @handles(
     "odometer", "speed", "acceleratorpedalposition", "brakepedalstatus",
@@ -429,13 +417,14 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
     """
     state_val = _get_state_value(new_state)
     entity_id = f"sensor.fordpass_{device_id}_{slug}"
+    key = _key(ha_config, device_id)
 
     # Initialize pending dict for this device if needed
-    if device_id not in _pending_vehicle_status:
-        _pending_vehicle_status[device_id] = {}
-        _pending_vehicle_status[device_id]["_recorded_at"] = datetime.now(UTC)
+    if key not in _pending_vehicle_status:
+        _pending_vehicle_status[key] = {}
+        _pending_vehicle_status[key]["_recorded_at"] = datetime.now(UTC)
 
-    pending = _pending_vehicle_status[device_id]
+    pending = _pending_vehicle_status[key]
 
     def _distance_converter(v):
         return _resolve_and_convert(
@@ -459,12 +448,23 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
             device_id=device_id,
         )
 
-    # Map slug to field. Numeric + distance/temp converters route through
+    def _speed_converter(v):
+        return _resolve_and_convert(
+            raw_value=v,
+            entity_id=entity_id,
+            attribute="",
+            new_state=new_state,
+            ha_config=ha_config,
+            field_type="speed",
+            device_id=device_id,
+        )
+
+    # Map slug to field. Numeric + distance/temp/speed converters route through
     # web.services.units.to_metric via _convert_with_uom; string / _safe_float
     # converters remain pure.
     slug_field_map = {
         "odometer": ("odometer", _distance_converter),
-        "speed": ("speed", _distance_converter),
+        "speed": ("speed", _speed_converter),
         "acceleratorpedalposition": ("accelerator_position", _safe_float),
         "brakepedalstatus": ("brake_status", str),
         "braketorque": ("brake_torque", _safe_float),
@@ -485,11 +485,11 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
     if slug == "lastrefresh":
         # lastrefresh triggers a flush of accumulated vehicle status
         now = time.time()
-        _pending_vehicle_status_ts[device_id] = now
+        _pending_vehicle_status_ts[key] = now
 
         # Also flush battery status on lastrefresh
-        await _flush_vehicle_status(device_id, db)
-        await _flush_battery_status(device_id, db)
+        await _flush_vehicle_status(device_id, db, config_id=key[0])
+        await _flush_battery_status(device_id, db, config_id=key[0])
         logger.debug("lastrefresh received, flushed vehicle + battery status for %s", device_id)
         return
 
@@ -502,14 +502,15 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
         await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
 
     # Check timeout-based flush
-    _pending_vehicle_status_ts.setdefault(device_id, time.time())
-    if time.time() - _pending_vehicle_status_ts[device_id] > _FLUSH_TIMEOUT:
-        await _flush_vehicle_status(device_id, db)
+    _pending_vehicle_status_ts.setdefault(key, time.time())
+    if time.time() - _pending_vehicle_status_ts[key] > _FLUSH_TIMEOUT:
+        await _flush_vehicle_status(device_id, db, config_id=key[0])
 
 
 # ---------------------------------------------------------------------------
 # Battery status handler
 # ---------------------------------------------------------------------------
+
 
 @handles("soc", "elveh", "battery", "lastenergyconsumed")
 async def handle_battery_status(slug, new_state, ha_config, device_id, db):
@@ -530,13 +531,14 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
     state_val = _get_state_value(new_state)
     attrs = _get_attributes(new_state)
     entity_id = f"sensor.fordpass_{device_id}_{slug}"
+    key = _key(ha_config, device_id)
 
     # Initialize pending dict for this device if needed
-    if device_id not in _pending_battery_status:
-        _pending_battery_status[device_id] = {}
-        _pending_battery_status[device_id]["_recorded_at"] = datetime.now(UTC)
+    if key not in _pending_battery_status:
+        _pending_battery_status[key] = {}
+        _pending_battery_status[key]["_recorded_at"] = datetime.now(UTC)
 
-    pending = _pending_battery_status[device_id]
+    pending = _pending_battery_status[key]
 
     if slug == "soc":
         # HV battery state of charge (%)
@@ -671,30 +673,30 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 return _d(v)
             return ha_fordpass.convert(_range_regen_contract, v, new_state, ha_config)
 
-        trip_attr_map = {
+        trip_attr_map: dict[str, tuple[str, Callable[..., Any]]] = {
             "tripDistanceTraveled": ("distance", _d),
-            "tripDuration": ("duration", _safe_float),
+            # Canonical storage is seconds; elveh emits minutes -> *60.
+            "tripDuration": ("duration", _duration_to_seconds_from_minutes),
             "tripEnergyConsumed": ("energy_consumed", _safe_float),
             "tripEfficiency": ("efficiency", _efficiency_conv),
-            "tripDrivingScore": ("driving_score", _safe_float),
-            "tripSpeed": ("speed_score", _safe_float),
-            "tripAcceleration": ("acceleration_score", _safe_float),
-            "tripDeceleration": ("deceleration_score", _safe_float),
+            # Score fields use the 0-as-sentinel converter so empty trips
+            # store NULL rather than rendering as a red 0-score gauge.
+            "tripDrivingScore": ("driving_score", _score_or_null),
+            "tripSpeed": ("speed_score", _score_or_null),
+            "tripAcceleration": ("acceleration_score", _score_or_null),
+            "tripDeceleration": ("deceleration_score", _score_or_null),
             "tripAmbientTemp": ("ambient_temp", _t),
             "tripOutsideAirAmbientTemp": ("outside_air_temp", _t),
             "tripCabinTemp": ("cabin_temp", _t),
             "tripRangeRegenerated": ("range_regenerated", _range_regen_conv),
-            "tripElectricalEfficiency": ("electrical_efficiency", _safe_float),
+            "tripElectricalEfficiency": ("electrical_efficiency", _score_or_null),
         }
 
         trip_fields = {}
-        # Converters that want the HA attribute name (for detection-layer
-        # bookkeeping) are _d and _t. Others accept just the value.
-        _attribute_aware = {_d, _t}
         for attr_key, (field_name, converter) in trip_attr_map.items():
             val = attrs.get(attr_key)
             if val is not None:
-                if converter in _attribute_aware:
+                if attr_key in {"tripDistance", "tripDistanceTraveled", "tripAmbientTemp", "tripOutsideAirAmbientTemp", "tripCabinTemp"}:
                     converted = converter(val, attr_key)
                 else:
                     converted = converter(val)
@@ -702,7 +704,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                     trip_fields[field_name] = converted
 
         if trip_fields.get("distance") or trip_fields.get("energy_consumed"):
-            last = _last_trip_values.get(device_id, {})
+            last = _last_trip_values.get(key, {})
             # Check if trip data actually changed (new trip)
             is_new = (
                 not last
@@ -711,25 +713,43 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 or last.get("efficiency") != trip_fields.get("efficiency")
             )
             if is_new:
-                _last_trip_values[device_id] = trip_fields.copy()
+                _last_trip_values[key] = trip_fields.copy()
                 event_ts = _get_event_timestamp(new_state)
                 end_time = event_ts or datetime.now(UTC)
                 start_time = None
                 if trip_fields.get("duration") and end_time:
                     from datetime import timedelta
-                    start_time = end_time - timedelta(minutes=float(trip_fields["duration"]))
+                    # duration is canonical seconds (elveh minutes already
+                    # converted via _duration_to_seconds_from_minutes).
+                    start_time = end_time - timedelta(seconds=float(trip_fields["duration"]))
 
-                # Match-and-enrich: if an _events row already exists for this
-                # trip, enrich it with elveh-owned fields rather than inserting
-                # a duplicate.
+                # Deterministic-id lookup: if elveh carries tripUpdateTime
+                # (some installs do, others don't) compute the same uuid5 the
+                # events handler would. Existing row → enrich; otherwise fall
+                # through to the legacy predicate-match path.
+                from sqlalchemy import select as _select
+
                 from db.models.trip_metrics import EVTripMetrics
 
-                existing = await _find_matching_trip(
-                    db,
-                    device_id,
-                    trip_fields.get("distance"),
-                    trip_fields.get("energy_consumed"),
-                )
+                update_time_iso = attrs.get("tripUpdateTime")
+                deterministic_id = ha_fordpass.compute_trip_id(device_id, update_time_iso)
+
+                existing = None
+                if deterministic_id is not None:
+                    existing = (await db.execute(
+                        _select(EVTripMetrics)
+                        .where(EVTripMetrics.trip_id == deterministic_id)
+                        .limit(1)
+                    )).scalar_one_or_none()
+
+                if existing is None:
+                    existing = await _find_matching_trip(
+                        db,
+                        device_id,
+                        trip_fields.get("distance"),
+                        trip_fields.get("energy_consumed"),
+                    )
+
                 if existing is not None:
                     # Enrich the existing row with elveh-owned fields.
                     # Scores and regen always overwrite (elveh is canonical).
@@ -750,19 +770,40 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         existing.efficiency = trip_fields["efficiency"]
                     if existing.duration is None and trip_fields.get("duration") is not None:
                         existing.duration = trip_fields["duration"]
+                    if existing.odometer_end is None and existing.end_time is not None:
+                        existing.odometer_end = await ha_fordpass._closest_odometer(
+                            db, device_id, existing.end_time,
+                        )
+                    if existing.odometer_start is None and existing.start_time is not None:
+                        existing.odometer_start = await ha_fordpass._closest_odometer(
+                            db, device_id, existing.start_time,
+                        )
                     logger.info(
                         "Enriched existing trip row %s for %s with elveh scores/regen",
                         existing.id,
                         device_id,
                     )
                 else:
+                    import uuid as _uuid
+
+                    odometer_start = await ha_fordpass._closest_odometer(db, device_id, start_time) if start_time else None
+                    odometer_end = await ha_fordpass._closest_odometer(db, device_id, end_time)
+
                     trip_record = EVTripMetrics(
+                        # Deterministic uuid5 when tripUpdateTime is available;
+                        # uuid4 fallback otherwise. The fallback row can't
+                        # cross-source dedup but the row-level UNIQUE(trip_id)
+                        # constraint still blocks double inserts of the same
+                        # payload.
+                        trip_id=deterministic_id or _uuid.uuid4(),
                         device_id=device_id,
                         start_time=start_time,
                         end_time=end_time,
                         recorded_at=datetime.now(UTC),
+                        odometer_start=odometer_start,
+                        odometer_end=odometer_end,
                         is_complete=True,
-                        source_system="homeassistant",
+                        source_system="ha_fordpass",
                         original_timestamp=event_ts,
                         ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
                         **trip_fields,
@@ -770,7 +811,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                     db.add(trip_record)
                     await db.commit()
                     logger.info(
-                        "Trip recorded for %s: %s km, %s min",
+                        "Trip recorded for %s: distance=%s duration_s=%s",
                         device_id,
                         trip_fields.get("distance"),
                         trip_fields.get("duration"),
@@ -795,14 +836,15 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             logger.debug("Last energy consumed: %s kWh", energy_kwh)
 
     # Check timeout-based flush
-    _pending_battery_status_ts.setdefault(device_id, time.time())
-    if time.time() - _pending_battery_status_ts[device_id] > _FLUSH_TIMEOUT:
-        await _flush_battery_status(device_id, db)
+    _pending_battery_status_ts.setdefault(key, time.time())
+    if time.time() - _pending_battery_status_ts[key] > _FLUSH_TIMEOUT:
+        await _flush_battery_status(device_id, db, config_id=key[0])
 
 
 # ---------------------------------------------------------------------------
 # Charging live status handler
 # ---------------------------------------------------------------------------
+
 
 @handles("elvehcharging", "elvehplug")
 async def handle_charging_live(slug, new_state, ha_config, device_id, db):
@@ -837,6 +879,7 @@ async def handle_charging_live(slug, new_state, ha_config, device_id, db):
 # ---------------------------------------------------------------------------
 # GPS handler
 # ---------------------------------------------------------------------------
+
 
 @handles("gps")
 async def handle_gps(slug, new_state, ha_config, device_id, db):
@@ -889,7 +932,7 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
             latitude=lat,
             longitude=lon,
             gps_accuracy=gps_accuracy,
-            source_system="home_assistant",
+            source_system="ha_fordpass",
         )
         db.add(new_loc)
         logger.debug("Stored GPS snapshot for %s", device_id)
@@ -899,6 +942,7 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
 # Tire pressure handler
 # ---------------------------------------------------------------------------
 
+
 @handles("tirepressure")
 async def handle_tire_pressure(slug, new_state, ha_config, device_id, db):
     """Handle tire pressure sensor updates.
@@ -906,6 +950,7 @@ async def handle_tire_pressure(slug, new_state, ha_config, device_id, db):
     Parses tire pressure attributes and stores as JSONB in vehicle status.
     """
     attrs = _get_attributes(new_state)
+    key = _key(ha_config, device_id)
 
     tire_data = {
         "front_left": attrs.get("frontLeft"),
@@ -920,92 +965,19 @@ async def handle_tire_pressure(slug, new_state, ha_config, device_id, db):
     }
 
     # Store in pending vehicle status batch
-    if device_id not in _pending_vehicle_status:
-        _pending_vehicle_status[device_id] = {}
-        _pending_vehicle_status[device_id]["_recorded_at"] = datetime.now(UTC)
+    if key not in _pending_vehicle_status:
+        _pending_vehicle_status[key] = {}
+        _pending_vehicle_status[key]["_recorded_at"] = datetime.now(UTC)
 
-    _pending_vehicle_status[device_id]["tire_pressure"] = tire_data
-    _pending_vehicle_status_ts.setdefault(device_id, time.time())
+    _pending_vehicle_status[key]["tire_pressure"] = tire_data
+    _pending_vehicle_status_ts.setdefault(key, time.time())
 
     logger.debug("Tire pressure update stored for batch flush")
 
 
 # ---------------------------------------------------------------------------
-# Helper: get device_id (VIN) from entity_id or ha_config
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # energytransferlogentry handler (charging session creation)
 # ---------------------------------------------------------------------------
-
-# Charger type normalization mapping — collapse all variants to AC/DC codes
-# matching csv_parser._normalize_charge_type. Level 1/2 granularity is
-# intentionally discarded: callers that need it can derive it from the EVSE
-# power/voltage columns.
-_CHARGER_TYPE_MAP = {
-    "AC": "AC",
-    "AC_BASIC": "AC",
-    "AC_LEVEL_1": "AC",
-    "AC_LEVEL_2": "AC",
-    "AC LEVEL 1": "AC",
-    "AC LEVEL 2": "AC",
-    "LEVEL_1": "AC",
-    "LEVEL_2": "AC",
-    "LEVEL 1": "AC",
-    "LEVEL 2": "AC",
-    "L1": "AC",
-    "L2": "AC",
-    "DC": "DC",
-    "DC_FAST": "DC",
-    "DC_DCFAST": "DC",
-    "DC_COMBO": "DC",
-    "DC FAST": "DC",
-    "DCFC": "DC",
-    "L3": "DC",
-    "LEVEL 3": "DC",
-}
-
-
-def _normalize_charge_type(raw: str | None) -> str | None:
-    """Normalize charger type string to 'AC' or 'DC'.
-
-    Returns None for empty input. Unrecognized values fall back to the raw
-    string (uppercased) so debugging still surfaces the unknown code.
-    """
-    if not raw:
-        return None
-    key = raw.strip().upper()
-    if not key:
-        return None
-    return _CHARGER_TYPE_MAP.get(key, key)
-
-
-def _format_address(addr: dict | None) -> str | None:
-    """Format address dict from energytransferlogentry location into a string."""
-    if not addr or not isinstance(addr, dict):
-        return None
-    parts = []
-    if addr.get("address1"):
-        parts.append(addr["address1"])
-    if addr.get("city"):
-        parts.append(addr["city"])
-    if addr.get("state"):
-        parts.append(addr["state"])
-    return ", ".join(parts) if parts else None
-
-
-def _parse_iso_datetime(val: str | None) -> datetime | None:
-    """Parse ISO 8601 datetime string, returning None on failure."""
-    if not val:
-        return None
-    try:
-        # Handle Z suffix and various ISO formats
-        if val.endswith("Z"):
-            val = val[:-1] + "+00:00"
-        return datetime.fromisoformat(val)
-    except (ValueError, TypeError):
-        logger.warning("Failed to parse datetime: %s", val)
-        return None
 
 
 @handles("energytransferlogentry")
@@ -1133,7 +1105,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
             if energy_kwh is not None and match_energy is not None:
                 tolerance = abs(float(match_energy)) * 0.1 if float(match_energy) != 0 else 0.5
                 if abs(float(energy_kwh) - float(match_energy)) <= tolerance:
-                    if match_source == "home_assistant":
+                    if match_source == "ha_fordpass":
                         # Same source duplicate -- skip silently (existing behavior)
                         logger.info(
                             "Duplicate HA session detected (start=%s, energy=%.3f kWh), skipping",
@@ -1145,7 +1117,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
                         duplicate_of_id = match_id
                         break
             elif energy_kwh is None and match_energy is None:
-                if match_source == "home_assistant":
+                if match_source == "ha_fordpass":
                     logger.info("Duplicate HA session detected (start=%s, no energy), skipping", session_start_utc)
                     return
                 else:
@@ -1158,7 +1130,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     network_id = None
     if network_name and network_name.upper() != "UNKNOWN":
         from web.queries.settings import resolve_network
-        network_id = await resolve_network(db, network_name=network_name, source_system="home_assistant")
+        network_id = await resolve_network(db, network_name=network_name, source_system="ha_fordpass")
 
     # -----------------------------------------------------------------------
     # Location resolution
@@ -1174,7 +1146,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         network_id=network_id,
         location_name=location_name,
         address_dict=address_dict,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         _location_data=location_data,
         _network_name_raw=network_name,
     )
@@ -1184,7 +1156,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # -----------------------------------------------------------------------
     session = EVChargingSession(
         device_id=device_id,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
         charge_type=charge_type,
         location_name=location_name,
         location_id=location_id,
@@ -1225,219 +1197,3 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         charge_type,
         location_name or "unknown location",
     )
-
-
-# ---------------------------------------------------------------------------
-# Gas price sensor handling (non-slug, arbitrary entity_ids)
-# ---------------------------------------------------------------------------
-
-# Cache for gas sensor entity_ids from app_settings to avoid per-event DB query
-_gas_sensor_cache: dict[str, str] = {}
-_gas_sensor_cache_ts: float = 0.0
-_GAS_SENSOR_CACHE_TTL = 300  # seconds (5 minutes)
-
-
-async def _get_gas_sensor_entity_ids(db) -> tuple[str | None, str | None]:
-    """Return (station_entity_id, average_entity_id) from app_settings, cached.
-
-    Cache is refreshed every 5 minutes to pick up configuration changes
-    without querying app_settings on every single event.
-    """
-    global _gas_sensor_cache, _gas_sensor_cache_ts
-
-    now = time.time()
-    if _gas_sensor_cache and (now - _gas_sensor_cache_ts) < _GAS_SENSOR_CACHE_TTL:
-        logger.debug("Gas sensor cache hit")
-        return (
-            _gas_sensor_cache.get("gas_sensor_station_entity_id"),
-            _gas_sensor_cache.get("gas_sensor_average_entity_id"),
-        )
-
-    from web.queries.settings import get_app_settings_dict
-
-    gas_settings = await get_app_settings_dict(
-        db, ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"]
-    )
-    _gas_sensor_cache = gas_settings
-    _gas_sensor_cache_ts = now
-    logger.debug("Gas sensor cache refreshed: %s", gas_settings)
-    return (
-        gas_settings.get("gas_sensor_station_entity_id") or None,
-        gas_settings.get("gas_sensor_average_entity_id") or None,
-    )
-
-
-def invalidate_gas_sensor_cache() -> None:
-    """Invalidate the gas sensor entity_id cache.
-
-    Call this when gas sensor settings are updated via the settings UI.
-    """
-    global _gas_sensor_cache, _gas_sensor_cache_ts
-    _gas_sensor_cache = {}
-    _gas_sensor_cache_ts = 0.0
-
-
-async def _handle_gas_sensor_event(
-    entity_id: str,
-    new_state: dict,
-    station_entity: str | None,
-    average_entity: str | None,
-    db,
-) -> bool:
-    """Handle a gas price sensor event if entity_id matches configured sensors.
-
-    Returns True if the event was handled (entity_id matched), False otherwise.
-    Non-numeric state values are skipped gracefully.
-    """
-    if entity_id != station_entity and entity_id != average_entity:
-        return False
-
-    state_val = _get_state_value(new_state)
-    if state_val is None or state_val in ("unknown", "unavailable", ""):
-        logger.debug("Gas sensor %s has non-numeric state '%s', skipping", entity_id, state_val)
-        return True  # Matched but not actionable
-
-    price = _safe_float(state_val)
-    if price is None or price <= 0:
-        logger.debug("Gas sensor %s value not a valid price: '%s', skipping", entity_id, state_val)
-        return True
-
-    recorded_at = _get_event_timestamp(new_state) or datetime.now(UTC)
-
-    from web.queries.gas_prices import (
-        compute_monthly_averages,
-        store_gas_price_reading,
-        upsert_gas_price,
-    )
-
-    await store_gas_price_reading(db, entity_id, price, recorded_at)
-    logger.info("Gas price reading stored: entity=%s, price=%.3f, at=%s", entity_id, price, recorded_at)
-
-    # Compute monthly averages and upsert into gas_price_history
-    month_avg = await compute_monthly_averages(db, entity_id)
-    for (year, month), avg_price in month_avg.items():
-        if entity_id == station_entity:
-            await upsert_gas_price(db, year, month, station_price=avg_price, source="ha_sensor")
-        elif entity_id == average_entity:
-            await upsert_gas_price(db, year, month, average_price=avg_price, source="ha_sensor")
-
-    return True
-
-
-# ---------------------------------------------------------------------------
-# Main event dispatcher
-# ---------------------------------------------------------------------------
-
-
-async def _ensure_vehicle_exists(device_id: str, entity_id: str, db) -> None:
-    """Ensure an EVVehicle record exists for this device_id.
-
-    If no vehicle record exists, creates one with display_name=device_id,
-    source_system='home_assistant'. Auto-activates only when no active vehicle
-    is currently set.
-    """
-    from sqlalchemy import select
-    from sqlalchemy.exc import IntegrityError
-
-    from db.models.vehicle import EVVehicle
-    from web.queries.settings import get_app_setting, set_app_setting
-
-    # Check if vehicle already exists
-    result = await db.execute(
-        select(EVVehicle.id).where(EVVehicle.device_id == device_id).limit(1)
-    )
-    if result.scalar_one_or_none() is not None:
-        return  # Already exists
-
-    # Create new vehicle record
-    vehicle = EVVehicle(
-        display_name=device_id,
-        device_id=device_id,
-        vin=device_id,  # For FordPass, device_id IS the VIN
-        source_system="home_assistant",
-    )
-    db.add(vehicle)
-    try:
-        await db.flush()
-    except IntegrityError:
-        # Another concurrent request already created it
-        await db.rollback()
-        return
-
-    logger.info("Auto-created vehicle record for device_id=%s", device_id)
-
-    # Auto-activate only if no active vehicle is set
-    active_vid = await get_app_setting(db, "active_vehicle_id", "")
-    if not active_vid:
-        await set_app_setting(db, "active_vehicle_id", str(vehicle.id))
-        logger.info("Auto-activated vehicle %s (id=%d) -- no prior active vehicle", device_id, vehicle.id)
-
-
-async def process_state_change(
-    entity_id: str, old_state: dict, new_state: dict, ha_config: dict
-) -> None:
-    """Main event handler -- dispatches to registered sensor handlers.
-
-    Called by HASSClient for each state_changed event. First checks if the
-    entity_id matches a configured gas price sensor (arbitrary entity_ids).
-    Then falls through to slug-based FordPass handler dispatch.
-    """
-    from db.engine import AsyncSessionLocal
-
-    # --- Gas price sensor check (before slug-based dispatch) ---
-    # Gas sensors use arbitrary entity_ids, not the FordPass slug pattern
-    async with AsyncSessionLocal() as db:
-        try:
-            station_entity, average_entity = await _get_gas_sensor_entity_ids(db)
-            if station_entity or average_entity:
-                handled = await _handle_gas_sensor_event(
-                    entity_id, new_state, station_entity, average_entity, db
-                )
-                if handled:
-                    return  # Gas sensor event fully handled
-        except Exception as e:
-            await db.rollback()
-            logger.error("Error checking gas sensor for %s: %s", entity_id, e, exc_info=True)
-
-    # --- Slug-based FordPass handler dispatch ---
-    slug = extract_slug(entity_id)
-    if slug is None or slug not in SENSOR_HANDLERS:
-        return  # Unhandled entity, ignore silently
-
-    handler = SENSOR_HANDLERS[slug]
-    device_id = get_device_id(entity_id, ha_config)
-
-    async with AsyncSessionLocal() as db:
-        try:
-            # Ensure vehicle record exists before processing any sensor data
-            await _ensure_vehicle_exists(device_id, entity_id, db)
-            await handler(slug, new_state, ha_config, device_id, db)
-            await db.commit()
-        except Exception as e:
-            await db.rollback()
-            logger.error("Error processing %s: %s", entity_id, e, exc_info=True)
-
-
-# ---------------------------------------------------------------------------
-# Helper: get device_id (VIN) from entity_id or ha_config
-# ---------------------------------------------------------------------------
-
-def get_device_id(entity_id: str, ha_config: dict) -> str:
-    """Resolve device_id (VIN) from entity_id pattern or config override.
-
-    Extracts VIN from sensor.fordpass_{vin}_{slug} pattern.
-    Falls back to ha_config override or 'unknown'.
-    """
-    # Check for VIN override in ha_config
-    vin_override = ha_config.get("_vin_override")
-    if vin_override:
-        return vin_override
-
-    # Extract from entity_id
-    if entity_id and entity_id.startswith("sensor.fordpass_"):
-        remainder = entity_id[len("sensor.fordpass_"):]
-        parts = remainder.split("_", 1)
-        if parts:
-            return parts[0]
-
-    return "unknown"

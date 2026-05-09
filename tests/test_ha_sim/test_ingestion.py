@@ -18,10 +18,8 @@ from tests.test_ha_sim.simulator import (
     make_lastrefresh_event,
     make_trip_event,
 )
-from web.services.hass_processor import (
-    SENSOR_HANDLERS,
-    extract_slug,
-)
+from web.services.sources.ha_fordpass.dispatch import SENSOR_HANDLERS
+from web.services.sources.ha_fordpass.handlers import extract_slug
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
@@ -100,7 +98,7 @@ async def test_charging_session_ingestion(db_session):
     assert session.charge_type == "DC"
     assert session.start_soc == 15.0
     assert session.end_soc == 80.0
-    assert session.source_system == "home_assistant"
+    assert session.source_system == "ha_fordpass"
 
 
 @pytest.mark.asyncio
@@ -171,8 +169,9 @@ async def test_trip_ingestion(db_session):
     # Distance should be converted from miles to km (22.5 * 1.60934)
     assert trip.distance is not None
     assert abs(float(trip.distance) - 22.5 * 1.60934) < 0.1
-    assert float(trip.duration) == 35.0
-    assert trip.source_system == "homeassistant"
+    # duration is canonical seconds (35 minutes → 2100 seconds)
+    assert float(trip.duration) == 35.0 * 60
+    assert trip.source_system == "ha_fordpass"
 
 
 @pytest.mark.asyncio
@@ -199,6 +198,7 @@ async def test_battery_status_ingestion(db_session):
     refresh_entity, refresh_state = make_lastrefresh_event(device_id=_TEST_DEVICE_ID)
     # lastrefresh handler is in vehicle_status handler
     slug = extract_slug(refresh_entity)
+    assert slug is not None
     handler = SENSOR_HANDLERS[slug]
     parts = refresh_entity[len("sensor.fordpass_"):].split("_", 1)
     device_id = parts[0]
@@ -218,7 +218,7 @@ async def test_battery_status_ingestion(db_session):
     # resolver never silently defaults to "mi". A later metrics.xevBatteryRange
     # event would back-fill via cross-reference.
     assert battery.hv_battery_range is None
-    assert battery.source_system == "home_assistant"
+    assert battery.source_system == "ha_fordpass"
 
 
 @pytest.mark.asyncio
@@ -246,4 +246,4 @@ async def test_gps_location_ingestion(db_session):
     assert loc is not None, "GPS location not created"
     assert float(loc.latitude) == pytest.approx(38.9072, abs=0.001)
     assert float(loc.longitude) == pytest.approx(-77.0369, abs=0.001)
-    assert loc.source_system == "home_assistant"
+    assert loc.source_system == "ha_fordpass"

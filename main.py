@@ -1,4 +1,4 @@
-"""Module for main."""
+"""Console entry point placeholder for local package runs."""
 
 def main():
     print("Hello from lightningrod!")

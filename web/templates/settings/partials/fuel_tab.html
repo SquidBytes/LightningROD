@@ -1,0 +1,47 @@
+{# Fuel tab body — card stack
+   - ICE Vehicles management table
+   - Fuel Price Trend chart (lazy)
+   - Fuel Price History table (lazy)
+#}
+
+<p class="text-base-content/60 text-sm mb-6">Configure ICE vehicles for gas savings comparison and track historical fuel prices.</p>
+
+<div class="space-y-6">
+    {# ICE Vehicles management table — partial owns the card chrome #}
+    {% include "settings/partials/ice_vehicle_management.html" %}
+
+    {# Fuel Price Trend chart card #}
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h2 class="card-title text-base font-semibold flex items-center gap-1">
+                <span>Fuel Price Trend</span>
+                <span class="cursor-help tooltip tooltip-bottom"
+                      data-tip="{{ tooltips.fuel_price_trend if tooltips and tooltips.get('fuel_price_trend') else 'Station and regional average fuel prices over time, displayed in your configured units.' }}"
+                      aria-label="Fuel Price Trend tooltip">&#9432;</span>
+            </h2>
+            <p class="text-base-content/60 text-sm -mt-1">Prices stored in metric and displayed in your configured units.</p>
+            <div id="fuel-price-trend-chart" class="mt-2"
+                 hx-get="/settings/fuel-price-trend"
+                 hx-trigger="revealed"
+                 hx-swap="innerHTML">
+                <div class="flex justify-center py-8">
+                    <span class="loading loading-spinner loading-md text-base-content/30"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Fuel Price History card #}
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h2 class="card-title text-base font-semibold">Fuel Price History</h2>
+            <p class="text-base-content/60 text-sm -mt-1">Track fuel prices over time with two tracks: Station (your regular station) and Average (regional average). Both calculate the savings range on the Costs page.</p>
+            <div id="gas-price-history-section" class="mt-2"
+                 hx-get="/settings/gas-prices"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <span class="loading loading-spinner loading-sm"></span>
+            </div>
+        </div>
+    </div>
+</div>

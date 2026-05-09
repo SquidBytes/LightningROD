@@ -170,3 +170,72 @@ async def store_gas_price_reading_if_new(
     await db.flush()
     await db.commit()
     return True
+
+
+async def build_fuel_price_trend_chart(
+    db: AsyncSession,
+    distance_unit: str,
+) -> str:
+    """Build a Plotly HTML chart of station + average gas prices over time.
+
+    Reads metric ($/L) values from gas_price_history; converts to user-display
+    units ($/gal in US, $/L in metric) before plotting. Returns Plotly HTML for
+    direct innerHTML swap into the chart slot. Empty data returns a centered
+    placeholder div instead of an empty Plotly figure.
+    """
+    from datetime import date
+
+    import plotly.graph_objects as go
+
+    from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
+    from web.unit_system import convert_price_per_volume, get_units
+
+    rows = await get_all_gas_prices(db)
+    if not rows:
+        return (
+            '<div class="flex flex-col items-center py-8 text-center">'
+            '<span class="text-base-content/40 text-sm">'
+            'No fuel price history available. Add entries above to see the trend.'
+            '</span></div>'
+        )
+
+    rows_sorted = sorted(rows, key=lambda r: (r.year, r.month))
+    x = [date(r.year, r.month, 1) for r in rows_sorted]
+    station = [
+        convert_price_per_volume(float(r.station_price), distance_unit)
+        if r.station_price is not None else None
+        for r in rows_sorted
+    ]
+    average = [
+        convert_price_per_volume(float(r.average_price), distance_unit)
+        if r.average_price is not None else None
+        for r in rows_sorted
+    ]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=x, y=station, name="Station", mode="lines+markers",
+        line=dict(color="#47A8E5", width=2),
+        connectgaps=False,
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=average, name="Average", mode="lines+markers",
+        line=dict(color="#888", width=2, dash="dash"),
+        connectgaps=False,
+    ))
+    fuel_volume_label = get_units(distance_unit=distance_unit)["fuel_volume_label"]
+    fig.update_layout(
+        margin=dict(l=40, r=20, t=20, b=40),
+        height=260,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        xaxis_title=None,
+        yaxis_title=f"$/{fuel_volume_label}",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="rgba(255,255,255,0.7)"),
+        hoverlabel=_HOVER_LABEL,
+    )
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )

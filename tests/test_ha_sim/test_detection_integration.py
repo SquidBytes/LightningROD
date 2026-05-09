@@ -10,8 +10,9 @@ from __future__ import annotations
 import pytest
 
 from tests.factories.vehicles import VehicleFactory
-from web.services import hass_processor
-from web.services.hass_processor import SENSOR_HANDLERS, extract_slug
+from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+from web.services.sources.ha_fordpass.dispatch import SENSOR_HANDLERS
+from web.services.sources.ha_fordpass.handlers import extract_slug
 from web.services.units import detection
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
@@ -43,11 +44,11 @@ async def _dispatch(entity_id: str, new_state: dict, db) -> None:
 @pytest.fixture(autouse=True)
 def _reset():
     detection.clear()
-    hass_processor._pending_battery_status.clear()
-    hass_processor._pending_battery_status_ts.clear()
-    hass_processor._pending_vehicle_status.clear()
-    hass_processor._pending_vehicle_status_ts.clear()
-    hass_processor._last_trip_values.clear()
+    fordpass_handlers._pending_battery_status.clear()
+    fordpass_handlers._pending_battery_status_ts.clear()
+    fordpass_handlers._pending_vehicle_status.clear()
+    fordpass_handlers._pending_vehicle_status_ts.clear()
+    fordpass_handlers._last_trip_values.clear()
     yield
     detection.clear()
 

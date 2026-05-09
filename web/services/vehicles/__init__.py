@@ -1,0 +1,1 @@
+"""Vehicle-profile registry package."""

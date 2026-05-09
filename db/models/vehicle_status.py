@@ -1,4 +1,4 @@
-"""Database models for vehicle status."""
+"""Vehicle status snapshot model."""
 
 from datetime import datetime
 
@@ -13,11 +13,7 @@ TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVVehicleStatus(Base):
-    """Vehicle operational status snapshots (28 columns).
-
-    Source: 002_create_target_tables.sql, ev_vehicle_status table.
-    Includes 12 dynamics fields from updated FordPass ha-fordpass integration (2026-02).
-    """
+    """Operational, drivetrain, environment, and structured vehicle status."""
 
     __tablename__ = "ev_vehicle_status"
 
@@ -48,7 +44,7 @@ class EVVehicleStatus(Base):
     tire_pressure: Mapped[dict | None] = mapped_column(JSONStorage)
     indicators: Mapped[dict | None] = mapped_column(JSONStorage)
 
-    # Dynamics fields (new — from updated FordPass ha-fordpass integration, 2026-02)
+    # Dynamics fields from FordPass telemetry.
     brake_torque: Mapped[float | None] = mapped_column(Numeric)
     wheel_torque_status: Mapped[str | None] = mapped_column(String)
     yaw_rate: Mapped[float | None] = mapped_column(Numeric)
