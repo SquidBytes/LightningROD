@@ -8,8 +8,8 @@
     <td>{% if trip.distance is not none %}{{ "%.1f"|format(trip.distance|cvt_dist(distance_unit)) }} {{ units.distance_label }}{% else %}--{% endif %}</td>
     <td>
         {% if trip.duration is not none %}
-            {% set _hrs = (trip.duration | int) // 60 %}
-            {% set _mins = (trip.duration | int) % 60 %}
+            {% set _hrs = (trip.duration | int) // 3600 %}
+            {% set _mins = ((trip.duration | int) % 3600) // 60 %}
             {% if _hrs > 0 %}{{ _hrs }}h {{ _mins }}m{% else %}{{ _mins }}m{% endif %}
         {% else %}
             --
@@ -36,16 +36,18 @@
             --
         {% endif %}
     </td>
-    <td>
+    <td class="w-20">
         {% if trip.driving_score is not none %}
-        <div class="relative h-6 w-16 rounded overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-r from-error via-warning to-success"></div>
-            <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
-                {{ "%.0f"|format(trip.driving_score) }}
-            </span>
-        </div>
+            {% set _score = trip.driving_score|round|int %}
+            {% set _gauge_class = 'text-error' if _score < 50 else ('text-warning' if _score < 75 else 'text-success') %}
+            <div class="radial-progress {{ _gauge_class }}"
+                 style="--value:{{ _score }}; --size:2.5rem; --thickness:3px;"
+                 role="progressbar"
+                 aria-label="Driving score: {{ _score }} of 100">
+                <span class="text-xs font-semibold">{{ _score }}</span>
+            </div>
         {% else %}
-        <span class="text-base-content/30">--</span>
+            <span class="text-base-content/30">—</span>
         {% endif %}
     </td>
     <td>

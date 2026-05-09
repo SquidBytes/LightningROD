@@ -19,7 +19,15 @@ async def _seed_default(db_session, *, ha_url: str, ha_token: str, **extra):
             DataSourceConfig.instance_label == "default",
         )
     )
-    row = result.scalar_one()
+    row = result.scalar_one_or_none()
+    if row is None:
+        row = DataSourceConfig(
+            source_name="ha_fordpass",
+            instance_label="default",
+            config_json={},
+            enabled=True,
+        )
+        db_session.add(row)
     row.config_json = {"ha_url": ha_url, "ha_token": ha_token, **extra}
     await db_session.commit()
     return row
@@ -40,7 +48,7 @@ async def test_get_data_sources_tab_renders_one_card(client, db_session):
     response = await client.get("/settings/data-sources")
     assert response.status_code == 200
     body = response.text
-    assert ">Home Assistant<" in body
+    assert "Home Assistant" in body
     assert ">FordPass<" in body
     assert ">Gas Price Sensors<" in body
     assert "http://homeassistant.local:8123" in body

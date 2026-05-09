@@ -1,6 +1,7 @@
 """Driving-session list and trip-detail routes."""
 
 import math
+import uuid
 from datetime import date
 from typing import Annotated
 
@@ -31,6 +32,7 @@ from web.queries.vehicles import (
     get_active_vehicle,
     get_all_vehicles,
 )
+from web.services.sources.ha_fordpass.adapter import LIGHTNINGROD_TRIP_NAMESPACE
 from web.unit_system import MI_PER_KM, parse_user_local_to_utc, to_metric_distance
 
 router = APIRouter()
@@ -44,14 +46,19 @@ async def trips(
     request: Request,
     db: AsyncSession = Depends(get_db),
     range: str | None = "30d",
-    sort: str | None = "date",
-    dir: str | None = "desc",
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+    sort: str | None = None,
+    dir: str | None = None,
     page: int = 1,
     hx_request: Annotated[str | None, Header()] = None,
 ):
     time_range = range or "30d"
-    sort_by = sort or "date"
-    sort_dir = dir or "desc"
+    # Accept the new sort_by/sort_dir form fields; fall back to the legacy
+    # sort/dir aliases so deep-linked URLs from before the column-header
+    # switch keep working.
+    sort_by = sort_by or sort or "date"
+    sort_dir = sort_dir or dir or "desc"
 
     # Vehicle scoping
     active_device_id = await get_active_device_id(db)
@@ -194,6 +201,7 @@ async def trip_environment_chart(
         vehicle_df,
         temp_factor_f=(unit_ctx["temp_unit"] == "us"),
         temp_label=unit_ctx["units"]["temp_label"],
+        trip=trip,
     )
     if not chart_html:
         return HTMLResponse(
@@ -226,6 +234,7 @@ async def trip_drive_chart(
         distance_factor=distance_factor,
         range_label=unit_ctx["units"]["range_label"],
         speed_label=unit_ctx["units"]["speed_label"],
+        trip=trip,
     )
     if not chart_html:
         return HTMLResponse(
@@ -342,7 +351,18 @@ async def create_trip(
     active_vehicle = await get_active_vehicle(db)
     device_id = active_vehicle.device_id if active_vehicle else "manual"
 
+    # Compute deterministic trip_id over the user-supplied fields. The model
+    # default was dropped in the trip-overhaul migration; manual-trip writes
+    # now own their dedup invariant. Two manual entries with identical
+    # (device_id, parsed_date, distance) intentionally collide so re-submitting
+    # the same data is a no-op rather than silently doubling rows.
+    manual_trip_id = uuid.uuid5(
+        LIGHTNINGROD_TRIP_NAMESPACE,
+        f"manual|{device_id}|{parsed_date.isoformat()}|{distance_km or 0}",
+    )
+
     new_trip = EVTripMetrics(
+        trip_id=manual_trip_id,
         device_id=device_id,
         end_time=parsed_date,
         start_time=parsed_date,

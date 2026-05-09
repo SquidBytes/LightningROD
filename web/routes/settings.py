@@ -3,6 +3,7 @@
 import json
 from dataclasses import asdict
 from datetime import datetime
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -64,6 +65,7 @@ from web.queries.vehicles import (
 from web.services.csv_parser import get_db_field_options
 from web.services.ingestion import supervisor
 from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
+from web.services.sources.ha_fordpass.config import HAFordpassConfig
 from web.services.sources.registry import REGISTRY as SOURCE_REGISTRY
 from web.services.vehicles.registry import VehicleRegistry
 from web.unit_system import (
@@ -1373,6 +1375,12 @@ async def _load_existing_config(db: AsyncSession, descriptor):
         return None
 
 
+def _masked_token_for_config(config: object | None) -> str:
+    if isinstance(config, HAFordpassConfig):
+        return _mask_token(config.ha_token)
+    return ""
+
+
 async def _upsert_data_source_config(db: AsyncSession, descriptor, config) -> None:
     """Persist config: UPDATE the existing row, INSERT one if missing.
 
@@ -1447,7 +1455,7 @@ async def data_sources_tab(
             "descriptor": descriptor,
             "config": config,
             "partial_config": partial_config,
-            "masked_token": _mask_token(config.ha_token) if config else "",
+            "masked_token": _masked_token_for_config(config),
             "health": health,
             "last_seen": last_seen,
         }
@@ -1484,7 +1492,7 @@ async def save_data_source(
     if descriptor is None:
         raise HTTPException(status_code=404, detail=f"Unknown source: {source_name}")
 
-    form = dict(await request.form())
+    form: dict[str, Any] = dict(await request.form())
 
     # Masked-token preprocess — preserves the regression-locked invariant: if
     # the user submits the masked placeholder, do NOT overwrite the stored
@@ -1495,7 +1503,10 @@ async def save_data_source(
     # update.
     if "ha_token" in form:
         existing = await _load_existing_config(db, descriptor)
-        if existing and form["ha_token"] == _mask_token(existing.ha_token):
+        if (
+            isinstance(existing, HAFordpassConfig)
+            and form["ha_token"] == _mask_token(existing.ha_token)
+        ):
             form["ha_token"] = existing.ha_token
 
     # Boolean coercion for HTML checkbox: unchecked → absent from form,
@@ -1554,7 +1565,7 @@ async def save_data_source(
                 "descriptor": descriptor,
                 "config": config,
                 "partial_config": None,
-                "masked_token": _mask_token(config.ha_token),
+                "masked_token": _masked_token_for_config(config),
                 "health": health,
                 "last_seen": last_seen,
                 "gas_sensor_station_entity_id": gas_station_entity,
@@ -1637,7 +1648,7 @@ async def hass_backfill(request: Request):
             '<div class="alert alert-error text-sm">Must be connected to HA to backfill.</div>'
         )
 
-    result = await runtime.backfill_history(days=None)
+    result = await cast(Any, runtime).backfill_history(days=None)
 
     if result.get("error"):
         return HTMLResponse(
@@ -1843,7 +1854,7 @@ async def _hass_gas_sensors_context(
                 continue
             if runtime is None:
                 continue
-            state_obj = await runtime.fetch_entity_state(entity_id)
+            state_obj = await cast(Any, runtime).fetch_entity_state(entity_id)
             if not state_obj:
                 continue
             raw_val = state_obj.get("state")

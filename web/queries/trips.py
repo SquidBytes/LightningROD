@@ -4,6 +4,7 @@ Provides paginated trip queries with filtering/sorting, efficiency trend
 data with 7-day rolling average chart, and driving score radar chart.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 import numpy as np
@@ -20,6 +21,8 @@ from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle_status import EVVehicleStatus
 from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
 from web.queries.locations import _find_geo_match
+
+logger = logging.getLogger("lightningrod.queries.trips")
 
 PAGE_SIZE = 25
 VALID_PER_PAGE = {25, 50, 100}
@@ -542,12 +545,110 @@ async def detect_trip_locations(
     start_coords = await _find_nearest_gps(start_time)
     end_coords = await _find_nearest_gps(end_time)
 
-    return (_resolve_name(start_coords), _resolve_name(end_coords))
+    start_name = _resolve_name(start_coords)
+    end_name = _resolve_name(end_coords)
+
+    if start_name is None and end_name is None:
+        logger.warning(
+            "detect_trip_locations: no GPS within %ds for device %s "
+            "between %s and %s; both endpoints render as em-dash",
+            tolerance_seconds, device_id, start_time, end_time,
+        )
+
+    return (start_name, end_name)
 
 
 # ---------------------------------------------------------------------------
 # Chart builders — drawer charts
 # ---------------------------------------------------------------------------
+
+
+def _build_trip_score_fallback(
+    trip: EVTripMetrics, range_label: str = "km"
+) -> str:
+    """Render a horizontal bar chart of per-trip scores when no time-series exists.
+
+    Used by `build_drive_graph` when both battery and vehicle DataFrames are
+    empty for the trip window. Returns "" when the trip itself has no score
+    or efficiency data either.
+    """
+    score_fields = [
+        ("Driving", trip.driving_score),
+        ("Speed", trip.speed_score),
+        ("Acceleration", trip.acceleration_score),
+        ("Deceleration", trip.deceleration_score),
+    ]
+    populated = [(label, float(val)) for label, val in score_fields if val is not None]
+    if not populated:
+        return ""
+
+    pio.templates.default = "plotly_dark"
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=[v for _, v in populated],
+            y=[label for label, _ in populated],
+            orientation="h",
+            marker=dict(color="#47A8E5"),
+            hovertemplate="<b>%{y}</b><br>%{x:.0f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        height=240,
+        **_DARK_LAYOUT,
+        margin=dict(l=80, r=20, t=20, b=20),
+        xaxis=dict(title="Score (0-100)", range=[0, 100]),
+    )
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+def _build_trip_temps_fallback(
+    trip: EVTripMetrics, temp_factor_f: bool, temp_label: str
+) -> str:
+    """Render a bar chart of per-trip aggregate temperatures.
+
+    Used by `build_environment_chart` when no time-series temperature
+    data exists for the trip window. Returns "" when the trip itself
+    has no ambient/cabin/outside_air values either.
+    """
+    temp_fields = [
+        ("Outside Air", trip.outside_air_temp),
+        ("Cabin", trip.cabin_temp),
+        ("Ambient", trip.ambient_temp),
+    ]
+    populated = []
+    for label, val in temp_fields:
+        if val is None:
+            continue
+        v = float(val)
+        if temp_factor_f:
+            v = v * 9.0 / 5.0 + 32.0
+        populated.append((label, v))
+    if not populated:
+        return ""
+
+    pio.templates.default = "plotly_dark"
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=[label for label, _ in populated],
+            y=[v for _, v in populated],
+            marker=dict(color=["#47A8E5", "#f97316", "#a855f7"][: len(populated)]),
+            hovertemplate="<b>%{x}</b><br>%{y:.1f} " + temp_label + "<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        height=220,
+        **_DARK_LAYOUT,
+        margin=dict(l=50, r=20, t=20, b=30),
+        yaxis=dict(title=f"Temperature ({temp_label})"),
+    )
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
 
 _DARK_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
@@ -596,19 +697,25 @@ def build_drive_graph(
     distance_factor: float = 1.0,
     range_label: str = "km",
     speed_label: str = "km/h",
+    trip: EVTripMetrics | None = None,
 ) -> str:
     """Build combined SOC + Speed + Range chart with dual Y-axes.
 
     `range` column (km) and `speed` column (km/h) are converted by
     distance_factor before plotting (1.0 for metric, MI_PER_KM for US).
 
-    Returns HTML string. Empty string if both DataFrames are empty.
+    When both time-series DataFrames are empty but ``trip`` carries score
+    or regen data, fall back to a horizontal bar chart of the per-trip
+    scores so trips without point-by-point telemetry still get a chart.
+
+    Returns HTML string. Empty string if neither time-series nor trip-side
+    data exists.
     """
     b_empty = battery_df.empty or battery_df.drop(columns=["time"], errors="ignore").isna().all().all()
     v_empty = vehicle_df.empty or vehicle_df.drop(columns=["time"], errors="ignore").isna().all().all()
 
     if b_empty and v_empty:
-        return ""
+        return _build_trip_score_fallback(trip, range_label=range_label) if trip else ""
 
     pio.templates.default = "plotly_dark"
 
@@ -674,19 +781,27 @@ def build_environment_chart(
     vehicle_df: pd.DataFrame,
     temp_factor_f: bool = False,
     temp_label: str = "\u00b0C",
+    trip: EVTripMetrics | None = None,
 ) -> str:
     """Build temperature chart (outside + cabin) for trip time window.
 
-    Returns HTML string. Empty string if no temperature data.
+    When the time-series ``vehicle_df`` is empty but the trip row itself
+    carries any of ambient_temp / cabin_temp / outside_air_temp, fall
+    back to a small bar chart of the trip-aggregate temperatures so the
+    drawer still shows something useful for trips without minute-by-minute
+    telemetry.
+
+    Returns HTML string. Empty string if no temperature data exists at
+    either level.
     """
     if vehicle_df.empty:
-        return ""
+        return _build_trip_temps_fallback(trip, temp_factor_f, temp_label) if trip else ""
 
     has_outside = "outside_temp" in vehicle_df.columns and vehicle_df["outside_temp"].notna().any()
     has_cabin = "cabin_temp" in vehicle_df.columns and vehicle_df["cabin_temp"].notna().any()
 
     if not has_outside and not has_cabin:
-        return ""
+        return _build_trip_temps_fallback(trip, temp_factor_f, temp_label) if trip else ""
 
     pio.templates.default = "plotly_dark"
 

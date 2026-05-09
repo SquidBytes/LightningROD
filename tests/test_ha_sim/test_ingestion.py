@@ -169,7 +169,8 @@ async def test_trip_ingestion(db_session):
     # Distance should be converted from miles to km (22.5 * 1.60934)
     assert trip.distance is not None
     assert abs(float(trip.distance) - 22.5 * 1.60934) < 0.1
-    assert float(trip.duration) == 35.0
+    # duration is canonical seconds (35 minutes → 2100 seconds)
+    assert float(trip.duration) == 35.0 * 60
     assert trip.source_system == "ha_fordpass"
 
 
@@ -197,6 +198,7 @@ async def test_battery_status_ingestion(db_session):
     refresh_entity, refresh_state = make_lastrefresh_event(device_id=_TEST_DEVICE_ID)
     # lastrefresh handler is in vehicle_status handler
     slug = extract_slug(refresh_entity)
+    assert slug is not None
     handler = SENSOR_HANDLERS[slug]
     parts = refresh_entity[len("sensor.fordpass_"):].split("_", 1)
     device_id = parts[0]

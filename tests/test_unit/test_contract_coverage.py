@@ -53,6 +53,10 @@ _EXEMPTIONS: set[tuple[str, str]] = {
     # electrical_efficiency is a dimensionless trip-score field (0-100) per
     # ha-fordpass; matches 'efficiency' token but is NOT a unit-ful quantity.
     ("ev_trip_metrics", "electrical_efficiency"),
+    # odometer_start/end derived at write-time from ev_vehicle_status.odometer
+    # (closest-reading lookup); not a direct HA-source field, so no FieldContract.
+    ("ev_trip_metrics", "odometer_start"),
+    ("ev_trip_metrics", "odometer_end"),
     # Already-SI scalar columns that don't match any token would not need
     # exemptions, but we keep the SI groupings for documentation parity.
 }

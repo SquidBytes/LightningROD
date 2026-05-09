@@ -58,16 +58,32 @@
         <table class="table table-sm w-full">
             <thead>
                 <tr>
+                    {% set current_sort_by = sort_by %}
+                    {% set current_sort_dir = sort_dir %}
                     <th>#</th>
-                    <th>Date</th>
-                    <th>Distance</th>
-                    <th>Duration</th>
-                    <th>Temp</th>
+                    {% with col_id="date", col_label="Date", sort_key="date", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                        {% include "partials/column_dropdown.html" %}
+                    {% endwith %}
+                    {% with col_id="distance", col_label="Distance", sort_key="distance", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                        {% include "partials/column_dropdown.html" %}
+                    {% endwith %}
+                    {% with col_id="duration", col_label="Duration", sort_key="duration", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                        {% include "partials/column_dropdown.html" %}
+                    {% endwith %}
+                    {% with col_id="temperature", col_label="Temp", sort_key="temperature", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                        {% include "partials/column_dropdown.html" %}
+                    {% endwith %}
                     <th>Energy</th>
-                    <th>Reported Eff.</th>
+                    {% with col_id="efficiency", col_label="Reported Eff.", sort_key="efficiency", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                        {% include "partials/column_dropdown.html" %}
+                    {% endwith %}
                     <th>Calc. Eff.</th>
-                    <th>Score</th>
-                    <th>Regen</th>
+                    {% with col_id="score", col_label="Score", sort_key="score", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                        {% include "partials/column_dropdown.html" %}
+                    {% endwith %}
+                    {% with col_id="regen", col_label="Regen", sort_key="regen", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                        {% include "partials/column_dropdown.html" %}
+                    {% endwith %}
                 </tr>
             </thead>
             <tbody>
@@ -96,7 +112,7 @@
                         <p class="text-sm text-base-content/60">
                             {% if trip.distance is not none %}{{ "%.1f"|format(trip.distance|cvt_dist(distance_unit)) }} {{ units.distance_label }}{% endif %}
                             {% if trip.duration is not none %}
-                                &middot; {{ (trip.duration | int) // 60 }}h {{ (trip.duration | int) % 60 }}m
+                                &middot; {{ (trip.duration | int) // 3600 }}h {{ ((trip.duration | int) % 3600) // 60 }}m
                             {% endif %}
                         </p>
                     </div>

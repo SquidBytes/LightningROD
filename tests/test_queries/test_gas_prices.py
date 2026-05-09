@@ -33,6 +33,8 @@ async def test_upsert_gas_price_inserts_new_row(db_session):
     assert entry.id is not None
     assert entry.year == 2025
     assert entry.month == 6
+    assert entry.station_price is not None
+    assert entry.average_price is not None
     assert float(entry.station_price) == 4.00
     assert float(entry.average_price) == 4.20
 
@@ -45,6 +47,8 @@ async def test_upsert_gas_price_updates_existing_without_clobbering(db_session):
     updated = await upsert_gas_price(
         db_session, year=2025, month=7, station_price=4.30
     )
+    assert updated.station_price is not None
+    assert updated.average_price is not None
     assert float(updated.station_price) == 4.30
     assert float(updated.average_price) == 4.25  # preserved
 
@@ -213,6 +217,8 @@ async def test_gas_price_history_returns_metric_values(db_session):
     rows = await get_all_gas_prices(db_session)
     target = next((r for r in rows if r.year == 2025 and r.month == 4), None)
     assert target is not None
+    assert target.station_price is not None
+    assert target.average_price is not None
     # Query layer returns raw values verbatim — NO conversion.
     assert float(target.station_price) == pytest.approx(1.057, rel=1e-6)
     assert float(target.average_price) == pytest.approx(1.110, rel=1e-6)

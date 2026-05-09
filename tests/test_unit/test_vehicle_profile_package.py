@@ -9,8 +9,10 @@ Validates the relocated package structure under web/services/vehicles/:
 Row counts mirror tests/test_unit/test_vehicle_presets.py (35 Lightning + 30 Mach-E).
 """
 from dataclasses import FrozenInstanceError, asdict
+from typing import Any, cast
 
 import pytest
+
 from web.services.vehicles.base import VehiclePresetRow, VehicleProfile
 from web.services.vehicles.ford import FordProfile
 from web.services.vehicles.ford.presets import VEHICLE_PRESETS
@@ -21,7 +23,7 @@ def test_vehicle_preset_row_is_frozen():
     """VehiclePresetRow rejects attribute mutation (frozen dataclass)."""
     row = VEHICLE_PRESETS[0]
     with pytest.raises(FrozenInstanceError):
-        row.make = "X"
+        cast(Any, row).make = "X"
 
 
 def test_vehicle_preset_row_field_set_matches_legacy_keys():

@@ -508,3 +508,101 @@ async def test_no_match_both_sources_insert_independently(db_session):
     assert len(rows) == 2, (
         f"Different trips must each produce their own row; got {len(rows)} rows."
     )
+
+
+# ---------------------------------------------------------------------------
+# Deterministic trip_id + UNIQUE-constraint regression coverage
+# ---------------------------------------------------------------------------
+
+
+_DETERMINISTIC_TRIP_TS = "2026-04-28T10:00:00+00:00"
+
+
+async def test_three_source_dedupe(db_session):
+    """elveh + events for the same physical trip → exactly ONE row.
+
+    Both adapters compute the same uuid5(NS, device_id|tripUpdateTime); the
+    second insert finds the row via deterministic-id lookup and enriches it
+    rather than duplicating.
+    """
+    from db.models.trip_metrics import EVTripMetrics
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+
+    # 1. elveh fires first carrying tripUpdateTime
+    elveh_entity_id, elveh_state = make_trip_event(
+        device_id=_TEST_DEVICE_ID,
+        distance_miles=_TRIP_DIST_MILES,
+        energy_consumed=_TRIP_ENERGY_KWH,
+        update_time_iso=_DETERMINISTIC_TRIP_TS,
+    )
+    await _dispatch_event(elveh_entity_id, elveh_state, db_session)
+    await db_session.flush()
+
+    rows = (await db_session.execute(
+        select(EVTripMetrics).where(EVTripMetrics.device_id == _TEST_DEVICE_ID)
+    )).scalars().all()
+    assert len(rows) == 1, "elveh should insert one row"
+
+    # Clear caches so the second delivery exercises the DB lookup path.
+    from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+    fordpass_handlers._last_trip_values.clear()
+
+    # 2. events fires next carrying the SAME updateTime
+    events_entity_id, events_state = make_events_trip_event(
+        device_id=_TEST_DEVICE_ID,
+        distance_km=_TRIP_DIST_KM,
+        energy_wh=_TRIP_ENERGY_WH,
+        update_time_iso=_DETERMINISTIC_TRIP_TS,
+    )
+    await _dispatch_event(events_entity_id, events_state, db_session)
+    await db_session.flush()
+
+    rows = (await db_session.execute(
+        select(EVTripMetrics).where(EVTripMetrics.device_id == _TEST_DEVICE_ID)
+    )).scalars().all()
+    assert len(rows) == 1, (
+        f"Cross-source deterministic dedup failed: expected 1 row, got {len(rows)}."
+    )
+
+
+async def test_unique_constraint_blocks_duplicate(db_session):
+    """Direct INSERT collision on trip_id must raise IntegrityError.
+
+    Bypasses the in-memory cache + handler match-and-enrich path entirely so
+    the DB-level UNIQUE(trip_id) constraint is the only safety net under
+    test.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from db.models.trip_metrics import EVTripMetrics
+    from web.services.sources.ha_fordpass.adapter import compute_trip_id
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+
+    forced_id = compute_trip_id(_TEST_DEVICE_ID, _DETERMINISTIC_TRIP_TS)
+    assert forced_id is not None
+
+    db_session.add(
+        EVTripMetrics(
+            trip_id=forced_id,
+            device_id=_TEST_DEVICE_ID,
+            end_time=datetime(2026, 4, 28, 10, 0, tzinfo=UTC),
+            distance=24.0,
+            energy_consumed=7.0,
+        )
+    )
+    await db_session.flush()
+
+    db_session.add(
+        EVTripMetrics(
+            trip_id=forced_id,
+            device_id=_TEST_DEVICE_ID,
+            end_time=datetime(2026, 4, 28, 10, 5, tzinfo=UTC),
+            distance=25.0,  # different but trip_id collides
+            energy_consumed=7.5,
+        )
+    )
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+    await db_session.rollback()

@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -72,11 +73,43 @@ def _key(ha_config: dict, device_id: str) -> tuple[int, str]:
 
 
 # ---------------------------------------------------------------------------
+# Trip-field pure-converter helpers
+# ---------------------------------------------------------------------------
+
+
+def _score_or_null(val: Any) -> float | None:
+    """Convert a 0-100 driving-score-like field, treating 0 as 'unmeasured'.
+
+    ha-fordpass emits 0 when the underlying telemetry is missing rather than
+    omitting the attribute (its metrics_mapping carries `default=0`). Storing
+    that as a real low score paints empty trips red on the gauge UI; we
+    convert 0 → None at the adapter boundary so empty-state rendering stays
+    consistent.
+    """
+    raw = _safe_float(val)
+    if raw is None or raw == 0:
+        return None
+    return raw
+
+
+def _duration_to_seconds_from_minutes(val: Any) -> float | None:
+    """Convert an elveh-shaped tripDuration (minutes) to canonical seconds.
+
+    Events-entity payloads emit trip_duration in seconds directly (handled
+    upstream); elveh attributes emit minutes. Storing both as seconds keeps
+    the drawer's `(duration // 3600)` / `(duration // 60) % 60` rendering
+    correct regardless of which source wrote the row.
+    """
+    raw = _safe_float(val)
+    return raw * 60.0 if raw is not None else None
+
+
+# ---------------------------------------------------------------------------
 # Slug extractor
 # ---------------------------------------------------------------------------
 
 
-def extract_slug(entity_id: str) -> str | None:
+def extract_slug(entity_id: str | None) -> str | None:
     """Extract sensor slug from entity_id pattern sensor.fordpass_{vin}_{slug}.
 
     Example: sensor.fordpass_1ftvw1el6pwg05841_soc -> soc
@@ -640,30 +673,30 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 return _d(v)
             return ha_fordpass.convert(_range_regen_contract, v, new_state, ha_config)
 
-        trip_attr_map = {
+        trip_attr_map: dict[str, tuple[str, Callable[..., Any]]] = {
             "tripDistanceTraveled": ("distance", _d),
-            "tripDuration": ("duration", _safe_float),
+            # Canonical storage is seconds; elveh emits minutes -> *60.
+            "tripDuration": ("duration", _duration_to_seconds_from_minutes),
             "tripEnergyConsumed": ("energy_consumed", _safe_float),
             "tripEfficiency": ("efficiency", _efficiency_conv),
-            "tripDrivingScore": ("driving_score", _safe_float),
-            "tripSpeed": ("speed_score", _safe_float),
-            "tripAcceleration": ("acceleration_score", _safe_float),
-            "tripDeceleration": ("deceleration_score", _safe_float),
+            # Score fields use the 0-as-sentinel converter so empty trips
+            # store NULL rather than rendering as a red 0-score gauge.
+            "tripDrivingScore": ("driving_score", _score_or_null),
+            "tripSpeed": ("speed_score", _score_or_null),
+            "tripAcceleration": ("acceleration_score", _score_or_null),
+            "tripDeceleration": ("deceleration_score", _score_or_null),
             "tripAmbientTemp": ("ambient_temp", _t),
             "tripOutsideAirAmbientTemp": ("outside_air_temp", _t),
             "tripCabinTemp": ("cabin_temp", _t),
             "tripRangeRegenerated": ("range_regenerated", _range_regen_conv),
-            "tripElectricalEfficiency": ("electrical_efficiency", _safe_float),
+            "tripElectricalEfficiency": ("electrical_efficiency", _score_or_null),
         }
 
         trip_fields = {}
-        # Converters that want the HA attribute name (for detection-layer
-        # bookkeeping) are _d and _t. Others accept just the value.
-        _attribute_aware = {_d, _t}
         for attr_key, (field_name, converter) in trip_attr_map.items():
             val = attrs.get(attr_key)
             if val is not None:
-                if converter in _attribute_aware:
+                if attr_key in {"tripDistance", "tripDistanceTraveled", "tripAmbientTemp", "tripOutsideAirAmbientTemp", "tripCabinTemp"}:
                     converted = converter(val, attr_key)
                 else:
                     converted = converter(val)
@@ -686,19 +719,37 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 start_time = None
                 if trip_fields.get("duration") and end_time:
                     from datetime import timedelta
-                    start_time = end_time - timedelta(minutes=float(trip_fields["duration"]))
+                    # duration is canonical seconds (elveh minutes already
+                    # converted via _duration_to_seconds_from_minutes).
+                    start_time = end_time - timedelta(seconds=float(trip_fields["duration"]))
 
-                # Match-and-enrich: if an _events row already exists for this
-                # trip, enrich it with elveh-owned fields rather than inserting
-                # a duplicate.
+                # Deterministic-id lookup: if elveh carries tripUpdateTime
+                # (some installs do, others don't) compute the same uuid5 the
+                # events handler would. Existing row → enrich; otherwise fall
+                # through to the legacy predicate-match path.
+                from sqlalchemy import select as _select
+
                 from db.models.trip_metrics import EVTripMetrics
 
-                existing = await _find_matching_trip(
-                    db,
-                    device_id,
-                    trip_fields.get("distance"),
-                    trip_fields.get("energy_consumed"),
-                )
+                update_time_iso = attrs.get("tripUpdateTime")
+                deterministic_id = ha_fordpass.compute_trip_id(device_id, update_time_iso)
+
+                existing = None
+                if deterministic_id is not None:
+                    existing = (await db.execute(
+                        _select(EVTripMetrics)
+                        .where(EVTripMetrics.trip_id == deterministic_id)
+                        .limit(1)
+                    )).scalar_one_or_none()
+
+                if existing is None:
+                    existing = await _find_matching_trip(
+                        db,
+                        device_id,
+                        trip_fields.get("distance"),
+                        trip_fields.get("energy_consumed"),
+                    )
+
                 if existing is not None:
                     # Enrich the existing row with elveh-owned fields.
                     # Scores and regen always overwrite (elveh is canonical).
@@ -719,17 +770,38 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         existing.efficiency = trip_fields["efficiency"]
                     if existing.duration is None and trip_fields.get("duration") is not None:
                         existing.duration = trip_fields["duration"]
+                    if existing.odometer_end is None and existing.end_time is not None:
+                        existing.odometer_end = await ha_fordpass._closest_odometer(
+                            db, device_id, existing.end_time,
+                        )
+                    if existing.odometer_start is None and existing.start_time is not None:
+                        existing.odometer_start = await ha_fordpass._closest_odometer(
+                            db, device_id, existing.start_time,
+                        )
                     logger.info(
                         "Enriched existing trip row %s for %s with elveh scores/regen",
                         existing.id,
                         device_id,
                     )
                 else:
+                    import uuid as _uuid
+
+                    odometer_start = await ha_fordpass._closest_odometer(db, device_id, start_time) if start_time else None
+                    odometer_end = await ha_fordpass._closest_odometer(db, device_id, end_time)
+
                     trip_record = EVTripMetrics(
+                        # Deterministic uuid5 when tripUpdateTime is available;
+                        # uuid4 fallback otherwise. The fallback row can't
+                        # cross-source dedup but the row-level UNIQUE(trip_id)
+                        # constraint still blocks double inserts of the same
+                        # payload.
+                        trip_id=deterministic_id or _uuid.uuid4(),
                         device_id=device_id,
                         start_time=start_time,
                         end_time=end_time,
                         recorded_at=datetime.now(UTC),
+                        odometer_start=odometer_start,
+                        odometer_end=odometer_end,
                         is_complete=True,
                         source_system="ha_fordpass",
                         original_timestamp=event_ts,
@@ -739,7 +811,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                     db.add(trip_record)
                     await db.commit()
                     logger.info(
-                        "Trip recorded for %s: %s km, %s min",
+                        "Trip recorded for %s: distance=%s duration_s=%s",
                         device_id,
                         trip_fields.get("distance"),
                         trip_fields.get("duration"),

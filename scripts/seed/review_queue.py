@@ -84,6 +84,17 @@ async def seed(db: AsyncSession) -> int:
 
     pairs_created = 0
     for orig in originals:
+        if (
+            orig.energy_kwh is None
+            or orig.session_start_utc is None
+            or orig.session_end_utc is None
+        ):
+            logger.warning(
+                "review_queue: skipping session %s with incomplete duplicate fields",
+                orig.session_id,
+            )
+            continue
+
         # Flag the original
         orig.needs_review = True
         orig.review_type = "duplicate"
