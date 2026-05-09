@@ -11,7 +11,7 @@ import logging
 from datetime import UTC, datetime
 
 import websockets
-from websockets.asyncio.server import ServerConnection, serve
+from websockets.asyncio.server import Server, ServerConnection, serve
 
 logger = logging.getLogger("lightningrod.test.ha_sim")
 
@@ -35,7 +35,7 @@ class HASimulator:
         self._host = host
         self._port = port  # 0 = OS-assigned free port
         self._valid_token = valid_token
-        self._server = None
+        self._server: Server | None = None
         self._actual_port: int | None = None
 
         # Event injection queue and subscribed client tracking
@@ -81,6 +81,8 @@ class HASimulator:
             ping_interval=None,
             ping_timeout=None,
         )
+        if self._server.sockets is None:
+            raise RuntimeError("Simulator server did not expose listening sockets")
         # Read the actual port from the server socket
         for sock in self._server.sockets:
             addr = sock.getsockname()

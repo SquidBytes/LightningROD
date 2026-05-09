@@ -7,7 +7,9 @@ Locks the column-header sort pattern that mirrors /charging/sessions:
 - Active sort indicator renders in the active column header.
 - The route handler accepts sort_by/sort_dir query params (no API break).
 """
+from collections.abc import MutableMapping
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from jinja2 import Environment, FileSystemLoader
@@ -84,11 +86,12 @@ def _render_full_index(sort_by="date", sort_dir="desc"):
     env.filters["cvt_eff"] = lambda v, u: v
     env.filters["localtime"] = lambda v, tz, fmt="%Y-%m-%d": str(v)
     # Stub FastAPI/template globals so {% extends 'base.html' %} doesn't blow up.
-    env.globals["url_for"] = lambda *a, **kw: ""
-    env.globals["request"] = type("R", (), {"url": type("U", (), {"path": "/driving/sessions"})()})()
-    env.globals["developer_mode"] = lambda: False
-    env.globals["demo_mode"] = lambda: False
-    env.globals["app_version"] = lambda: "test"
+    globals_map = cast(MutableMapping[str, Any], env.globals)
+    globals_map["url_for"] = lambda *a, **kw: ""
+    globals_map["request"] = type("R", (), {"url": type("U", (), {"path": "/driving/sessions"})()})()
+    globals_map["developer_mode"] = lambda: False
+    globals_map["demo_mode"] = lambda: False
+    globals_map["app_version"] = lambda: "test"
     tpl = env.get_template("driving/sessions/index.html")
     return tpl.render(
         trips=[],

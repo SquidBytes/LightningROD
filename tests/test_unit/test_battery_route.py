@@ -10,6 +10,7 @@ Covers:
 
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -164,10 +165,10 @@ async def test_battery_temp_summary_populated_without_capacity_row(db_session):
 
     from web.routes import battery as route_module
     real_templates = route_module.templates
-    route_module.templates = _StubTemplates()
+    route_module.templates = cast(Any, _StubTemplates())
     try:
         await battery_handler(
-            request=None,
+            request=cast(Any, None),
             db=db,
             range="7d",
             session=None,
@@ -217,10 +218,10 @@ async def test_default_session_is_latest(db_session):
             return None
 
     real_templates = route_module.templates
-    route_module.templates = _StubTemplates()
+    route_module.templates = cast(Any, _StubTemplates())
     try:
         await battery_handler(
-            request=None, db=db, range="7d",
+            request=cast(Any, None), db=db, range="7d",
             session=None, section=None, hx_request=None,
         )
     finally:
@@ -263,10 +264,10 @@ async def test_explicit_session_overrides_default(db_session):
             return None
 
     real_templates = route_module.templates
-    route_module.templates = _StubTemplates()
+    route_module.templates = cast(Any, _StubTemplates())
     try:
         await battery_handler(
-            request=None, db=db, range="7d",
+            request=cast(Any, None), db=db, range="7d",
             session=s1.id, section=None, hx_request=None,
         )
     finally:
@@ -291,10 +292,10 @@ async def test_no_sessions_means_no_default(db_session):
             return None
 
     real_templates = route_module.templates
-    route_module.templates = _StubTemplates()
+    route_module.templates = cast(Any, _StubTemplates())
     try:
         await battery_handler(
-            request=None, db=db, range="7d",
+            request=cast(Any, None), db=db, range="7d",
             session=None, section=None, hx_request=None,
         )
     finally:
@@ -439,10 +440,10 @@ async def test_telemetry_context_carries_all_four_metrics(db_session):
             return None
 
     real_templates = route_module.templates
-    route_module.templates = _StubTemplates()
+    route_module.templates = cast(Any, _StubTemplates())
     try:
         await battery_handler(
-            request=None, db=db, range="7d",
+            request=cast(Any, None), db=db, range="7d",
             session=None, section=None, hx_request=None,
         )
     finally:

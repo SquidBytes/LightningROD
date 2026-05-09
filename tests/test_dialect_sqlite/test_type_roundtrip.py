@@ -63,4 +63,5 @@ async def test_datetime_tz_roundtrip(db_session):
     # Component-level comparison so the naive-vs-aware return is documented
     # rather than masked. If/when SQLAlchemy starts returning tz-aware on
     # SQLite, tighten this to ``sess.session_start_utc == now``.
+    assert sess.session_start_utc is not None
     assert sess.session_start_utc.replace(tzinfo=None) == now.replace(tzinfo=None)

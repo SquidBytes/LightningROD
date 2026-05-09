@@ -96,6 +96,8 @@ async def test_p33_gas_price_history_stored_metric(db_session: AsyncSession):
             )
         )
     ).scalar_one()
+    assert fetched.station_price is not None
+    assert fetched.average_price is not None
     assert float(fetched.station_price) == pytest.approx(1.058, rel=1e-3)
     assert float(fetched.average_price) == pytest.approx(1.111, rel=1e-3)
 

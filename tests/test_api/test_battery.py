@@ -179,6 +179,7 @@ def test_build_battery_temp_chart_renders_charging_regions():
         [(now - timedelta(hours=1), now)],
         temp_label="°C",
     )
+    assert html is not None
     assert "rgba(74, 222, 128, 0.25)" in html
 
 

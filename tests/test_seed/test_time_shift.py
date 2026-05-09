@@ -91,5 +91,6 @@ def test_shift_datetime_basic():
     assert shift_datetime(None, offset) is None
 
     result_naive = shift_datetime(naive_dt, offset)
+    assert result_naive is not None
     assert result_naive == datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
     assert result_naive.tzinfo is not None

@@ -86,5 +86,6 @@ def test_degC_identity_property(value):
 @given(st.floats(min_value=0, max_value=1e5, allow_nan=False, allow_infinity=False))
 def test_mi_km_mi_round_trip(miles):
     km = to_metric(miles, "mi")
+    assert km is not None
     recovered_miles = km / 1.60934
     assert recovered_miles == pytest.approx(miles, rel=1e-4)

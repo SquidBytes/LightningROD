@@ -56,10 +56,14 @@ class TestNormalizeAddress:
     def test_normalizes_abbreviations(self):
         from web.queries.locations import normalize_address
 
-        assert "avenue" in normalize_address("5th Ave")
-        assert "boulevard" in normalize_address("Sunset Blvd")
-        assert "drive" in normalize_address("Oak Dr")
-        assert "road" in normalize_address("Elm Rd")
+        ave = normalize_address("5th Ave")
+        blvd = normalize_address("Sunset Blvd")
+        drive = normalize_address("Oak Dr")
+        road = normalize_address("Elm Rd")
+        assert ave is not None and "avenue" in ave
+        assert blvd is not None and "boulevard" in blvd
+        assert drive is not None and "drive" in drive
+        assert road is not None and "road" in road
 
     def test_none_returns_none(self):
         from web.queries.locations import normalize_address

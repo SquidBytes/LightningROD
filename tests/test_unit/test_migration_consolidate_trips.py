@@ -22,6 +22,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import sqlalchemy as sa
+import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from db.migrations.versions.p34_battery_trips_overhaul import (
