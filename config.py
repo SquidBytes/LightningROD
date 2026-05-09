@@ -1,5 +1,8 @@
 """Environment-backed application settings."""
 
+from typing import Any, cast
+
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,7 +11,10 @@ class Settings(BaseSettings):
 
     database_url: str
     app_port: int = 8000
-    debug: bool = False
+    debug: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("APP_DEBUG", "LIGHTNINGROD_DEBUG"),
+    )
 
 
-settings = Settings()
+settings = Settings.model_validate(cast(dict[str, Any], {}))
