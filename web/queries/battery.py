@@ -938,13 +938,14 @@ _SPARKLINE_CONFIG = {"displayModeBar": False, "staticPlot": True, "displaylogo":
 def build_metric_sparkline(
     series: list[dict],
     color: str = "#47A8E5",
-    height: int = 32,
+    height: int = 48,
     transform=None,
+    zero_line: bool = False,
 ) -> str | None:
     """Tiny inline sparkline for a single battery telemetry metric.
 
     Renders a chrome-less line trace with no axes, hover, or modebar — designed
-    to sit under a numeric headline value at ~32px tall.
+    to sit under a numeric headline value.
 
     Args:
         series: list of {"recorded_at", "value"} from query_battery_telemetry.
@@ -952,6 +953,9 @@ def build_metric_sparkline(
         height: pixel height of the chart.
         transform: optional callable mapping each raw value (already a float)
             to its displayed value, e.g. C-to-F conversion.
+        zero_line: when True, draws a faint horizontal reference line at y=0.
+            Use for signed metrics (current, power) where below-zero indicates
+            charging — saves having to call that out in the tooltip.
 
     Returns Plotly HTML, or None when series has fewer than 2 points (a single
     point can't draw a line).
@@ -972,7 +976,7 @@ def build_metric_sparkline(
             hoverinfo="skip",
         )
     )
-    fig.update_layout(
+    layout_kwargs = dict(
         height=height,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -981,6 +985,18 @@ def build_metric_sparkline(
         yaxis=dict(visible=False, fixedrange=True),
         showlegend=False,
     )
+    if zero_line:
+        # Faint horizontal reference at y=0 spanning the full plot — separates
+        # discharging (above) from charging (below) without needing axis labels.
+        layout_kwargs["shapes"] = [
+            dict(
+                type="line",
+                xref="paper", x0=0, x1=1,
+                yref="y", y0=0, y1=0,
+                line=dict(color="rgba(229,231,235,0.35)", width=1, dash="dot"),
+            )
+        ]
+    fig.update_layout(**layout_kwargs)
     return _wrap_chart(
         fig.to_html(full_html=False, include_plotlyjs=False, config=_SPARKLINE_CONFIG)
     )

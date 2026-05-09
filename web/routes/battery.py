@@ -253,70 +253,67 @@ async def battery(
     def _c_to_user_unit(c: float) -> float:
         return (c * 9.0 / 5.0) + 32.0 if unit_ctx["temp_unit"] == "us" else c
 
+    def _val(field):
+        latest = telemetry_latest.get(field)
+        return latest["value"] if latest else None
+
+    def _ts(field):
+        latest = telemetry_latest.get(field)
+        return latest["recorded_at"] if latest else None
+
     telemetry = {
         "hv_battery_temperature": {
             "label": "Pack Temp",
-            "value": (
-                _c_to_user_unit(temp_latest["value"]) if temp_latest else None
-            ),
+            "value": _c_to_user_unit(_val("hv_battery_temperature")) if _val("hv_battery_temperature") is not None else None,
             "unit": unit_ctx["units"]["temp_label"],
-            "recorded_at": temp_latest["recorded_at"] if temp_latest else None,
+            "recorded_at": _ts("hv_battery_temperature"),
             "sparkline": build_metric_sparkline(
                 series["hv_battery_temperature"],
                 color="#fbbf24",
                 transform=_c_to_user_unit,
+                zero_line=True,
             ),
             "fmt": "{:.0f}",
         },
         "hv_battery_voltage": {
-            "label": "HV Voltage",
-            "value": (
-                telemetry_latest["hv_battery_voltage"]["value"]
-                if telemetry_latest["hv_battery_voltage"] else None
-            ),
+            "label": "Voltage",
+            "value": _val("hv_battery_voltage"),
             "unit": "V",
-            "recorded_at": (
-                telemetry_latest["hv_battery_voltage"]["recorded_at"]
-                if telemetry_latest["hv_battery_voltage"] else None
-            ),
+            "recorded_at": _ts("hv_battery_voltage"),
             "sparkline": build_metric_sparkline(
-                series["hv_battery_voltage"], color="#a78bfa"
+                series["hv_battery_voltage"], color="#a78bfa",
             ),
             "fmt": "{:.0f}",
         },
         "hv_battery_amperage": {
-            "label": "HV Amperage",
-            "value": (
-                telemetry_latest["hv_battery_amperage"]["value"]
-                if telemetry_latest["hv_battery_amperage"] else None
-            ),
+            "label": "Amperage",
+            "value": _val("hv_battery_amperage"),
             "unit": "A",
-            "recorded_at": (
-                telemetry_latest["hv_battery_amperage"]["recorded_at"]
-                if telemetry_latest["hv_battery_amperage"] else None
-            ),
+            "recorded_at": _ts("hv_battery_amperage"),
             "sparkline": build_metric_sparkline(
-                series["hv_battery_amperage"], color="#34d399"
+                series["hv_battery_amperage"], color="#34d399",
+                zero_line=True,
             ),
             "fmt": "{:+.1f}",
         },
         "hv_battery_kw": {
-            "label": "HV Power",
-            "value": (
-                telemetry_latest["hv_battery_kw"]["value"]
-                if telemetry_latest["hv_battery_kw"] else None
-            ),
+            "label": "Power",
+            "value": _val("hv_battery_kw"),
             "unit": "kW",
-            "recorded_at": (
-                telemetry_latest["hv_battery_kw"]["recorded_at"]
-                if telemetry_latest["hv_battery_kw"] else None
-            ),
+            "recorded_at": _ts("hv_battery_kw"),
             "sparkline": build_metric_sparkline(
-                series["hv_battery_kw"], color="#47A8E5"
+                series["hv_battery_kw"], color="#47A8E5",
+                zero_line=True,
             ),
             "fmt": "{:+.1f}",
         },
     }
+    # All four metrics ingest from the same EVBatteryStatus row, so any one
+    # populated recorded_at represents the whole card. Pick the freshest.
+    telemetry_latest_at = max(
+        (m["recorded_at"] for m in telemetry.values() if m["recorded_at"]),
+        default=None,
+    )
 
     # Degradation, charge curve, and 12v charts are NOT computed here --
     # they are lazy-loaded via HTMX hx-trigger="revealed"
@@ -328,6 +325,7 @@ async def battery(
         "ref_curve_name": ref_curve_data["name"] if ref_curve_data else None,
         "summary": summary,
         "telemetry": telemetry,
+        "telemetry_latest_at": telemetry_latest_at,
         "sessions_list": recent_sessions,
         "session_time_windows": session_time_windows,
         "active_range": time_range,
