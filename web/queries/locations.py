@@ -333,6 +333,18 @@ async def resolve_location(
     return new_loc.id
 
 
+async def get_location_network_id(
+    db: AsyncSession, location_id: int | None
+) -> int | None:
+    """Return the network_id of the given location, or None if unset/missing."""
+    if not location_id:
+        return None
+    result = await db.execute(
+        select(EVLocationLookup.network_id).where(EVLocationLookup.id == location_id)
+    )
+    return result.scalar_one_or_none()
+
+
 async def _get_setting(db: AsyncSession, key: str) -> str | None:
     """Get a single app setting value."""
     result = await db.execute(

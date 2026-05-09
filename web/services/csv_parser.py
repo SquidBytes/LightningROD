@@ -1034,6 +1034,15 @@ async def import_rows(
                             if resolved_loc_id:
                                 clean_row["location_id"] = resolved_loc_id
 
+                    # Inherit network from the resolved location when row has none.
+                    if clean_row.get("network_id") is None and clean_row.get("location_id"):
+                        from web.queries.locations import get_location_network_id
+                        inherited_net_id = await get_location_network_id(
+                            db_session, clean_row["location_id"]
+                        )
+                        if inherited_net_id is not None:
+                            clean_row["network_id"] = inherited_net_id
+
                     session_obj = EVChargingSession(**clean_row)
                     db_session.add(session_obj)
                 added += 1
