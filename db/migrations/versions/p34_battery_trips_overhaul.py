@@ -106,7 +106,7 @@ def _coerce_datetime(val: Any):
     return None
 
 
-def _bucket_key(device_id: str, end_time: Any, distance: Any) -> tuple[str, str, float] | None:
+def _bucket_key(device_id: Any, end_time: Any, distance: Any) -> tuple[str, str, float] | None:
     """Group key: device_id + end_time bucketed to nearest minute + distance rounded to 1 dp.
 
     Returns None when the row lacks the fields we group on (those rows are
@@ -306,8 +306,9 @@ def upgrade() -> None:
             rewrite_trip_ids_to_legacy_form(sync_conn)
 
         # `bind` may already be a sync Connection inside Alembic's online flow.
-        if hasattr(bind, "run_sync"):
-            bind.run_sync(_run_data_passes)
+        run_sync = getattr(bind, "run_sync", None)
+        if callable(run_sync):
+            run_sync(_run_data_passes)
         else:
             _run_data_passes(bind)
 

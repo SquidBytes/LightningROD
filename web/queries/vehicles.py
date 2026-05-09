@@ -14,7 +14,7 @@ def lookup_battery_values(
     model: str,
     year: int,
     trim_level: str,
-    battery_option: str,
+    battery_option: str | None,
 ) -> tuple[float, float] | None:
     """Return (battery_usable_kwh, battery_gross_kwh) for a preset match or None.
 

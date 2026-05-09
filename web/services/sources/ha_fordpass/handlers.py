@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -108,7 +109,7 @@ def _duration_to_seconds_from_minutes(val: Any) -> float | None:
 # ---------------------------------------------------------------------------
 
 
-def extract_slug(entity_id: str) -> str | None:
+def extract_slug(entity_id: str | None) -> str | None:
     """Extract sensor slug from entity_id pattern sensor.fordpass_{vin}_{slug}.
 
     Example: sensor.fordpass_1ftvw1el6pwg05841_soc -> soc
@@ -672,7 +673,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 return _d(v)
             return ha_fordpass.convert(_range_regen_contract, v, new_state, ha_config)
 
-        trip_attr_map = {
+        trip_attr_map: dict[str, tuple[str, Callable[..., Any]]] = {
             "tripDistanceTraveled": ("distance", _d),
             # Canonical storage is seconds; elveh emits minutes -> *60.
             "tripDuration": ("duration", _duration_to_seconds_from_minutes),
@@ -692,13 +693,10 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         }
 
         trip_fields = {}
-        # Converters that want the HA attribute name (for detection-layer
-        # bookkeeping) are _d and _t. Others accept just the value.
-        _attribute_aware = {_d, _t}
         for attr_key, (field_name, converter) in trip_attr_map.items():
             val = attrs.get(attr_key)
             if val is not None:
-                if converter in _attribute_aware:
+                if attr_key in {"tripDistance", "tripDistanceTraveled", "tripAmbientTemp", "tripOutsideAirAmbientTemp", "tripCabinTemp"}:
                     converted = converter(val, attr_key)
                 else:
                     converted = converter(val)

@@ -19,7 +19,7 @@
                 {% if summary.current_capacity is not none %}
                     <dl class="mt-3 text-sm space-y-0.5 text-left self-start">
                         <div class="flex gap-2">
-                            <dt class="text-base-content/50 font-light">Current:</dt>
+                            <dt class="text-base-content/50 font-light">Last Reported:</dt>
                             <dd class="text-base-content/80 tabular-nums">{{ "%.1f"|format(summary.current_capacity) }} kWh</dd>
                         </div>
                         <div class="flex gap-2">
@@ -28,7 +28,7 @@
                         </div>
                         {% if summary.capacity_delta is not none %}
                         <div class="flex gap-2">
-                            <dt class="text-base-content/50 font-light">Δ:</dt>
+                            <dt class="text-base-content/50 font-light">Delta:</dt>
                             <dd class="tabular-nums {% if summary.capacity_delta < 0 %}text-error{% else %}text-success{% endif %}">
                                 {{ "%+.1f"|format(summary.capacity_delta) }} kWh
                             </dd>

@@ -7,6 +7,7 @@ with adaptive downsampling, plus Plotly chart builders for each.
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -976,7 +977,7 @@ def build_metric_sparkline(
             hoverinfo="skip",
         )
     )
-    layout_kwargs = dict(
+    layout_kwargs: dict[str, Any] = dict(
         height=height,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",

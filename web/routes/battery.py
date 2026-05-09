@@ -125,15 +125,15 @@ async def battery(
             for s, e in charging_regions_idx
             if s < n and e < n
         ]
-        chart = build_battery_temp_chart(
+        temp_chart = build_battery_temp_chart(
             temp_data,
             outside_data,
             charging_regions_ts,
             temp_factor_f=(unit_ctx["temp_unit"] == "us"),
             temp_label=unit_ctx["units"]["temp_label"],
         )
-        if chart:
-            return HTMLResponse(chart)
+        if temp_chart:
+            return HTMLResponse(temp_chart)
         return HTMLResponse(
             '<p class="text-base-content/40 text-sm py-8 text-center">'
             'No temperature data available for this time range.</p>'

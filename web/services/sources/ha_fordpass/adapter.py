@@ -93,7 +93,7 @@ logger = logging.getLogger("lightningrod.sources.ha_fordpass")
 LIGHTNINGROD_TRIP_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-4a5b-9c8d-7e6f5a4b3c20")
 
 
-def compute_trip_id(device_id: str, trip_update_time: str | None) -> uuid.UUID | None:
+def compute_trip_id(device_id: str | None, trip_update_time: str | None) -> uuid.UUID | None:
     """Deterministic trip_id for cross-source dedup.
 
     Hash inputs: device_id + tripUpdateTime. Returns None when either input
