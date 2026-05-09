@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,7 +45,7 @@ class OffsetResult:
 async def compute_global_offset(
     db: AsyncSession,
     *,
-    sources: list[tuple[type, str]] | None = None,
+    sources: Iterable[tuple[Any, str]] | None = None,
     now: datetime | None = None,
 ) -> OffsetResult:
     """Compute a single global time offset = now - max(timestamp across all sources).
@@ -115,7 +116,8 @@ async def apply_offset_to_table(
             shifted = col + offset
         stmt = update(model).values({ts_col_name: shifted}).where(col.isnot(None))
         result = await db.execute(stmt)
-        rows_updated = max(rows_updated, result.rowcount or 0)
+        rowcount = getattr(result, "rowcount", 0) or 0
+        rows_updated = max(rows_updated, rowcount)
     return rows_updated
 
 

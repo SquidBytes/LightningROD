@@ -103,14 +103,13 @@ def iter_python_comment_doc_lines(source: str) -> Iterator[LineEntry]:
         if not getattr(node, "body", None):
             continue
         first = node.body[0]
-        if not (
-            isinstance(first, ast.Expr)
-            and isinstance(getattr(first, "value", None), ast.Constant)
-            and isinstance(first.value.value, str)
-        ):
+        if not isinstance(first, ast.Expr):
+            continue
+        value = first.value
+        if not (isinstance(value, ast.Constant) and isinstance(value.value, str)):
             continue
 
-        for idx, line_text in enumerate(first.value.value.splitlines()):
+        for idx, line_text in enumerate(value.value.splitlines()):
             stripped = line_text.strip()
             if not stripped:
                 continue

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from typing import TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.reference import EVChargingNetwork, EVNetworkSubscription
 
 logger = logging.getLogger(__name__)
+
+
+class _SubscriptionSpec(TypedDict):
+    network_name: str
+    member_rate: float
+    monthly_fee: float
+    start_date: date
+    end_date: date | None
+    notes: str
 
 
 async def _resolve_network_id(db: AsyncSession, network_name: str) -> int | None:
@@ -29,7 +39,7 @@ async def seed(db: AsyncSession) -> int:
     Idempotent: skips rows where (network_id, start_date) already exists.
     Returns the number of rows inserted.
     """
-    specs = [
+    specs: list[_SubscriptionSpec] = [
         {
             "network_name": "Tesla Supercharger",
             "member_rate": 0.13,  # $/kWh with Tesla Premium membership

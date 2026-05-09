@@ -157,6 +157,8 @@ async def seed(db: AsyncSession) -> int:
     lon = _BASE_LON
 
     for trip in trips:
+        if trip.start_time is None or trip.end_time is None:
+            continue
         trip_rows, lat, lon = _generate_trip_points(
             rng=rng,
             device_id=device_id,
