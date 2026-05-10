@@ -201,6 +201,20 @@ async def seed(db: AsyncSession) -> int:
         dur_seconds = dur_hours * 3600
         ts_end = ts_start + timedelta(seconds=dur_seconds)
 
+        # Wall-to-battery loss factor (EVSE-side energy is always > vehicle-side)
+        if current_type == "AC":
+            loss_factor = rng.uniform(0.10, 0.14)
+        else:
+            loss_factor = rng.uniform(0.04, 0.07)
+        evse_energy_kwh = round(energy_kwh * (1 + loss_factor), 2)
+
+        # Max-power utilization factor (real sessions rarely peak the stall)
+        if current_type == "AC":
+            util_factor = rng.uniform(0.85, 0.98)
+        else:
+            util_factor = rng.uniform(0.55, 0.92)
+        evse_max_power_kw = round(peak_kw * util_factor, 2)
+
         # SoC
         start_soc = round(rng.uniform(*soc_start_range), 1)
         end_soc = round(rng.uniform(*soc_end_range), 1)
@@ -265,8 +279,8 @@ async def seed(db: AsyncSession) -> int:
             evse_voltage=voltage,
             evse_amperage=amperage,
             evse_kw=avg_kw,
-            evse_energy_kwh=energy_kwh,
-            evse_max_power_kw=peak_kw,
+            evse_energy_kwh=evse_energy_kwh,
+            evse_max_power_kw=evse_max_power_kw,
             charger_rated_kw=peak_kw,
             evse_source="estimated",
             needs_review=False,

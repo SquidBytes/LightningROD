@@ -29,6 +29,7 @@ from db.migrations.versions.p34_battery_trips_overhaul import (
     LIGHTNINGROD_TRIP_NAMESPACE,
     _coerce_datetime,
     consolidate_trip_groups,
+    consolidate_trip_id_collisions,
     rewrite_trip_ids_to_legacy_form,
 )
 
@@ -303,6 +304,88 @@ async def test_consolidation_preserves_non_duplicates():
         assert survivor_id == expected, (
             f"Non-duplicate row for {row.device_id} did not get deterministic id"
         )
+
+
+@pytest.mark.asyncio
+async def test_collision_pass_merges_same_endtime_different_distance():
+    """Regression: two rows with the same (device_id, end_time) but distances
+    in *different* 0.1-buckets slip past `consolidate_trip_groups` (which keys
+    on rounded distance) yet collide on trip_id during rewrite (which ignores
+    distance). The trip_id-keyed pass must merge them so the UNIQUE constraint
+    can be added cleanly. Reproduces the prod-test failure from p34 rollout."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    end_t = datetime(2026, 4, 29, 12, 58, tzinfo=UTC)
+
+    async with engine.begin() as conn:
+        await conn.run_sync(_create_legacy_table)
+
+        def _seed(sync):
+            # Both rows: same device, identical end_time. Different distance
+            # buckets (24.9 vs 25.1 round to different 0.1 dp values), so the
+            # bucket pass will not merge them.
+            _insert_row(
+                sync,
+                trip_id=uuid.uuid4().hex,
+                device_id="TESTVIN_COLLIDE",
+                end_time=end_t,
+                distance=24.9,
+                energy_consumed=7.0,
+                ambient_temp=18.0,
+                source_system="ha_fordpass_events",
+                is_complete=1,
+            )
+            _insert_row(
+                sync,
+                trip_id=uuid.uuid4().hex,
+                device_id="TESTVIN_COLLIDE",
+                end_time=end_t,
+                distance=25.1,
+                energy_consumed=7.5,
+                driving_score=88.0,
+                source_system="ha_fordpass",
+                is_complete=1,
+            )
+
+        await conn.run_sync(_seed)
+        await conn.run_sync(consolidate_trip_groups)
+        await conn.run_sync(rewrite_trip_ids_to_legacy_form)
+
+        # Pre-collision-pass invariant: both rows still present, sharing a trip_id.
+        pre = (
+            await conn.execute(
+                sa.text("SELECT trip_id FROM ev_trip_metrics WHERE device_id = :d"),
+                {"d": "TESTVIN_COLLIDE"},
+            )
+        ).all()
+        assert len(pre) == 2
+        assert pre[0].trip_id == pre[1].trip_id, (
+            "Test setup expects rewrite to produce a trip_id collision"
+        )
+
+        await conn.run_sync(consolidate_trip_id_collisions)
+
+        rows = (
+            await conn.execute(
+                sa.text(
+                    "SELECT trip_id, distance, energy_consumed, ambient_temp, "
+                    "driving_score FROM ev_trip_metrics WHERE device_id = :d"
+                ),
+                {"d": "TESTVIN_COLLIDE"},
+            )
+        ).all()
+
+    await engine.dispose()
+
+    assert len(rows) == 1, (
+        f"Trip-id collision pass must collapse colliding rows; got {len(rows)}"
+    )
+    row = rows[0]
+    # Source-precedence merge still applies: events temp + elveh score survive.
+    assert float(row.ambient_temp) == pytest.approx(18.0)
+    assert float(row.driving_score) == pytest.approx(88.0)
+    # MAX of distance / energy_consumed.
+    assert float(row.distance) == pytest.approx(25.1)
+    assert float(row.energy_consumed) == pytest.approx(7.5)
 
 
 @pytest.mark.asyncio

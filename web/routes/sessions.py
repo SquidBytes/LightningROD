@@ -468,6 +468,11 @@ async def create_session(
             if resolved_loc_id:
                 new_session.location_id = resolved_loc_id
 
+    # Inherit network from the resolved location if none was supplied.
+    if new_session.network_id is None and new_session.location_id:
+        from web.queries.locations import get_location_network_id
+        new_session.network_id = await get_location_network_id(db, new_session.location_id)
+
     # DC V/A estimation: if evse_kw set and V/A blank for DC sessions
     if new_session.charge_type == 'DC' and new_session.evse_kw and not new_session.evse_voltage and not new_session.evse_amperage:
         pack_voltage = 400  # F-150 Lightning ~400V pack
@@ -711,6 +716,11 @@ async def update_session(
             )
             if resolved_loc:
                 session.location_id = resolved_loc
+
+    # Inherit network from the resolved location when the session still has none.
+    if session.network_id is None and session.location_id:
+        from web.queries.locations import get_location_network_id
+        session.network_id = await get_location_network_id(db, session.location_id)
 
     # DC V/A estimation: if evse_kw set and V/A blank for DC sessions
     if session.charge_type == 'DC' and session.evse_kw and not session.evse_voltage and not session.evse_amperage:
