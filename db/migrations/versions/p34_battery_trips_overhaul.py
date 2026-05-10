@@ -259,6 +259,86 @@ def _bind_uuid_value(sync_conn, new_id: uuid.UUID) -> Any:
     return new_id  # asyncpg / psycopg2 accept uuid.UUID directly
 
 
+def consolidate_trip_id_collisions(sync_conn) -> None:
+    """Final dedup pass keyed on trip_id itself.
+
+    The bucket-based pass in `consolidate_trip_groups` groups on
+    (device_id, minute-bucketed end_time, rounded distance), but trip_id is
+    derived from (device_id, full end_iso) only — so two rows with identical
+    end_time but different distances slip past the bucket pass and then
+    collide on trip_id, breaking the UNIQUE constraint added next. Anything
+    that hashes to the same trip_id is by definition the same trip under
+    the new contract; merge them with the same source-precedence rules.
+    """
+    col_list = ", ".join(_CONSOLIDATION_COLUMNS)
+    rows = sync_conn.execute(sa.text(f"SELECT {col_list} FROM ev_trip_metrics")).all()
+    if not rows:
+        return
+
+    by_trip_id: dict[Any, list[dict]] = {}
+    for row in rows:
+        row_d = _row_to_dict(row)
+        tid = row_d.get("trip_id")
+        if tid is None:
+            continue
+        by_trip_id.setdefault(tid, []).append(row_d)
+
+    for tid, members in by_trip_id.items():
+        if len(members) < 2:
+            continue
+
+        survivor = max(
+            members,
+            key=lambda r: (_populated_count(r), -int(r.get("id") or 0)),
+        )
+
+        merged: dict[str, Any] = {}
+        for field in _TEMP_FIELDS:
+            events_rows = [r for r in members if _is_events_canonical(r) and r.get(field) is not None]
+            if events_rows:
+                merged[field] = events_rows[0][field]
+            else:
+                for r in members:
+                    if r.get(field) is not None:
+                        merged[field] = r[field]
+                        break
+        for field in _SCORE_FIELDS:
+            elveh_rows = [r for r in members if _is_elveh_canonical(r) and r.get(field) is not None]
+            if elveh_rows:
+                merged[field] = elveh_rows[0][field]
+            else:
+                for r in members:
+                    if r.get(field) is not None:
+                        merged[field] = r[field]
+                        break
+        for field in _MAX_FIELDS:
+            merged[field] = _max_or_none([r.get(field) for r in members])
+
+        update_payload: dict[str, Any] = {}
+        for field, val in merged.items():
+            if val is not None and val != survivor.get(field):
+                update_payload[field] = val
+        if update_payload:
+            set_clause = ", ".join(f"{k} = :{k}" for k in update_payload)
+            sync_conn.execute(
+                sa.text(f"UPDATE ev_trip_metrics SET {set_clause} WHERE id = :id"),
+                {**update_payload, "id": survivor["id"]},
+            )
+
+        loser_ids = [r["id"] for r in members if r["id"] != survivor["id"]]
+        if loser_ids:
+            sync_conn.execute(
+                sa.text("DELETE FROM ev_trip_metrics WHERE id IN :ids").bindparams(
+                    sa.bindparam("ids", expanding=True)
+                ),
+                {"ids": loser_ids},
+            )
+            _logger.info(
+                "consolidate-by-trip-id: trip_id=%s kept=%s deleted=%s",
+                tid, survivor["id"], loser_ids,
+            )
+
+
 def rewrite_trip_ids_to_legacy_form(sync_conn) -> None:
     """Rewrite every surviving row's trip_id to uuid5(NS, "legacy|device|end_time").
 
@@ -304,6 +384,7 @@ def upgrade() -> None:
         def _run_data_passes(sync_conn):
             consolidate_trip_groups(sync_conn)
             rewrite_trip_ids_to_legacy_form(sync_conn)
+            consolidate_trip_id_collisions(sync_conn)
 
         # `bind` may already be a sync Connection inside Alembic's online flow.
         run_sync = getattr(bind, "run_sync", None)
