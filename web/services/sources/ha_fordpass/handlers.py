@@ -1152,9 +1152,8 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     )
 
     # Inherit the location's network when none was resolved from the payload.
-    if network_id is None and location_id:
-        from web.queries.locations import get_location_network_id
-        network_id = await get_location_network_id(db, location_id)
+    from web.queries.locations import inherit_network_from_location
+    network_id = await inherit_network_from_location(db, network_id, location_id)
 
     # -----------------------------------------------------------------------
     # Create session record
