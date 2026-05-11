@@ -75,8 +75,9 @@
 <div class="p-4 space-y-6">
 
     <!-- Basics -->
-    <div>
-        <h3 class="text-xs uppercase tracking-wide text-base-content/50 pb-2 mb-3 border-b border-base-300">Basics</h3>
+    <div class="card bg-base-300/40 mb-4">
+        <div class="card-body p-4 gap-2">
+            <h4 class="text-xs uppercase tracking-wider font-semibold text-base-content/60 mb-1">Core</h4>
         <dl class="space-y-2">
             <div class="flex justify-between items-center">
                 <dt class="text-base-content/60 text-base w-40 shrink-0">Network</dt>
@@ -117,11 +118,11 @@
             </div>
             <div class="flex justify-between">
                 <dt class="text-base-content/60 text-base w-40 shrink-0">Energy</dt>
-                <dd class="text-base-content text-base">
+                <dd class="text-base-content text-lg font-semibold">
                     {% if session.energy_kwh is not none %}
                         {{ "%.1f"|format(session.energy_kwh) }} kWh
                     {% else %}
-                        <span class="text-base-content/40">—</span>
+                        <span class="text-base-content/40 text-base font-normal">—</span>
                     {% endif %}
                 </dd>
             </div>
@@ -316,6 +317,7 @@
                 </dd>
             </div>
         </dl>
+        </div>
     </div>
 
     <!-- Details -->
