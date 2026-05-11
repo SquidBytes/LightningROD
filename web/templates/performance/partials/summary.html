@@ -1,24 +1,36 @@
 <!-- Headline Summary Cards -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 
-    <!-- Card 1: Total Energy (Phase 27-05: shrunken + sparkline beneath, D5/D8) -->
-    <div class="card bg-base-200">
-        <div class="card-body p-4">
-            <div class="flex items-center gap-1 mb-1">
-                <p class="text-xs uppercase tracking-wide text-base-content/40">Total Energy</p>
-                <span class="cursor-help tooltip tooltip-bottom" data-tip="{{ tooltips.performance_total_energy }}" aria-label="{{ tooltips.performance_total_energy }}">ⓘ</span>
+    <!-- Left card: Total Energy top-stat + toggleable chart (Charging Speed | Energy) -->
+    <div class="card bg-base-200 h-full">
+        <div class="card-body p-4 flex flex-col gap-2">
+            <div class="flex flex-col items-center text-center pb-2">
+                <div class="flex items-center gap-1 mb-1">
+                    <p class="text-xs uppercase tracking-wide text-base-content/40">Total Energy</p>
+                    <span class="cursor-help tooltip tooltip-bottom" data-tip="{{ tooltips.performance_total_energy }}" aria-label="{{ tooltips.performance_total_energy }}">ⓘ</span>
+                </div>
+                <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
+                <p class="text-sm text-base-content/60 mt-1">{{ summary.total_sessions }} sessions</p>
             </div>
-            <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
-            <p class="text-sm text-base-content/60 mt-1">{{ summary.total_sessions }} sessions</p>
-            <div class="mt-2 plotly-chart-wrap" style="height: 72px;">
-                {{ monthly_energy_sparkline_html | safe }}
+            <div class="join self-center" role="tablist" aria-label="Left card metric">
+                <button type="button" onclick="setLeftCardMetric('speed', this)"
+                        class="join-item btn btn-xs btn-primary" data-card-btn="left" data-metric="speed">Charging Speed</button>
+                <button type="button" onclick="setLeftCardMetric('energy', this)"
+                        class="join-item btn btn-xs btn-ghost" data-card-btn="left" data-metric="energy">Energy</button>
             </div>
-            <p class="text-[11px] text-base-content/40 leading-tight mt-1">Monthly energy</p>
+            <div class="flex-1 min-h-0">
+                {% if left_chart_speed_html or left_chart_energy_html %}
+                    <div id="card-left-speed" class="plotly-chart-wrap h-full">{{ left_chart_speed_html | safe }}</div>
+                    <div id="card-left-energy" class="plotly-chart-wrap h-full hidden">{{ left_chart_energy_html | safe }}</div>
+                {% else %}
+                    <p class="text-base-content/40 text-sm py-8 text-center">No trend data for this range.</p>
+                {% endif %}
+            </div>
         </div>
     </div>
 
-    <!-- Card 2: AC vs DC Distribution (Phase 25 — replaces the previous recovery tile, moved to /driving/performance) -->
-    <div class="card bg-base-200">
+    <!-- Center card: AC vs DC Distribution donut — height reference, untouched -->
+    <div class="card bg-base-200 h-full">
         <div class="card-body p-4">
             <div class="flex items-center justify-between mb-2">
                 <p class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
@@ -64,29 +76,73 @@
             if (plotDiv) Plotly.Plots.resize(plotDiv);
         }
     }
+    function setLeftCardMetric(metric, btn) {
+        ['speed', 'energy'].forEach(function(m) {
+            var el = document.getElementById('card-left-' + m);
+            if (el) el.classList.toggle('hidden', m !== metric);
+            var b = document.querySelector('[data-card-btn="left"][data-metric="' + m + '"]');
+            if (b) {
+                b.classList.toggle('btn-primary', m === metric);
+                b.classList.toggle('btn-ghost', m !== metric);
+            }
+        });
+        var active = document.getElementById('card-left-' + metric);
+        if (active) {
+            var plotDiv = active.querySelector('.js-plotly-plot');
+            if (plotDiv) Plotly.Plots.resize(plotDiv);
+        }
+    }
+    function setRightCardMetric(metric, btn) {
+        ['efficiency', 'rangeregen'].forEach(function(m) {
+            var el = document.getElementById('card-right-' + m);
+            if (el) el.classList.toggle('hidden', m !== metric);
+            var b = document.querySelector('[data-card-btn="right"][data-metric="' + m + '"]');
+            if (b) {
+                b.classList.toggle('btn-primary', m === metric);
+                b.classList.toggle('btn-ghost', m !== metric);
+            }
+        });
+        var active = document.getElementById('card-right-' + metric);
+        if (active) {
+            var plotDiv = active.querySelector('.js-plotly-plot');
+            if (plotDiv) Plotly.Plots.resize(plotDiv);
+        }
+    }
     </script>
 
-    <!-- Card 3: Range per kWh (Avg Efficiency) (Phase 27-05: shrunken + sparkline beneath, D5/D8) -->
-    <div class="card bg-base-200">
-        <div class="card-body p-4">
-            <div class="flex items-center gap-1 mb-1">
-                <p class="text-xs uppercase tracking-wide text-base-content/40">Range per kWh</p>
-                <span class="cursor-help tooltip tooltip-bottom" data-tip="{{ tooltips.performance_avg_efficiency }}" aria-label="{{ tooltips.performance_avg_efficiency }}">ⓘ</span>
+    <!-- Right card: Range per kWh top-stat + toggleable chart (Efficiency | Range Regen) -->
+    <div class="card bg-base-200 h-full">
+        <div class="card-body p-4 flex flex-col gap-2">
+            <div class="flex flex-col items-center text-center pb-2">
+                <div class="flex items-center gap-1 mb-1">
+                    <p class="text-xs uppercase tracking-wide text-base-content/40">Range per kWh</p>
+                    <span class="cursor-help tooltip tooltip-bottom" data-tip="{{ tooltips.performance_avg_efficiency }}" aria-label="{{ tooltips.performance_avg_efficiency }}">ⓘ</span>
+                </div>
+                {% if summary.avg_efficiency is not none %}
+                    <p class="text-3xl font-bold">{{ "%.2f"|format(summary.avg_efficiency) }} <span class="text-xl font-normal text-base-content/60">{{ unit_label }}</span></p>
+                    <p class="text-sm text-base-content/60 mt-1">
+                        Best: {{ "%.2f"|format(summary.best_efficiency) }} &middot;
+                        Worst: {{ "%.2f"|format(summary.worst_efficiency) }}
+                    </p>
+                {% else %}
+                    <p class="text-2xl font-semibold text-base-content/30">No data</p>
+                    <p class="text-xs text-base-content/30 mt-1">Requires sessions with miles added</p>
+                {% endif %}
             </div>
-            {% if summary.avg_efficiency is not none %}
-                <p class="text-3xl font-bold">{{ "%.2f"|format(summary.avg_efficiency) }} <span class="text-xl font-normal text-base-content/60">{{ unit_label }}</span></p>
-                <p class="text-sm text-base-content/60 mt-1">
-                    Best: {{ "%.2f"|format(summary.best_efficiency) }} &middot;
-                    Worst: {{ "%.2f"|format(summary.worst_efficiency) }}
-                </p>
-            {% else %}
-                <p class="text-2xl font-semibold text-base-content/30">No data</p>
-                <p class="text-xs text-base-content/30 mt-1">Requires sessions with miles added</p>
-            {% endif %}
-            <div class="mt-2 plotly-chart-wrap" style="height: 72px;">
-                {{ efficiency_sparkline_html | safe }}
+            <div class="join self-center" role="tablist" aria-label="Right card metric">
+                <button type="button" onclick="setRightCardMetric('efficiency', this)"
+                        class="join-item btn btn-xs btn-primary" data-card-btn="right" data-metric="efficiency">Efficiency</button>
+                <button type="button" onclick="setRightCardMetric('rangeregen', this)"
+                        class="join-item btn btn-xs btn-ghost" data-card-btn="right" data-metric="rangeregen">Range Regen</button>
             </div>
-            <p class="text-[11px] text-base-content/40 leading-tight mt-1">Efficiency over time</p>
+            <div class="flex-1 min-h-0">
+                {% if right_chart_efficiency_html or right_chart_rangeregen_html %}
+                    <div id="card-right-efficiency" class="plotly-chart-wrap h-full">{{ right_chart_efficiency_html | safe }}</div>
+                    <div id="card-right-rangeregen" class="plotly-chart-wrap h-full hidden">{{ right_chart_rangeregen_html | safe }}</div>
+                {% else %}
+                    <p class="text-base-content/40 text-sm py-8 text-center">No trend data for this range.</p>
+                {% endif %}
+            </div>
         </div>
     </div>
 
@@ -119,7 +175,7 @@
 </div>
 {% endif %}
 
-<!-- Synthetic Charge Curve (Phase 25) — DC fallback aggregate -->
+<!-- Synthetic Charge Curve — DC fallback aggregate -->
 {% if synthetic_curve_chart %}
 <div class="card bg-base-200 mt-4">
     <div class="card-body">
