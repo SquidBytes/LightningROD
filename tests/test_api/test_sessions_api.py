@@ -113,3 +113,36 @@ async def test_locations_by_network_without_id_returns_placeholder(client, db_se
     response = await client.get("/locations/by-network")
     assert response.status_code == 200
     assert "select network first" in response.text.lower()
+
+
+@pytest.mark.db
+async def test_create_session_inherits_network_from_location(client, db_session):
+    """POST /charging/sessions with a location_id but no network_id inherits the
+    network from the resolved location. Mirrors the manual-add flow where a
+    user picks a known station from the dropdown without restating its network.
+    """
+    await VehicleFactory.create(db_session)
+    net = await NetworkFactory.create(db_session)
+    loc = await LocationLookupFactory.create(
+        db_session, network_id=net.id, location_name="Inherit Station"
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        "/charging/sessions",
+        data={
+            "session_date": "2026-04-01",
+            "session_time": "10:00",
+            "energy_kwh": "33.0",
+            "location_id": str(loc.id),
+            # network_id intentionally omitted
+        },
+    )
+    assert response.status_code == 200
+
+    result = await db_session.execute(
+        select(EVChargingSession).where(EVChargingSession.location_id == loc.id)
+    )
+    created = result.scalar_one()
+    await db_session.refresh(created)
+    assert created.network_id == net.id

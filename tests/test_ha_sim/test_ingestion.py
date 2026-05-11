@@ -247,3 +247,163 @@ async def test_gps_location_ingestion(db_session):
     assert float(loc.latitude) == pytest.approx(38.9072, abs=0.001)
     assert float(loc.longitude) == pytest.approx(-77.0369, abs=0.001)
     assert loc.source_system == "ha_fordpass"
+
+
+# ---------------------------------------------------------------------------
+# Network auto-tag flow: payload UNKNOWN/empty -> inherit from known location;
+# payload with network -> auto-learn onto unverified location.
+#
+# Each test fires a full energytransferlogentry through the dispatch registry,
+# mirroring how real FordPass payloads flow from Home Assistant through the
+# adapter and into the DB. Coords match the simulator's default GPS so geo
+# matching aligns with the seeded location.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_charging_ingestion_inherits_network_from_known_location(db_session):
+    """Case 2: payload reports network=UNKNOWN, but GPS matches a pre-existing
+    location with a network configured. Session inherits that network.
+    """
+    from db.models.charging_session import EVChargingSession
+    from db.models.reference import EVChargingNetwork, EVLocationLookup
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+
+    # Seed: verified network + auto-created location pre-tagged with that network
+    net = EVChargingNetwork(network_name="Seeded EA", is_verified=True)
+    db_session.add(net)
+    await db_session.flush()
+    loc = EVLocationLookup(
+        location_name="Pre-Known Station",
+        latitude=38.9072,
+        longitude=-77.0369,
+        network_id=net.id,
+        is_verified=False,
+        source_system="ha_fordpass",
+    )
+    db_session.add(loc)
+    await db_session.flush()
+
+    # Payload arrives with no network info — simulates the FordPass
+    # "UNKNOWN" / empty network case that was leaving sessions untagged.
+    entity_id, new_state = make_charging_session_event(
+        device_id=_TEST_DEVICE_ID,
+        energy_kwh=18.0,
+        charge_type="DC_FAST",
+        network_name="UNKNOWN",
+        latitude=38.9072,
+        longitude=-77.0369,
+    )
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    result = await db_session.execute(
+        select(EVChargingSession).where(EVChargingSession.device_id == _TEST_DEVICE_ID)
+    )
+    session = result.scalar_one_or_none()
+
+    assert session is not None
+    assert session.location_id == loc.id
+    assert session.network_id == net.id
+
+
+@pytest.mark.asyncio
+async def test_charging_ingestion_auto_learns_network_onto_unverified_location(db_session):
+    """Case 3 (buildout-over-time): an auto-created unverified location with
+    network_id=NULL learns the network from the first payload that reports one
+    at those coords. Both the session and the location row get tagged.
+    """
+    from db.models.charging_session import EVChargingSession
+    from db.models.reference import EVLocationLookup
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+
+    # Seed: auto-created stub location with no network attached yet
+    loc = EVLocationLookup(
+        location_name="Untagged Stub",
+        latitude=38.9072,
+        longitude=-77.0369,
+        network_id=None,
+        is_verified=False,
+        source_system="ha_fordpass",
+    )
+    db_session.add(loc)
+    await db_session.flush()
+
+    # First named-network payload at this spot — should teach the location
+    entity_id, new_state = make_charging_session_event(
+        device_id=_TEST_DEVICE_ID,
+        energy_kwh=22.0,
+        charge_type="DC_FAST",
+        network_name="Electrify America",
+        latitude=38.9072,
+        longitude=-77.0369,
+    )
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    # Session is tagged with the resolved network
+    result = await db_session.execute(
+        select(EVChargingSession).where(EVChargingSession.device_id == _TEST_DEVICE_ID)
+    )
+    session = result.scalar_one_or_none()
+    assert session is not None
+    assert session.location_id == loc.id
+    assert session.network_id is not None
+
+    # And the location row now carries the same network — buildout learned.
+    refreshed = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == loc.id)
+        )
+    ).scalar_one()
+    assert refreshed.network_id == session.network_id
+
+
+@pytest.mark.asyncio
+async def test_charging_ingestion_skips_auto_learn_on_manual_location(db_session):
+    """User-touched (source_system='manual') locations are protected: even when
+    a payload reports a real network, the location row is not mutated.
+    """
+    from db.models.reference import EVChargingNetwork, EVLocationLookup
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+
+    # Pre-seed a unique network so resolve_network has a single deterministic
+    # match (avoid clashing with the predefined-network seed data).
+    net = EVChargingNetwork(network_name="ManualProtectNet", is_verified=True)
+    db_session.add(net)
+    await db_session.flush()
+
+    # User-approved location at the payload coords with no network set
+    loc = EVLocationLookup(
+        location_name="My Approved Spot",
+        latitude=38.9072,
+        longitude=-77.0369,
+        network_id=None,
+        is_verified=True,
+        source_system="manual",
+    )
+    db_session.add(loc)
+    await db_session.flush()
+
+    entity_id, new_state = make_charging_session_event(
+        device_id=_TEST_DEVICE_ID,
+        energy_kwh=10.0,
+        charge_type="DC_FAST",
+        network_name="ManualProtectNet",
+        latitude=38.9072,
+        longitude=-77.0369,
+    )
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    refreshed = (
+        await db_session.execute(
+            select(EVLocationLookup).where(EVLocationLookup.id == loc.id)
+        )
+    ).scalar_one()
+    assert refreshed.network_id is None, (
+        "Manual location must not auto-learn a network from a payload"
+    )

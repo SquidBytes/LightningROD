@@ -442,3 +442,71 @@ async def test_import_rows_returns_correct_counts(stub_unit_context):
     assert "skipped" in result
     assert "updated" in result
     assert "failed" in result
+
+
+# ---------------------------------------------------------------------------
+# Integration: network inheritance during CSV import
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.db
+@pytest.mark.asyncio
+async def test_import_rows_inherits_network_from_resolved_location(
+    db_session, stub_unit_context
+):
+    """A CSV row with no network but lat/lon that matches a network-tagged
+    location inherits that network on insert. Mirrors the auto-tag flow that
+    fires for HA payloads — same helper, same DB.
+    """
+    import uuid
+
+    from sqlalchemy import select
+
+    from db.models.charging_session import EVChargingSession
+    from db.models.reference import EVChargingNetwork, EVLocationLookup
+    from web.services.csv_parser import import_rows
+
+    # Seed a network and an auto-created location at known GPS coords
+    net = EVChargingNetwork(network_name="CSV Test Net", is_verified=True)
+    db_session.add(net)
+    await db_session.flush()
+    loc = EVLocationLookup(
+        location_name="CSV Test Station",
+        latitude=40.0,
+        longitude=-105.0,
+        network_id=net.id,
+        is_verified=False,
+        source_system="csv_import",
+    )
+    db_session.add(loc)
+    await db_session.flush()
+
+    rows = [
+        {
+            "_row_index": 0,
+            "_status": "new",
+            "session_id": uuid.uuid4(),
+            "energy_kwh": 21.0,
+            "latitude": 40.0,
+            "longitude": -105.0,
+            # network_id intentionally omitted -- the test is whether
+            # inheritance fills it from the resolved location.
+            "device_id": "CSV_TEST_DEVICE",
+            "source_system": "csv_import",
+            "is_complete": True,
+        }
+    ]
+
+    result = await import_rows(rows, {0}, {}, db_session)
+    assert result["added"] == 1
+    await db_session.flush()
+
+    created = (
+        await db_session.execute(
+            select(EVChargingSession).where(
+                EVChargingSession.device_id == "CSV_TEST_DEVICE"
+            )
+        )
+    ).scalar_one()
+    assert created.location_id == loc.id
+    assert created.network_id == net.id
