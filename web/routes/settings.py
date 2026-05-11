@@ -260,7 +260,7 @@ async def create_vehicle_route(
             status_code=422,
             content={"detail": "Display name is required"},
         )
-    await create_vehicle(
+    new_vehicle = await create_vehicle(
         db,
         display_name=display_name.strip(),
         make=make or None,
@@ -274,6 +274,8 @@ async def create_vehicle_route(
         device_id=device_id or None,
     )
     veh_ctx = await _vehicle_management_context(db)
+    veh_ctx["saved"] = True
+    veh_ctx["just_saved_row_id"] = getattr(new_vehicle, "id", None)
     return templates.TemplateResponse(
         request,
         "settings/partials/vehicle_management.html",
@@ -340,6 +342,8 @@ async def update_vehicle_route(
         device_id=device_id or None,
     )
     veh_ctx = await _vehicle_management_context(db)
+    veh_ctx["saved"] = True
+    veh_ctx["just_saved_row_id"] = vehicle_id
     response = templates.TemplateResponse(
         request,
         "settings/partials/vehicle_management.html",
@@ -431,7 +435,7 @@ async def create_ice_vehicle_route(
     if fuel_metric is None:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=422, content={"detail": "Combined fuel economy is required"})
-    await create_ice_vehicle(
+    new_ice = await create_ice_vehicle(
         db,
         label=label.strip(),
         fuel_efficiency_l_per_100km=fuel_metric,
@@ -439,6 +443,8 @@ async def create_ice_vehicle_route(
         is_default=is_default,
     )
     ctx = await _ice_vehicle_management_context(db)
+    ctx["saved"] = True
+    ctx["just_saved_row_id"] = getattr(new_ice, "id", None)
     response = templates.TemplateResponse(
         request,
         "settings/partials/ice_vehicle_management.html",
@@ -507,6 +513,8 @@ async def update_ice_vehicle_route(
         is_default=is_default,
     )
     ctx = await _ice_vehicle_management_context(db)
+    ctx["saved"] = True
+    ctx["just_saved_row_id"] = ice_id
     response = templates.TemplateResponse(
         request,
         "settings/partials/ice_vehicle_management.html",
@@ -565,7 +573,7 @@ async def create_network_route(
     is_free: str | None = Form(None),
 ):
     is_free_bool = is_free is not None
-    await create_network(
+    new_network = await create_network(
         db,
         name=network_name,
         cost_per_kwh=cost_per_kwh,
@@ -573,6 +581,8 @@ async def create_network_route(
         color=color,
     )
     net_ctx = await _network_management_context(db)
+    net_ctx["saved"] = True
+    net_ctx["just_saved_row_id"] = getattr(new_network, "id", None)
     return templates.TemplateResponse(
         request,
         "settings/partials/network_management.html",
@@ -649,6 +659,8 @@ async def update_network_route(
         color=color,
     )
     net_ctx = await _network_management_context(db)
+    net_ctx["saved"] = True
+    net_ctx["just_saved_row_id"] = network_id
     response = templates.TemplateResponse(
         request,
         "settings/partials/network_management.html",
@@ -874,7 +886,7 @@ async def create_location_route(
     cost_per_kwh: float | None = Form(None),
 ):
     """Add a location under a network."""
-    await create_location(
+    new_loc = await create_location(
         db, network_id, location_name, location_type, notes,
         address=address or None, latitude=latitude, longitude=longitude,
         cost_per_kwh=cost_per_kwh,
@@ -891,7 +903,13 @@ async def create_location_route(
     return templates.TemplateResponse(
         request,
         "settings/partials/location_rows.html",
-        {"locations": locations, "network_id": network_id, "stall_counts": stall_counts},
+        {
+            "locations": locations,
+            "network_id": network_id,
+            "stall_counts": stall_counts,
+            "saved": True,
+            "just_saved_row_id": getattr(new_loc, "id", None),
+        },
     )
 
 
@@ -927,7 +945,13 @@ async def update_location_route(
     return templates.TemplateResponse(
         request,
         "settings/partials/location_rows.html",
-        {"locations": locations, "network_id": network_id, "stall_counts": stall_counts},
+        {
+            "locations": locations,
+            "network_id": network_id,
+            "stall_counts": stall_counts,
+            "saved": True,
+            "just_saved_row_id": location_id,
+        },
     )
 
 
@@ -1798,11 +1822,12 @@ async def add_gas_price(
     unit_ctx = await get_unit_context(db)
     station_metric = to_metric_price_per_volume(station_price, unit_ctx["distance_unit"])
     average_metric = to_metric_price_per_volume(average_price, unit_ctx["distance_unit"])
-    await upsert_gas_price(
+    saved_row = await upsert_gas_price(
         db, year, month, station_price=station_metric, average_price=average_metric
     )
     ctx = await _gas_price_history_context(db)
     ctx["saved"] = True
+    ctx["just_saved_row_id"] = getattr(saved_row, "id", None)
     return templates.TemplateResponse(
         request,
         "settings/partials/gas_price_history.html",
