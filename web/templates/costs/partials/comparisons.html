@@ -22,50 +22,69 @@
     {% if gas_comparison %}
     <div id="panel-gas">
         {% if gas_comparison.session_count > 0 %}
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div class="card bg-base-200">
-                <div class="card-body items-center text-center">
-                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Your EV Cost</p>
-                    <p class="text-3xl font-bold">${{ "%.2f"|format(gas_comparison.ev_total) }}</p>
-                    <p class="text-sm text-base-content/60 mt-2">{{ gas_comparison.session_count }} sessions</p>
+        <div class="ledger">
+            <div class="ledger-grid">
+                <div class="ledger-col">
+                    <p class="ledger-col-label">Your EV — {{ gas_comparison.session_count }} sessions</p>
+                    <p class="ledger-total">${{ "%.2f"|format(gas_comparison.ev_total) }}</p>
+                    <p class="ledger-sub">
+                        {{ "%.0f"|format(gas_comparison.total_distance or 0) }} {{ units.distance_label }}
+                        {% if gas_comparison.ev_total and gas_comparison.total_distance and gas_comparison.total_distance > 0 %}
+                            · {{ "%.1f"|format((gas_comparison.ev_total / gas_comparison.total_distance) * 100) }} ¢/{{ units.distance_label }} all-in
+                        {% endif %}
+                    </p>
+                </div>
+
+                <div class="ledger-col">
+                    <p class="ledger-col-label">If you'd used gas</p>
+
+                    <div class="ledger-item">
+                        <div>
+                            <div class="item-label">
+                                {{ gas_comparison.station_friendly_name or "Favorite station" }}
+                            </div>
+                            <div class="item-source">favorite station</div>
+                        </div>
+                        <div class="item-cost">${{ "%.2f"|format(gas_comparison.gas_total_station) }}</div>
+                        <div class="item-delta">
+                            − ${{ "%.2f"|format((gas_comparison.gas_total_station - gas_comparison.ev_total) if gas_comparison.gas_total_station > gas_comparison.ev_total else 0) }} saved
+                            {% if gas_comparison.gas_total_station > 0 %}
+                                ({{ "%.0f"|format(((gas_comparison.gas_total_station - gas_comparison.ev_total) / gas_comparison.gas_total_station) * 100) }}% less)
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if gas_comparison.has_range %}
+                    <div class="ledger-item">
+                        <div>
+                            <div class="item-label">
+                                {{ gas_comparison.average_friendly_name or "Regional average" }}
+                            </div>
+                            <div class="item-source">regional reference</div>
+                        </div>
+                        <div class="item-cost">${{ "%.2f"|format(gas_comparison.gas_total_average) }}</div>
+                        <div class="item-delta">
+                            − ${{ "%.2f"|format((gas_comparison.gas_total_average - gas_comparison.ev_total) if gas_comparison.gas_total_average > gas_comparison.ev_total else 0) }} saved
+                            {% if gas_comparison.gas_total_average > 0 %}
+                                ({{ "%.0f"|format(((gas_comparison.gas_total_average - gas_comparison.ev_total) / gas_comparison.gas_total_average) * 100) }}% less)
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
-            <div class="card bg-base-200">
-                <div class="card-body items-center text-center">
-                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Equivalent Gas Cost</p>
-                    <p class="text-3xl font-bold">
-                        {% if gas_comparison.has_range %}
-                            ${{ "%.2f"|format(gas_comparison.gas_total_low) }}&ndash;${{ "%.2f"|format(gas_comparison.gas_total_high) }}
-                        {% else %}
-                            ${{ "%.2f"|format(gas_comparison.gas_total_low) }}
-                        {% endif %}
-                    </p>
-                    <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(gas_comparison.total_distance) }} {{ units.distance_long }}</p>
-                </div>
-            </div>
-            <div class="card bg-base-200">
-                <div class="card-body items-center text-center">
-                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">You Saved</p>
-                    <p class="text-3xl font-bold {% if gas_comparison.savings_low >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
-                        {% if gas_comparison.has_range %}
-                            ${{ "%.2f"|format(gas_comparison.savings_low|abs) }}&ndash;${{ "%.2f"|format(gas_comparison.savings_high|abs) }}
-                        {% else %}
-                            ${{ "%.2f"|format(gas_comparison.savings_low|abs) }}
-                        {% endif %}
-                    </p>
-                    <p class="text-sm text-base-content/60 mt-1">
-                        {% if gas_comparison.has_range %}
-                            {{ "%.0f"|format(gas_comparison.savings_pct_low|abs) }}&ndash;{{ "%.0f"|format(gas_comparison.savings_pct_high|abs) }}%
-                        {% else %}
-                            {{ "%.0f"|format(gas_comparison.savings_pct_low|abs) }}%
-                        {% endif %}
-                        {% if gas_comparison.savings_low >= 0 %}less than gas{% else %}more than gas{% endif %}
-                    </p>
-                    <p class="text-xs text-base-content/40 mt-1">(estimated)</p>
-                </div>
+
+            <div class="ledger-footer">
+                {% if gas_comparison.has_range %}
+                    <span class="footer-label">Estimated savings range over this period</span>
+                    <span class="footer-amount">${{ "%.2f"|format(gas_comparison.savings_low) }} – ${{ "%.2f"|format(gas_comparison.savings_high) }}</span>
+                {% else %}
+                    <span class="footer-label">Estimated savings over this period</span>
+                    <span class="footer-amount">${{ "%.2f"|format(gas_comparison.savings_low) }}</span>
+                {% endif %}
             </div>
         </div>
-        <p class="text-xs text-base-content/40">Based on your vehicle's ICE comparison config and gas price history. Update in Settings.</p>
+        <p class="caption">Based on your vehicle's ICE comparison config and gas price history. Update in Settings.</p>
         {% else %}
         <p class="text-sm text-base-content/40">No gas comparison data available. Configure ICE comparison in Settings &gt; Vehicles and add gas prices in Settings &gt; Comparison.</p>
         {% endif %}

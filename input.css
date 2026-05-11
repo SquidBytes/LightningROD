@@ -137,3 +137,126 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
   color: var(--color-brand-accent);
   font-weight: 600;
 }
+
+/* ── Savings Scenarios gas-panel ledger (Phase 35 / D-18..D-22) ─────
+   Warm off-white scoped surface for /costs gas comparison.
+   Theme tokens declared INSIDE .ledger so palette is local to this
+   surface — the rest of the app keeps its DaisyUI dark theme.
+   Footer vertical padding is 24px (not the sketch's 20px) per the
+   4px-grid reconciliation locked in UI-SPEC.
+   ──────────────────────────────────────────────────────────────────── */
+.ledger {
+  --color-surface: #ffffff;
+  --color-surface-subtle: #fafaf7;
+  --color-border: #e8e7e1;
+  --color-text: #1f1f1f;
+  --color-text-muted: #4a4a4a;
+  --color-text-subtle: #6b6b6b;
+  --color-success: #15803d;
+  --radius-lg: 12px;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-2xl: 24px;
+  --text-4xl: 36px;
+
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.ledger-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.ledger-col { padding: 32px; }
+.ledger-col + .ledger-col { border-left: 1px solid var(--color-border); }
+
+@media (max-width: 720px) {
+  .ledger-grid { grid-template-columns: 1fr; }
+  .ledger-col + .ledger-col {
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+.ledger-col-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-subtle);
+  margin: 0 0 16px;
+  font-weight: 600;
+}
+.ledger-total {
+  font-size: var(--text-4xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.ledger-sub {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: 8px 0 0;
+}
+
+.ledger-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 16px 0;
+}
+.ledger-item + .ledger-item { border-top: 1px solid var(--color-border); }
+.ledger-item .item-label {
+  color: var(--color-text);
+  font-size: var(--text-base);
+}
+.ledger-item .item-source {
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+  margin-top: 2px;
+}
+.ledger-item .item-cost {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.ledger-item .item-delta {
+  grid-column: 1 / -1;
+  color: var(--color-success);
+  font-size: var(--text-sm);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-footer {
+  background: var(--color-surface-subtle);
+  border-top: 1px solid var(--color-border);
+  padding: 24px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.ledger-footer .footer-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.ledger-footer .footer-amount {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--color-success);
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger + .caption {
+  display: block;
+  margin-top: 20px;
+  font-size: 12px;
+  color: #6b6b6b;
+}
