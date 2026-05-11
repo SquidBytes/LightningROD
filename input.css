@@ -124,3 +124,16 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
   display: flex !important;
   flex-wrap: nowrap !important;
 }
+
+/* ── Tab-active contrast (Phase 35 / D-10, D-11) ─────────────────────
+   Beef up tab-active state on every tabs-bordered instance.
+   Stronger bottom-border + brand-accent color + semibold weight.
+   Single CSS rule applies globally — no per-surface override.
+   ──────────────────────────────────────────────────────────────────── */
+.tabs-bordered .tab.tab-active,
+.tabs-bordered .tab[aria-selected="true"] {
+  border-bottom-width: 2px;
+  border-bottom-color: var(--color-brand-accent);
+  color: var(--color-brand-accent);
+  font-weight: 600;
+}
