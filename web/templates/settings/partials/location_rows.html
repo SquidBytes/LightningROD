@@ -2,7 +2,7 @@
     <p class="text-sm uppercase tracking-wide text-base-content/40 mb-3">Locations</p>
     {% for loc in locations %}
     {% set sc = stall_counts.get(loc.id, 0) if stall_counts is defined else 0 %}
-    <div class="bg-base-300/50 rounded-lg px-4 py-3" id="location-{{ loc.id }}">
+    <div class="bg-base-300/50 rounded-lg px-4 py-3 {% if just_saved_row_id == loc.id %}ring-2 ring-success ring-offset-2 ring-offset-base-100 rounded{% endif %}" id="location-{{ loc.id }}">
         {# Read mode #}
         <div class="flex items-center justify-between location-read" data-loc="{{ loc.id }}">
             <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -115,6 +115,14 @@
         <button type="submit" class="btn btn-primary btn-xs">Add</button>
     </form>
 </div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Locations saved.</span>
+  </div>
+</div>
+{% endif %}
 
 <script>
 function editLocation(locId) {

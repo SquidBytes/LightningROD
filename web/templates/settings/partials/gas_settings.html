@@ -1,7 +1,3 @@
-{% if saved %}
-<div class="alert alert-success text-sm mb-3">Settings saved.</div>
-{% endif %}
-
 <!-- Display Toggle Options -->
 <div class="label"><span class="label-text font-semibold">Display Options</span></div>
 <p class="text-xs text-base-content/50 -mt-1 mb-2">Toggle which comparison sections appear on the costs page.</p>
@@ -31,3 +27,11 @@
         </button>
     </div>
 </form>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Settings saved.</span>
+  </div>
+</div>
+{% endif %}

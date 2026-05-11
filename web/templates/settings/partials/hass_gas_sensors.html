@@ -14,10 +14,6 @@
             on the Fuel tab; backfill and live-check live here.
         </p>
 
-        {% if gas_saved %}
-        <div class="alert alert-success text-sm py-2">Gas sensor settings saved.</div>
-        {% endif %}
-
         <form hx-post="/settings/hass/gas-sensors"
               hx-target="#hass-gas-sensors-card"
               hx-swap="outerHTML"
@@ -102,3 +98,11 @@
         </div>
     </div>
 </div>
+
+{% if gas_saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Gas sensor settings saved.</span>
+  </div>
+</div>
+{% endif %}

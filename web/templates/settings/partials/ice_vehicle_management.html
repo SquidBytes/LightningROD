@@ -18,7 +18,7 @@
                 </thead>
                 <tbody>
                     {% for ice in ice_vehicles %}
-                    <tr>
+                    <tr class="{% if just_saved_row_id == ice.id %}ring-2 ring-success ring-offset-2 ring-offset-base-100 rounded{% endif %}">
                         <td class="font-medium">{{ ice.label }}</td>
                         <td class="text-base-content/60 text-sm">
                             {% if ice.fuel_efficiency_display is not none %}
@@ -71,3 +71,11 @@
         </div>
     </div>
 </div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>ICE vehicle saved.</span>
+  </div>
+</div>
+{% endif %}
