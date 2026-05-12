@@ -1,5 +1,5 @@
 ## Stage 1: Build CSS with Node 22 (Tailwind v4 + DaisyUI v5 require Node 20+)
-FROM node:25-slim AS css-builder
+FROM node:26-slim AS css-builder
 
 WORKDIR /build
 COPY package.json package-lock.json* ./
