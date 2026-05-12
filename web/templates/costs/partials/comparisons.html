@@ -25,7 +25,14 @@
         <div class="ledger">
             <div class="ledger-grid">
                 <div class="ledger-col">
-                    <p class="ledger-col-label">Your EV — {{ gas_comparison.session_count }} sessions</p>
+                    <p class="ledger-col-label">Your EV</p>
+                    <div class="ledger-meta">
+                        {% if active_vehicle %}
+                        <p><span class="meta-label">Vehicle:</span>{{ active_vehicle.display_name }}</p>
+                        {% endif %}
+                        <p><span class="meta-label">Date range:</span>{{ range_label }}</p>
+                        <p><span class="meta-label">Sessions:</span>{{ gas_comparison.session_count }}</p>
+                    </div>
                     <p class="ledger-total">${{ "%.2f"|format(gas_comparison.ev_total) }}</p>
                     <p class="ledger-sub">
                         {{ "%.0f"|format(gas_comparison.total_distance or 0) }} {{ units.distance_label }}
@@ -46,6 +53,15 @@
                             <div class="item-source">favorite station</div>
                         </div>
                         <div class="item-cost">${{ "%.2f"|format(gas_comparison.gas_total_station) }}</div>
+                        {% if gas_comparison.station_price_min is not none %}
+                        <div class="item-price-range">
+                            {% if gas_comparison.station_price_max > gas_comparison.station_price_min %}
+                                ${{ "%.2f"|format(gas_comparison.station_price_min) }} – ${{ "%.2f"|format(gas_comparison.station_price_max) }} / gal
+                            {% else %}
+                                ${{ "%.2f"|format(gas_comparison.station_price_min) }} / gal
+                            {% endif %}
+                        </div>
+                        {% endif %}
                         <div class="item-delta">
                             − ${{ "%.2f"|format((gas_comparison.gas_total_station - gas_comparison.ev_total) if gas_comparison.gas_total_station > gas_comparison.ev_total else 0) }} saved
                             {% if gas_comparison.gas_total_station > 0 %}
@@ -63,6 +79,15 @@
                             <div class="item-source">regional reference</div>
                         </div>
                         <div class="item-cost">${{ "%.2f"|format(gas_comparison.gas_total_average) }}</div>
+                        {% if gas_comparison.average_price_min is not none %}
+                        <div class="item-price-range">
+                            {% if gas_comparison.average_price_max > gas_comparison.average_price_min %}
+                                ${{ "%.2f"|format(gas_comparison.average_price_min) }} – ${{ "%.2f"|format(gas_comparison.average_price_max) }} / gal
+                            {% else %}
+                                ${{ "%.2f"|format(gas_comparison.average_price_min) }} / gal
+                            {% endif %}
+                        </div>
+                        {% endif %}
                         <div class="item-delta">
                             − ${{ "%.2f"|format((gas_comparison.gas_total_average - gas_comparison.ev_total) if gas_comparison.gas_total_average > gas_comparison.ev_total else 0) }} saved
                             {% if gas_comparison.gas_total_average > 0 %}
