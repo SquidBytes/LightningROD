@@ -12,7 +12,7 @@
                 <p class="text-3xl font-bold">{{ "%.1f"|format(summary.total_kwh) }} <span class="text-xl font-normal text-base-content/60">kWh</span></p>
                 <p class="text-sm text-base-content/60 mt-1">{{ summary.total_sessions }} sessions</p>
             </div>
-            <div class="join self-center" role="tablist" aria-label="Left card metric">
+            <div class="join self-start mb-4" role="tablist" aria-label="Left card metric">
                 <button type="button" onclick="setLeftCardMetric('speed', this)"
                         class="join-item btn btn-xs btn-primary" data-card-btn="left" data-metric="speed">Charging Speed</button>
                 <button type="button" onclick="setLeftCardMetric('energy', this)"
@@ -129,7 +129,7 @@
                     <p class="text-xs text-base-content/30 mt-1">Requires sessions with miles added</p>
                 {% endif %}
             </div>
-            <div class="join self-center" role="tablist" aria-label="Right card metric">
+            <div class="join self-start mb-4" role="tablist" aria-label="Right card metric">
                 <button type="button" onclick="setRightCardMetric('efficiency', this)"
                         class="join-item btn btn-xs btn-primary" data-card-btn="right" data-metric="efficiency">Efficiency</button>
                 <button type="button" onclick="setRightCardMetric('rangeregen', this)"
