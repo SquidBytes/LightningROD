@@ -1,7 +1,3 @@
-{% if saved %}
-<div class="alert alert-success text-sm mb-3">Timezone preference saved.</div>
-{% endif %}
-
 {% set current_tz = settings.get('user_timezone', 'UTC') %}
 
 <form hx-post="/settings/timezone" hx-target="#timezone-settings" hx-swap="innerHTML"
@@ -76,3 +72,11 @@
         </button>
     </div>
 </form>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Timezone preference saved.</span>
+  </div>
+</div>
+{% endif %}

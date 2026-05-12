@@ -207,6 +207,55 @@ async def monthly_energy_series(
     return [(row.m, float(row.kwh)) for row in result.all() if row.m is not None]
 
 
+async def charging_speed_series(
+    db: AsyncSession,
+    time_range: str = "all",
+    device_id: str | None = None,
+) -> list[tuple[datetime, float]]:
+    """Return (month_start, average_kw) per month in the filter range.
+
+    Average kW = SUM(energy_kwh) / SUM(charge_duration_seconds / 3600) per month
+    — gives a time-weighted average power across all sessions in the bucket,
+    rather than averaging the per-session averages (which would over-weight
+    short sessions). Sessions with NULL or non-positive duration are excluded
+    from both numerator and denominator.
+
+    Ordered ascending by month_start. Empty list when nothing qualifies.
+    """
+    duration_hours = EVChargingSession.charge_duration_seconds / 3600.0
+    stmt = (
+        select(
+            date_trunc_compat(
+                "month", EVChargingSession.session_start_utc, dialect=db.bind.dialect
+            ).label("m"),
+            func.coalesce(func.sum(EVChargingSession.energy_kwh), 0.0).label("kwh"),
+            func.coalesce(func.sum(duration_hours), 0.0).label("hours"),
+        )
+        .where(EVChargingSession.energy_kwh.isnot(None))
+        .where(EVChargingSession.energy_kwh > 0)
+        .where(EVChargingSession.charge_duration_seconds.isnot(None))
+        .where(EVChargingSession.charge_duration_seconds > 0)
+        .group_by("m")
+        .order_by("m")
+    )
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id is not None:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+
+    result = await db.execute(stmt)
+    out: list[tuple[datetime, float]] = []
+    for row in result.all():
+        if row.m is None:
+            continue
+        hours = float(row.hours or 0)
+        if hours <= 0:
+            continue
+        out.append((row.m, float(row.kwh) / hours))
+    return out
+
+
 async def efficiency_over_time_series(
     db: AsyncSession,
     time_range: str = "all",
@@ -641,6 +690,195 @@ def build_efficiency_chart(
     )
 
     return _wrap_chart(fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG))
+
+
+# ---------------------------------------------------------------------------
+# Per-card time-series chart builders
+#
+# Four single-trace line+markers charts that live inside the left/right outer
+# cards of the Charging Performance summary row. Each card carries an
+# independent toggle (Charging Speed/Energy on the left, Efficiency/Range Regen
+# on the right) — the JS handler swaps which one is visible and re-measures
+# the Plotly figure. All four honor the page-level date-range filter via the
+# upstream series queries.
+# ---------------------------------------------------------------------------
+
+
+_CARD_CHART_MARGIN = dict(l=30, r=10, t=10, b=30)
+
+
+def build_charging_speed_chart(
+    series: list[tuple[datetime, float]],
+) -> str:
+    """Line chart of average charging speed (kW) per time bucket.
+
+    Input shape mirrors charging_speed_series — list of (bucket_start, avg_kw).
+    Returns "" on empty input.
+    """
+    if not series:
+        return ""
+    xs = [row[0] for row in series]
+    ys = [row[1] for row in series]
+    pio.templates.default = "plotly_dark"
+    fig = go.Figure(
+        data=[
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="lines+markers",
+                line=dict(color="#47A8E5", width=2),
+                marker=dict(size=5, color="#47A8E5"),
+                hovertemplate="%{x|%b %Y}<br>%{y:.1f} kW<extra></extra>",
+            )
+        ]
+    )
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
+        showlegend=False,
+        margin=_CARD_CHART_MARGIN,
+        xaxis=dict(showgrid=False),
+        yaxis=dict(title="kW", showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
+        hoverlabel=_HOVER_LABEL,
+    )
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+def build_energy_over_time_chart(
+    series: list[tuple[datetime, float]],
+) -> str:
+    """Line chart of total kWh per time bucket.
+
+    Input shape mirrors monthly_energy_series — list of (bucket_start, kwh).
+    Returns "" on empty input.
+    """
+    if not series:
+        return ""
+    xs = [row[0] for row in series]
+    ys = [row[1] for row in series]
+    pio.templates.default = "plotly_dark"
+    fig = go.Figure(
+        data=[
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="lines+markers",
+                line=dict(color="#60a5fa", width=2),
+                marker=dict(size=5, color="#60a5fa"),
+                hovertemplate="%{x|%b %Y}<br>%{y:.1f} kWh<extra></extra>",
+            )
+        ]
+    )
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
+        showlegend=False,
+        margin=_CARD_CHART_MARGIN,
+        xaxis=dict(showgrid=False),
+        yaxis=dict(title="kWh", showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
+        hoverlabel=_HOVER_LABEL,
+    )
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+def build_efficiency_over_time_chart(
+    series: list[tuple[datetime, float]],
+    efficiency_factor: float = 1.0,
+    unit_label: str = "mi/kWh",
+) -> str:
+    """Line chart of efficiency over time (one point per qualifying session).
+
+    Input shape mirrors efficiency_over_time_series — list of
+    (session_start, km_per_kwh). Applies efficiency_factor to convert the
+    metric-base km/kWh to the user's display unit. Returns "" on empty input.
+    """
+    if not series:
+        return ""
+    xs = [row[0] for row in series]
+    ys = [row[1] * efficiency_factor for row in series]
+    pio.templates.default = "plotly_dark"
+    fig = go.Figure(
+        data=[
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="lines+markers",
+                line=dict(color="#4ade80", width=2),
+                marker=dict(size=5, color="#4ade80"),
+                hovertemplate=(
+                    "%{x|%b %d, %Y}<br>%{y:.2f} " + unit_label + "<extra></extra>"
+                ),
+            )
+        ]
+    )
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
+        showlegend=False,
+        margin=_CARD_CHART_MARGIN,
+        xaxis=dict(showgrid=False),
+        yaxis=dict(title=unit_label, showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
+        hoverlabel=_HOVER_LABEL,
+    )
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+def build_range_regen_over_time_chart(
+    regen_chart_data: list[dict] | None,
+    range_factor: float = 1.0,
+    range_label: str = "mi",
+) -> str:
+    """Line chart of regenerated range per trip over time.
+
+    Input shape mirrors query_regen_for_chart — list of
+    {"date": datetime, "range_regenerated": float (km)} dicts, or None.
+    Applies range_factor for km->display unit. Returns "" when input is
+    None or empty (or when every value is zero — no signal to plot).
+    """
+    if not regen_chart_data:
+        return ""
+    xs = [row["date"] for row in regen_chart_data]
+    ys = [float(row.get("range_regenerated") or 0) * range_factor for row in regen_chart_data]
+    if not any(ys):
+        return ""
+    pio.templates.default = "plotly_dark"
+    fig = go.Figure(
+        data=[
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="lines+markers",
+                line=dict(color="#facc15", width=2),
+                marker=dict(size=5, color="#facc15"),
+                hovertemplate=(
+                    "%{x|%b %d, %Y}<br>%{y:.1f} " + range_label
+                    + " regen<extra></extra>"
+                ),
+            )
+        ]
+    )
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
+        showlegend=False,
+        margin=_CARD_CHART_MARGIN,
+        xaxis=dict(showgrid=False),
+        yaxis=dict(title=range_label, showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
+        hoverlabel=_HOVER_LABEL,
+    )
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
 
 
 # ---------------------------------------------------------------------------

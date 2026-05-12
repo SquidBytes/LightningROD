@@ -124,3 +124,157 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
   display: flex !important;
   flex-wrap: nowrap !important;
 }
+
+/* ── Tab-active contrast (Phase 35 / D-10, D-11) ─────────────────────
+   Beef up tab-active state on every tabs-bordered instance.
+   Stronger bottom-border + brand-accent color + semibold weight.
+   Single CSS rule applies globally — no per-surface override.
+   ──────────────────────────────────────────────────────────────────── */
+.tabs-bordered .tab.tab-active,
+.tabs-bordered .tab[aria-selected="true"] {
+  border-bottom-width: 2px;
+  border-bottom-color: var(--color-brand-accent);
+  color: var(--color-brand-accent);
+  font-weight: 600;
+}
+
+/* ── Savings Scenarios gas-panel ledger (Phase 35 / D-18..D-22) ─────
+   Ledger surface mapped to the DaisyUI dark theme so it integrates
+   with the rest of /costs. Layout, spacing, and type-scale unchanged
+   from the original sketch — only the palette swaps to base-200/300
+   + base-content + success tokens.
+   ──────────────────────────────────────────────────────────────────── */
+.ledger {
+  --radius-lg: 12px;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-2xl: 24px;
+  --text-4xl: 36px;
+
+  background: var(--color-base-200);
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  color: var(--color-base-content);
+}
+.ledger-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.ledger-col { padding: 32px; }
+.ledger-col + .ledger-col {
+  border-left: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+}
+
+@media (max-width: 720px) {
+  .ledger-grid { grid-template-columns: 1fr; }
+  .ledger-col + .ledger-col {
+    border-left: none;
+    border-top: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  }
+}
+
+.ledger-col-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+  margin: 0 0 16px;
+  font-weight: 600;
+}
+.ledger-total {
+  font-size: var(--text-4xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.ledger-sub {
+  font-size: var(--text-sm);
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+  margin: 8px 0 0;
+}
+
+.ledger-meta {
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ledger-meta p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-base-content);
+}
+.ledger-meta .meta-label {
+  color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+  margin-right: 4px;
+}
+
+.ledger-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 16px 0;
+}
+.ledger-item + .ledger-item {
+  border-top: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+}
+.ledger-item .item-label {
+  color: var(--color-base-content);
+  font-size: var(--text-base);
+}
+.ledger-item .item-source {
+  font-size: var(--text-xs);
+  color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+  margin-top: 2px;
+}
+.ledger-item .item-cost {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.ledger-item .item-price-range {
+  grid-column: 1 / -1;
+  color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+  font-size: var(--text-xs);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.ledger-item .item-delta {
+  grid-column: 1 / -1;
+  color: var(--color-success);
+  font-size: var(--text-sm);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-footer {
+  background: var(--color-base-300);
+  border-top: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  padding: 24px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.ledger-footer .footer-label {
+  font-size: var(--text-sm);
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+}
+.ledger-footer .footer-amount {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--color-success);
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger + .caption {
+  display: block;
+  margin-top: 20px;
+  font-size: 12px;
+  color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+}

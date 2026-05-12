@@ -21,7 +21,7 @@
                 <tbody>
                     {% for network in networks %}
                     <tr id="network-row-{{ network.id }}"
-                        class="cursor-pointer hover transition-colors"
+                        class="cursor-pointer hover transition-colors {% if just_saved_row_id == network.id %}ring-2 ring-success ring-offset-2 ring-offset-base-100 rounded{% endif %}"
                         onclick="toggleNetworkLocations({{ network.id }})">
                         <td class="pr-3">
                             <div class="flex items-center gap-1.5">
@@ -149,6 +149,14 @@
         </div>
     </div>
 </div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Network costs saved.</span>
+  </div>
+</div>
+{% endif %}
 
 <script>
 function toggleNetworkLocations(networkId) {

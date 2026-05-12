@@ -44,6 +44,8 @@ def _empty_gas_result() -> dict:
         "ev_total": 0.0,
         "gas_total_low": 0.0,
         "gas_total_high": 0.0,
+        "gas_total_station": 0.0,
+        "gas_total_average": 0.0,
         "savings_low": 0.0,
         "savings_high": 0.0,
         "savings_pct_low": 0.0,
@@ -52,6 +54,10 @@ def _empty_gas_result() -> dict:
         "total_distance": 0.0,  # km (metric base)
         "ice_label": None,
         "has_range": False,
+        "station_price_min": None,
+        "station_price_max": None,
+        "average_price_min": None,
+        "average_price_max": None,
     }
 
 
@@ -125,6 +131,8 @@ async def query_gas_comparison(
     average_has_data = False
     session_count = 0
     total_distance_km = 0.0
+    station_prices_seen: list[float] = []
+    average_prices_seen: list[float] = []
 
     for s in sessions:
         cost_info = compute_session_cost(s, networks_by_name)
@@ -163,9 +171,11 @@ async def query_gas_comparison(
         if station_price is not None:
             gas_total_station += gallons * station_price
             station_has_data = True
+            station_prices_seen.append(station_price)
         if average_price is not None:
             gas_total_average += gallons * average_price
             average_has_data = True
+            average_prices_seen.append(average_price)
 
         ev_total += cost_info["display_cost"]
         session_count += 1
@@ -195,6 +205,8 @@ async def query_gas_comparison(
         "ev_total": ev_total,
         "gas_total_low": gas_total_low,
         "gas_total_high": gas_total_high,
+        "gas_total_station": gas_total_station,
+        "gas_total_average": gas_total_average,
         "savings_low": savings_low,
         "savings_high": savings_high,
         "savings_pct_low": savings_pct_low,
@@ -203,6 +215,10 @@ async def query_gas_comparison(
         "total_distance": total_distance_km,  # km, metric base
         "ice_label": ice_vehicle.label,
         "has_range": has_range,
+        "station_price_min": min(station_prices_seen) if station_prices_seen else None,
+        "station_price_max": max(station_prices_seen) if station_prices_seen else None,
+        "average_price_min": min(average_prices_seen) if average_prices_seen else None,
+        "average_price_max": max(average_prices_seen) if average_prices_seen else None,
     }
 
 

@@ -1,10 +1,6 @@
-{% if saved %}
-<div class="alert alert-success text-sm mb-3">Network costs saved.</div>
-{% endif %}
-
 {% for network in networks %}
 <form hx-post="/settings/networks" hx-target="#networks-table" hx-swap="innerHTML"
-      class="flex items-center gap-3 py-2 border-b border-base-300/50">
+      class="flex items-center gap-3 py-2 border-b border-base-300/50 {% if just_saved_row_id == network.id %}ring-2 ring-success ring-offset-2 ring-offset-base-100 rounded{% endif %}">
     <input type="hidden" name="network_id" value="{{ network.id }}">
     <span class="flex-1 min-w-0 truncate">
         <span class="badge text-white text-xs" style="background-color: {{ network.color or '#6B7280' }}">{{ network.network_name }}</span>
@@ -26,3 +22,11 @@
     </button>
 </form>
 {% endfor %}
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Network costs saved.</span>
+  </div>
+</div>
+{% endif %}

@@ -13,9 +13,14 @@ from web.dependencies import get_db
 from web.queries.energy import (
     CHARGE_TYPE_LABELS,
     build_charge_type_donut_chart,
+    build_charging_speed_chart,
     build_efficiency_chart,
+    build_efficiency_over_time_chart,
+    build_energy_over_time_chart,
     build_monthly_energy_chart,
+    build_range_regen_over_time_chart,
     build_synthetic_charge_curve_chart,
+    charging_speed_series,
     efficiency_over_time_series,
     has_real_charge_curve_data,
     monthly_energy_series,
@@ -167,6 +172,27 @@ async def performance(
         ys=[v * efficiency_factor for _, v in efficiency_series],
     )
 
+    # Toggleable card charts in the left/right outer cards of the 3-card row.
+    # All four reuse the page-level time_range/active_device_id filter so the
+    # date-range bar at the top of /charging/performance controls the whole
+    # surface (donut + scatter + the four card charts) consistently.
+    speed_series = await charging_speed_series(
+        db, time_range=time_range, device_id=active_device_id
+    )
+    left_chart_speed_html = build_charging_speed_chart(speed_series)
+    left_chart_energy_html = build_energy_over_time_chart(monthly_series)
+    range_label = "mi" if distance_unit == "us" else "km"
+    right_chart_efficiency_html = build_efficiency_over_time_chart(
+        efficiency_series,
+        efficiency_factor=efficiency_factor,
+        unit_label=unit_ctx["units"]["efficiency_label"],
+    )
+    right_chart_rangeregen_html = build_range_regen_over_time_chart(
+        regen_chart_data,
+        range_factor=range_factor,
+        range_label=range_label,
+    )
+
     all_vehicles = await get_all_vehicles(db)
 
     context = {
@@ -176,6 +202,10 @@ async def performance(
         "monthly_energy_chart": monthly_energy_chart,
         "monthly_energy_sparkline_html": monthly_energy_sparkline_html,
         "efficiency_sparkline_html": efficiency_sparkline_html,
+        "left_chart_speed_html": left_chart_speed_html,
+        "left_chart_energy_html": left_chart_energy_html,
+        "right_chart_efficiency_html": right_chart_efficiency_html,
+        "right_chart_rangeregen_html": right_chart_rangeregen_html,
         "donut_kwh": donut_kwh,
         "donut_count": donut_count,
         "donut_cost": donut_cost,
