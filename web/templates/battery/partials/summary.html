@@ -141,22 +141,130 @@
                       data-tip="{{ tooltips.battery_charge_curve }}"
                       aria-label="{{ tooltips.battery_charge_curve }}">ⓘ</span>
             </h3>
-            <select id="session-picker"
-                    class="select select-sm select-bordered w-auto max-w-xs"
-                    hx-get="/battery?section=charge_curve"
-                    hx-target="#charge-curve-content"
-                    hx-swap="innerHTML"
-                    hx-include="[name='range']"
-                    name="session">
-                <option value="">Select a session...</option>
-                {% for s in sessions_list %}
-                <option value="{{ s.id }}" {{ 'selected' if active_session and s.id == active_session }}>
-                    {% if s.session_start_utc %}{{ s.session_start_utc|localtime(user_tz|default('UTC'), "%b %-d, %H:%M") }}{% endif %}
-                    {% if s.location_name %} - {{ s.location_name }}{% endif %}
-                    {% if s.energy_kwh %} ({{ "%.1f"|format(s.energy_kwh) }} kWh){% endif %}
-                </option>
-                {% endfor %}
-            </select>
+            {# Searchable session dropdown — DaisyUI dropdown pattern so the open
+               list is fully stylable (the native <select> open state is
+               browser-rendered and can't be themed). #}
+            {% macro _picker_label(s, user_tz) %}{% if s.session_start_utc %}{{ s.session_start_utc|localtime(user_tz|default('UTC'), "%b %-d, %H:%M") }}{% endif %}{% if s.location_name %} · {{ s.location_name }}{% elif s.network_name %} · {{ s.network_name }}{% endif %}{% endmacro %}
+            <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button"
+                     class="select select-sm select-bordered w-auto max-w-xs flex items-center text-left">
+                    <span id="session-picker-label" class="truncate">
+                        {% if active_session and sessions_list -%}
+                            {%- for s in sessions_list -%}
+                                {%- if s.id == active_session -%}{{ _picker_label(s, user_tz) }}{%- endif -%}
+                            {%- endfor -%}
+                        {%- else -%}
+                            Select a session...
+                        {%- endif %}
+                    </span>
+                </div>
+                <div tabindex="0"
+                     class="dropdown-content bg-base-300 rounded-box z-[100] w-96 shadow-lg mt-1 flex flex-col max-h-96">
+                    <div class="p-2 border-b border-base-100 space-y-2">
+                        <input type="text"
+                               id="session-picker-search"
+                               class="input input-sm input-bordered w-full"
+                               placeholder="Search sessions..."
+                               oninput="filterSessionPicker()"
+                               onclick="event.stopPropagation()">
+                        <div class="flex items-center gap-1 text-xs">
+                            <span class="text-base-content/60 mr-1">Filter:</span>
+                            <button type="button" data-type=""
+                                    class="session-picker-chip badge badge-sm badge-neutral"
+                                    onclick="setSessionPickerType(this)">All</button>
+                            <button type="button" data-type="AC"
+                                    class="session-picker-chip badge badge-sm badge-ghost"
+                                    onclick="setSessionPickerType(this)">AC</button>
+                            <button type="button" data-type="DC"
+                                    class="session-picker-chip badge badge-sm badge-ghost"
+                                    onclick="setSessionPickerType(this)">DC</button>
+                        </div>
+                    </div>
+                    <ul class="p-1 overflow-y-auto overflow-x-hidden flex-1" id="session-picker-list">
+                        {% if sessions_list %}
+                            {% for s in sessions_list %}
+                                {% set _datetime = s.session_start_utc|localtime(user_tz|default('UTC'), "%b %-d %H:%M") if s.session_start_utc else '' %}
+                                {% set _energy = ("%.1f kWh"|format(s.energy_kwh)) if s.energy_kwh else '' %}
+                                {% set _primary = s.location_name or s.network_name or 'Unknown location' %}
+                                {% set _label = _picker_label(s, user_tz) %}
+                                <li data-search="{{ _datetime }} {{ s.location_name or '' }} {{ s.network_name or '' }} {{ _energy }} {{ s.charge_type or '' }}"
+                                    data-type="{{ s.charge_type or '' }}">
+                                    <button type="button"
+                                            class="w-full text-left px-3 py-2 rounded-md hover:bg-base-content/10 transition-colors flex items-center justify-between gap-3 {{ 'bg-brand-accent/15 text-brand-accent' if active_session and s.id == active_session }}"
+                                            data-id="{{ s.id }}"
+                                            data-label="{{ _label|trim }}"
+                                            onclick="selectSessionPicker(this)">
+                                        <span class="flex items-center gap-2 min-w-0 flex-1">
+                                            <span class="h-2 w-2 rounded-full flex-shrink-0"
+                                                  style="background:{{ s.network_color or '#666' }}"
+                                                  aria-hidden="true"></span>
+                                            <span class="truncate text-sm">{{ _primary }}</span>
+                                        </span>
+                                        <span class="flex items-center gap-2 flex-shrink-0 text-xs text-base-content/60">
+                                            {% if s.charge_type %}
+                                                <span class="badge badge-xs {{ 'badge-info' if s.charge_type == 'DC' else 'badge-ghost' }} font-semibold">{{ s.charge_type }}</span>
+                                            {% endif %}
+                                            <span class="font-mono whitespace-nowrap">
+                                                {{ _datetime }}{% if _energy %} · {{ _energy }}{% endif %}
+                                            </span>
+                                        </span>
+                                    </button>
+                                </li>
+                            {% endfor %}
+                        {% else %}
+                            <li class="px-3 py-2 text-sm text-base-content/60">No sessions available</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <input type="hidden"
+                       id="session-picker-value"
+                       name="session"
+                       value="{{ active_session or '' }}"
+                       hx-get="/battery?section=charge_curve"
+                       hx-target="#charge-curve-content"
+                       hx-swap="innerHTML"
+                       hx-include="[name='range']"
+                       hx-trigger="change">
+            </div>
+            <script>
+                (function() {
+                    var activeType = '';
+                    window.selectSessionPicker = function(btn) {
+                        var hidden = document.getElementById('session-picker-value');
+                        var label = document.getElementById('session-picker-label');
+                        if (!hidden || !label) return;
+                        hidden.value = btn.dataset.id;
+                        label.textContent = btn.dataset.label;
+                        document.querySelectorAll('#session-picker-list button').forEach(function(el) {
+                            el.classList.remove('bg-brand-accent/15', 'text-brand-accent');
+                        });
+                        btn.classList.add('bg-brand-accent/15', 'text-brand-accent');
+                        if (document.activeElement && document.activeElement.blur) {
+                            document.activeElement.blur();
+                        }
+                        htmx.trigger(hidden, 'change');
+                    };
+                    function applyPickerFilters() {
+                        var input = document.getElementById('session-picker-search');
+                        var q = (input ? input.value : '').toLowerCase().trim();
+                        document.querySelectorAll('#session-picker-list li[data-search]').forEach(function(li) {
+                            var textMatch = !q || li.dataset.search.toLowerCase().indexOf(q) !== -1;
+                            var typeMatch = !activeType || li.dataset.type === activeType;
+                            li.classList.toggle('hidden', !(textMatch && typeMatch));
+                        });
+                    }
+                    window.filterSessionPicker = applyPickerFilters;
+                    window.setSessionPickerType = function(btn) {
+                        activeType = btn.dataset.type;
+                        document.querySelectorAll('.session-picker-chip').forEach(function(c) {
+                            var on = c.dataset.type === activeType;
+                            c.classList.toggle('badge-neutral', on);
+                            c.classList.toggle('badge-ghost', !on);
+                        });
+                        applyPickerFilters();
+                    };
+                })();
+            </script>
         </div>
         <!-- Pass active range as hidden input for HTMX session picker -->
         <input type="hidden" name="range" value="{{ active_range }}">
@@ -234,10 +342,10 @@
 
             // Only auto-select if within 2 hours of a session start
             if (bestSession && bestDiff < 2 * 60 * 60 * 1000) {
-                var picker = document.getElementById('session-picker');
-                if (picker) {
-                    picker.value = bestSession.id;
-                    htmx.trigger(picker, 'change');
+                var btn = document.querySelector(
+                    '#session-picker-list button[data-id="' + bestSession.id + '"]');
+                if (btn && typeof selectSessionPicker === 'function') {
+                    selectSessionPicker(btn);
                 }
             }
         });

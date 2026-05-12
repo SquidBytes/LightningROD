@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.dialect import date_trunc_compat
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
+from db.models.reference import EVChargingNetwork
 from db.models.vehicle_status import EVVehicleStatus
 from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
 from web.unit_system import format_user_local
@@ -491,7 +492,8 @@ async def query_recent_sessions_for_picker(
 ) -> list[dict]:
     """Query recent charging sessions for the charge curve session dropdown.
 
-    Returns list of dicts with keys: id, session_start_utc, location_name, energy_kwh.
+    Returns list of dicts with keys: id, session_start_utc, location_name,
+    energy_kwh, charge_type, network_name, network_color.
     """
     stmt = (
         select(
@@ -499,6 +501,13 @@ async def query_recent_sessions_for_picker(
             EVChargingSession.session_start_utc,
             EVChargingSession.location_name,
             EVChargingSession.energy_kwh,
+            EVChargingSession.charge_type,
+            EVChargingNetwork.network_name,
+            EVChargingNetwork.color,
+        )
+        .outerjoin(
+            EVChargingNetwork,
+            EVChargingSession.network_id == EVChargingNetwork.id,
         )
         .order_by(EVChargingSession.session_start_utc.desc())
         .limit(limit)
@@ -514,6 +523,9 @@ async def query_recent_sessions_for_picker(
             "session_start_utc": row.session_start_utc,
             "location_name": row.location_name,
             "energy_kwh": float(row.energy_kwh) if row.energy_kwh else None,
+            "charge_type": row.charge_type,
+            "network_name": row.network_name,
+            "network_color": row.color,
         }
         for row in result.all()
     ]
