@@ -128,14 +128,31 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
 /* ── Tab-active contrast (Phase 35 / D-10, D-11) ─────────────────────
    Beef up tab-active state on every tabs-bordered instance.
    Stronger bottom-border + brand-accent color + semibold weight.
-   Single CSS rule applies globally — no per-surface override.
+   `:checked` covers DaisyUI radio-input tab markup (e.g. Settings,
+   network edit modal, session edit modal) where there is no
+   `.tab-active` class — the active state is the radio's :checked.
    ──────────────────────────────────────────────────────────────────── */
 .tabs-bordered .tab.tab-active,
-.tabs-bordered .tab[aria-selected="true"] {
+.tabs-bordered .tab[aria-selected="true"],
+.tabs-bordered .tab:checked {
   border-bottom-width: 2px;
   border-bottom-color: var(--color-brand-accent);
   color: var(--color-brand-accent);
   font-weight: 600;
+}
+
+/* ── Tabs-boxed active state — softer brand-accent sub-tab ─────────
+   Used for secondary/nested tabs (e.g. Review queue Networks/Locations).
+   Same brand color family as the top-level tabs-bordered treatment,
+   but expressed as a tinted chip rather than a bold underline so the
+   hierarchy reads correctly: top-level > sub-level.
+   ──────────────────────────────────────────────────────────────────── */
+.tabs-boxed .tab.tab-active,
+.tabs-boxed .tab[aria-selected="true"],
+.tabs-boxed .tab:checked {
+  background-color: color-mix(in oklab, var(--color-brand-accent) 18%, transparent);
+  color: var(--color-brand-accent);
+  font-weight: 500;
 }
 
 /* ── Savings Scenarios gas-panel ledger (Phase 35 / D-18..D-22) ─────
