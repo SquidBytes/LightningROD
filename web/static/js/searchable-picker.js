@@ -26,6 +26,21 @@
         });
     }
 
+    // When a picker opens, scroll its active item into view so the highlight
+    // is visible in long lists (e.g. timezone) instead of buried below the fold.
+    // Gate to the trigger element (the only descendant with an explicit
+    // role="button"). Running on every focusin would re-scroll during a
+    // list-item click: focus moves to the clicked <button> on mousedown, the
+    // handler jumps the list back to the still-active item, and the mouseup
+    // lands on a different row — swallowing the selection.
+    document.addEventListener('focusin', function (e) {
+        var picker = root(e.target);
+        if (!picker) return;
+        if (e.target.getAttribute && e.target.getAttribute('role') !== 'button') return;
+        var active = picker.querySelector('[data-picker-list] button.bg-brand-accent\\/15');
+        if (active) active.scrollIntoView({ block: 'nearest' });
+    });
+
     LR.searchablePicker = {
         select: function (btn) {
             var picker = root(btn);

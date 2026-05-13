@@ -72,9 +72,9 @@
         <span data-picker-label class="truncate">{{ selected_label or placeholder }}</span>
     </div>
     <div tabindex="0"
-         class="dropdown-content bg-base-300 rounded-box z-[100] {{ width_class }} shadow-lg mt-1 flex flex-col max-h-96">
+         class="dropdown-content bg-base-100 border border-base-content/15 rounded-box z-[100] {{ width_class }} shadow-xl mt-1 flex flex-col max-h-96">
         {% if searchable or filter_chips %}
-        <div class="p-2 border-b border-base-100 space-y-2">
+        <div class="p-2 border-b border-base-content/10 space-y-2">
             {% if searchable %}
             <input type="text"
                    data-picker-search
@@ -84,7 +84,7 @@
                    onclick="event.stopPropagation()">
             {% endif %}
             {% if filter_chips %}
-            <div class="flex items-center gap-1 text-xs" data-picker-chips>
+            <div class="flex flex-wrap items-center gap-1 text-xs" data-picker-chips>
                 <span class="text-base-content/60 mr-1">Filter:</span>
                 <button type="button" data-filter-key=""
                         class="badge badge-sm badge-neutral"
@@ -98,7 +98,7 @@
             {% endif %}
         </div>
         {% endif %}
-        <ul data-picker-list class="p-1 overflow-y-auto overflow-x-hidden flex-1">
+        <ul data-picker-list class="p-1 overflow-y-auto overflow-x-hidden flex-1 min-h-0">
             {{ caller() }}
         </ul>
     </div>
