@@ -37,6 +37,17 @@
    For minimal use (search-only, no chips/colors/meta) just omit the optional
    args — only `id`, `name`, and the item's `item_id` + `label` are required. #}
 
+{# `align` controls where the panel anchors relative to the trigger.  Use
+   'end' (default) when the trigger sits near the right edge of its container
+   so the panel extends left — fine for card headers like the battery session
+   picker.  Use '' (empty) for left-aligned form fields so the panel extends
+   right into the content area; otherwise an overflow-clipping ancestor (e.g.
+   `<main class="overflow-y-auto">`) will visually swallow the panel as it
+   pushes left toward the sidebar.
+
+   `wrapper_class` adds classes to the dropdown root.  DaisyUI's `.dropdown`
+   is `inline-block`, which makes a `w-full` trigger size unpredictably inside
+   form-controls; pass `block w-full max-w-xs` from such call sites. #}
 {% macro searchable_select(
     id,
     name,
@@ -48,12 +59,14 @@
     searchable=true,
     search_placeholder='Search...',
     filter_chips=[],
+    align='end',
+    wrapper_class='',
     htmx_get='',
     htmx_target='',
     htmx_swap='innerHTML',
     htmx_include=''
 ) %}
-<div class="searchable-picker dropdown dropdown-end" data-picker="{{ id }}">
+<div class="searchable-picker dropdown{% if align %} dropdown-{{ align }}{% endif %}{% if wrapper_class %} {{ wrapper_class }}{% endif %}" data-picker="{{ id }}">
     <div tabindex="0" role="button"
          class="{{ trigger_class }} flex items-center text-left">
         <span data-picker-label class="truncate">{{ selected_label or placeholder }}</span>

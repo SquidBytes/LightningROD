@@ -98,7 +98,9 @@
         trigger_class=trigger_class,
         width_class=width_class,
         search_placeholder='Search timezone...',
-        filter_chips=TIMEZONE_REGIONS
+        filter_chips=TIMEZONE_REGIONS,
+        align='',
+        wrapper_class='block w-full max-w-xs'
     ) %}
         {% for region in TIMEZONE_REGIONS %}
             {% for tz_value, tz_label in region.entries %}
