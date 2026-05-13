@@ -6,6 +6,7 @@ __pycache__/
 
 # Environment
 .env
+env/
 
 # IDE
 .vscode/
@@ -26,6 +27,10 @@ web/static/css/output.css
 
 # Ruff
 .ruff_cache/
+
+# pi-lens per-project state (cache, turn-state, scanner data)
+.pi-lens/
+pii-tokens.txt
 
 # Seed data (CSV files)
 data/*.csv

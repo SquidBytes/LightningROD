@@ -1,0 +1,59 @@
+#!/bin/sh
+# LightningROD commit-message guard.
+#
+# Tracked at .githooks/commit-msg; active via `git config core.hooksPath .githooks`.
+# Policy: CLAUDE.md "Commit Messages" section.
+#
+# Enforced rules:
+# - Subject ≤ 72 characters.
+# - No internal planning / review shorthand (D-NN, WR-NN, CR-NN, IN-NN, WS-NN,
+#   AB-NN, DB-NN, CI-NN, including variants like D-B3).
+# - No "Phase NN" prose — the (NN) scope already conveys this.
+# - No planning artifact filenames (CONTEXT.md, PLAN.md, REVIEW.md, SUMMARY.md,
+#   VERIFICATION.md, ROADMAP.md).
+
+msg_file="$1"
+
+clean_msg="$(
+    sed '/^[[:space:]]*#/d' "$msg_file" |
+    sed '/^[[:space:]]*$/,$!b; /^[[:space:]]*$/d'
+)"
+
+subject="$(printf '%s\n' "$clean_msg" | sed -n '1p')"
+subject_len="$(printf '%s' "$subject" | wc -c | tr -d ' ')"
+
+fail() {
+    echo "Commit message rejected." >&2
+    echo "" >&2
+    echo "Use terse, behavior-first wording:" >&2
+    echo "  <type>(<scope>): <plain-English behavior change>" >&2
+    echo "" >&2
+    echo "Forbidden: planning IDs, 'Phase NN' prose, artifact .md names," >&2
+    echo "'app-public/' in any commit, 'Co-Authored-By:' trailers." >&2
+    echo "" >&2
+    echo "Reason: $1" >&2
+    exit 1
+}
+
+if [ "$subject_len" -gt 72 ]; then
+    fail "subject is ${subject_len} characters; keep it to 72 or fewer"
+fi
+
+if printf '%s\n' "$clean_msg" | grep -Eiq '\b(CR|WR|IN|AB|WS|DB|CI|D)-[A-Z0-9][A-Z0-9.-]*\b'; then
+    fail "contains internal planning / review shorthand (D-NN, WR-NN, CR-NN, etc.)"
+fi
+
+if printf '%s\n' "$clean_msg" | grep -Eiq '\bPhase[[:space:]]+[0-9]+([.-][0-9]+)?\b'; then
+    fail "contains 'Phase NN' prose — use the commit scope (NN) instead"
+fi
+
+if printf '%s\n' "$clean_msg" | grep -Eiq '\b(CONTEXT|PLAN|REVIEW|SUMMARY|VERIFICATION|ROADMAP)\.md\b'; then
+    fail "references a planning artifact filename"
+fi
+
+if printf '%s\n' "$clean_msg" | grep -Fq 'app-public/'; then
+    fail "contains 'app-public/' — write paths relative to the repo root"
+fi
+
+
+exit 0
