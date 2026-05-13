@@ -37,6 +37,7 @@ For feature documentation, see the docs site at
   - DC reference curve hidden (when AC session selected, DC session remain the same)
 - Charging sessions auto-inherit the network from a resolved location when the location has one.
 - `uuid5` used for Trip ingestion to cut down on duplicates (hopefully) 
+- Timezone dropdowns in Settings and CSV Import are now searchable with regional filters.
 
 ### Fixed
 
