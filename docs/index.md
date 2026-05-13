@@ -71,7 +71,7 @@ The app will be available at `http://localhost:8000`. See [Installation](getting
 |-------|-----------|
 | Language | Python 3.11 |
 | Web framework | FastAPI |
-| Database | PostgreSQL 16 |
+| Database | PostgreSQL 16 or SQLite |
 | ORM | SQLAlchemy 2.0 (async) |
 | Migrations | Alembic |
 | Templates | Jinja2 |
