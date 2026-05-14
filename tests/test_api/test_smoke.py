@@ -40,12 +40,14 @@ async def test_smoke_charging_costs(client):
 
 
 async def test_smoke_charging_costs_cost_explorer_section(client):
-    """GET /charging/costs?section=cost_explorer returns the partial-only body."""
+    """GET /charging/costs?section=cost_explorer returns the body-only fragment."""
     response = await client.get("/charging/costs?section=cost_explorer&range=all")
     assert response.status_code == 200
     body = response.text
-    # Partial-only — must contain the card body marker.
-    assert "cost-explorer-card" in body or "cost-explorer-body" in body
+    # Body-only — must carry the protagonist headline.
+    assert "You paid" in body
+    # Body-only — must NOT re-emit the control form (avoids nested header).
+    assert "cost-explorer-form" not in body
     # Partial-only — must NOT contain the page shell.
     assert "<html" not in body.lower()
     assert "<head" not in body.lower()

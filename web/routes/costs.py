@@ -189,23 +189,15 @@ async def costs(
     range_label = RANGE_LABELS.get(active_range, "Custom range")
 
     if section == "cost_explorer":
+        # Body-only partial — replaces #cost-explorer-body inside the shell, so
+        # the form/header strip is NOT re-emitted (avoids nested duplication).
         section_context = {
             **unit_ctx,
             "cost_explorer": cost_explorer,
             "cost_explorer_chart": cost_explorer_chart,
             "active_range": active_range,
-            "range_label": range_label,
-            "networks": all_networks,
-            "selected_networks_csv": networks or "",
-            "selected_network_items": selected_network_items,
-            "free_what_if": free_what_if_bool,
-            "free_what_if_scope": free_what_if_scope or "global",
-            "free_what_if_networks_csv": free_what_if_networks or "",
-            "ref_mode": ref_mode_eff,
-            "ref_network_id": ref_network_id_eff,
-            "ref_value": ref_value,
         }
-        return templates.TemplateResponse(request, "costs/partials/cost_explorer.html", section_context)
+        return templates.TemplateResponse(request, "costs/partials/cost_explorer_body.html", section_context)
 
     context = {
         **unit_ctx,
