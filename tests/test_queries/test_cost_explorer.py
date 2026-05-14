@@ -91,8 +91,9 @@ async def test_query_cost_explorer_subscription_counterfactual(cost_scenario):
         # At least one month of fees counted when active.
         assert sub["with_fees_count"] >= 1
     else:
-        # Inactive -> nothing else is asserted on the block.
-        assert sub == {"active": False}
+        # Inactive — only structural keys are required.
+        assert sub["active"] is False
+        assert sub.get("subscriptions", []) == []
 
 
 async def test_query_cost_explorer_zero_reference_rate(cost_scenario):

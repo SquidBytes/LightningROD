@@ -232,6 +232,10 @@ async def query_cost_explorer(
     free_eligible_ids: set[int] = set()
     range_start_min: date | None = None
     range_end_max: date | None = None
+    # Per-network subscription-energy accumulator: only counts sessions where
+    # compute_session_cost flagged subscription_active. Used to drive the
+    # per-subscription breakdown rendered in the aside.
+    subscription_energy_by_network: dict[int, float] = {}
 
     per_net_scope_set = set(free_charging_networks or [])
 
@@ -281,6 +285,10 @@ async def query_cost_explorer(
         with_energy += paid
         if cost_info.get("subscription_active") and cost_info.get("non_member_cost") is not None:
             without_energy += float(cost_info["non_member_cost"])
+            if s.network_id:
+                subscription_energy_by_network[s.network_id] = (
+                    subscription_energy_by_network.get(s.network_id, 0.0) + paid
+                )
         else:
             without_energy += paid
 
@@ -370,6 +378,43 @@ async def query_cost_explorer(
         with_total = round(with_energy_only + with_fees_total, 2)
         without_total = round(without_energy, 2)
         net_saved = round(without_total - with_total, 2)
+
+        # Per-subscription rows for the aside breakdown: one entry per network
+        # with a fee_breakdown contribution. Energy comes from
+        # subscription_energy_by_network (sessions where subscription_active),
+        # fees come from the fee_breakdown bucketed by period.network_id.
+        per_network_fees: dict[int, dict[str, Any]] = {}
+        for b in fee_breakdown:
+            nid = b["period"].network_id
+            if nid not in per_network_fees:
+                per_network_fees[nid] = {
+                    "fee_total": 0.0,
+                    "months": 0,
+                    "fee_per_month": float(b["fee_per_month"]),
+                }
+            per_network_fees[nid]["fee_total"] += float(b["fee_total"])
+            per_network_fees[nid]["months"] += int(b["months"])
+            # Carry the most-recent period's monthly fee as the headline rate.
+            per_network_fees[nid]["fee_per_month"] = float(b["fee_per_month"])
+
+        subscription_network_ids = sorted(
+            set(per_network_fees.keys()) | set(subscription_energy_by_network.keys())
+        )
+        per_subscription: list[dict[str, Any]] = []
+        for nid in subscription_network_ids:
+            net = networks_by_id.get(nid)
+            fees_entry = per_network_fees.get(nid, {"fee_total": 0.0, "months": 0, "fee_per_month": 0.0})
+            per_subscription.append({
+                "network_id": nid,
+                "network_name": net.network_name if net else "Unknown",
+                "energy_at_member_rate": round(subscription_energy_by_network.get(nid, 0.0), 2),
+                "member_fee": round(fees_entry["fee_total"], 2),
+                "fee_months": fees_entry["months"],
+                "fee_per_month": round(fees_entry["fee_per_month"], 2),
+            })
+        # Stable display order: highest energy first, then alphabetical.
+        per_subscription.sort(key=lambda r: (-r["energy_at_member_rate"], r["network_name"]))
+
         subscription_block: dict[str, Any] = {
             "active": True,
             "with_total": with_total,
@@ -380,10 +425,11 @@ async def query_cost_explorer(
             "without_total": without_total,
             "net_saved": net_saved,
             "fee_breakdown": fee_breakdown,
+            "subscriptions": per_subscription,
             "scoped_network_name": scoped_network_name,
         }
     else:
-        subscription_block = {"active": False, "scoped_network_name": scoped_network_name}
+        subscription_block = {"active": False, "scoped_network_name": scoped_network_name, "subscriptions": []}
 
     all_months = sorted(set(monthly_paid.keys()) | set(monthly_at_ref.keys()))
     monthly_trend = [
