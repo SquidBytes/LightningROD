@@ -6,7 +6,7 @@ import logging
 from datetime import date
 from typing import TypedDict
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import EVChargingNetwork, EVNetworkSubscription
@@ -33,28 +33,52 @@ async def _resolve_network_id(db: AsyncSession, network_name: str) -> int | None
     ).scalar_one_or_none()
 
 
+async def _update_network_cost_per_kwh(
+    db: AsyncSession, network_name: str, cost_per_kwh: float
+) -> None:
+    """Upsert the non-member cost_per_kwh on an existing network row."""
+    net_id = await _resolve_network_id(db, network_name)
+    if net_id is None:
+        logger.warning(
+            "Network %r not found — skipping cost_per_kwh upsert", network_name
+        )
+        return
+    await db.execute(
+        update(EVChargingNetwork)
+        .where(EVChargingNetwork.network_name == network_name)
+        .values(cost_per_kwh=cost_per_kwh)
+    )
+
+
 async def seed(db: AsyncSession) -> int:
     """Insert EVNetworkSubscription rows for known network plans.
 
     Idempotent: skips rows where (network_id, start_date) already exists.
     Returns the number of rows inserted.
     """
+    await _update_network_cost_per_kwh(db, "Tesla Supercharger", 0.57)
+    await _update_network_cost_per_kwh(db, "Electrify America", 0.56)
+
     specs: list[_SubscriptionSpec] = [
         {
             "network_name": "Tesla Supercharger",
-            "member_rate": 0.13,  # $/kWh with Tesla Premium membership
+            "member_rate": 0.39,  # $/kWh with Tesla membership, medium congestion
             "monthly_fee": 12.99,
             "start_date": date(2026, 1, 1),
             "end_date": None,
-            "notes": "tier:premium",
+            "notes": (
+                "tier:medium-congestion (low=0.31, med=0.39, high=0.44; "
+                "schema does not yet model congestion tiers — using medium as "
+                "representative)"
+            ),
         },
         {
             "network_name": "Electrify America",
-            "member_rate": 0.31,  # $/kWh with EA+ membership
+            "member_rate": 0.42,  # $/kWh with EA Pass+ membership
             "monthly_fee": 7.00,
             "start_date": date(2026, 1, 1),
             "end_date": None,
-            "notes": "tier:plus",
+            "notes": "tier:pass-plus (25% off non-member rate of $0.56/kWh)",
         },
         {
             "network_name": "ChargePoint",
