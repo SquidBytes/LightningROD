@@ -25,13 +25,33 @@
         <div class="flex flex-wrap items-end gap-6 px-6 py-4 bg-base-300/40 border-y border-base-300">
 
             {# Networks multi-select column #}
-            <div class="flex-1 min-w-[280px]">
+            {% set all_network_ids_csv = networks | map(attribute='id') | join(',') %}
+            {% set ac_network_ids_csv = (ac_network_ids or []) | join(',') %}
+            {% set dc_network_ids_csv = (dc_network_ids or []) | join(',') %}
+            <div class="flex-1 min-w-[280px]"
+                 data-cost-explorer-network-quickselect
+                 data-all-ids="{{ all_network_ids_csv }}"
+                 data-ac-ids="{{ ac_network_ids_csv }}"
+                 data-dc-ids="{{ dc_network_ids_csv }}">
                 <label class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
                     <span>Network filter</span>
                     <span class="cursor-help tooltip tooltip-bottom"
                           data-tip="Restrict the card to specific networks. Only networks you've charged at appear in the list."
                           aria-label="Network filter tooltip">ⓘ</span>
                 </label>
+                <div class="flex flex-wrap items-center gap-1 mb-1">
+                    <span class="text-[10px] uppercase tracking-wide text-base-content/40 mr-1">Quick:</span>
+                    <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="all">All</button>
+                    <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="none">None</button>
+                    {% if ac_network_ids %}
+                    <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="ac"
+                            title="Networks where you've charged AC">AC</button>
+                    {% endif %}
+                    {% if dc_network_ids %}
+                    <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="dc"
+                            title="Networks where you've charged DC">DC</button>
+                    {% endif %}
+                </div>
                 {% call searchable_select(
                     id='cost-explorer-networks',
                     name='networks',
@@ -184,6 +204,89 @@
                         input.disabled = !on;
                     });
                     if (panel.tagName === 'SELECT') panel.disabled = !on;
+                });
+            });
+        }
+
+        // Network filter quick-action chips (All / None / AC / DC).
+        // Each chip sets the picker's selection to a predetermined ID list and
+        // triggers a single change event so HTMX fetches the new body once.
+        var quickWrap = form.querySelector('[data-cost-explorer-network-quickselect]');
+        if (quickWrap) {
+            function parseIds(csv) {
+                return (csv || '')
+                    .split(',')
+                    .map(function (s) { return s.trim(); })
+                    .filter(function (s) { return s.length > 0; });
+            }
+            var ACTION_IDS = {
+                all: parseIds(quickWrap.dataset.allIds),
+                none: [],
+                ac: parseIds(quickWrap.dataset.acIds),
+                dc: parseIds(quickWrap.dataset.dcIds),
+            };
+            quickWrap.querySelectorAll('[data-quickselect-action]').forEach(function (chip) {
+                chip.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    var action = chip.dataset.quickselectAction;
+                    var targetIds = ACTION_IDS[action] || [];
+                    var targetSet = {};
+                    targetIds.forEach(function (id) { targetSet[id] = true; });
+
+                    var picker = quickWrap.querySelector('.searchable-picker');
+                    if (!picker) return;
+                    picker.querySelectorAll('[data-picker-list] button').forEach(function (btn) {
+                        var shouldBeActive = !!targetSet[btn.dataset.id];
+                        btn.classList.toggle('bg-brand-accent/15', shouldBeActive);
+                        btn.classList.toggle('text-brand-accent', shouldBeActive);
+                    });
+
+                    // Rebuild hidden value + chip strip from the new active set,
+                    // then fire one change event so HTMX swaps the body once.
+                    var hidden = picker.querySelector('[data-picker-value]');
+                    if (!hidden) return;
+                    var chipContainer = picker.querySelector('[data-picker-chip-container]');
+                    var activeButtons = picker.querySelectorAll('[data-picker-list] button.bg-brand-accent\\/15');
+                    var ids = [];
+                    var items = [];
+                    activeButtons.forEach(function (b) {
+                        ids.push(b.dataset.id);
+                        items.push({ id: b.dataset.id, label: b.dataset.label });
+                    });
+                    hidden.value = ids.join(',');
+                    if (chipContainer) {
+                        chipContainer.innerHTML = '';
+                        if (items.length === 0) {
+                            var placeholder = picker.dataset.placeholder || 'All networks';
+                            var ph = document.createElement('span');
+                            ph.className = 'text-base-content/50 text-sm';
+                            ph.textContent = placeholder;
+                            chipContainer.appendChild(ph);
+                        } else {
+                            items.forEach(function (item) {
+                                var c = document.createElement('span');
+                                c.className = 'badge badge-outline gap-1';
+                                c.setAttribute('data-chip-id', item.id);
+                                var lbl = document.createElement('span');
+                                lbl.className = 'truncate max-w-[10rem]';
+                                lbl.textContent = item.label;
+                                c.appendChild(lbl);
+                                var rm = document.createElement('button');
+                                rm.type = 'button';
+                                rm.className = 'btn btn-ghost btn-xs btn-circle leading-none';
+                                rm.setAttribute('data-id', item.id);
+                                rm.setAttribute('aria-label', 'Remove ' + item.label);
+                                rm.innerHTML = '&times;';
+                                rm.onclick = function (ev) {
+                                    ev.stopPropagation();
+                                    if (window.LR && LR.searchablePicker) LR.searchablePicker.removeChip(rm);
+                                };
+                                c.appendChild(rm);
+                                chipContainer.appendChild(c);
+                            });
+                        }
+                    }
+                    if (window.htmx) htmx.trigger(hidden, 'change');
                 });
             });
         }
