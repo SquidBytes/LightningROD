@@ -25,6 +25,10 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
 #costs-content.htmx-request { opacity: 0.4; }
 #costs-content { transition: opacity 0.15s ease; }
 
+/* Cost Explorer card — loading state during HTMX swap (mirrors #costs-content above). */
+#cost-explorer-body.htmx-request { opacity: 0.4; }
+#cost-explorer-body { transition: opacity 0.15s ease; }
+
 /* HTMX loading state for energy content region */
 #energy-content.htmx-request { opacity: 0.4; }
 #energy-content { transition: opacity 0.15s ease; }
