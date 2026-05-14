@@ -25,12 +25,10 @@
         <div class="flex flex-wrap items-end gap-6 px-6 py-4 bg-base-300/40 border-y border-base-300">
 
             {# Networks multi-select column #}
-            {% set all_network_ids_csv = networks | map(attribute='id') | join(',') %}
             {% set ac_network_ids_csv = (ac_network_ids or []) | join(',') %}
             {% set dc_network_ids_csv = (dc_network_ids or []) | join(',') %}
             <div class="flex-1 min-w-[280px]"
                  data-cost-explorer-network-quickselect
-                 data-all-ids="{{ all_network_ids_csv }}"
                  data-ac-ids="{{ ac_network_ids_csv }}"
                  data-dc-ids="{{ dc_network_ids_csv }}">
                 <label class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
@@ -41,8 +39,8 @@
                 </label>
                 <div class="flex flex-wrap items-center gap-1 mb-1">
                     <span class="text-[10px] uppercase tracking-wide text-base-content/40 mr-1">Quick:</span>
-                    <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="all">All</button>
-                    <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="none">None</button>
+                    <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="clear"
+                            title="Clear the filter — show all networks">Clear</button>
                     {% if ac_network_ids %}
                     <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="ac"
                             title="Networks where you've charged AC">AC</button>
@@ -219,9 +217,11 @@
                     .map(function (s) { return s.trim(); })
                     .filter(function (s) { return s.length > 0; });
             }
+            // "clear" = empty list (no filter = show everything). The previous
+            // "all" (select every network) and "none" actions were redundant —
+            // an empty selection already means unfiltered.
             var ACTION_IDS = {
-                all: parseIds(quickWrap.dataset.allIds),
-                none: [],
+                clear: [],
                 ac: parseIds(quickWrap.dataset.acIds),
                 dc: parseIds(quickWrap.dataset.dcIds),
             };
