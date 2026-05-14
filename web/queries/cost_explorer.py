@@ -186,7 +186,10 @@ async def query_cost_explorer(
                           with_fees_per_month, with_fees_total, without_total, net_saved,
                           fee_breakdown)
     - by_network: list[dict] — one row per network in scope, keyed on network_id
-    - totals_row: dict — totals across by_network
+    - totals_row: dict — totals across by_network. Includes `paid_per_kwh` and
+      `reference_per_kwh` (None when energy/reference is zero) and a
+      `reference_label` ready for the ledger tfoot sub-line (e.g.
+      "Blink - $0.40/kWh" in network mode, "$0.52/kWh" in custom mode).
     - monthly_trend: list[dict] — [{month, paid, at_reference}, ...]
     - unconfigured_count: int — sessions skipped due to missing network config
     - free_charging_eligible_networks: list[dict] — networks with >=1 free session (per-net UI)
@@ -340,12 +343,36 @@ async def query_cost_explorer(
         by_network_list.append(row)
     by_network_list.sort(key=lambda r: r["total_paid"], reverse=True)
 
+    totals_kwh = round(sum(r["total_kwh"] for r in by_network_list), 2)
+    # Effective $/kWh sublines for the ledger tfoot. Guarded against zero-energy
+    # ranges (template renders the bare $/kWh row as "—" when None).
+    totals_paid_per_kwh = (
+        round(total_paid_actual / totals_kwh, 2) if totals_kwh > 0 else None
+    )
+    if reference_rate > 0 and totals_kwh > 0:
+        totals_reference_per_kwh = round(total_at_reference / totals_kwh, 2)
+    else:
+        totals_reference_per_kwh = None
+    # Label for the reference sub-line. Network mode prefixes with the
+    # reference network name ("Blink - $0.40/kWh"); custom mode renders the
+    # bare rate. None when no reference is configured.
+    if reference_rate > 0:
+        if reference_network_name:
+            reference_label = f"{reference_network_name} - ${reference_rate:.2f}/kWh"
+        else:
+            reference_label = f"${reference_rate:.2f}/kWh"
+    else:
+        reference_label = None
+
     totals_row = {
         "session_count": sum(r["session_count"] for r in by_network_list),
-        "total_kwh": round(sum(r["total_kwh"] for r in by_network_list), 2),
+        "total_kwh": totals_kwh,
         "total_paid": round(total_paid_actual, 2),
         "total_at_reference": round(total_at_reference, 2),
         "delta": round(total_paid_actual - total_at_reference, 2),
+        "paid_per_kwh": totals_paid_per_kwh,
+        "reference_per_kwh": totals_reference_per_kwh,
+        "reference_label": reference_label,
     }
 
     # Subscription block: collect every period overlapping the session range.
