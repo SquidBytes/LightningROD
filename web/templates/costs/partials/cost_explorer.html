@@ -37,41 +37,49 @@
                           data-tip="Restrict the card to specific networks. Only networks you've charged at appear in the list."
                           aria-label="Network filter tooltip">ⓘ</span>
                 </label>
-                <div class="flex flex-wrap items-center gap-1 mb-1">
-                    <span class="text-[10px] uppercase tracking-wide text-base-content/40 mr-1">Quick:</span>
-                    <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="clear"
-                            title="Clear the filter — show all networks">Clear</button>
-                    {% if ac_network_ids %}
-                    <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="ac"
-                            title="Networks where you've charged AC">AC</button>
-                    {% endif %}
-                    {% if dc_network_ids %}
-                    <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="dc"
-                            title="Networks where you've charged DC">DC</button>
-                    {% endif %}
+                {# Trigger + quick-action chips share a single row — mirrors the
+                   battery session picker's header layout (title on the left,
+                   picker on the right of a single flex row). The picker stays
+                   `flex-1` so it fills available space; chips collapse onto
+                   the next line on narrow viewports. #}
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex-1 min-w-[200px]">
+                        {% call searchable_select(
+                            id='cost-explorer-networks',
+                            name='networks',
+                            value=selected_networks_csv or '',
+                            placeholder='All networks',
+                            multiple=true,
+                            selected_items=selected_network_items or [],
+                            trigger_class='select select-sm select-bordered w-full',
+                            wrapper_class='block w-full',
+                            width_class='w-96',
+                            align=''
+                        ) %}
+                            {% for net in networks %}
+                            {{ searchable_select_item(
+                                item_id=net.id,
+                                label=net.network_name,
+                                color=net.color or '#6B7280',
+                                active=(selected_networks_csv and (net.id|string in (selected_networks_csv or '').split(','))),
+                                search=net.network_name
+                            ) }}
+                            {% endfor %}
+                        {% endcall %}
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1">
+                        <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="clear"
+                                title="Clear the filter — show all networks">Clear</button>
+                        {% if ac_network_ids %}
+                        <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="ac"
+                                title="Networks where you've charged AC">AC</button>
+                        {% endif %}
+                        {% if dc_network_ids %}
+                        <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="dc"
+                                title="Networks where you've charged DC">DC</button>
+                        {% endif %}
+                    </div>
                 </div>
-                {% call searchable_select(
-                    id='cost-explorer-networks',
-                    name='networks',
-                    value=selected_networks_csv or '',
-                    placeholder='All networks',
-                    multiple=true,
-                    selected_items=selected_network_items or [],
-                    trigger_class='select select-sm select-bordered w-full',
-                    wrapper_class='block w-full',
-                    width_class='w-96',
-                    align=''
-                ) %}
-                    {% for net in networks %}
-                    {{ searchable_select_item(
-                        item_id=net.id,
-                        label=net.network_name,
-                        color=net.color or '#6B7280',
-                        active=(selected_networks_csv and (net.id|string in (selected_networks_csv or '').split(','))),
-                        search=net.network_name
-                    ) }}
-                    {% endfor %}
-                {% endcall %}
             </div>
 
             {# Free-charging what-if + scope #}
