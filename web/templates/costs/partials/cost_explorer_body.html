@@ -12,11 +12,11 @@
             </p>
             {% if cost_explorer.total_fees_paid > 0 %}
             {# Headline includes subscription fees the user paid out-of-pocket
-               (e.g. EA+, Tesla Premium monthly). Surface the split so the
-               math from the subscription block below is legible up here too. #}
-            <p class="text-xs text-base-content/50 tabular-nums mt-0.5">
-                Energy ${{ "%.2f"|format(cost_explorer.total_paid_energy) }}
-                · Fees ${{ "%.2f"|format(cost_explorer.total_fees_paid) }}
+               (e.g. EA+, Tesla Premium monthly). The h2-equivalent subhead
+               surfaces the energy-only portion so the user can read the
+               protagonist as "total out-of-pocket; of which energy was X". #}
+            <p class="text-2xl font-semibold tabular-nums text-base-content/70 mt-0.5">
+                Paid in energy: ${{ "%.2f"|format(cost_explorer.total_paid_energy) }}
             </p>
             {% endif %}
             {% if cost_explorer.estimated_total > 0 %}
