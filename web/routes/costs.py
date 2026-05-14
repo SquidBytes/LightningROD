@@ -199,11 +199,17 @@ async def costs(
     if section == "cost_explorer":
         # Body-only partial — replaces #cost-explorer-body inside the shell, so
         # the form/header strip is NOT re-emitted (avoids nested duplication).
+        # The free-charging what-if controls now live IN the aside (their effect
+        # is only visible there + on the chart), so they need their state passed
+        # to the section partial too.
         section_context = {
             **unit_ctx,
             "cost_explorer": cost_explorer,
             "cost_explorer_chart": cost_explorer_chart,
             "active_range": active_range,
+            "free_what_if": free_what_if_bool,
+            "free_what_if_scope": free_what_if_scope or "global",
+            "free_what_if_networks_csv": free_what_if_networks or "",
         }
         return templates.TemplateResponse(request, "costs/partials/cost_explorer_body.html", section_context)
 

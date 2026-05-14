@@ -82,44 +82,6 @@
                 </div>
             </div>
 
-            {# Free-charging what-if + scope #}
-            <div class="flex flex-col gap-1 min-w-[180px]">
-                <label class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
-                    <span>Free charging</span>
-                    <span class="cursor-help tooltip tooltip-bottom"
-                          data-tip="Re-bill free-charging sessions at the reference rate to see what they would have cost."
-                          aria-label="Free charging what-if tooltip">ⓘ</span>
-                </label>
-                <div class="flex items-center gap-3">
-                    <input type="checkbox" name="free_what_if" value="1" class="toggle toggle-sm toggle-success"
-                           {% if free_what_if %}checked{% endif %}>
-                    {% set scope_eff = free_what_if_scope or 'global' %}
-                    <div class="join" data-segmented-group="free_what_if_scope">
-                        <input type="radio" name="free_what_if_scope" value="global"
-                               class="join-item btn btn-xs {% if scope_eff == 'global' %}btn-primary{% else %}btn-ghost{% endif %}"
-                               {% if scope_eff == 'global' %}checked{% endif %}
-                               aria-label="Global">
-                        <input type="radio" name="free_what_if_scope" value="per_network"
-                               class="join-item btn btn-xs {% if scope_eff == 'per_network' %}btn-primary{% else %}btn-ghost{% endif %}"
-                               {% if scope_eff == 'per_network' %}checked{% endif %}
-                               {% if not cost_explorer.free_charging_eligible_networks %}disabled{% endif %}
-                               aria-label="Per network">
-                    </div>
-                </div>
-                {% if free_what_if_scope == 'per_network' and cost_explorer.free_charging_eligible_networks %}
-                <div class="flex flex-wrap gap-1 mt-1">
-                    {% for net in cost_explorer.free_charging_eligible_networks %}
-                    {% set is_selected = net.network_id|string in (free_what_if_networks_csv or '').split(',') %}
-                    <label class="badge badge-outline gap-1 cursor-pointer {% if is_selected %}badge-primary{% endif %}">
-                        <input type="checkbox" name="free_what_if_networks" value="{{ net.network_id }}"
-                               class="hidden" {% if is_selected %}checked{% endif %}>
-                        {{ net.network_name }}
-                    </label>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-
             {# Reference rate — segmented + dynamic input.
                Both ref-mode panels (network/custom) are rendered; the matching
                one is shown and the other hidden. Toggling ref_mode swaps
@@ -165,13 +127,16 @@
             </div>
 
         </div>
-    </form>
 
-    {# Body wrapper — the section endpoint returns just cost_explorer_body.html
-       so HTMX replaces this inner content rather than re-emitting the header.  #}
-    <div id="cost-explorer-body">
-        {% include "costs/partials/cost_explorer_body.html" %}
-    </div>
+        {# Body wrapper — the section endpoint returns just cost_explorer_body.html
+           so HTMX replaces this inner content rather than re-emitting the header.
+           Sits INSIDE the form so toggles rendered in the body (e.g. the
+           free-charging what-if in the left aside) are submitted with the rest
+           of the unified control state. #}
+        <div id="cost-explorer-body">
+            {% include "costs/partials/cost_explorer_body.html" %}
+        </div>
+    </form>
 </div>
 
 <script>
@@ -179,19 +144,20 @@
         // Segmented-button groups inside the cost-explorer form are radio inputs
         // styled as buttons; the browser handles the radio-group state but the
         // DaisyUI btn-primary/btn-ghost classes are baked in server-side. When
-        // only the body swaps on change, the header survives — so flip those
-        // classes client-side to keep the active highlight exclusive per group.
+        // only the body swaps on change, the body-resident groups (e.g.
+        // free_what_if_scope) lose their listeners — delegate at the form level
+        // so the handler survives every swap.
         var form = document.getElementById('cost-explorer-form');
         if (!form) return;
-        form.querySelectorAll('[data-segmented-group]').forEach(function (group) {
-            group.addEventListener('change', function (e) {
-                if (!(e.target instanceof HTMLInputElement)) return;
-                if (e.target.type !== 'radio') return;
-                group.querySelectorAll('input[type="radio"]').forEach(function (radio) {
-                    var on = radio.checked;
-                    radio.classList.toggle('btn-primary', on);
-                    radio.classList.toggle('btn-ghost', !on);
-                });
+        form.addEventListener('change', function (e) {
+            if (!(e.target instanceof HTMLInputElement)) return;
+            if (e.target.type !== 'radio') return;
+            var group = e.target.closest('[data-segmented-group]');
+            if (!group || !form.contains(group)) return;
+            group.querySelectorAll('input[type="radio"]').forEach(function (radio) {
+                var on = radio.checked;
+                radio.classList.toggle('btn-primary', on);
+                radio.classList.toggle('btn-ghost', !on);
             });
         });
 

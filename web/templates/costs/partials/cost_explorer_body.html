@@ -26,6 +26,55 @@
                 <span class="text-error">+${{ "%.2f"|format(cost_explorer.total_paid_what_if - cost_explorer.total_paid_actual) }}</span>
             </p>
             {% endif %}
+
+            {# Free-charging what-if + scope — lives in the aside (not the
+               header) because its only visible effects are the "Without free
+               charging" sub-line above and the chart's "You paid" trace below.
+               Keeping it next to where it acts avoids the user toggling a
+               control in the header and seeing no change in the ledger they
+               were looking at. #}
+            <div class="mt-3 flex flex-col gap-1">
+                <label class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                    <span>Free-charging what-if</span>
+                    <span class="cursor-help tooltip tooltip-right"
+                          data-tip="Re-bill free-charging sessions at the reference rate to see what they would have cost. Affects this aside and the trend chart only."
+                          aria-label="Free charging what-if tooltip">ⓘ</span>
+                </label>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <input type="checkbox" name="free_what_if" value="1"
+                           class="toggle toggle-sm {% if free_what_if %}toggle-success{% endif %}"
+                           {% if free_what_if %}checked{% endif %}
+                           aria-label="Enable free-charging what-if">
+                    {% set scope_eff = free_what_if_scope or 'global' %}
+                    <div class="join" data-segmented-group="free_what_if_scope">
+                        <input type="radio" name="free_what_if_scope" value="global"
+                               class="join-item btn btn-xs {% if scope_eff == 'global' %}btn-primary{% else %}btn-ghost{% endif %}"
+                               {% if scope_eff == 'global' %}checked{% endif %}
+                               {% if not free_what_if %}disabled{% endif %}
+                               aria-label="Apply to all free networks">
+                        <input type="radio" name="free_what_if_scope" value="per_network"
+                               class="join-item btn btn-xs {% if scope_eff == 'per_network' %}btn-primary{% else %}btn-ghost{% endif %}"
+                               {% if scope_eff == 'per_network' %}checked{% endif %}
+                               {% if not free_what_if or not cost_explorer.free_charging_eligible_networks %}disabled{% endif %}
+                               aria-label="Pick which free networks">
+                    </div>
+                </div>
+                {% if free_what_if and free_what_if_scope == 'per_network' and cost_explorer.free_charging_eligible_networks %}
+                <p class="text-xs text-base-content/40 mt-1">Pick which free-charging networks to rebill:</p>
+                <div class="flex flex-wrap gap-1">
+                    {% for net in cost_explorer.free_charging_eligible_networks %}
+                    {% set is_selected = net.network_id|string in (free_what_if_networks_csv or '').split(',') %}
+                    <label class="badge badge-outline gap-1 cursor-pointer {% if is_selected %}badge-primary{% endif %}">
+                        <input type="checkbox" name="free_what_if_networks" value="{{ net.network_id }}"
+                               class="hidden" {% if is_selected %}checked{% endif %}>
+                        {{ net.network_name }}
+                    </label>
+                    {% endfor %}
+                </div>
+                {% elif free_what_if and free_what_if_scope == 'per_network' %}
+                <p class="text-xs text-base-content/40 mt-1">No free-charging networks in this range.</p>
+                {% endif %}
+            </div>
         </div>
 
         {# Subscription counterfactual block — sits at the bottom of the aside.
