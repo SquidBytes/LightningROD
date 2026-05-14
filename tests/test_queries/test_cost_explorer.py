@@ -1,7 +1,10 @@
 """Unit tests for query_cost_explorer aggregator."""
 
+from datetime import date
+
 import pytest
 
+from db.models.reference import EVNetworkSubscription
 from web.queries.cost_explorer import (  # noqa: F401
     calculate_fee_breakdown,
     query_cost_explorer,
@@ -112,3 +115,47 @@ async def test_query_cost_explorer_zero_reference_rate(cost_scenario):
         # Per-row delta is total_paid - total_at_reference (positive when you paid
         # more than the reference); with rate=0 it collapses to total_paid.
         assert row["delta"] == round(row["total_paid"], 2)
+
+
+async def test_query_cost_explorer_per_subscription_breakdown(cost_scenario):
+    """subscription.subscriptions exposes one entry per network with energy + fees."""
+    db = cost_scenario["db"]
+
+    # Add a second subscription on Network A so the breakdown carries two rows.
+    net_a_sub = EVNetworkSubscription(
+        network_id=cost_scenario["net_a"].id,
+        member_rate=0.20,
+        monthly_fee=4.99,
+        start_date=date(2025, 6, 1),
+        end_date=date(2025, 8, 1),
+    )
+    db.add(net_a_sub)
+    await db.flush()
+
+    result = await query_cost_explorer(db, time_range="all", reference_rate=0.50)
+    sub = result["subscription"]
+    assert sub["active"] is True
+
+    subs = sub["subscriptions"]
+    by_net_name = {row["network_name"]: row for row in subs}
+
+    # Both networks should have a breakdown row.
+    assert "Network A" in by_net_name
+    assert "Network B" in by_net_name
+
+    # Per-row structural shape: id + name + numeric energy + numeric fee.
+    for row in subs:
+        assert isinstance(row["network_id"], int)
+        assert isinstance(row["network_name"], str)
+        assert isinstance(row["energy_at_member_rate"], float)
+        assert isinstance(row["member_fee"], float)
+        assert row["member_fee"] >= 0.0
+
+    # Fees should sum to the headline `with_fees_total`.
+    assert abs(
+        sum(r["member_fee"] for r in subs) - sub["with_fees_total"]
+    ) < 0.02
+
+    # Energy sum across networks should not exceed total paid (free sessions
+    # don't carry a subscription so they're excluded from the per-net energy).
+    assert sum(r["energy_at_member_rate"] for r in subs) <= sub["with_energy_at_member_rate"] + 0.02
