@@ -31,7 +31,7 @@
             </thead>
             <tbody>
                 {% for stall in stalls %}
-                <tr>
+                <tr class="{% if just_saved_row_id == stall.id %}ring-2 ring-inset ring-success rounded{% endif %}">
                     <td>{{ stall.stall_label }}</td>
                     <td>
                         {% if stall.charger_type == 'DCFC' %}
@@ -158,3 +158,11 @@
         attachEvseAutoCalc('add-stall-kw-{{ location_id }}', 'add-stall-volt-{{ location_id }}', 'add-stall-amp-{{ location_id }}');
     }
 </script>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Stall saved.</span>
+  </div>
+</div>
+{% endif %}

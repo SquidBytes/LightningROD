@@ -30,10 +30,6 @@
             </div>
         </div>
 
-        {% if saved %}
-        <div class="alert alert-success text-sm py-2 mt-2">Settings saved.</div>
-        {% endif %}
-
         <form hx-post="/settings/data-sources/{{ card.descriptor.source_name }}"
               hx-target="closest .card" hx-swap="outerHTML"
               class="space-y-4 mt-4">
@@ -158,3 +154,11 @@
         </form>
     </div>
 </div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Settings saved.</span>
+  </div>
+</div>
+{% endif %}

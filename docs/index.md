@@ -38,7 +38,7 @@ In short: more fields means better calculations, safer backfills, and fewer assu
 
 **Cost Analytics** -- Cost hierarchy (manual/imported, location override, network, subscription member rate), actual vs estimated tracking, subscription savings, and gas/network comparison scenarios.
 
-**Battery Analytics** -- SOC timeline with color-coded charging regions, industry-standard flipped charge curves (SOC% X, kW Y) with reference/average/session overlay, mileage-based degradation scatter, and a 12V low-voltage battery trend.
+**Battery Analytics** -- SOC timeline with color-coded charging regions, an HV Pack Telemetry card (temp / voltage / amperage / power with 7-day sparklines), industry-standard flipped charge curves (SOC% X, kW Y) with reference/average/session overlay, a battery temperature over time chart, and mileage-based degradation scatter.
 
 **Driving** -- Trip Sessions table with 10-column detail view + slide-out drive graphs, plus a Driving Performance analytics page covering mi/kWh vs ambient temperature correlation, regen recovery per trip, and driving efficiency trend. (New in v0.3.)
 
@@ -50,7 +50,7 @@ In short: more fields means better calculations, safer backfills, and fewer assu
 
 **Home Assistant Integration** -- Real-time WebSocket connection for automatic charging session detection from [ha-fordpass](https://github.com/marq24/ha_fordpass). Vehicle telemetry ingestion, VIN auto-detection, home-zone location auto-populate, unit normalization, and full-history backfill (no 30-day cap).
 
-**Settings** -- Vehicle profiles with cascading Make/Model/Trim presets, comparison display options, gas price history and HA gas-sensor integration, split distance/temperature unit preferences, timezone selection, and Home Assistant connection controls.
+**Settings** -- Vehicle profiles with cascading Make/Model/Trim presets, a dedicated **Fuel** tab for multiple ICE vehicles and gas price history, a **Data Sources** tab for Home Assistant adapter configuration, split distance/temperature unit preferences, timezone selection, and comparison display toggles.
 
 ---
 
@@ -71,7 +71,7 @@ The app will be available at `http://localhost:8000`. See [Installation](getting
 |-------|-----------|
 | Language | Python 3.11 |
 | Web framework | FastAPI |
-| Database | PostgreSQL 16 |
+| Database | PostgreSQL 16 or SQLite |
 | ORM | SQLAlchemy 2.0 (async) |
 | Migrations | Alembic |
 | Templates | Jinja2 |

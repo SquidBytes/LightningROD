@@ -1,7 +1,3 @@
-{% if saved %}
-<div class="alert alert-success text-sm mb-3">Unit preferences saved.</div>
-{% endif %}
-
 <form hx-post="/settings/units" hx-target="#unit-settings" hx-swap="innerHTML"
       class="space-y-6">
 
@@ -57,3 +53,11 @@
         </button>
     </div>
 </form>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Unit preferences saved.</span>
+  </div>
+</div>
+{% endif %}

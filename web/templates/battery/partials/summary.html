@@ -141,22 +141,48 @@
                       data-tip="{{ tooltips.battery_charge_curve }}"
                       aria-label="{{ tooltips.battery_charge_curve }}">ⓘ</span>
             </h3>
-            <select id="session-picker"
-                    class="select select-sm select-bordered w-auto max-w-xs"
-                    hx-get="/battery?section=charge_curve"
-                    hx-target="#charge-curve-content"
-                    hx-swap="innerHTML"
-                    hx-include="[name='range']"
-                    name="session">
-                <option value="">Select a session...</option>
+            {% from "partials/searchable_select.html" import searchable_select, searchable_select_item %}
+            {% macro _session_trigger_label(s, user_tz) %}{% if s.session_start_utc %}{{ s.session_start_utc|localtime(user_tz|default('UTC'), "%b %-d, %H:%M") }}{% endif %}{% if s.location_name %} · {{ s.location_name }}{% elif s.network_name %} · {{ s.network_name }}{% endif %}{% endmacro %}
+            {% set _ns = namespace(selected_label='') %}
+            {% if active_session and sessions_list %}
                 {% for s in sessions_list %}
-                <option value="{{ s.id }}" {{ 'selected' if active_session and s.id == active_session }}>
-                    {% if s.session_start_utc %}{{ s.session_start_utc|localtime(user_tz|default('UTC'), "%b %-d, %H:%M") }}{% endif %}
-                    {% if s.location_name %} - {{ s.location_name }}{% endif %}
-                    {% if s.energy_kwh %} ({{ "%.1f"|format(s.energy_kwh) }} kWh){% endif %}
-                </option>
+                    {% if s.id == active_session %}{% set _ns.selected_label = _session_trigger_label(s, user_tz)|trim %}{% endif %}
                 {% endfor %}
-            </select>
+            {% endif %}
+            {% call searchable_select(
+                id='session-picker',
+                name='session',
+                value=active_session or '',
+                placeholder='Select a session...',
+                selected_label=_ns.selected_label,
+                search_placeholder='Search sessions...',
+                filter_chips=[{'key': 'AC', 'label': 'AC'}, {'key': 'DC', 'label': 'DC'}],
+                htmx_get='/battery?section=charge_curve',
+                htmx_target='#charge-curve-content',
+                htmx_include="[name='range']"
+            ) %}
+                {% if sessions_list %}
+                    {% for s in sessions_list %}
+                        {% set _datetime = s.session_start_utc|localtime(user_tz|default('UTC'), "%b %-d %H:%M") if s.session_start_utc else '' %}
+                        {% set _energy = ("%.1f kWh"|format(s.energy_kwh)) if s.energy_kwh else '' %}
+                        {% set _primary = s.location_name or s.network_name or 'Unknown location' %}
+                        {{ searchable_select_item(
+                            item_id=s.id,
+                            label=_primary,
+                            trigger_label=_session_trigger_label(s, user_tz)|trim,
+                            color=s.network_color,
+                            badge=s.charge_type,
+                            badge_variant=('info' if s.charge_type == 'DC' else 'ghost'),
+                            meta=(_datetime ~ ((' · ' ~ _energy) if _energy else '')),
+                            filter_key=(s.charge_type or ''),
+                            active=(active_session == s.id),
+                            search=(_datetime ~ ' ' ~ (s.location_name or '') ~ ' ' ~ (s.network_name or '') ~ ' ' ~ _energy ~ ' ' ~ (s.charge_type or ''))
+                        ) }}
+                    {% endfor %}
+                {% else %}
+                    <li class="px-3 py-2 text-sm text-base-content/60">No sessions available</li>
+                {% endif %}
+            {% endcall %}
         </div>
         <!-- Pass active range as hidden input for HTMX session picker -->
         <input type="hidden" name="range" value="{{ active_range }}">
@@ -234,10 +260,10 @@
 
             // Only auto-select if within 2 hours of a session start
             if (bestSession && bestDiff < 2 * 60 * 60 * 1000) {
-                var picker = document.getElementById('session-picker');
-                if (picker) {
-                    picker.value = bestSession.id;
-                    htmx.trigger(picker, 'change');
+                var btn = document.querySelector(
+                    '[data-picker="session-picker"] [data-picker-list] button[data-id="' + bestSession.id + '"]');
+                if (btn && window.LR && LR.searchablePicker) {
+                    LR.searchablePicker.select(btn);
                 }
             }
         });

@@ -9,18 +9,47 @@ For feature documentation, see the docs site at
 
 ### Added
 
+- Settings → **Fuel** tab — multi-ICE-vehicle table (mark one as default), gas price history, and a fuel price trend chart. Gas/ICE configuration relocated out of General.
+- Settings → **Data Sources** tab — register and configure HA-FordPass and HA gas-price sources
+- Battery page **HV Pack Telemetry** card — temperature, voltage, amperage, and power, each with a 7-day sparkline.
+- Battery page **Battery Temperature Over Time** chart with battery (solid) + outside-air (dashed) traces and charging-region overlays.
+- Trip drawer fields populated: odometer start/end, duration, and regen recovered (I hope)
+- Trip score column rendered as a color-banded radial-progress gauge.
+- Column-header sort on `/driving/sessions` (replaces the toolbar).
+- Demo Site and SQLite deployment option
+- Backend changes for data source abstraction
+- Backend changes for easier de-duplication (`uuid5`)
+
 ### Changed
 
-- SQLite is the default for docker/docker-compose.standalone.yml; standard
-  compose still uses Postgres. `DATABASE_URL` in `.env` is now an optional
-  override.
+- SQLite is the default for docker/docker-compose.standalone.yml
+  - Docker compose still uses Postgres.
+    - The `DATABASE_URL` in `.env` is now an optional override allowing for external database connection
+- Settings tabs restructured
+  - **General** is now the default
+  - Import CSV now labeled **Import**
+    - Still working on fixes for CSV imports
+  - Data Sources tab adjusted for future data source options
+    - Large backend changes for data source adapters to make alternative vehicle support easier in the future
+- Gas prices and ICE fuel-economy / tank-capacity are stored in metric and converted to your configured units at display time.
+- `/battery` charge curve defaults to the most recent session of any type. 
+  - AC charging sessions y-axis caps at 25 kW
+  - DC reference curve hidden (when AC session selected, DC session remain the same)
+- Charging sessions auto-inherit the network from a resolved location when the location has one.
+- `uuid5` used for Trip ingestion to cut down on duplicates (hopefully) 
+- Timezone dropdowns in Settings and CSV Import are now searchable with regional filters.
 
 ### Fixed
 
-- Docker entrypoint auto-recovers v0.3.x databases stamped at squashed-away
-  revisions. Non-Docker upgraders: see `db/migrations/README.md`.
+- Docker entrypoint auto-recovers v0.3.x databases stamped at squashed-away revisions. 
+  - Non-Docker upgraders: see `db/migrations/README.md`.
+- Datetimes correctly use configured timezone (converted to UTC on storage) and render based on configured settings.
+- Charge-curve session picker no longer scrolls the page back to the top — only the curve card swaps.
 
 ### Removed
+
+- `/battery` standalone 12V Battery Voltage Trend chart, the Range summary card, and the 12V Battery summary card.
+- `/driving/performance` regen-as-percent-of-SOC card.
 
 ## [0.3.21] - 2026-04-25
 

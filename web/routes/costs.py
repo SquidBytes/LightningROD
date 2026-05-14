@@ -36,6 +36,16 @@ from web.unit_system import MI_PER_KM
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
 
+# Human-readable labels for the preset date-range buttons (see filter_bar.html).
+RANGE_LABELS: dict[str, str] = {
+    "7d": "Last 7 days",
+    "30d": "Last 30 days",
+    "90d": "Last 90 days",
+    "ytd": "Year to date",
+    "1y": "Last 12 months",
+    "all": "All time",
+}
+
 
 @router.get("/costs", response_class=HTMLResponse)
 async def costs(
@@ -120,12 +130,31 @@ async def costs(
     if gas_comparison is not None and gas_comparison.get("total_distance") is not None:
         gas_comparison["total_distance"] = gas_comparison["total_distance"] * distance_factor
 
+    # Surface HA sensor friendly names for the ledger surface.
+    # Fallback is the raw entity_id when the setting is blank; the template
+    # renders the entity_id as-is rather than a hardcoded label.
+    if gas_comparison is not None:
+        sensor_settings = await get_app_settings_dict(
+            db,
+            ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"],
+        )
+        gas_comparison["station_friendly_name"] = (
+            sensor_settings.get("gas_sensor_station_entity_id") or ""
+        )
+        gas_comparison["average_friendly_name"] = (
+            sensor_settings.get("gas_sensor_average_entity_id") or ""
+        )
+
+    active_range = range or "all"
+    range_label = RANGE_LABELS.get(active_range, "Custom range")
+
     context = {
         **unit_ctx,
         "summary": summary,
         "network_chart": network_chart,
         "monthly_chart": monthly_chart,
-        "active_range": range or "all",
+        "active_range": active_range,
+        "range_label": range_label,
         "active_page": "costs",
         "page_title": "Costs",
         "show_comparisons": show_comparisons,

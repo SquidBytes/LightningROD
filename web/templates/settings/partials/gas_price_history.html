@@ -1,7 +1,3 @@
-{% if saved %}
-<div class="alert alert-success text-sm mb-3">Settings saved.</div>
-{% endif %}
-
 {# Heading + intro live on the wrapper card in fuel_tab.html — not duplicated here. #}
 
 {# Add new entry form (collapsible) #}
@@ -67,7 +63,7 @@
         </thead>
         <tbody>
             {% for price in gas_prices %}
-            <tr>
+            <tr class="{% if just_saved_row_id == price.id %}ring-2 ring-inset ring-success rounded{% endif %}">
                 <td>{{ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][price.month - 1] }} {{ price.year }}</td>
                 <td>{% if price.station_price_display is not none %}${{ "%.2f"|format(price.station_price_display) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
                 <td>{% if price.average_price_display is not none %}${{ "%.2f"|format(price.average_price_display) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
@@ -97,3 +93,11 @@
     <a href="/settings?tab=data_sources" class="link link-hover">Data Sources tab</a>.
     Historical readings from those sensors appear in the monthly table above.
 </div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Gas prices saved.</span>
+  </div>
+</div>
+{% endif %}

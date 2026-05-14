@@ -6,6 +6,7 @@ __pycache__/
 
 # Environment
 .env
+env/
 
 # IDE
 .vscode/
@@ -20,8 +21,16 @@ tailwindcss
 # Node
 node_modules/
 
+# Tailwind/DaisyUI generated stylesheet — rebuilt from input.css via
+# `npm run build:css` locally and by the Dockerfile in CI/release.
+web/static/css/output.css
+
 # Ruff
 .ruff_cache/
+
+# pi-lens per-project state (cache, turn-state, scanner data)
+.pi-lens/
+pii-tokens.txt
 
 # Seed data (CSV files)
 data/*.csv

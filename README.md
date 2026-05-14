@@ -1,62 +1,42 @@
 # LightningROD
 
-Self-hosted charging analytics for Ford electric vehicles. Track charging sessions, analyze costs, and monitor energy consumption with a web-based dashboard.
+Self-hosted charge logs, and vehicle analytics. Track charging sessions, trips, costs, and battery metrics from a web dashboard.
 
-Built for the Ford F-150 Lightning, but should work with any Ford EV.
+Built for the Ford F-150 Lightning, but should work with other Ford EVs.  
+If you'd like support for a vehicle that isn't covered, open an issue and let me know.
 
-Designed to support automatic data ingestion from Home Assistant via [ha-fordpass](https://github.com/marq24/ha-fordpass), CSV import, and manual entry.
+Designed to support automatic data ingestion from Home Assistant via [ha-fordpass](https://github.com/marq24/ha-fordpass).
 
-> [!IMPORTANT]
-> This is a work in progress. Do not use this as the only data storage.
 
-### **DEMO** 
+### **DEMO**
 
-An interactive read-only demo is available: https://lightningrod.onrender.com  
-**Note**: The  service may need time to wake up.
+An interactive read-only demo is available. Data values are random and meant to showcase various features - their values may be incorrect.
+
+**Site**: https://lightningrod.onrender.com  
+*Note: The service may need time to wake up.*
 
 > [!NOTE]
-> **This is my own personal project**
-> I am using it for a fun side project, and for learning.
+> **Personal project, built with AI help.** I work on this when I have free time and use AI (primarily Claude) as a tool and to learn new things. For more information read my [AI Usage Disclaimer](https://squidbytes.github.io/LightningROD/ai-disclaimer/).
 
-If you would like to, please consider buying me a coffee.
+If you find LightningROD useful, and would like to, you can [buy me a coffee](https://www.buymeacoffee.com/SquidBytes):
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/SquidBytes)
 
-
-> **Note:** AI (primarily Claude) was used to build this project — see the [AI Usage Disclaimer](https://squidbytes.github.io/LightningROD/ai-disclaimer/) for more information
-
-
+> [!IMPORTANT]
+> This is a work in progress. Alternative backups are recommended.
+> 
 ## Features
 
-- Charging session CRUD with sorting/filtering, group edit, and rich drawer details
-- EVSE-aware analytics (loss/utilization), charger stall mapping, and session-level EVSE provenance
-  - Charging Network/location/stall management 
-- Cost analytics with network/location rate hierarchy, actual vs estimated tracking
-- Energy dashboard with efficiency trends, monthly energy by charge type, and regen summaries (when trip data exists)
-- Multi-vehicle support with active-vehicle scoping for vehicle-specific pages
-- CSV import flow with auto column mapping, timezone handling, duplicate controls, and preview edits
-- Home Assistant WebSocket integration with live status and backfill controls
+- **Charging analytics** — session CRUD, network/location/stall management, cost hierarchy (location override → network → subscription), EVSE loss and utilization metrics.
+- **Battery & trip analytics** — SOC timeline, charge curves with reference overlay, estimated degradation (based on reported capacity and milage), HV pack telemetry, trip-by-trip efficiency and regen.
+- **Home Assistant ingestion** — real-time WebSocket capture, auto-detected charging sessions and history backfill
+- **CSV import and manual entry** — for data outside Home Assistant (work in progress, not recommended currently)
 
-## Project Goals
+Full feature list and screenshots in the [documentation site](https://squidbytes.github.io/LightningROD/).
 
-### Data Ingestion
-- **HomeAssistant**
-  - [x] ha-fordpass
-  - [ ] EVSE
-    - Ford Charge Station Pro
-    - Open Charge Point Protocol EVSE's
-- **Manual Entry**
-- **Import** (Charging sessions)
-  - [x] CSV
-  - [ ] XLSX
-  - [ ] EVSE App exports
-- **OBD Reader**
-  - WiCAN Pro
-  - OBDLink MX+
-- **Comma.ai** (Will require hardware)
-  - BluePilot
-  - comma four
-  - comma 3X
+## What's Next
+
+The short version: more ways to get data in, like EVSE-direct (Ford Charge Station Pro, OCPP), different import formats (XLSX, network app exports), long term stretch goal is to support data ingestion through OBD readers not relying upon the API.
 
 ## Documentation
 
@@ -100,38 +80,29 @@ Selected views from the current release.
 
 ## Quick Start
 
-### Docker Compose (recommended)
+### Docker Compose (Postgres):
 
 ```bash
 git clone https://github.com/SquidBytes/LightningROD.git
 cd LightningROD
-cp .env.example .env
-# Edit .env -- at minimum, set a real POSTGRES_PASSWORD
-docker compose up --build -d
+cp .env.example .env   # set POSTGRES_PASSWORD
+docker compose up -d
 ```
 
-The app will be available at `http://localhost:8000`. Migrations run automatically on startup.
+The app is at `http://localhost:8000`.
 
-### Standalone Docker (single container)
+### Standalone Docker (SQLite)
 
-Runs the app in a single container with an embedded SQLite database on a named volume -- no separate database service required.
+Pre-built images are published to GitHub Container Registry on each release. The simplest single-container setup uses SQLite on a named volume:
 
 ```bash
-git clone https://github.com/SquidBytes/LightningROD.git
-cd LightningROD
-docker build -f docker/Dockerfile -t lightningrod-web:dev .
 docker run -d \
   -p 8000:8000 \
   -v lightningrod-data:/data \
   -e DATABASE_URL=sqlite+aiosqlite:////data/lightningrod.db \
   --name lightningrod \
-  lightningrod-web:dev
+  ghcr.io/squidbytes/lightningrod-web:latest
 ```
 
-Or using the standalone compose file (overrides `DATABASE_URL` automatically):
 
-```bash
-docker compose -f docker/docker-compose.standalone.yml up --build -d
-```
-
-Reference the full [documentation site](https://SquidBytes.github.io/LightningROD/).
+Full install options like Unraid, external databases, etc can be found in the [Installation guide](https://squidbytes.github.io/LightningROD/getting-started/installation/).

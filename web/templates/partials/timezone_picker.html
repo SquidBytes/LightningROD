@@ -1,0 +1,116 @@
+{# Region-grouped IANA timezone picker.
+
+   Wraps the shared searchable_select macro so the same dropdown — with regional
+   filter chips and live text search — can be dropped into any form that needs a
+   timezone selector.  Both timezone settings and CSV import use this; add new
+   call sites with a one-line `{{ timezone_picker(name='...', value=...) }}`.
+
+   The TIMEZONE_REGIONS list is the single source of truth for the option set.
+   Each region has a stable `key` (used as the filter-chip key), a short `label`
+   shown on the chip, and `entries` of `(iana_value, friendly_label)` pairs. #}
+
+{% from "partials/searchable_select.html" import searchable_select, searchable_select_item %}
+
+{% set TIMEZONE_REGIONS = [
+    {'key': 'us_ca', 'label': 'US/CA', 'entries': [
+        ('America/New_York', 'Eastern (New York)'),
+        ('America/Chicago', 'Central (Chicago)'),
+        ('America/Denver', 'Mountain (Denver)'),
+        ('America/Los_Angeles', 'Pacific (Los Angeles)'),
+        ('America/Phoenix', 'Arizona (Phoenix)'),
+        ('America/Anchorage', 'Alaska (Anchorage)'),
+        ('America/Honolulu', 'Hawaii (Honolulu)'),
+        ('America/Toronto', 'Eastern (Toronto)'),
+        ('America/Vancouver', 'Pacific (Vancouver)'),
+        ('America/Edmonton', 'Mountain (Edmonton)'),
+        ('America/Winnipeg', 'Central (Winnipeg)'),
+        ('America/Halifax', 'Atlantic (Halifax)'),
+        ('America/St_Johns', "Newfoundland (St. John's)"),
+    ]},
+    {'key': 'latam', 'label': 'Latin Am.', 'entries': [
+        ('America/Mexico_City', 'Mexico City'),
+        ('America/Bogota', 'Bogota'),
+        ('America/Sao_Paulo', 'Sao Paulo'),
+        ('America/Argentina/Buenos_Aires', 'Buenos Aires'),
+        ('America/Santiago', 'Santiago'),
+    ]},
+    {'key': 'europe', 'label': 'Europe', 'entries': [
+        ('Europe/London', 'London (GMT/BST)'),
+        ('Europe/Paris', 'Paris (CET)'),
+        ('Europe/Berlin', 'Berlin (CET)'),
+        ('Europe/Madrid', 'Madrid (CET)'),
+        ('Europe/Rome', 'Rome (CET)'),
+        ('Europe/Amsterdam', 'Amsterdam (CET)'),
+        ('Europe/Stockholm', 'Stockholm (CET)'),
+        ('Europe/Helsinki', 'Helsinki (EET)'),
+        ('Europe/Athens', 'Athens (EET)'),
+        ('Europe/Moscow', 'Moscow (MSK)'),
+        ('Europe/Istanbul', 'Istanbul (TRT)'),
+    ]},
+    {'key': 'asia', 'label': 'Asia', 'entries': [
+        ('Asia/Dubai', 'Dubai (GST)'),
+        ('Asia/Kolkata', 'India (IST)'),
+        ('Asia/Bangkok', 'Bangkok (ICT)'),
+        ('Asia/Singapore', 'Singapore (SGT)'),
+        ('Asia/Shanghai', 'China (CST)'),
+        ('Asia/Hong_Kong', 'Hong Kong (HKT)'),
+        ('Asia/Tokyo', 'Tokyo (JST)'),
+        ('Asia/Seoul', 'Seoul (KST)'),
+    ]},
+    {'key': 'oceania', 'label': 'Oceania', 'entries': [
+        ('Australia/Perth', 'Perth (AWST)'),
+        ('Australia/Adelaide', 'Adelaide (ACST)'),
+        ('Australia/Sydney', 'Sydney (AEST)'),
+        ('Australia/Brisbane', 'Brisbane (AEST)'),
+        ('Pacific/Auckland', 'Auckland (NZST)'),
+    ]},
+    {'key': 'other', 'label': 'Other', 'entries': [
+        ('UTC', 'UTC'),
+        ('Africa/Johannesburg', 'Johannesburg (SAST)'),
+        ('Africa/Cairo', 'Cairo (EET)'),
+        ('Africa/Lagos', 'Lagos (WAT)'),
+    ]},
+] %}
+
+
+{% macro timezone_picker(
+    name='user_timezone',
+    value='UTC',
+    id=none,
+    trigger_class='select select-bordered w-full max-w-xs',
+    width_class='w-80'
+) %}
+    {# Resolve the friendly label for `value`.  namespace() is needed so the
+       assignment survives the nested for-loop's scope. #}
+    {% set current = namespace(label='') %}
+    {% for region in TIMEZONE_REGIONS %}
+        {% for tz_value, tz_label in region.entries %}
+            {% if tz_value == value %}{% set current.label = tz_label %}{% endif %}
+        {% endfor %}
+    {% endfor %}
+
+    {% call searchable_select(
+        id=(id or name),
+        name=name,
+        value=value,
+        selected_label=(current.label or value),
+        placeholder='Select timezone...',
+        trigger_class=trigger_class,
+        width_class=width_class,
+        search_placeholder='Search timezone...',
+        align='',
+        wrapper_class='block w-full max-w-xs'
+    ) %}
+        {% for region in TIMEZONE_REGIONS %}
+            {% for tz_value, tz_label in region.entries %}
+                {{ searchable_select_item(
+                    item_id=tz_value,
+                    label=tz_label,
+                    filter_key=region.key,
+                    active=(value == tz_value),
+                    search=tz_label ~ ' ' ~ tz_value ~ ' ' ~ region.label
+                ) }}
+            {% endfor %}
+        {% endfor %}
+    {% endcall %}
+{% endmacro %}
