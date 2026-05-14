@@ -4,20 +4,6 @@
     <h2 class="text-xl font-bold text-base-content mb-1">Savings Scenarios</h2>
     <p class="text-base-content/60 text-sm mb-4">See how your EV charging costs compare to alternatives.</p>
 
-    <!-- Tab buttons -->
-    {% if gas_comparison or network_comparison %}
-    <div class="flex gap-2 mb-4">
-        {% if gas_comparison %}
-            <button id="tab-gas" onclick="showTab('gas')"
-                class="btn btn-sm btn-primary">vs {{ gas_comparison.ice_label or 'Gasoline' }}</button>
-        {% endif %}
-        {% if network_comparison %}
-            <button id="tab-network" onclick="showTab('network')"
-                class="btn btn-sm {% if gas_comparison %}btn-ghost{% else %}btn-primary{% endif %}">vs Network Rate</button>
-        {% endif %}
-    </div>
-    {% endif %}
-
     <!-- Gasoline comparison panel -->
     {% if gas_comparison %}
     <div id="panel-gas">
@@ -116,91 +102,8 @@
     </div>
     {% endif %}
 
-    <!-- Network comparison panel -->
-    {% if network_comparison %}
-    <div id="panel-network" {% if gas_comparison %}class="hidden"{% endif %}>
-        <div class="flex items-center gap-3 mb-4">
-            <label class="text-base-content/60 text-sm">Compare against:</label>
-            <form class="flex items-center gap-2">
-                <input type="hidden" name="range" value="{{ active_range }}">
-                <select id="ref-rate-select"
-                        hx-get="/charging/costs"
-                        hx-target="#costs-content"
-                        hx-swap="innerHTML"
-                        hx-include="closest form"
-                        name="ref_rate"
-                        class="select select-sm select-bordered">
-                    {% for network in networks %}
-                        {% if not network.is_free and network.cost_per_kwh %}
-                            <option value="{{ network.cost_per_kwh }}"
-                                {% if network_comparison.reference_rate == network.cost_per_kwh|float %}selected{% endif %}>
-                                {{ network.network_name }} (${{ "%.3f"|format(network.cost_per_kwh) }}/kWh)
-                            </option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
-            </form>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div class="card bg-base-200">
-                <div class="card-body items-center text-center">
-                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Your Actual Cost</p>
-                    <p class="text-3xl font-bold">${{ "%.2f"|format(network_comparison.ev_total) }}</p>
-                    <p class="text-sm text-base-content/60 mt-2">{{ network_comparison.session_count }} sessions</p>
-                </div>
-            </div>
-            <div class="card bg-base-200">
-                <div class="card-body items-center text-center">
-                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">At Reference Rate</p>
-                    <p class="text-3xl font-bold">${{ "%.2f"|format(network_comparison.hypothetical_total) }}</p>
-                    <p class="text-sm text-base-content/60 mt-2">{{ network_comparison.session_count }} sessions at ${{ "%.3f"|format(network_comparison.reference_rate) }}/kWh</p>
-                </div>
-            </div>
-            <div class="card bg-base-200">
-                <div class="card-body items-center text-center">
-                    {% if network_comparison.difference > 0 %}
-                        <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">You Saved</p>
-                        <p class="text-3xl font-bold text-green-400">${{ "%.2f"|format(network_comparison.difference) }}</p>
-                        <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(network_comparison.difference_pct) }}% less than reference rate</p>
-                    {% elif network_comparison.difference < 0 %}
-                        <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">You Paid More</p>
-                        <p class="text-3xl font-bold text-red-400">${{ "%.2f"|format(network_comparison.difference|abs) }}</p>
-                        <p class="text-sm text-base-content/60 mt-2">{{ "%.0f"|format(network_comparison.difference_pct|abs) }}% more than reference rate</p>
-                    {% else %}
-                        <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">No Difference</p>
-                        <p class="text-3xl font-bold text-base-content/60">$0.00</p>
-                        <p class="text-sm text-base-content/60 mt-2">Same as reference rate</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    {% if not gas_comparison and not network_comparison and show_comparisons %}
+    {% if not gas_comparison and show_comparisons %}
     <p class="text-base-content/40 text-sm">No comparison data available. Configure charging networks in Settings to see savings scenarios.</p>
     {% endif %}
 </div>
-
-<script>
-function showTab(tab) {
-    const panels = ['gas', 'network'];
-    panels.forEach(p => {
-        const panel = document.getElementById('panel-' + p);
-        const tabBtn = document.getElementById('tab-' + p);
-        if (panel) {
-            panel.classList.toggle('hidden', p !== tab);
-        }
-        if (tabBtn) {
-            if (p === tab) {
-                tabBtn.classList.remove('btn-ghost');
-                tabBtn.classList.add('btn-primary');
-            } else {
-                tabBtn.classList.remove('btn-primary');
-                tabBtn.classList.add('btn-ghost');
-            }
-        }
-    });
-}
-</script>
 {% endif %}
