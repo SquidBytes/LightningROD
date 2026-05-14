@@ -39,6 +39,18 @@ async def test_smoke_charging_costs(client):
     assert response.status_code == 200
 
 
+async def test_smoke_charging_costs_cost_explorer_section(client):
+    """GET /charging/costs?section=cost_explorer returns the partial-only body."""
+    response = await client.get("/charging/costs?section=cost_explorer&range=all")
+    assert response.status_code == 200
+    body = response.text
+    # Partial-only — must contain the card body marker.
+    assert "cost-explorer-card" in body or "cost-explorer-body" in body
+    # Partial-only — must NOT contain the page shell.
+    assert "<html" not in body.lower()
+    assert "<head" not in body.lower()
+
+
 async def test_smoke_charging_sessions(client):
     """GET /charging/sessions renders the sessions list."""
     response = await client.get("/charging/sessions")
