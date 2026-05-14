@@ -263,6 +263,12 @@ async def seed(db: AsyncSession) -> int:
         # Distance added — rough estimate: ~6 km/kWh efficiency
         distance_added = round(energy_kwh * 6.0, 1)
 
+        evse_source = rng.choices(
+            ["estimated", "stall_default", "manual", "adapter"],
+            weights=[50, 30, 10, 10],
+            k=1,
+        )[0]
+
         session = EVChargingSession(
             session_id=uuid.UUID(int=rng.getrandbits(128)),
             device_id=vehicle.device_id,
@@ -304,7 +310,7 @@ async def seed(db: AsyncSession) -> int:
             evse_energy_kwh=evse_energy_kwh,
             evse_max_power_kw=evse_max_power_kw,
             charger_rated_kw=peak_kw,
-            evse_source="estimated",
+            evse_source=evse_source,
             needs_review=False,
             battery_temp_start=battery_temp_start,
             battery_temp_end=battery_temp_end,
