@@ -62,14 +62,15 @@
                 <div class="flex items-center gap-3">
                     <input type="checkbox" name="free_what_if" value="1" class="toggle toggle-sm"
                            {% if free_what_if %}checked{% endif %}>
-                    <div class="join">
+                    {% set scope_eff = free_what_if_scope or 'global' %}
+                    <div class="join" data-segmented-group="free_what_if_scope">
                         <input type="radio" name="free_what_if_scope" value="global"
-                               class="join-item btn btn-xs {% if (free_what_if_scope or 'global') == 'global' %}btn-primary{% else %}btn-ghost{% endif %}"
-                               {% if (free_what_if_scope or 'global') == 'global' %}checked{% endif %}
+                               class="join-item btn btn-xs {% if scope_eff == 'global' %}btn-primary{% else %}btn-ghost{% endif %}"
+                               {% if scope_eff == 'global' %}checked{% endif %}
                                aria-label="Global">
                         <input type="radio" name="free_what_if_scope" value="per_network"
-                               class="join-item btn btn-xs {% if free_what_if_scope == 'per_network' %}btn-primary{% else %}btn-ghost{% endif %}"
-                               {% if free_what_if_scope == 'per_network' %}checked{% endif %}
+                               class="join-item btn btn-xs {% if scope_eff == 'per_network' %}btn-primary{% else %}btn-ghost{% endif %}"
+                               {% if scope_eff == 'per_network' %}checked{% endif %}
                                {% if not cost_explorer.free_charging_eligible_networks %}disabled{% endif %}
                                aria-label="Per network">
                     </div>
@@ -88,21 +89,27 @@
                 {% endif %}
             </div>
 
-            {# Reference rate — segmented + dynamic input #}
+            {# Reference rate — segmented + dynamic input.
+               Both ref-mode panels (network/custom) are rendered; the matching
+               one is shown and the other hidden. Toggling ref_mode swaps
+               visibility client-side so the header survives body-only swaps. #}
+            {% set ref_mode_eff = ref_mode or 'network' %}
             <div class="flex flex-col gap-1 min-w-[240px]">
                 <label class="text-xs uppercase tracking-wide text-base-content/40">Reference rate</label>
-                <div class="join">
+                <div class="join" data-segmented-group="ref_mode">
                     <input type="radio" name="ref_mode" value="network"
-                           class="join-item btn btn-sm {% if (ref_mode or 'network') == 'network' %}btn-primary{% else %}btn-ghost{% endif %}"
-                           {% if (ref_mode or 'network') == 'network' %}checked{% endif %}
+                           class="join-item btn btn-sm {% if ref_mode_eff == 'network' %}btn-primary{% else %}btn-ghost{% endif %}"
+                           {% if ref_mode_eff == 'network' %}checked{% endif %}
                            aria-label="Network rate">
                     <input type="radio" name="ref_mode" value="custom"
-                           class="join-item btn btn-sm {% if ref_mode == 'custom' %}btn-primary{% else %}btn-ghost{% endif %}"
-                           {% if ref_mode == 'custom' %}checked{% endif %}
+                           class="join-item btn btn-sm {% if ref_mode_eff == 'custom' %}btn-primary{% else %}btn-ghost{% endif %}"
+                           {% if ref_mode_eff == 'custom' %}checked{% endif %}
                            aria-label="Custom">
                 </div>
-                {% if (ref_mode or 'network') == 'network' %}
-                <select name="ref_network_id" class="select select-sm select-bordered w-full mt-1">
+                <select name="ref_network_id"
+                        class="select select-sm select-bordered w-full mt-1{% if ref_mode_eff != 'network' %} hidden{% endif %}"
+                        data-ref-mode-panel="network"
+                        {% if ref_mode_eff != 'network' %}disabled{% endif %}>
                     <option value="">— select —</option>
                     {% for net in networks if not net.is_free and net.cost_per_kwh %}
                     <option value="{{ net.id }}" {% if ref_network_id == net.id %}selected{% endif %}>
@@ -110,15 +117,15 @@
                     </option>
                     {% endfor %}
                 </select>
-                {% else %}
-                <label class="input input-sm input-bordered flex items-center gap-1 mt-1">
+                <label class="input input-sm input-bordered flex items-center gap-1 mt-1{% if ref_mode_eff != 'custom' %} hidden{% endif %}"
+                       data-ref-mode-panel="custom">
                     <span class="text-base-content/50">$</span>
                     <input type="number" name="ref_value" step="0.001" min="0" placeholder="0.000"
                            value="{{ '%.3f'|format(ref_value) if ref_value else '' }}"
-                           class="grow tabular-nums">
+                           class="grow tabular-nums"
+                           {% if ref_mode_eff != 'custom' %}disabled{% endif %}>
                     <span class="text-base-content/50 text-xs">/ kWh</span>
                 </label>
-                {% endif %}
             </div>
 
         </div>
@@ -130,3 +137,45 @@
         {% include "costs/partials/cost_explorer_body.html" %}
     </div>
 </div>
+
+<script>
+    (function () {
+        // Segmented-button groups inside the cost-explorer form are radio inputs
+        // styled as buttons; the browser handles the radio-group state but the
+        // DaisyUI btn-primary/btn-ghost classes are baked in server-side. When
+        // only the body swaps on change, the header survives — so flip those
+        // classes client-side to keep the active highlight exclusive per group.
+        var form = document.getElementById('cost-explorer-form');
+        if (!form) return;
+        form.querySelectorAll('[data-segmented-group]').forEach(function (group) {
+            group.addEventListener('change', function (e) {
+                if (!(e.target instanceof HTMLInputElement)) return;
+                if (e.target.type !== 'radio') return;
+                group.querySelectorAll('input[type="radio"]').forEach(function (radio) {
+                    var on = radio.checked;
+                    radio.classList.toggle('btn-primary', on);
+                    radio.classList.toggle('btn-ghost', !on);
+                });
+            });
+        });
+
+        // ref_mode toggle: show the matching ref-mode panel, hide+disable the
+        // other so its value is not posted with the form.
+        var refModeGroup = form.querySelector('[data-segmented-group="ref_mode"]');
+        if (refModeGroup) {
+            refModeGroup.addEventListener('change', function (e) {
+                if (!(e.target instanceof HTMLInputElement)) return;
+                if (e.target.name !== 'ref_mode') return;
+                var active = e.target.value;
+                form.querySelectorAll('[data-ref-mode-panel]').forEach(function (panel) {
+                    var on = panel.dataset.refModePanel === active;
+                    panel.classList.toggle('hidden', !on);
+                    panel.querySelectorAll('input, select').forEach(function (input) {
+                        input.disabled = !on;
+                    });
+                    if (panel.tagName === 'SELECT') panel.disabled = !on;
+                });
+            });
+        }
+    })();
+</script>
