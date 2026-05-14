@@ -1,0 +1,186 @@
+{% from "partials/searchable_select.html" import searchable_select, searchable_select_item %}
+
+{# Cost Explorer card — replaces Actual/Estimated stat pair + Cost by Network grid + Savings Scenarios "vs Network Rate" tab. Sketch 002 Variant D. #}
+<div class="card bg-base-200 mb-6" id="cost-explorer-card">
+
+    <div class="card-body p-6 pb-0">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <h2 class="card-title text-lg">Cost Explorer</h2>
+                <p class="text-sm text-base-content/60 mt-0.5">Spend, reference comparison, and subscription net — for the active range.</p>
+            </div>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mt-1 whitespace-nowrap">{{ range_label }}</p>
+        </div>
+    </div>
+
+    <form id="cost-explorer-form"
+          hx-get="/charging/costs"
+          hx-include="#cost-explorer-form"
+          hx-target="#cost-explorer-body"
+          hx-swap="innerHTML"
+          hx-push-url="true"
+          hx-trigger="change">
+        <input type="hidden" name="range" value="{{ active_range }}">
+        <input type="hidden" name="section" value="cost_explorer">
+        <div class="flex flex-wrap items-end gap-6 px-6 py-4 bg-base-300/40 border-y border-base-300">
+
+            {# Networks multi-select column #}
+            <div class="flex-1 min-w-[280px]">
+                <label class="text-xs uppercase tracking-wide text-base-content/40 mb-1 block">Networks</label>
+                {% call searchable_select(
+                    id='cost-explorer-networks',
+                    name='networks',
+                    value=selected_networks_csv or '',
+                    placeholder='All networks',
+                    multiple=true,
+                    selected_items=selected_network_items or [],
+                    trigger_class='select select-sm select-bordered w-full',
+                    wrapper_class='block w-full',
+                    width_class='w-96',
+                    align=''
+                ) %}
+                    {% for net in networks %}
+                    {{ searchable_select_item(
+                        item_id=net.id,
+                        label=net.network_name,
+                        color=net.color or '#6B7280',
+                        active=(selected_networks_csv and (net.id|string in (selected_networks_csv or '').split(','))),
+                        search=net.network_name
+                    ) }}
+                    {% endfor %}
+                {% endcall %}
+            </div>
+
+            {# Free-charging what-if + scope #}
+            <div class="flex flex-col gap-1 min-w-[180px]">
+                <label class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                    <span>Free charging</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="Re-bill free-charging sessions at the reference rate to see what they would have cost."
+                          aria-label="Free charging what-if tooltip">ⓘ</span>
+                </label>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" name="free_what_if" value="1" class="toggle toggle-sm"
+                           {% if free_what_if %}checked{% endif %}>
+                    <div class="join">
+                        <input type="radio" name="free_what_if_scope" value="global"
+                               class="join-item btn btn-xs {% if (free_what_if_scope or 'global') == 'global' %}btn-primary{% else %}btn-ghost{% endif %}"
+                               {% if (free_what_if_scope or 'global') == 'global' %}checked{% endif %}
+                               aria-label="Global">
+                        <input type="radio" name="free_what_if_scope" value="per_network"
+                               class="join-item btn btn-xs {% if free_what_if_scope == 'per_network' %}btn-primary{% else %}btn-ghost{% endif %}"
+                               {% if free_what_if_scope == 'per_network' %}checked{% endif %}
+                               {% if not cost_explorer.free_charging_eligible_networks %}disabled{% endif %}
+                               aria-label="Per network">
+                    </div>
+                </div>
+                {% if free_what_if_scope == 'per_network' and cost_explorer.free_charging_eligible_networks %}
+                <div class="flex flex-wrap gap-1 mt-1">
+                    {% for net in cost_explorer.free_charging_eligible_networks %}
+                    {% set is_selected = net.network_id|string in (free_what_if_networks_csv or '').split(',') %}
+                    <label class="badge badge-outline gap-1 cursor-pointer {% if is_selected %}badge-primary{% endif %}">
+                        <input type="checkbox" name="free_what_if_networks" value="{{ net.network_id }}"
+                               class="hidden" {% if is_selected %}checked{% endif %}>
+                        {{ net.network_name }}
+                    </label>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            {# Reference rate — segmented + dynamic input #}
+            <div class="flex flex-col gap-1 min-w-[240px]">
+                <label class="text-xs uppercase tracking-wide text-base-content/40">Reference rate</label>
+                <div class="join">
+                    <input type="radio" name="ref_mode" value="network"
+                           class="join-item btn btn-sm {% if (ref_mode or 'network') == 'network' %}btn-primary{% else %}btn-ghost{% endif %}"
+                           {% if (ref_mode or 'network') == 'network' %}checked{% endif %}
+                           aria-label="Network rate">
+                    <input type="radio" name="ref_mode" value="custom"
+                           class="join-item btn btn-sm {% if ref_mode == 'custom' %}btn-primary{% else %}btn-ghost{% endif %}"
+                           {% if ref_mode == 'custom' %}checked{% endif %}
+                           aria-label="Custom">
+                </div>
+                {% if (ref_mode or 'network') == 'network' %}
+                <select name="ref_network_id" class="select select-sm select-bordered w-full mt-1">
+                    <option value="">— select —</option>
+                    {% for net in networks if not net.is_free and net.cost_per_kwh %}
+                    <option value="{{ net.id }}" {% if ref_network_id == net.id %}selected{% endif %}>
+                        {{ net.network_name }} (${{ "%.3f"|format(net.cost_per_kwh|float) }}/kWh)
+                    </option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <label class="input input-sm input-bordered flex items-center gap-1 mt-1">
+                    <span class="text-base-content/50">$</span>
+                    <input type="number" name="ref_value" step="0.001" min="0" placeholder="0.000"
+                           value="{{ '%.3f'|format(ref_value) if ref_value else '' }}"
+                           class="grow tabular-nums">
+                    <span class="text-base-content/50 text-xs">/ kWh</span>
+                </label>
+                {% endif %}
+            </div>
+
+        </div>
+    </form>
+
+    <div id="cost-explorer-body">
+        <div class="grid grid-cols-1 md:grid-cols-[360px_1fr] min-h-[540px]">
+
+            <aside class="p-6 md:p-8 bg-base-200 md:border-r border-base-300 flex flex-col gap-6 justify-between">
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">You paid</p>
+                    <p class="text-4xl font-bold tabular-nums tracking-tight">
+                        ${{ "%.2f"|format(cost_explorer.total_paid_actual) }}
+                    </p>
+                    {% if cost_explorer.estimated_total > 0 %}
+                    <p class="text-base text-base-content/70 tabular-nums mt-1">
+                        Estimated ${{ "%.2f"|format(cost_explorer.estimated_total) }}
+                        {% if cost_explorer.delta_actual_vs_estimated != 0 %}
+                        <span class="text-sm text-base-content/50">
+                            · Δ {% if cost_explorer.delta_actual_vs_estimated > 0 %}+{% endif %}${{ "%.2f"|format(cost_explorer.delta_actual_vs_estimated) }}
+                        </span>
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                    {% if cost_explorer.total_paid_what_if != cost_explorer.total_paid_actual %}
+                    <p class="text-sm text-base-content/60 tabular-nums mt-2">
+                        Without free charging: ${{ "%.2f"|format(cost_explorer.total_paid_what_if) }}
+                        <span class="text-error">+${{ "%.2f"|format(cost_explorer.total_paid_what_if - cost_explorer.total_paid_actual) }}</span>
+                    </p>
+                    {% endif %}
+                </div>
+
+                {# Subscription counterfactual block — sits at the bottom of the aside #}
+                <div class="mt-auto">
+                    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Subscription savings</p>
+                    {% if cost_explorer.subscription.active %}
+                    <div class="text-sm tabular-nums space-y-1">
+                        <div class="flex justify-between">
+                            <span>With <span class="text-base-content/60">you paid</span></span>
+                            <span class="font-semibold">${{ "%.2f"|format(cost_explorer.subscription.with_total) }}</span>
+                        </div>
+                        <div class="flex justify-between pl-3 text-xs text-base-content/60">
+                            <span>Energy at member rate</span>
+                            <span>${{ "%.2f"|format(cost_explorer.subscription.with_energy_at_member_rate) }}</span>
+                        </div>
+                        <div class="flex justify-between pl-3 text-xs text-base-content/60">
+                            <span>Fees · {{ cost_explorer.subscription.with_fees_count }} × ${{ "%.2f"|format(cost_explorer.subscription.with_fees_per_month) }}</span>
+                            <span>${{ "%.2f"|format(cost_explorer.subscription.with_fees_total) }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Without <span class="text-base-content/60">non-member rate</span></span>
+                            <span class="font-semibold">${{ "%.2f"|format(cost_explorer.subscription.without_total) }}</span>
+                        </div>
+                        <div class="flex justify-between border-t border-base-300 pt-2 mt-1">
+                            <span class="font-semibold">Net saved</span>
+                            <span class="font-bold {% if cost_explorer.subscription.net_saved >= 0 %}text-success{% else %}text-error{% endif %}">
+                                {% if cost_explorer.subscription.net_saved >= 0 %}+{% endif %}${{ "%.2f"|format(cost_explorer.subscription.net_saved) }}
+                            </span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-base-content/50">No subscription active</p>
+                    {% endif %}
+                </div>
+            </aside>
