@@ -85,7 +85,7 @@
                           aria-label="Free charging what-if tooltip">ⓘ</span>
                 </label>
                 <div class="flex items-center gap-3">
-                    <input type="checkbox" name="free_what_if" value="1" class="toggle toggle-sm"
+                    <input type="checkbox" name="free_what_if" value="1" class="toggle toggle-sm toggle-success"
                            {% if free_what_if %}checked{% endif %}>
                     {% set scope_eff = free_what_if_scope or 'global' %}
                     <div class="join" data-segmented-group="free_what_if_scope">
