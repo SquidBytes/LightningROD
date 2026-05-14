@@ -125,6 +125,63 @@ async def test_query_cost_explorer_zero_reference_rate(cost_scenario):
         assert row["delta"] == round(row["total_paid"], 2)
 
 
+async def test_totals_row_reference_label_network_mode(cost_scenario):
+    """Network-rate mode formats the tfoot label as "{network_name} - $X.XX/kWh"."""
+    db = cost_scenario["db"]
+
+    result = await query_cost_explorer(
+        db,
+        time_range="all",
+        reference_rate=0.40,
+        reference_network_name="Blink",
+        reference_network_id=99,
+    )
+    totals = result["totals_row"]
+    assert totals["reference_label"] == "Blink - $0.40/kWh"
+    # paid_per_kwh + reference_per_kwh are populated when energy > 0.
+    assert totals["paid_per_kwh"] is not None
+    assert totals["reference_per_kwh"] == round(0.40, 2)
+
+
+async def test_totals_row_reference_label_custom_mode(cost_scenario):
+    """Custom-rate mode (no network name) formats the label as bare "$X.XX/kWh"."""
+    db = cost_scenario["db"]
+
+    result = await query_cost_explorer(
+        db,
+        time_range="all",
+        reference_rate=0.52,
+        reference_network_name=None,
+    )
+    totals = result["totals_row"]
+    assert totals["reference_label"] == "$0.52/kWh"
+    assert totals["reference_per_kwh"] == 0.52
+
+
+async def test_totals_row_reference_label_multi_network_weighted(cost_scenario):
+    """No-reference-set case: reference_label is None and reference_per_kwh is None."""
+    db = cost_scenario["db"]
+
+    # Multi-network scope with reference_rate=0 -> no reference comparison.
+    result = await query_cost_explorer(db, time_range="all", reference_rate=0.0)
+    totals = result["totals_row"]
+    assert totals["reference_label"] is None
+    assert totals["reference_per_kwh"] is None
+    # paid_per_kwh still surfaces (it's independent of reference state).
+    assert totals["paid_per_kwh"] is not None
+    # Weighted-average reference math: when reference_rate is set in network
+    # mode and multiple networks are in scope, reference_per_kwh equals the
+    # uniform reference_rate (since total_at_reference = total_kwh * rate).
+    weighted = await query_cost_explorer(
+        db,
+        time_range="all",
+        reference_rate=0.45,
+        reference_network_name="Network B",
+    )
+    assert weighted["totals_row"]["reference_per_kwh"] == 0.45
+    assert weighted["totals_row"]["reference_label"] == "Network B - $0.45/kWh"
+
+
 async def test_query_cost_explorer_per_subscription_breakdown(cost_scenario):
     """subscription.subscriptions exposes one entry per network with energy + fees."""
     db = cost_scenario["db"]
