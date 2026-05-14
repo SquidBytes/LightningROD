@@ -100,11 +100,7 @@
                 <span class="text-lg font-semibold">{{ detail.network_name }}</span>
                 <button type="button"
                         class="btn btn-ghost btn-xs ml-auto"
-                        hx-get="/charging/costs"
-                        hx-target="#cost-explorer-body"
-                        hx-swap="innerHTML"
-                        hx-push-url="true"
-                        hx-vals='{"section": "cost_explorer", "networks": "", "range": "{{ active_range }}"}'>
+                        data-cost-explorer-scope-clear>
                     Clear scope ×
                 </button>
             </div>
@@ -154,11 +150,9 @@
                 <tbody>
                     {% for row in cost_explorer.by_network %}
                     <tr class="cursor-pointer hover:bg-base-300/40"
-                        hx-get="/charging/costs"
-                        hx-target="#cost-explorer-body"
-                        hx-swap="innerHTML"
-                        hx-push-url="true"
-                        hx-vals='{"section": "cost_explorer", "networks": "{{ row.network_id }}", "range": "{{ active_range }}"}'>
+                        data-cost-explorer-scope-row
+                        data-network-id="{{ row.network_id }}"
+                        data-network-label="{{ row.network_name }}">
                         <td><span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color: {{ row.color }}"></span></td>
                         <td>{{ row.network_name }}</td>
                         <td class="text-right tabular-nums">{{ row.session_count }}</td>

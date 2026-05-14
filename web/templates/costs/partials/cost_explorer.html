@@ -214,6 +214,86 @@
             });
         }
 
+        // Scope helper: drive the network picker programmatically and fire a
+        // single change event so the unified form (free-charging toggle,
+        // ref-rate, scope segmented, custom rate) submits with every control's
+        // current value preserved. Used by row-click scope, single-network
+        // "Clear scope ×", and the quick-action chips below.
+        function setPickerSelection(ids, labelById) {
+            var picker = form.querySelector('#cost-explorer-card .searchable-picker');
+            if (!picker) return false;
+            var targetSet = {};
+            ids.forEach(function (id) { targetSet[String(id)] = true; });
+            picker.querySelectorAll('[data-picker-list] button').forEach(function (btn) {
+                var on = !!targetSet[btn.dataset.id];
+                btn.classList.toggle('bg-brand-accent/15', on);
+                btn.classList.toggle('text-brand-accent', on);
+            });
+            var hidden = picker.querySelector('[data-picker-value]');
+            if (!hidden) return false;
+            var chipContainer = picker.querySelector('[data-picker-chip-container]');
+            hidden.value = ids.map(String).join(',');
+            if (chipContainer) {
+                chipContainer.innerHTML = '';
+                if (ids.length === 0) {
+                    var placeholder = picker.dataset.placeholder || 'All networks';
+                    var ph = document.createElement('span');
+                    ph.className = 'text-base-content/50 text-sm';
+                    ph.textContent = placeholder;
+                    chipContainer.appendChild(ph);
+                } else {
+                    ids.forEach(function (id) {
+                        var label = (labelById && labelById[String(id)]) ||
+                            (picker.querySelector('[data-picker-list] button[data-id="' + id + '"]') || {}).dataset?.label ||
+                            String(id);
+                        var c = document.createElement('span');
+                        c.className = 'badge badge-outline gap-1';
+                        c.setAttribute('data-chip-id', String(id));
+                        var lbl = document.createElement('span');
+                        lbl.className = 'truncate max-w-[10rem]';
+                        lbl.textContent = label;
+                        c.appendChild(lbl);
+                        var rm = document.createElement('button');
+                        rm.type = 'button';
+                        rm.className = 'btn btn-ghost btn-xs btn-circle leading-none';
+                        rm.setAttribute('data-id', String(id));
+                        rm.setAttribute('aria-label', 'Remove ' + label);
+                        rm.innerHTML = '&times;';
+                        rm.onmousedown = function (ev) {
+                            ev.stopPropagation();
+                            ev.preventDefault();
+                        };
+                        rm.onclick = function (ev) {
+                            ev.stopPropagation();
+                            if (window.LR && LR.searchablePicker) LR.searchablePicker.removeChip(rm);
+                        };
+                        c.appendChild(rm);
+                        chipContainer.appendChild(c);
+                    });
+                }
+            }
+            if (window.htmx) htmx.trigger(hidden, 'change');
+            return true;
+        }
+
+        // Row click → scope to that one network. Delegated on the form so it
+        // survives body swaps that re-render the table rows.
+        form.addEventListener('click', function (e) {
+            var row = e.target.closest && e.target.closest('[data-cost-explorer-scope-row]');
+            if (row && form.contains(row)) {
+                var id = row.dataset.networkId;
+                var label = row.dataset.networkLabel || id;
+                var labelMap = {};
+                labelMap[String(id)] = label;
+                setPickerSelection([id], labelMap);
+                return;
+            }
+            var clear = e.target.closest && e.target.closest('[data-cost-explorer-scope-clear]');
+            if (clear && form.contains(clear)) {
+                setPickerSelection([], {});
+            }
+        });
+
         // Network filter quick-action chips (All / None / AC / DC).
         // Each chip sets the picker's selection to a predetermined ID list and
         // triggers a single change event so HTMX fetches the new body once.
