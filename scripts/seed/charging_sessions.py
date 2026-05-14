@@ -38,7 +38,7 @@ _PROFILES = [
     #  soc_end_range, rate_per_kwh, charge_current_type)
     (
         "Home",
-        "AC Level 2",
+        "AC",
         "private",
         "Home",
         40,
@@ -52,7 +52,7 @@ _PROFILES = [
     ),
     (
         "Work",
-        "AC Level 2",
+        "AC",
         "private",
         "Work",  # employer-provided network (free)
         25,
@@ -66,7 +66,7 @@ _PROFILES = [
     ),
     (
         "Tesla Supercharger Downtown",
-        "DC Fast",
+        "DC",
         "public",
         "Tesla Supercharger",
         20,
@@ -80,7 +80,7 @@ _PROFILES = [
     ),
     (
         "Electrify America Costco",
-        "DC Fast",
+        "DC",
         "public",
         "Electrify America",
         15,
