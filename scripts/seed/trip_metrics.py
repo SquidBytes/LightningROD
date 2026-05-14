@@ -201,7 +201,7 @@ async def seed(db: AsyncSession) -> int:
             recorded_at=end_time,
             original_timestamp=end_time,
             distance=distance_km,
-            duration=round(duration_min, 1),
+            duration=round(duration_min * 60, 0),
             energy_consumed=energy_kwh,
             efficiency=efficiency_km_per_kwh,
             range_regenerated=range_regenerated,
