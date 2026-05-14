@@ -26,7 +26,12 @@
 
             {# Networks multi-select column #}
             <div class="flex-1 min-w-[280px]">
-                <label class="text-xs uppercase tracking-wide text-base-content/40 mb-1 block">Networks</label>
+                <label class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                    <span>Network filter</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="Restrict the card to specific networks. Only networks you've charged at appear in the list."
+                          aria-label="Network filter tooltip">ⓘ</span>
+                </label>
                 {% call searchable_select(
                     id='cost-explorer-networks',
                     name='networks',
@@ -95,7 +100,12 @@
                visibility client-side so the header survives body-only swaps. #}
             {% set ref_mode_eff = ref_mode or 'network' %}
             <div class="flex flex-col gap-1 min-w-[240px]">
-                <label class="text-xs uppercase tracking-wide text-base-content/40">Reference rate</label>
+                <label class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                    <span>Compare vs</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="The per-kWh rate the ledger compares your actual paid cost against. The Δ column is what you paid minus this reference."
+                          aria-label="Compare vs tooltip">ⓘ</span>
+                </label>
                 <div class="join" data-segmented-group="ref_mode">
                     <input type="radio" name="ref_mode" value="network"
                            class="join-item btn btn-sm {% if ref_mode_eff == 'network' %}btn-primary{% else %}btn-ghost{% endif %}"
