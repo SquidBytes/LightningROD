@@ -10,6 +10,15 @@
             <p class="text-4xl font-bold tabular-nums tracking-tight">
                 ${{ "%.2f"|format(cost_explorer.total_paid_actual) }}
             </p>
+            {% if cost_explorer.total_fees_paid > 0 %}
+            {# Headline includes subscription fees the user paid out-of-pocket
+               (e.g. EA+, Tesla Premium monthly). Surface the split so the
+               math from the subscription block below is legible up here too. #}
+            <p class="text-xs text-base-content/50 tabular-nums mt-0.5">
+                Energy ${{ "%.2f"|format(cost_explorer.total_paid_energy) }}
+                · Fees ${{ "%.2f"|format(cost_explorer.total_fees_paid) }}
+            </p>
+            {% endif %}
             {% if cost_explorer.estimated_total > 0 %}
             <p class="text-base text-base-content/70 tabular-nums mt-1">
                 Estimated ${{ "%.2f"|format(cost_explorer.estimated_total) }}

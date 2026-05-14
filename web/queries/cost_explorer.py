@@ -169,9 +169,17 @@ async def query_cost_explorer(
     All currency values are `round(value, 2)` at the boundary.
 
     Returns dict with:
-    - total_paid_actual: float — sum of compute_session_cost.display_cost
-    - total_paid_what_if: float — actual + delta from free-rebill (== total_paid_actual when what_if=False)
-    - estimated_total, delta_actual_vs_estimated: float — Estimated − Actual
+    - total_paid_actual: float — total out-of-pocket = session energy paid +
+      subscription fees overlapping the active range. Includes fees so the
+      headline reflects what the user actually paid, not just energy cost.
+    - total_paid_energy: float — session energy only (sum of display_cost);
+      use this for like-for-like comparison with estimated_total or for
+      reconciling against totals_row.total_paid (which stays energy-only so
+      the ledger table footer matches the per-row sum).
+    - total_paid_what_if: float — total_paid_actual + delta from free-rebill
+      (== total_paid_actual when what_if=False)
+    - estimated_total, delta_actual_vs_estimated: float — Estimated − Energy
+      (apples-to-apples, both exclude subscription fees)
     - reference_rate, reference_network_id, reference_network_name, total_at_reference,
       total_savings_vs_reference
     - subscription: dict (active, with_total, with_energy_at_member_rate, with_fees_count,
@@ -463,16 +471,31 @@ async def query_cost_explorer(
         if nid in networks_by_id
     ]
 
+    # Subscription fees the user actually paid out-of-pocket in this range.
+    # When a subscription is active, these are real recurring charges separate
+    # from per-session energy cost — the headline must reflect them so
+    # "you paid" matches what's left the user's wallet.
+    total_fees_paid = float(subscription_block.get("with_fees_total", 0.0)) if subscription_block.get("active") else 0.0
+    total_paid_energy = total_paid_actual
+    total_paid_with_fees = total_paid_actual + total_fees_paid
+    total_paid_what_if_with_fees = total_paid_what_if + total_fees_paid
+
     return {
-        "total_paid_actual": round(total_paid_actual, 2),
-        "total_paid_what_if": round(total_paid_what_if, 2),
+        # Headline value: energy + subscription fees in range.
+        "total_paid_actual": round(total_paid_with_fees, 2),
+        # Energy-only sum — keeps the ledger table footer ↔ row arithmetic
+        # consistent and powers the "Energy $X · Fees $Y" breakdown sub-line.
+        "total_paid_energy": round(total_paid_energy, 2),
+        "total_fees_paid": round(total_fees_paid, 2),
+        "total_paid_what_if": round(total_paid_what_if_with_fees, 2),
         "estimated_total": round(estimated_total, 2),
-        "delta_actual_vs_estimated": round(estimated_total - total_paid_actual, 2),
+        # Estimated is energy-only; compare like-for-like so the delta is meaningful.
+        "delta_actual_vs_estimated": round(estimated_total - total_paid_energy, 2),
         "reference_rate": reference_rate,
         "reference_network_id": reference_network_id,
         "reference_network_name": reference_network_name,
         "total_at_reference": round(total_at_reference, 2),
-        "total_savings_vs_reference": round(total_at_reference - total_paid_actual, 2),
+        "total_savings_vs_reference": round(total_at_reference - total_paid_energy, 2),
         "subscription": subscription_block,
         "by_network": by_network_list,
         "totals_row": totals_row,

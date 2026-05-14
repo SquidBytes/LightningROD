@@ -26,7 +26,13 @@ async def test_query_cost_explorer_totals(cost_scenario):
 
     assert result["total_paid_actual"] > 0
     assert result["unconfigured_count"] >= 0
-    assert result["totals_row"]["total_paid"] == result["total_paid_actual"]
+    # totals_row.total_paid is the energy-only sum (matches per-row totals so
+    # the ledger footer arithmetic is consistent). The headline
+    # total_paid_actual now includes subscription fees on top of that.
+    assert result["totals_row"]["total_paid"] == result["total_paid_energy"]
+    assert result["total_paid_actual"] == round(
+        result["total_paid_energy"] + result["total_fees_paid"], 2
+    )
     assert isinstance(result["by_network"], list)
     assert result["subscription"] is not None
     # When reference_rate=0.50, total_at_reference = sum(session.kWh) * 0.50.
@@ -48,7 +54,9 @@ async def test_query_cost_explorer_network_filter(cost_scenario):
 
     assert len(scoped["by_network"]) == 1
     assert scoped["by_network"][0]["network_id"] == first_net_id
-    assert scoped["total_paid_actual"] == scoped["by_network"][0]["total_paid"]
+    # Energy-only sum lines up with the per-row total; the headline adds any
+    # subscription fees on top.
+    assert scoped["total_paid_energy"] == scoped["by_network"][0]["total_paid"]
     # Exactly one network in scope -> single_network_detail is populated.
     assert scoped["single_network_detail"] is not None
     assert scoped["single_network_detail"]["network_id"] == first_net_id
@@ -106,10 +114,10 @@ async def test_query_cost_explorer_zero_reference_rate(cost_scenario):
     result = await query_cost_explorer(db, time_range="all", reference_rate=0.0)
 
     assert result["total_at_reference"] == 0.0
-    # total_savings_vs_reference = total_at_reference - total_paid_actual;
-    # with rate=0 that's -total_paid_actual (negative — you "saved" nothing vs an
-    # all-free counterfactual, in fact you paid more).
-    assert result["total_savings_vs_reference"] == round(-result["total_paid_actual"], 2)
+    # total_savings_vs_reference = total_at_reference - total_paid_energy
+    # (apples-to-apples — fees aren't a per-kWh quantity so they're excluded
+    # from this comparison). With rate=0 that collapses to -total_paid_energy.
+    assert result["total_savings_vs_reference"] == round(-result["total_paid_energy"], 2)
     for row in result["by_network"]:
         assert row["total_at_reference"] == 0.0
         # Per-row delta is total_paid - total_at_reference (positive when you paid
