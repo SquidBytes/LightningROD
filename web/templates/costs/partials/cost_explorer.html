@@ -277,6 +277,10 @@
                                 rm.setAttribute('data-id', item.id);
                                 rm.setAttribute('aria-label', 'Remove ' + item.label);
                                 rm.innerHTML = '&times;';
+                                rm.onmousedown = function (ev) {
+                                    ev.stopPropagation();
+                                    ev.preventDefault();
+                                };
                                 rm.onclick = function (ev) {
                                     ev.stopPropagation();
                                     if (window.LR && LR.searchablePicker) LR.searchablePicker.removeChip(rm);

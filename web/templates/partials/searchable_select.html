@@ -88,6 +88,7 @@
                         class="btn btn-ghost btn-xs btn-circle leading-none"
                         data-id="{{ item.id }}"
                         aria-label="Remove {{ item.label }}"
+                        onmousedown="event.stopPropagation(); event.preventDefault();"
                         onclick="event.stopPropagation(); LR.searchablePicker.removeChip(this)">&times;</button>
             </span>
             {% endfor %}

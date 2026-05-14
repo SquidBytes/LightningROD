@@ -68,6 +68,14 @@
             btn.setAttribute('data-id', item.id);
             btn.setAttribute('aria-label', 'Remove ' + item.label);
             btn.innerHTML = '&times;';
+            // Stop the click from bubbling up to the trigger (DaisyUI dropdown
+            // opens via focus on the role="button" wrapper). preventDefault on
+            // mousedown keeps focus from moving to the trigger before the click
+            // handler runs — otherwise the dropdown re-opens on chip x.
+            btn.onmousedown = function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            };
             btn.onclick = function (e) {
                 e.stopPropagation();
                 LR.searchablePicker.removeChip(btn);
