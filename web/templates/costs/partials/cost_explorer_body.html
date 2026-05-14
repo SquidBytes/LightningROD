@@ -137,13 +137,7 @@
     <main class="p-6 md:p-8">
         <div class="flex items-baseline justify-between gap-2 mb-3">
             <p class="text-xs uppercase tracking-wide text-base-content/40">Reference comparison</p>
-            {% if cost_explorer.reference_rate > 0 %}
-            <p class="text-xs text-base-content/60">
-                <strong>{{ cost_explorer.reference_network_name or 'Custom rate' }}</strong>
-                · ${{ "%.3f"|format(cost_explorer.reference_rate) }}/kWh
-                · <span class="text-base-content/40">click a row to scope</span>
-            </p>
-            {% else %}
+            {% if cost_explorer.reference_rate <= 0 %}
             <p class="text-xs text-base-content/40">Set a reference rate above to see Δ</p>
             {% endif %}
         </div>
