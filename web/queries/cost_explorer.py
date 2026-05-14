@@ -24,6 +24,42 @@ from web.queries.costs import (
 from web.queries.settings import get_all_subscriptions_by_network
 
 
+async def get_charge_type_network_groupings(
+    db: AsyncSession,
+    *,
+    time_range: str = "all",
+    device_id: str | None = None,
+) -> dict[str, list[int]]:
+    """Return network IDs grouped by session-history AC/DC mix.
+
+    A network appears in `ac` if the user has at least one AC session on it
+    within the time range, in `dc` likewise. Networks can appear in both
+    (mixed-use networks like ChargePoint or Tesla Supercharger). Networks with
+    no charge_type recorded contribute to neither list.
+    """
+    stmt = (
+        select(EVChargingSession.network_id, EVChargingSession.charge_type)
+        .where(EVChargingSession.network_id.is_not(None))
+        .where(EVChargingSession.charge_type.is_not(None))
+        .distinct()
+    )
+    time_filter = build_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVChargingSession.device_id == device_id)
+
+    result = await db.execute(stmt)
+    ac_ids: set[int] = set()
+    dc_ids: set[int] = set()
+    for net_id, ct in result.all():
+        if ct == "AC":
+            ac_ids.add(net_id)
+        elif ct == "DC":
+            dc_ids.add(net_id)
+    return {"ac": sorted(ac_ids), "dc": sorted(dc_ids)}
+
+
 def calculate_fee_breakdown(
     periods: list[EVNetworkSubscription],
     range_start: date,

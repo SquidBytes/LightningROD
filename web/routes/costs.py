@@ -11,6 +11,7 @@ from web.dependencies import get_db
 from web.queries.comparisons import query_gas_comparison
 from web.queries.cost_explorer import (
     build_cost_explorer_monthly_chart,
+    get_charge_type_network_groupings,
     query_cost_explorer,
 )
 from web.queries.costs import (
@@ -79,6 +80,13 @@ async def costs(
 
     all_networks = await get_all_networks(db)
     networks_by_id_lookup = {n.id: n for n in all_networks}
+
+    # Networks grouped by session-history AC/DC mix — powers the Network filter
+    # quick-action chips (All / None / AC / DC). A network can appear in both
+    # groupings if the user has both AC and DC sessions on it.
+    charge_type_groupings = await get_charge_type_network_groupings(
+        db, time_range=range or "all", device_id=active_device_id
+    )
 
     if ref_mode_eff == "custom":
         reference_rate = float(ref_value) if (ref_value is not None and ref_value > 0) else 0.0
@@ -213,6 +221,8 @@ async def costs(
         "networks": all_networks,
         "selected_networks_csv": networks or "",
         "selected_network_items": selected_network_items,
+        "ac_network_ids": charge_type_groupings["ac"],
+        "dc_network_ids": charge_type_groupings["dc"],
         "free_what_if": free_what_if_bool,
         "free_what_if_scope": free_what_if_scope or "global",
         "free_what_if_networks_csv": free_what_if_networks or "",
