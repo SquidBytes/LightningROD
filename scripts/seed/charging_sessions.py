@@ -222,9 +222,31 @@ async def seed(db: AsyncSession) -> int:
         # Cost
         if rate_per_kwh == 0.0:
             cost = 0.0
+            estimated_cost = 0.0
+            cost_without_overrides = 0.0
+            cost_source = "calculated"
+            session_source_system = "seed"
             is_free = True
         else:
-            cost = round(energy_kwh * rate_per_kwh, 2)
+            estimated_cost = round(energy_kwh * rate_per_kwh, 2)
+            cost_without_overrides = estimated_cost
+            roll = rng.random()
+            if roll < 0.70:
+                cost_source = "calculated"
+                session_source_system = "seed"
+                cost = estimated_cost
+            elif roll < 0.85:
+                cost_source = "manual"
+                session_source_system = "manual_entry"
+                cost = round(estimated_cost * rng.uniform(0.85, 1.20), 2)
+            elif roll < 0.95:
+                cost_source = "adapter"
+                session_source_system = "ha_fordpass"
+                cost = round(estimated_cost * rng.uniform(0.95, 1.05), 2)
+            else:
+                cost_source = "manual"
+                session_source_system = "csv_import"
+                cost = round(estimated_cost * rng.uniform(0.50, 0.90), 2)
             is_free = False
 
         # Power metrics — average kW inferred from energy/duration
@@ -266,9 +288,9 @@ async def seed(db: AsyncSession) -> int:
             end_soc=end_soc,
             energy_kwh=energy_kwh,
             cost=cost,
-            cost_without_overrides=cost,
-            cost_source="calculated",
-            estimated_cost=cost,
+            cost_without_overrides=cost_without_overrides,
+            cost_source=cost_source,
+            estimated_cost=estimated_cost,
             is_complete=True,
             address=loc.address,
             latitude=loc.latitude,
@@ -288,7 +310,7 @@ async def seed(db: AsyncSession) -> int:
             battery_temp_end=battery_temp_end,
             ambient_temp_start=ambient_temp_start,
             ambient_temp_end=ambient_temp_end,
-            source_system="seed",
+            source_system=session_source_system,
             original_timestamp=ts_start,
             ingest_schema_version=2,
         )
