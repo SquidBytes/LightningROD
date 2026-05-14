@@ -244,7 +244,48 @@
 
         // Row click → scope to that one network. Delegated on the form so it
         // survives body swaps that re-render the table rows.
+        //
+        // Per-row exclude button is checked FIRST and stops propagation, so
+        // clicking the icon never triggers the row-scope handler below.
         form.addEventListener('click', function (e) {
+            var exclude = e.target.closest && e.target.closest('[data-cost-explorer-row-exclude]');
+            if (exclude && form.contains(exclude)) {
+                e.stopPropagation();
+                e.preventDefault();
+                var excludeId = String(exclude.dataset.networkId);
+                var picker = form.querySelector('#cost-explorer-card .searchable-picker');
+                var hidden = picker && picker.querySelector('[data-picker-value]');
+                var currentCsv = (hidden && hidden.value) || '';
+                var currentIds = currentCsv
+                    .split(',')
+                    .map(function (s) { return s.trim(); })
+                    .filter(function (s) { return s.length > 0; });
+                var nextIds;
+                var labelMap = {};
+                if (currentIds.length === 0) {
+                    // No filter active: exclude = "all populated networks except this one".
+                    // Walk the current ledger rows for the populated network IDs.
+                    var rowEls = form.querySelectorAll('[data-cost-explorer-scope-row]');
+                    rowEls.forEach(function (r) {
+                        var rid = String(r.dataset.networkId);
+                        if (rid && rid !== excludeId) {
+                            labelMap[rid] = r.dataset.networkLabel || rid;
+                        }
+                    });
+                    nextIds = Object.keys(labelMap);
+                } else {
+                    // Active filter: drop just this id from the current selection.
+                    nextIds = currentIds.filter(function (id) { return id !== excludeId; });
+                    // Pull labels from the picker list for the surviving ids so chips
+                    // render with the network name instead of the raw id.
+                    nextIds.forEach(function (id) {
+                        var btn = picker && picker.querySelector('[data-picker-list] button[data-id="' + id + '"]');
+                        if (btn) labelMap[id] = btn.dataset.label || id;
+                    });
+                }
+                setPickerSelection(nextIds, labelMap);
+                return;
+            }
             var row = e.target.closest && e.target.closest('[data-cost-explorer-scope-row]');
             if (row && form.contains(row)) {
                 var id = row.dataset.networkId;

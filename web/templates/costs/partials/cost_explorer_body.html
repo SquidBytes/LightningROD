@@ -203,6 +203,7 @@
                         <th class="text-right tabular-nums">Paid</th>
                         <th class="text-right tabular-nums">At ref</th>
                         <th class="text-right tabular-nums">Δ</th>
+                        <th class="w-6"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -233,6 +234,24 @@
                             <span class="text-base-content/40">—</span>
                             {% endif %}
                         </td>
+                        {# Per-row exclude action — quick "filter out just this one"
+                           inverse of the row-click-to-scope. Hidden in
+                           single-network view (see {% if single_network_detail %}
+                           branch above) since there's nothing meaningful to exclude
+                           when one row is already in scope. #}
+                        <td class="text-right">
+                            <button type="button"
+                                    class="btn btn-ghost btn-xs btn-circle text-base-content/40 hover:text-error"
+                                    data-cost-explorer-row-exclude
+                                    data-network-id="{{ row.network_id }}"
+                                    data-network-label="{{ row.network_name }}"
+                                    title="Exclude {{ row.network_name }}"
+                                    aria-label="Exclude {{ row.network_name }} from the filter">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                </svg>
+                            </button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -253,6 +272,7 @@
                                 {% if cost_explorer.totals_row.delta > 0 %}+{% endif %}${{ "%.2f"|format(cost_explorer.totals_row.delta) }}
                             {% else %}<span class="text-base-content/40">—</span>{% endif %}
                         </td>
+                        <td></td>
                     </tr>
                 </tfoot>
             </table>
