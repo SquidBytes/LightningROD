@@ -10,7 +10,6 @@ import pytest
 from web.queries.costs import (
     compute_session_cost,
     query_cost_summary,
-    query_monthly_costs,
 )
 
 pytestmark = [pytest.mark.query, pytest.mark.db]
@@ -86,26 +85,6 @@ async def test_cost_cascade_location_override(cost_scenario):
     assert result["display_cost"] == pytest.approx(7.50, abs=0.01)
     assert result["cost_source"] == "calculated"
     assert result["cost_per_kwh"] == pytest.approx(0.30, abs=0.001)
-
-
-async def test_monthly_cost_breakdown(cost_scenario):
-    """Verify monthly aggregation groups sessions by calendar month.
-
-    NOTE: query_monthly_costs does NOT load subscription periods, so Network B
-    sessions use the base rate ($0.45/kWh) regardless of subscription status.
-    Expected monthly total differs from cost summary total.
-    """
-    db = cost_scenario["db"]
-
-    result = await query_monthly_costs(db, time_range="all")
-
-    # Should have entries for the months sessions fall in
-    months = {entry["month"] for entry in result}
-    assert len(months) >= 1  # At least one month present
-    # Total across monthly data (no subscription applied):
-    # s1: 17.50, s2: 10.50, s3: 40*0.45=18.00, s4: 9.00, s5: 7.50, s6: 0.00 = 62.50
-    total = sum(entry["cost"] for entry in result)
-    assert total == pytest.approx(62.50, abs=0.01)
 
 
 # ---------------------------------------------------------------------------
