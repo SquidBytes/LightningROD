@@ -278,7 +278,7 @@ async def query_cost_explorer(
 
     # Finalize by_network rows.
     by_network_list: list[dict[str, Any]] = []
-    for net_id, row in by_network.items():
+    for row in by_network.values():
         kwh = row["total_kwh"]
         row["effective_rate_per_kwh"] = round(row["total_paid"] / kwh, 3) if kwh > 0 else 0.0
         row["delta"] = round(row["total_paid"] - row["total_at_reference"], 2)
@@ -297,8 +297,13 @@ async def query_cost_explorer(
     }
 
     # Subscription block: collect every period overlapping the session range.
+    # When a network filter is active, only include periods on those networks —
+    # the block then reflects the scoped view rather than global totals.
+    scope_network_ids: set[int] = set(network_ids) if network_ids else set()
     all_periods_in_range: list[EVNetworkSubscription] = []
-    for periods in subs_by_network.values():
+    for sub_network_id, periods in subs_by_network.items():
+        if scope_network_ids and sub_network_id not in scope_network_ids:
+            continue
         for p in periods:
             if range_start_min is None or range_end_max is None:
                 continue
@@ -306,6 +311,17 @@ async def query_cost_explorer(
             p_end = p.end_date if p.end_date is not None else range_end_max
             if p_start <= range_end_max and p_end >= range_start_min:
                 all_periods_in_range.append(p)
+
+    # Surface the scoped-network label so the template can label or hide the
+    # block when no subscription applies to the active network filter.
+    scoped_network_name: str | None = None
+    if scope_network_ids:
+        names = [
+            networks_by_id[nid].network_name
+            for nid in scope_network_ids
+            if nid in networks_by_id
+        ]
+        scoped_network_name = ", ".join(names) if names else None
 
     if all_periods_in_range and range_start_min and range_end_max:
         fee_breakdown = calculate_fee_breakdown(all_periods_in_range, range_start_min, range_end_max)
@@ -328,9 +344,10 @@ async def query_cost_explorer(
             "without_total": without_total,
             "net_saved": net_saved,
             "fee_breakdown": fee_breakdown,
+            "scoped_network_name": scoped_network_name,
         }
     else:
-        subscription_block = {"active": False}
+        subscription_block = {"active": False, "scoped_network_name": scoped_network_name}
 
     all_months = sorted(set(monthly_paid.keys()) | set(monthly_at_ref.keys()))
     monthly_trend = [

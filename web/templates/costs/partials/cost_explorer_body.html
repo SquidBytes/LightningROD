@@ -28,7 +28,9 @@
             {% endif %}
         </div>
 
-        {# Subscription counterfactual block — sits at the bottom of the aside #}
+        {# Subscription counterfactual block — sits at the bottom of the aside.
+           When a network filter is active, the block only shows subscriptions
+           covering an in-scope network; otherwise a short note replaces it. #}
         <div class="mt-auto">
             <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Subscription savings</p>
             {% if cost_explorer.subscription.active %}
@@ -55,7 +57,14 @@
                         {% if cost_explorer.subscription.net_saved >= 0 %}+{% endif %}${{ "%.2f"|format(cost_explorer.subscription.net_saved) }}
                     </span>
                 </div>
+                {% if cost_explorer.subscription.scoped_network_name %}
+                <p class="text-xs text-base-content/40 mt-2">
+                    Scoped to {{ cost_explorer.subscription.scoped_network_name }}
+                </p>
+                {% endif %}
             </div>
+            {% elif cost_explorer.subscription.scoped_network_name %}
+            <p class="text-sm text-base-content/50">No subscription active for {{ cost_explorer.subscription.scoped_network_name }}</p>
             {% else %}
             <p class="text-sm text-base-content/50">No subscription active</p>
             {% endif %}
