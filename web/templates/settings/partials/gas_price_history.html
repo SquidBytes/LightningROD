@@ -63,7 +63,7 @@
         </thead>
         <tbody>
             {% for price in gas_prices %}
-            <tr class="{% if just_saved_row_id == price.id %}ring-2 ring-success ring-offset-2 ring-offset-base-100 rounded{% endif %}">
+            <tr class="{% if just_saved_row_id == price.id %}ring-2 ring-inset ring-success rounded{% endif %}">
                 <td>{{ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][price.month - 1] }} {{ price.year }}</td>
                 <td>{% if price.station_price_display is not none %}${{ "%.2f"|format(price.station_price_display) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
                 <td>{% if price.average_price_display is not none %}${{ "%.2f"|format(price.average_price_display) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>

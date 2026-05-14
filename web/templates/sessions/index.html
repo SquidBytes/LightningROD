@@ -152,9 +152,6 @@
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
-<!-- Toast container -->
-<div id="toast-container" class="fixed top-4 right-4 z-[70] space-y-2"></div>
-
 <script>
 function openDrawer() {
     document.getElementById('session-drawer').checked = true;
@@ -236,29 +233,47 @@ function confirmDeleteFromModal(sessionId) {
 document.body.addEventListener('closeModal', closeSessionModal);
 
 function showToast(message, type) {
-    var container = document.getElementById('toast-container');
     var toast = document.createElement('div');
-    var cls = type === 'success' ? 'alert alert-success' : 'alert alert-error';
-    toast.className = cls + ' text-sm shadow-lg transform transition-all duration-300';
-    toast.textContent = message;
-    container.appendChild(toast);
-    setTimeout(function() {
-        toast.classList.add('opacity-0', 'translate-x-4');
-        setTimeout(function() { toast.remove(); }, 300);
-    }, 3000);
+    toast.className = 'toast toast-bottom toast-end z-50';
+    toast.setAttribute('data-auto-dismiss', '3000');
+    var alertEl = document.createElement('div');
+    alertEl.className = 'alert ' + (type === 'success' ? 'alert-success' : 'alert-error');
+    var span = document.createElement('span');
+    span.textContent = message;
+    alertEl.appendChild(span);
+    toast.appendChild(alertEl);
+    document.body.appendChild(toast);
+    if (window.LR && LR.scheduleDismiss) {
+        LR.scheduleDismiss(document);
+    } else {
+        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+    }
 }
 
+// Drawn on a row when the user clicks it (drawer opens). Cleared globally by
+// save-toast.js on any non-dismiss click, so only the most-recently-clicked
+// row carries the accent ring at any time.
+function markRowSelected(sessionId) {
+    var allRings = ['ring-2', 'ring-inset', 'ring-success', 'ring-accent', 'rounded'];
+    var accentRing = ['ring-2', 'ring-inset', 'ring-accent', 'rounded'];
+    document.querySelectorAll('#sessions-table-region tbody tr').forEach(function(row) {
+        allRings.forEach(function(c) { row.classList.remove(c); });
+    });
+    var target = document.querySelector('#sessions-table-region tr[hx-get*="/charging/sessions/' + sessionId + '/detail"]');
+    if (target) accentRing.forEach(function(c) { target.classList.add(c); });
+}
+
+// Swap the in-flight accent ring on the saved row for the success ring so a
+// just-edited session is differentiated from a merely-selected one.
 function highlightRow(sessionId) {
     var rows = document.querySelectorAll('#sessions-table-region tbody tr');
     rows.forEach(function(row) {
         var hxGet = row.getAttribute('hx-get');
         if (hxGet && hxGet.includes('/charging/sessions/' + sessionId + '/detail')) {
-            row.classList.add('bg-blue-900/30');
-            setTimeout(function() {
-                row.style.transition = 'background-color 2s ease-out';
-                row.classList.remove('bg-blue-900/30');
-                row.style.backgroundColor = '';
-            }, 100);
+            row.classList.remove('ring-accent');
+            ['ring-2', 'ring-inset', 'ring-success', 'rounded'].forEach(function(c) {
+                row.classList.add(c);
+            });
         }
     });
 }

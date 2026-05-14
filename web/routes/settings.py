@@ -1064,7 +1064,7 @@ async def create_stall_route(
     is_default: str | None = Form(None),
 ):
     """Create a stall for a location."""
-    await create_stall(
+    new_stall = await create_stall(
         db,
         location_id=location_id,
         label=stall_label,
@@ -1077,6 +1077,8 @@ async def create_stall_route(
         is_default=is_default is not None,
     )
     ctx = await _stall_context(db, location_id)
+    ctx["saved"] = True
+    ctx["just_saved_row_id"] = getattr(new_stall, "id", None)
     return templates.TemplateResponse(
         request,
         "settings/partials/stall_rows.html",
@@ -1113,6 +1115,8 @@ async def update_stall_route(
         is_default=is_default is not None,
     )
     ctx = await _stall_context(db, location_id)
+    ctx["saved"] = True
+    ctx["just_saved_row_id"] = stall_id
     return templates.TemplateResponse(
         request,
         "settings/partials/stall_rows.html",
@@ -1219,7 +1223,7 @@ async def create_subscription_route(
     parsed_end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date.strip() else None
 
     try:
-        await create_subscription(
+        new_sub = await create_subscription(
             db,
             network_id=network_id,
             member_rate=member_rate,
@@ -1238,6 +1242,8 @@ async def create_subscription_route(
         )
 
     ctx = await _subscription_tab_context(db, network_id)
+    ctx["saved"] = True
+    ctx["just_saved_row_id"] = getattr(new_sub, "id", None)
     return templates.TemplateResponse(
         request,
         "settings/partials/subscription_tab.html",
@@ -1306,6 +1312,8 @@ async def update_subscription_route(
         )
 
     ctx = await _subscription_tab_context(db, network_id)
+    ctx["saved"] = True
+    ctx["just_saved_row_id"] = subscription_id
     return templates.TemplateResponse(
         request,
         "settings/partials/subscription_tab.html",

@@ -78,9 +78,6 @@
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
-<!-- Toast container -->
-<div id="toast-container" class="fixed top-4 right-4 z-[70] space-y-2"></div>
-
 <script>
 // Auto-open drawer when HTMX loads content into it
 document.body.addEventListener('htmx:afterSettle', function(evt) {
@@ -98,17 +95,35 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+// Accent inset ring on the clicked trip row so the user can see which row's
+// detail is in the drawer. Cleared by save-toast.js on any click outside
+// drawer/modal surfaces.
+function markRowSelected(tripId) {
+    var allRings = ['ring-2', 'ring-inset', 'ring-success', 'ring-accent', 'rounded'];
+    var accentRing = ['ring-2', 'ring-inset', 'ring-accent', 'rounded'];
+    document.querySelectorAll('#driving-sessions-content tbody tr').forEach(function(row) {
+        allRings.forEach(function(c) { row.classList.remove(c); });
+    });
+    var target = document.querySelector('#driving-sessions-content tr[hx-get*="/driving/sessions/' + tripId + '/drawer"]');
+    if (target) accentRing.forEach(function(c) { target.classList.add(c); });
+}
+
 function showToast(message, type) {
-    var container = document.getElementById('toast-container');
     var toast = document.createElement('div');
-    var cls = type === 'success' ? 'alert alert-success' : 'alert alert-error';
-    toast.className = cls + ' text-sm shadow-lg transform transition-all duration-300';
-    toast.textContent = message;
-    container.appendChild(toast);
-    setTimeout(function() {
-        toast.classList.add('opacity-0', 'translate-x-4');
-        setTimeout(function() { toast.remove(); }, 300);
-    }, 3000);
+    toast.className = 'toast toast-bottom toast-end z-50';
+    toast.setAttribute('data-auto-dismiss', '3000');
+    var alertEl = document.createElement('div');
+    alertEl.className = 'alert ' + (type === 'success' ? 'alert-success' : 'alert-error');
+    var span = document.createElement('span');
+    span.textContent = message;
+    alertEl.appendChild(span);
+    toast.appendChild(alertEl);
+    document.body.appendChild(toast);
+    if (window.LR && LR.scheduleDismiss) {
+        LR.scheduleDismiss(document);
+    } else {
+        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+    }
 }
 
 document.body.addEventListener('trip-created', function() {

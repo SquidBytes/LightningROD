@@ -1,8 +1,8 @@
 """Smoke tests for settings save toast + row-highlight.
 
 Asserts that each of the 5 row-table save handlers renders both the toast
-block (data-auto-dismiss) AND the server-rendered ring-2 ring-success class
-on the saved row.
+block (data-auto-dismiss) AND the server-rendered ring-inset ring-success
+classes on the saved row.
 """
 
 import pytest
@@ -29,7 +29,7 @@ async def test_network_post_renders_ring_and_toast(client, db_session):
         },
     )
     assert response.status_code == 200
-    assert "ring-2 ring-success" in response.text
+    assert "ring-inset ring-success" in response.text
     assert "data-auto-dismiss=\"3000\"" in response.text
 
 
@@ -49,7 +49,7 @@ async def test_network_put_renders_ring_and_toast(client, db_session):
         },
     )
     assert response.status_code == 200
-    assert "ring-2 ring-success" in response.text
+    assert "ring-inset ring-success" in response.text
     assert "data-auto-dismiss=\"3000\"" in response.text
     assert "Network costs saved." in response.text
 
@@ -69,7 +69,7 @@ async def test_gas_price_post_renders_ring_and_toast(client, db_session):
         },
     )
     assert response.status_code == 200
-    assert "ring-2 ring-success" in response.text
+    assert "ring-inset ring-success" in response.text
     assert "data-auto-dismiss=\"3000\"" in response.text
     assert "Gas prices saved." in response.text
 
@@ -89,7 +89,7 @@ async def test_vehicle_post_renders_ring_and_toast(client, db_session):
         },
     )
     assert response.status_code == 200
-    assert "ring-2 ring-success" in response.text
+    assert "ring-inset ring-success" in response.text
     assert "data-auto-dismiss=\"3000\"" in response.text
     assert "Vehicle saved." in response.text
 
@@ -108,7 +108,7 @@ async def test_ice_vehicle_post_renders_ring_and_toast(client, db_session):
         },
     )
     assert response.status_code == 200
-    assert "ring-2 ring-success" in response.text
+    assert "ring-inset ring-success" in response.text
     assert "data-auto-dismiss=\"3000\"" in response.text
     assert "ICE vehicle saved." in response.text
 
@@ -129,6 +129,6 @@ async def test_location_post_renders_ring_and_toast(client, db_session):
         },
     )
     assert response.status_code == 200
-    assert "ring-2 ring-success" in response.text
+    assert "ring-inset ring-success" in response.text
     assert "data-auto-dismiss=\"3000\"" in response.text
     assert "Locations saved." in response.text

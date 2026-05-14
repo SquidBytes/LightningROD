@@ -18,7 +18,7 @@
                 </thead>
                 <tbody>
                     {% for ice in ice_vehicles %}
-                    <tr class="{% if just_saved_row_id == ice.id %}ring-2 ring-success ring-offset-2 ring-offset-base-100 rounded{% endif %}">
+                    <tr class="{% if just_saved_row_id == ice.id %}ring-2 ring-inset ring-success rounded{% endif %}">
                         <td class="font-medium">{{ ice.label }}</td>
                         <td class="text-base-content/60 text-sm">
                             {% if ice.fuel_efficiency_display is not none %}

@@ -10,7 +10,8 @@
        survive the swap that landed them).
    No external dependencies. IIFE-wrapped. */
 (function () {
-  var RING_CLASSES = ['ring-2', 'ring-success', 'ring-offset-2', 'ring-offset-base-100'];
+  window.LR = window.LR || {};
+  var RING_CLASSES = ['ring-2', 'ring-success', 'ring-accent', 'ring-offset-2', 'ring-offset-base-100'];
 
   function scheduleDismiss(root) {
     var scope = root || document;
@@ -26,7 +27,7 @@
   }
 
   function clearRings(exceptContainer) {
-    document.querySelectorAll('.ring-success').forEach(function (el) {
+    document.querySelectorAll('.ring-success, .ring-accent').forEach(function (el) {
       if (exceptContainer && (exceptContainer === el || exceptContainer.contains(el) || el.contains(exceptContainer))) {
         return;
       }
@@ -46,18 +47,39 @@
 
   document.addEventListener('htmx:afterSwap', function (e) {
     scheduleDismiss(document);
-    // The swap target's freshly-rendered content may carry a fresh ring;
-    // clear rings on elements OUTSIDE the swap target so cross-region
-    // saves don't leak old rings, but preserve any ring in the new content.
+    // Only sweep rings on save-like swaps. A GET swap (clicking a row to load
+    // its detail into the drawer) targets a different region and would
+    // otherwise strip the just-applied selection ring off the clicked row.
+    var verb = e && e.detail && e.detail.requestConfig && e.detail.requestConfig.verb;
+    if (verb && String(verb).toLowerCase() === 'get') return;
     var swapTarget = e && e.detail && e.detail.target;
     clearRings(swapTarget || null);
   });
 
+  // Listen in the CAPTURE phase so the exemption check runs before any inline
+  // onclick has a chance to detach the click target (e.g. Cancel buttons that
+  // call `modal-content.innerHTML = ''`, which orphans the element and breaks
+  // its closest()-based ancestor walk).
   document.addEventListener('click', function (e) {
-    clearRings(e.target);
-  });
+    var t = e.target;
+    // Skip if the click is on a dismissal affordance (overlay/backdrop/toggle/
+    // explicit data-dismiss-surface) OR inside a drawer panel or modal box.
+    // The latter cover in-surface interactions — Edit, Save, Cancel, Advanced
+    // Edit, etc. — which are about the ringed row and shouldn't clear it.
+    if (t && t.closest && t.closest('.drawer-overlay, .modal-backdrop, .drawer-toggle, .drawer-side, .modal-box, [data-dismiss-surface]')) return;
+    clearRings(t);
+  }, true);
 
-  document.addEventListener('submit', function () {
-    clearRings(null);
-  });
+  // (No submit listener: form-driven saves emit htmx:afterSwap which handles
+  // ring lifecycle via clearRings(swapTarget). A document-level submit hook
+  // also fired on dialog-dismiss forms like the modal close X, wiping the
+  // ring on what's logically a dismissal.)
+
+  // Public hooks for JS-created toasts (e.g. sessions/trips pages that build
+  // success toasts in response to custom HX-Trigger events). Callers append a
+  // [data-auto-dismiss] element to the DOM and invoke scheduleDismiss; the
+  // shared timeout + dismiss-flag bookkeeping lives here so all toasts share
+  // one lifecycle.
+  LR.scheduleDismiss = scheduleDismiss;
+  LR.clearRings = clearRings;
 })();

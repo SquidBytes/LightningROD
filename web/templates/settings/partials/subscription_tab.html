@@ -12,7 +12,7 @@
     {% endif %}
 
     {% for sub in periods %}
-    <div class="bg-base-300/50 rounded-lg px-4 py-3" id="subscription-{{ sub.id }}">
+    <div class="bg-base-300/50 rounded-lg px-4 py-3 {% if just_saved_row_id == sub.id %}ring-2 ring-inset ring-success rounded{% endif %}" id="subscription-{{ sub.id }}">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3 flex-1 min-w-0">
                 <span class="font-medium">${{ "%.3f"|format(sub.member_rate) }}/kWh</span>
@@ -95,3 +95,11 @@
         </form>
     </details>
 </div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Subscription period saved.</span>
+  </div>
+</div>
+{% endif %}
