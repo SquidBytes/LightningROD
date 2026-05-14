@@ -255,10 +255,18 @@
                         <td>Total</td>
                         <td class="text-right tabular-nums">{{ cost_explorer.totals_row.session_count }}</td>
                         <td class="text-right tabular-nums">{{ "%.1f"|format(cost_explorer.totals_row.total_kwh) }} kWh</td>
-                        <td class="text-right tabular-nums">${{ "%.2f"|format(cost_explorer.totals_row.total_paid) }}</td>
+                        <td class="text-right tabular-nums">
+                            ${{ "%.2f"|format(cost_explorer.totals_row.total_paid) }}
+                            {% if cost_explorer.totals_row.paid_per_kwh is not none %}
+                            <div class="text-xs text-base-content/50 font-normal tabular-nums">${{ "%.2f"|format(cost_explorer.totals_row.paid_per_kwh) }}/kWh</div>
+                            {% endif %}
+                        </td>
                         <td class="text-right tabular-nums">
                             {% if cost_explorer.reference_rate > 0 %}
                             ${{ "%.2f"|format(cost_explorer.totals_row.total_at_reference) }}
+                            {% if cost_explorer.totals_row.reference_label %}
+                            <div class="text-xs text-base-content/50 font-normal tabular-nums">{{ cost_explorer.totals_row.reference_label }}</div>
+                            {% endif %}
                             {% else %}<span class="text-base-content/40">—</span>{% endif %}
                         </td>
                         <td class="text-right tabular-nums {% if cost_explorer.totals_row.delta <= 0 %}text-success{% else %}text-error{% endif %}">
