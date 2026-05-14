@@ -26,6 +26,57 @@
         });
     }
 
+    // Multi-mode helper: recompute hidden value + chip strip from the set of
+    // currently-active list items. Private to the IIFE — callers reach it via
+    // LR.searchablePicker.select / removeChip.
+    function rebuildMultiState(picker) {
+        var hidden = picker.querySelector('[data-picker-value]');
+        var chipContainer = picker.querySelector('[data-picker-chip-container]');
+        if (!hidden) return;
+
+        var activeButtons = picker.querySelectorAll('[data-picker-list] button.bg-brand-accent\\/15');
+        var ids = [];
+        var items = [];
+        activeButtons.forEach(function (b) {
+            ids.push(b.dataset.id);
+            items.push({ id: b.dataset.id, label: b.dataset.label });
+        });
+
+        hidden.value = ids.join(',');
+
+        if (!chipContainer) return;
+        chipContainer.innerHTML = '';
+        if (items.length === 0) {
+            var placeholder = picker.dataset.placeholder || 'Select...';
+            var ph = document.createElement('span');
+            ph.className = 'text-base-content/50 text-sm';
+            ph.textContent = placeholder;
+            chipContainer.appendChild(ph);
+            return;
+        }
+        items.forEach(function (item) {
+            var chip = document.createElement('span');
+            chip.className = 'badge badge-outline gap-1';
+            chip.setAttribute('data-chip-id', item.id);
+            var label = document.createElement('span');
+            label.className = 'truncate max-w-[10rem]';
+            label.textContent = item.label;
+            chip.appendChild(label);
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-ghost btn-xs btn-circle leading-none';
+            btn.setAttribute('data-id', item.id);
+            btn.setAttribute('aria-label', 'Remove ' + item.label);
+            btn.innerHTML = '&times;';
+            btn.onclick = function (e) {
+                e.stopPropagation();
+                LR.searchablePicker.removeChip(btn);
+            };
+            chip.appendChild(btn);
+            chipContainer.appendChild(chip);
+        });
+    }
+
     // When a picker opens, scroll its active item into view so the highlight
     // is visible in long lists (e.g. timezone) instead of buried below the fold.
     // Gate to the trigger element (the only descendant with an explicit
@@ -46,8 +97,28 @@
             var picker = root(btn);
             if (!picker) return;
             var hidden = picker.querySelector('[data-picker-value]');
+            if (!hidden) return;
+
+            var isMulti = hidden.dataset.multiple === 'true';
+
+            if (isMulti) {
+                // Toggle active class on clicked item; rebuild hidden value + chip strip
+                // from all active items. Do NOT blur — the dropdown stays open so the
+                // user can keep selecting.
+                var wasActive = btn.classList.contains('bg-brand-accent/15');
+                if (wasActive) {
+                    btn.classList.remove('bg-brand-accent/15', 'text-brand-accent');
+                } else {
+                    btn.classList.add('bg-brand-accent/15', 'text-brand-accent');
+                }
+                rebuildMultiState(picker);
+                if (window.htmx) htmx.trigger(hidden, 'change');
+                return;
+            }
+
+            // Single-mode (existing behavior) — preserved as-is.
             var label = picker.querySelector('[data-picker-label]');
-            if (!hidden || !label) return;
+            if (!label) return;
 
             hidden.value = btn.dataset.id;
             label.textContent = btn.dataset.label;
@@ -63,6 +134,18 @@
             }
 
             if (window.htmx) htmx.trigger(hidden, 'change');
+        },
+
+        removeChip: function (chipBtn) {
+            var picker = root(chipBtn);
+            if (!picker) return;
+            var id = chipBtn.dataset.id;
+            if (!id) return;
+            var listBtn = picker.querySelector('[data-picker-list] button[data-id="' + id + '"]');
+            if (listBtn) listBtn.classList.remove('bg-brand-accent/15', 'text-brand-accent');
+            rebuildMultiState(picker);
+            var hidden = picker.querySelector('[data-picker-value]');
+            if (window.htmx && hidden) htmx.trigger(hidden, 'change');
         },
 
         filter: function (el) {
