@@ -194,6 +194,14 @@ async def query_cost_explorer(
     - unconfigured_count: int — sessions skipped due to missing network config
     - free_charging_eligible_networks: list[dict] — networks with >=1 free session (per-net UI)
     - single_network_detail: dict | None — extra fields when len(by_network) == 1
+    - total_sessions, total_kwh, total_distance, free_session_count: range counts
+    - cost_per_kwh, cost_per_session, cost_per_distance_km: all-in cost ratios
+      (None when the denominator is zero)
+    - free_charging_saved, cost_per_free_session: free-charging strip figures
+
+    The summary strip on the card is range-scoped, not network-filtered — the
+    route calls this aggregator a second time with `network_ids=None` and reads
+    the count/ratio/free-charging keys from that unfiltered result.
     """
     networks_by_id = await get_networks_by_id(db)
     subs_by_network = await get_all_subscriptions_by_network(db)
@@ -212,6 +220,7 @@ async def query_cost_explorer(
             EVChargingSession.device_id,
             EVChargingSession.session_start_utc,
             EVChargingSession.estimated_cost,
+            EVChargingSession.distance_added,
         )
     ).where(EVChargingSession.energy_kwh > 0)
 
@@ -234,6 +243,9 @@ async def query_cost_explorer(
     total_paid_what_if = 0.0
     estimated_total = 0.0
     total_at_reference = 0.0
+    total_distance = 0.0
+    free_session_count = 0
+    free_charging_saved = 0.0
     with_energy = 0.0
     without_energy = 0.0
     unconfigured_count = 0
@@ -290,6 +302,18 @@ async def query_cost_explorer(
         total_at_reference += hypothetical_at_ref
         if cost_info.get("estimated_cost") is not None:
             estimated_total += float(cost_info["estimated_cost"])
+
+        # Distance powers the $/mile (or $/km) strip ratio. distance_added is
+        # stored in km; the route converts to the user's display unit.
+        if s.distance_added is not None and s.distance_added > 0:
+            total_distance += float(s.distance_added)
+
+        # Free-charging strip figures: estimated_cost on a free session is its
+        # pre-cascade "would-have-cost" — the dollars saved by charging free.
+        if is_free_session:
+            free_session_count += 1
+            if cost_info.get("estimated_cost") is not None:
+                free_charging_saved += float(cost_info["estimated_cost"])
 
         # Subscription counterfactual: With = display_cost (already member-rate),
         # Without = non_member_cost when subscription active, else display_cost.
@@ -507,6 +531,21 @@ async def query_cost_explorer(
     total_paid_with_fees = total_paid_actual + total_fees_paid
     total_paid_what_if_with_fees = total_paid_what_if + total_fees_paid
 
+    # Cost ratios for the summary strip — divide the all-in total (energy +
+    # fees) by each denominator. None when the denominator is zero so the
+    # template renders "—" rather than NaN. $/mile divides by raw km distance;
+    # the route converts the figure to the user's display unit.
+    total_sessions = totals_row["session_count"]
+    cost_per_kwh = round(total_paid_with_fees / totals_kwh, 3) if totals_kwh > 0 else None
+    cost_per_session = round(total_paid_with_fees / total_sessions, 2) if total_sessions > 0 else None
+    cost_per_distance_km = (
+        round(total_paid_with_fees / total_distance, 4) if total_distance > 0 else None
+    )
+    # Average estimated cost of a free session had it been billed.
+    cost_per_free_session = (
+        round(free_charging_saved / free_session_count, 2) if free_session_count > 0 else None
+    )
+
     return {
         # Headline value: energy + subscription fees in range.
         "total_paid_actual": round(total_paid_with_fees, 2),
@@ -518,6 +557,18 @@ async def query_cost_explorer(
         "estimated_total": round(estimated_total, 2),
         # Estimated is energy-only; compare like-for-like so the delta is meaningful.
         "delta_actual_vs_estimated": round(estimated_total - total_paid_energy, 2),
+        # Summary-strip figures — counts, distance, ratios, and free-charging
+        # estimates. The strip is range-scoped: the route calls this aggregator
+        # a second time without the network filter to populate it.
+        "total_sessions": total_sessions,
+        "total_kwh": totals_kwh,
+        "total_distance": round(total_distance, 2),
+        "free_session_count": free_session_count,
+        "free_charging_saved": round(free_charging_saved, 2),
+        "cost_per_kwh": cost_per_kwh,
+        "cost_per_session": cost_per_session,
+        "cost_per_distance_km": cost_per_distance_km,
+        "cost_per_free_session": cost_per_free_session,
         "reference_rate": reference_rate,
         "reference_network_id": reference_network_id,
         "reference_network_name": reference_network_name,
