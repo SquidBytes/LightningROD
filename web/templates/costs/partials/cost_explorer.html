@@ -3,13 +3,90 @@
 {# Cost Explorer card — replaces Actual/Estimated stat pair + Cost by Network grid + Savings Scenarios "vs Network Rate" tab. Sketch 002 Variant D. #}
 <div class="card bg-base-200 mb-6" id="cost-explorer-card">
 
-    <div class="card-body p-6 pb-0">
-        <div class="flex items-start justify-between gap-4">
-            <div>
-                <h2 class="card-title text-lg">Cost Explorer</h2>
-                <p class="text-sm text-base-content/60 mt-0.5">Amount paid, reference comparison, and subscription information for the selected range.</p>
+    {# Card header + two-slot summary strip (Sketch 003 D1). Replaces the old
+       "Cost Explorer" title and the three standalone summary cards. The strip
+       is range-scoped — it reads cost_explorer_strip (the unfiltered
+       aggregator call), so it does NOT change when the in-card network filter
+       is applied. #}
+    {% set strip = cost_explorer_strip %}
+    {% set has_free_charging = strip.free_session_count > 0 %}
+    <div class="card-body p-6 pb-0 gap-0">
+
+        {# Header — date range left, session counts right. #}
+        <div class="flex items-baseline justify-between flex-wrap gap-2">
+            <span class="text-lg font-semibold">{{ range_label }}</span>
+            <span class="text-base text-base-content/70 tabular-nums">
+                {{ strip.total_sessions }} {{ "session" if strip.total_sessions == 1 else "sessions" }}{% if has_free_charging %} · <span class="text-success">{{ strip.free_session_count }} free</span>{% endif %}
+            </span>
+        </div>
+
+        {# Two-slot strip — Total spend + Cost ratios. #}
+        <div class="stats stats-vertical sm:stats-horizontal bg-transparent mt-3">
+
+            {# Slot 1 — Total spend. #}
+            <div class="stat flex-1 px-0 sm:pr-6">
+                <div class="stat-title text-xs uppercase tracking-wide text-base-content/40">Total spend</div>
+                <div class="stat-value tabular-nums">${{ "%.2f"|format(strip.total_paid_actual) }}</div>
+                {% if strip.total_fees_paid > 0 %}
+                <div class="stat-desc text-base-content/40">including ${{ "%.2f"|format(strip.total_fees_paid) }} in subscriptions</div>
+                {% endif %}
+                <div class="mt-2 flex flex-col gap-1">
+                    {% if strip.estimated_total > 0 %}
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem]">${{ "%.2f"|format(strip.estimated_total) }}</span>
+                        <span class="text-xs text-base-content/60">estimated total</span>
+                    </div>
+                    {% if strip.delta_actual_vs_estimated != 0 %}
+                    {% set delta = -strip.delta_actual_vs_estimated %}
+                    {% set delta_pct = (delta / strip.estimated_total * 100) if strip.estimated_total else 0 %}
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem] {% if delta <= 0 %}text-success{% else %}text-error{% endif %}">
+                            {% if delta > 0 %}+{% endif %}${{ "%.2f"|format(delta) }}
+                        </span>
+                        <span class="text-xs text-base-content/60">
+                            vs estimate · {% if delta_pct > 0 %}+{% endif %}{{ "%.0f"|format(delta_pct) }}%
+                        </span>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                    {% if has_free_charging and strip.free_charging_saved > 0 %}
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem] text-success">${{ "%.2f"|format(strip.free_charging_saved) }}</span>
+                        <span class="text-xs text-base-content/60">est. saved via free charging</span>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mt-1 whitespace-nowrap">{{ range_label }}</p>
+
+            {# Slot 2 — Cost ratios. #}
+            <div class="stat flex-1 px-0 sm:pl-6">
+                <div class="stat-title text-xs uppercase tracking-wide text-base-content/40">Cost ratios</div>
+                <div class="stat-value tabular-nums">
+                    {% if strip.cost_per_kwh is not none %}${{ "%.3f"|format(strip.cost_per_kwh) }}<span class="text-base font-normal text-base-content/60"> / kWh</span>{% else %}<span class="text-base-content/40">—</span>{% endif %}
+                </div>
+                <div class="stat-desc text-base-content/40">{{ "%.1f"|format(strip.total_kwh) }} kWh charged</div>
+                <div class="mt-2 flex flex-col gap-1">
+                    {% if strip.cost_per_session is not none %}
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem]">${{ "%.2f"|format(strip.cost_per_session) }}</span>
+                        <span class="text-xs text-base-content/60">per session</span>
+                    </div>
+                    {% endif %}
+                    {% if strip.cost_per_distance is not none %}
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem]">${{ "%.3f"|format(strip.cost_per_distance) }}</span>
+                        <span class="text-xs text-base-content/60">per {{ units.distance_label }}</span>
+                    </div>
+                    {% endif %}
+                    {% if has_free_charging and strip.cost_per_free_session is not none %}
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem]">${{ "%.2f"|format(strip.cost_per_free_session) }}</span>
+                        <span class="text-xs text-base-content/60">est. cost per free session</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
         </div>
     </div>
 
