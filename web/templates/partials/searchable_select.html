@@ -48,6 +48,9 @@
    `wrapper_class` adds classes to the dropdown root.  DaisyUI's `.dropdown`
    is `inline-block`, which makes a `w-full` trigger size unpredictably inside
    form-controls; pass `block w-full max-w-xs` from such call sites. #}
+{# Multi-select extension (Phase 36): pass `multiple=true` and `selected_items=[{id,label},...]`
+   to render a flex-wrap chip strip with × close buttons in place of the single label.
+   Hidden input then stores a comma-separated CSV of selected IDs. #}
 {% macro searchable_select(
     id,
     name,
@@ -64,12 +67,34 @@
     htmx_get='',
     htmx_target='',
     htmx_swap='innerHTML',
-    htmx_include=''
+    htmx_include='',
+    multiple=false,
+    selected_items=[]
 ) %}
 <div class="searchable-picker dropdown{% if align %} dropdown-{{ align }}{% endif %}{% if wrapper_class %} {{ wrapper_class }}{% endif %}" data-picker="{{ id }}">
     <div tabindex="0" role="button"
          class="{{ trigger_class }} flex items-center text-left">
+        {% if not multiple %}
         <span data-picker-label class="truncate">{{ selected_label or placeholder }}</span>
+        {% else %}
+        <div class="flex flex-wrap gap-1 items-center min-h-[1.5rem]" data-picker-chip-container>
+            {% if not selected_items %}
+            <span class="text-base-content/50 text-sm">{{ placeholder }}</span>
+            {% else %}
+            {% for item in selected_items %}
+            <span class="badge badge-outline gap-1" data-chip-id="{{ item.id }}">
+                <span class="truncate max-w-[10rem]">{{ item.label }}</span>
+                <button type="button"
+                        class="btn btn-ghost btn-xs btn-circle leading-none"
+                        data-id="{{ item.id }}"
+                        aria-label="Remove {{ item.label }}"
+                        onmousedown="event.stopPropagation(); event.preventDefault();"
+                        onclick="event.stopPropagation(); LR.searchablePicker.removeChip(this)">&times;</button>
+            </span>
+            {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
     <div tabindex="0"
          class="dropdown-content bg-base-100 border border-base-content/15 rounded-box z-[100] {{ width_class }} shadow-xl mt-1 flex flex-col max-h-96">
@@ -104,6 +129,7 @@
     </div>
     <input type="hidden"
            data-picker-value
+           data-multiple="{{ 'true' if multiple else 'false' }}"
            name="{{ name }}"
            value="{{ value or '' }}"
            {% if htmx_get %}hx-get="{{ htmx_get }}"{% endif %}

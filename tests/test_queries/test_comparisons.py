@@ -12,7 +12,7 @@ from db.models.charging_session import EVChargingSession
 from db.models.ice_vehicle import IceVehicle
 from db.models.reference import EVChargingNetwork, GasPriceHistory
 from db.models.vehicle import EVVehicle
-from web.queries.comparisons import query_gas_comparison, query_network_comparison
+from web.queries.comparisons import query_gas_comparison
 
 pytestmark = [pytest.mark.query, pytest.mark.db]
 
@@ -146,23 +146,6 @@ async def test_gas_comparison_no_ice_vehicle(db_session):
     assert result["gas_total_high"] == 0.0
     assert result["savings_low"] == 0.0
     assert result["session_count"] == 0
-
-
-async def test_network_comparison(db_session):
-    """Verify network rate comparison against a reference rate."""
-    db = db_session
-    await _setup_comparison_data(db)
-
-    # Compare actual cost (0.35/kWh) to hypothetical rate of 0.50/kWh
-    result = await query_network_comparison(db, reference_rate=0.50, time_range="all")
-
-    # EV costs: 42.00 (same as gas comparison)
-    assert result["ev_total"] == pytest.approx(42.00, abs=0.01)
-    # Hypothetical: 120 kWh * 0.50 = 60.00
-    assert result["hypothetical_total"] == pytest.approx(60.00, abs=0.01)
-    # Difference: 60 - 42 = 18.00
-    assert result["difference"] == pytest.approx(18.00, abs=0.01)
-    assert result["session_count"] == 3
 
 
 async def test_gas_comparison_empty(db_session):

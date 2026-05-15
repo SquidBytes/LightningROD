@@ -145,12 +145,12 @@ async def seed(db: AsyncSession) -> int:
         # --- Distance & energy (correlated, computed for realism) ---
         distance_km = round(rng.uniform(5.0, 200.0), 2)
         # baseline 0.15–0.25 kWh/km with ±20% noise
-        base_rate = rng.uniform(0.15, 0.25)
-        noise = rng.uniform(0.8, 1.2)
+        base_rate = rng.uniform(0.19, 0.42)
+        noise = rng.uniform(0.92, 1.08)
         energy_kwh = round(distance_km * base_rate * noise, 3)
 
         # Regen: 5–20% of energy consumed, expressed as km equivalent
-        regen_fraction = rng.uniform(0.05, 0.20)
+        regen_fraction = rng.uniform(0.08, 0.16)
         regen_kwh = energy_kwh * regen_fraction
         # Convert regen to km using same efficiency rate (kWh → km)
         regen_km = round(regen_kwh / (base_rate * noise), 2)
@@ -201,7 +201,7 @@ async def seed(db: AsyncSession) -> int:
             recorded_at=end_time,
             original_timestamp=end_time,
             distance=distance_km,
-            duration=round(duration_min, 1),
+            duration=round(duration_min * 60, 0),
             energy_consumed=energy_kwh,
             efficiency=efficiency_km_per_kwh,
             range_regenerated=range_regenerated,

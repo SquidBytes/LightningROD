@@ -16,7 +16,7 @@ from db.models.vehicle import EVVehicle
 from scripts.seed.base import ContractDrivenSeeder, load_declared_contracts
 
 _DEMO_VIN = "1FT6W1EV0NWG00000"
-_IDEMPOTENCY_THRESHOLD = 120
+_IDEMPOTENCY_THRESHOLD = 140
 
 # Realistic range (km) for the F-150 Lightning Standard Range at 100% SoC
 _MAX_RANGE_KM = 370.0
@@ -29,7 +29,7 @@ _RATED_CAPACITY_KWH = 108.0
 # high end of typical real-world F-150 Lightning measurement drift, picked so
 # the "capacity by mileage" chart shows a clear downward trend even within
 # narrower windows (7d/30d) where per-reading noise would otherwise dominate.
-_TOTAL_DEGRADATION_KWH = 3.0
+_TOTAL_DEGRADATION_KWH = 4.5
 
 logger = logging.getLogger(__name__)
 
@@ -240,7 +240,7 @@ async def seed(db: AsyncSession) -> int:
         cursor = (timeline_start or datetime.now(UTC)) + timedelta(hours=rng.uniform(1, 6))
         between_count = 0
 
-        while timeline_end is not None and cursor < timeline_end and between_count < 32:
+        while timeline_end is not None and cursor < timeline_end and between_count < 44:
             # Skip if within 30 minutes of any anchor
             too_close = any(abs((cursor - a).total_seconds()) < 1800 for a in anchor_timestamps)
             if not too_close:

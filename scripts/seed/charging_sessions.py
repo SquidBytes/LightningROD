@@ -38,7 +38,7 @@ _PROFILES = [
     #  soc_end_range, rate_per_kwh, charge_current_type)
     (
         "Home",
-        "AC Level 2",
+        "AC",
         "private",
         "Home",
         40,
@@ -52,7 +52,7 @@ _PROFILES = [
     ),
     (
         "Work",
-        "AC Level 2",
+        "AC",
         "private",
         "Work",  # employer-provided network (free)
         25,
@@ -66,7 +66,7 @@ _PROFILES = [
     ),
     (
         "Tesla Supercharger Downtown",
-        "DC Fast",
+        "DC",
         "public",
         "Tesla Supercharger",
         20,
@@ -75,12 +75,12 @@ _PROFILES = [
         150.0,
         (15.0, 45.0),
         (75.0, 95.0),
-        0.36,
+        0.39,
         "DC",
     ),
     (
         "Electrify America Costco",
-        "DC Fast",
+        "DC",
         "public",
         "Electrify America",
         15,
@@ -89,7 +89,7 @@ _PROFILES = [
         250.0,
         (15.0, 40.0),
         (80.0, 95.0),
-        0.36,
+        0.42,
         "DC",
     ),
 ]
@@ -222,9 +222,31 @@ async def seed(db: AsyncSession) -> int:
         # Cost
         if rate_per_kwh == 0.0:
             cost = 0.0
+            estimated_cost = 0.0
+            cost_without_overrides = 0.0
+            cost_source = "calculated"
+            session_source_system = "seed"
             is_free = True
         else:
-            cost = round(energy_kwh * rate_per_kwh, 2)
+            estimated_cost = round(energy_kwh * rate_per_kwh, 2)
+            cost_without_overrides = estimated_cost
+            roll = rng.random()
+            if roll < 0.70:
+                cost_source = "calculated"
+                session_source_system = "seed"
+                cost = estimated_cost
+            elif roll < 0.85:
+                cost_source = "manual"
+                session_source_system = "manual_entry"
+                cost = round(estimated_cost * rng.uniform(0.85, 1.20), 2)
+            elif roll < 0.95:
+                cost_source = "adapter"
+                session_source_system = "ha_fordpass"
+                cost = round(estimated_cost * rng.uniform(0.95, 1.05), 2)
+            else:
+                cost_source = "manual"
+                session_source_system = "csv_import"
+                cost = round(estimated_cost * rng.uniform(0.50, 0.90), 2)
             is_free = False
 
         # Power metrics — average kW inferred from energy/duration
@@ -240,6 +262,12 @@ async def seed(db: AsyncSession) -> int:
 
         # Distance added — rough estimate: ~6 km/kWh efficiency
         distance_added = round(energy_kwh * 6.0, 1)
+
+        evse_source = rng.choices(
+            ["estimated", "stall_default", "manual", "adapter"],
+            weights=[50, 30, 10, 10],
+            k=1,
+        )[0]
 
         session = EVChargingSession(
             session_id=uuid.UUID(int=rng.getrandbits(128)),
@@ -266,9 +294,9 @@ async def seed(db: AsyncSession) -> int:
             end_soc=end_soc,
             energy_kwh=energy_kwh,
             cost=cost,
-            cost_without_overrides=cost,
-            cost_source="calculated",
-            estimated_cost=cost,
+            cost_without_overrides=cost_without_overrides,
+            cost_source=cost_source,
+            estimated_cost=estimated_cost,
             is_complete=True,
             address=loc.address,
             latitude=loc.latitude,
@@ -282,13 +310,13 @@ async def seed(db: AsyncSession) -> int:
             evse_energy_kwh=evse_energy_kwh,
             evse_max_power_kw=evse_max_power_kw,
             charger_rated_kw=peak_kw,
-            evse_source="estimated",
+            evse_source=evse_source,
             needs_review=False,
             battery_temp_start=battery_temp_start,
             battery_temp_end=battery_temp_end,
             ambient_temp_start=ambient_temp_start,
             ambient_temp_end=ambient_temp_end,
-            source_system="seed",
+            source_system=session_source_system,
             original_timestamp=ts_start,
             ingest_schema_version=2,
         )

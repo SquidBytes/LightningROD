@@ -1,0 +1,393 @@
+{% from "partials/searchable_select.html" import searchable_select, searchable_select_item %}
+
+{# Cost Explorer card — replaces Actual/Estimated stat pair + Cost by Network grid + Savings Scenarios "vs Network Rate" tab. Sketch 002 Variant D. #}
+<div class="card bg-base-200 mb-6" id="cost-explorer-card">
+
+    <div class="card-body p-6 pb-0">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <h2 class="card-title text-lg">Cost Explorer</h2>
+                <p class="text-sm text-base-content/60 mt-0.5">Spend, reference comparison, and subscription net — for the active range.</p>
+            </div>
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mt-1 whitespace-nowrap">{{ range_label }}</p>
+        </div>
+    </div>
+
+    <form id="cost-explorer-form"
+          hx-get="/charging/costs"
+          hx-include="#cost-explorer-form"
+          hx-target="#cost-explorer-body"
+          hx-swap="innerHTML"
+          hx-push-url="true"
+          hx-trigger="change">
+        <input type="hidden" name="range" value="{{ active_range }}">
+        <input type="hidden" name="section" value="cost_explorer">
+        <div class="flex flex-wrap items-end gap-6 px-6 py-4 bg-base-300/40 border-y border-base-300">
+
+            {# Networks multi-select column #}
+            {% set ac_network_ids_csv = (ac_network_ids or []) | join(',') %}
+            {% set dc_network_ids_csv = (dc_network_ids or []) | join(',') %}
+            <div class="flex-1 min-w-[280px]"
+                 data-cost-explorer-network-quickselect
+                 data-ac-ids="{{ ac_network_ids_csv }}"
+                 data-dc-ids="{{ dc_network_ids_csv }}">
+                <label class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                    <span>Network filter</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="Restrict the card to specific networks. Only networks you've charged at appear in the list."
+                          aria-label="Network filter tooltip">ⓘ</span>
+                </label>
+                {# Trigger + quick-action chips share a single row — mirrors the
+                   battery session picker's header layout (title on the left,
+                   picker on the right of a single flex row). The picker stays
+                   `flex-1` so it fills available space; chips collapse onto
+                   the next line on narrow viewports. #}
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex-1 min-w-[200px]">
+                        {% call searchable_select(
+                            id='cost-explorer-networks',
+                            name='networks',
+                            value=selected_networks_csv or '',
+                            placeholder='All networks',
+                            multiple=true,
+                            selected_items=selected_network_items or [],
+                            trigger_class='select select-sm select-bordered w-full',
+                            wrapper_class='block w-full',
+                            width_class='w-96',
+                            align=''
+                        ) %}
+                            {% for net in networks %}
+                            {{ searchable_select_item(
+                                item_id=net.id,
+                                label=net.network_name,
+                                color=net.color or '#6B7280',
+                                active=(selected_networks_csv and (net.id|string in (selected_networks_csv or '').split(','))),
+                                search=net.network_name
+                            ) }}
+                            {% endfor %}
+                        {% endcall %}
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1">
+                        <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="clear"
+                                title="Clear the filter — show all networks">Clear</button>
+                        {% if ac_network_ids %}
+                        <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="ac"
+                                title="Networks where you've charged AC">AC</button>
+                        {% endif %}
+                        {% if dc_network_ids %}
+                        <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="dc"
+                                title="Networks where you've charged DC">DC</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {# Reference rate — segmented + dynamic input.
+               Both ref-mode panels (network/custom) are rendered; the matching
+               one is shown and the other hidden. Toggling ref_mode swaps
+               visibility client-side so the header survives body-only swaps. #}
+            {% set ref_mode_eff = ref_mode or 'network' %}
+            <div class="flex flex-col gap-1 min-w-[240px]">
+                <label class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                    <span>Compare vs</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="The per-kWh rate the ledger compares your actual paid cost against. The Δ column is what you paid minus this reference."
+                          aria-label="Compare vs tooltip">ⓘ</span>
+                </label>
+                <div class="join" data-segmented-group="ref_mode">
+                    <input type="radio" name="ref_mode" value="network"
+                           class="join-item btn btn-sm {% if ref_mode_eff == 'network' %}btn-primary{% else %}btn-ghost{% endif %}"
+                           {% if ref_mode_eff == 'network' %}checked{% endif %}
+                           aria-label="Network rate">
+                    <input type="radio" name="ref_mode" value="custom"
+                           class="join-item btn btn-sm {% if ref_mode_eff == 'custom' %}btn-primary{% else %}btn-ghost{% endif %}"
+                           {% if ref_mode_eff == 'custom' %}checked{% endif %}
+                           aria-label="Custom">
+                </div>
+                <select name="ref_network_id"
+                        class="select select-sm select-bordered w-full mt-1{% if ref_mode_eff != 'network' %} hidden{% endif %}"
+                        data-ref-mode-panel="network"
+                        {% if ref_mode_eff != 'network' %}disabled{% endif %}>
+                    <option value="">— select —</option>
+                    {% for net in networks if not net.is_free and net.cost_per_kwh %}
+                    <option value="{{ net.id }}" {% if ref_network_id == net.id %}selected{% endif %}>
+                        {{ net.network_name }} (${{ "%.3f"|format(net.cost_per_kwh|float) }}/kWh)
+                    </option>
+                    {% endfor %}
+                </select>
+                <label class="input input-sm input-bordered flex items-center gap-1 mt-1{% if ref_mode_eff != 'custom' %} hidden{% endif %}"
+                       data-ref-mode-panel="custom">
+                    <span class="text-base-content/50">$</span>
+                    <input type="number" name="ref_value" step="0.001" min="0" placeholder="0.000"
+                           value="{{ '%.3f'|format(ref_value) if ref_value else '' }}"
+                           class="grow tabular-nums"
+                           {% if ref_mode_eff != 'custom' %}disabled{% endif %}>
+                    <span class="text-base-content/50 text-xs">/ kWh</span>
+                </label>
+            </div>
+
+        </div>
+
+        {# Body wrapper — the section endpoint returns just cost_explorer_body.html
+           so HTMX replaces this inner content rather than re-emitting the header.
+           Sits INSIDE the form so toggles rendered in the body (e.g. the
+           free-charging what-if in the left aside) are submitted with the rest
+           of the unified control state. #}
+        <div id="cost-explorer-body">
+            {% include "costs/partials/cost_explorer_body.html" %}
+        </div>
+    </form>
+</div>
+
+<script>
+    (function () {
+        // Segmented-button groups inside the cost-explorer form are radio inputs
+        // styled as buttons; the browser handles the radio-group state but the
+        // DaisyUI btn-primary/btn-ghost classes are baked in server-side. When
+        // only the body swaps on change, the body-resident groups (e.g.
+        // free_what_if_scope) lose their listeners — delegate at the form level
+        // so the handler survives every swap.
+        var form = document.getElementById('cost-explorer-form');
+        if (!form) return;
+        form.addEventListener('change', function (e) {
+            if (!(e.target instanceof HTMLInputElement)) return;
+            if (e.target.type !== 'radio') return;
+            var group = e.target.closest('[data-segmented-group]');
+            if (!group || !form.contains(group)) return;
+            group.querySelectorAll('input[type="radio"]').forEach(function (radio) {
+                var on = radio.checked;
+                radio.classList.toggle('btn-primary', on);
+                radio.classList.toggle('btn-ghost', !on);
+            });
+        });
+
+        // ref_mode toggle: show the matching ref-mode panel, hide+disable the
+        // other so its value is not posted with the form.
+        var refModeGroup = form.querySelector('[data-segmented-group="ref_mode"]');
+        if (refModeGroup) {
+            refModeGroup.addEventListener('change', function (e) {
+                if (!(e.target instanceof HTMLInputElement)) return;
+                if (e.target.name !== 'ref_mode') return;
+                var active = e.target.value;
+                form.querySelectorAll('[data-ref-mode-panel]').forEach(function (panel) {
+                    var on = panel.dataset.refModePanel === active;
+                    panel.classList.toggle('hidden', !on);
+                    panel.querySelectorAll('input, select').forEach(function (input) {
+                        input.disabled = !on;
+                    });
+                    if (panel.tagName === 'SELECT') panel.disabled = !on;
+                });
+            });
+        }
+
+        // Scope helper: drive the network picker programmatically and fire a
+        // single change event so the unified form (free-charging toggle,
+        // ref-rate, scope segmented, custom rate) submits with every control's
+        // current value preserved. Used by row-click scope, single-network
+        // "Clear scope ×", and the quick-action chips below.
+        function setPickerSelection(ids, labelById) {
+            var picker = form.querySelector('#cost-explorer-card .searchable-picker');
+            if (!picker) return false;
+            var targetSet = {};
+            ids.forEach(function (id) { targetSet[String(id)] = true; });
+            picker.querySelectorAll('[data-picker-list] button').forEach(function (btn) {
+                var on = !!targetSet[btn.dataset.id];
+                btn.classList.toggle('bg-brand-accent/15', on);
+                btn.classList.toggle('text-brand-accent', on);
+            });
+            var hidden = picker.querySelector('[data-picker-value]');
+            if (!hidden) return false;
+            var chipContainer = picker.querySelector('[data-picker-chip-container]');
+            hidden.value = ids.map(String).join(',');
+            if (chipContainer) {
+                chipContainer.innerHTML = '';
+                if (ids.length === 0) {
+                    var placeholder = picker.dataset.placeholder || 'All networks';
+                    var ph = document.createElement('span');
+                    ph.className = 'text-base-content/50 text-sm';
+                    ph.textContent = placeholder;
+                    chipContainer.appendChild(ph);
+                } else {
+                    ids.forEach(function (id) {
+                        var label = (labelById && labelById[String(id)]) ||
+                            (picker.querySelector('[data-picker-list] button[data-id="' + id + '"]') || {}).dataset?.label ||
+                            String(id);
+                        var c = document.createElement('span');
+                        c.className = 'badge badge-outline gap-1';
+                        c.setAttribute('data-chip-id', String(id));
+                        var lbl = document.createElement('span');
+                        lbl.className = 'truncate max-w-[10rem]';
+                        lbl.textContent = label;
+                        c.appendChild(lbl);
+                        var rm = document.createElement('button');
+                        rm.type = 'button';
+                        rm.className = 'btn btn-ghost btn-xs btn-circle leading-none';
+                        rm.setAttribute('data-id', String(id));
+                        rm.setAttribute('aria-label', 'Remove ' + label);
+                        rm.innerHTML = '&times;';
+                        rm.onmousedown = function (ev) {
+                            ev.stopPropagation();
+                            ev.preventDefault();
+                        };
+                        rm.onclick = function (ev) {
+                            ev.stopPropagation();
+                            if (window.LR && LR.searchablePicker) LR.searchablePicker.removeChip(rm);
+                        };
+                        c.appendChild(rm);
+                        chipContainer.appendChild(c);
+                    });
+                }
+            }
+            if (window.htmx) htmx.trigger(hidden, 'change');
+            return true;
+        }
+
+        // Row click → scope to that one network. Delegated on the form so it
+        // survives body swaps that re-render the table rows.
+        //
+        // Per-row exclude button is checked FIRST and stops propagation, so
+        // clicking the icon never triggers the row-scope handler below.
+        form.addEventListener('click', function (e) {
+            var exclude = e.target.closest && e.target.closest('[data-cost-explorer-row-exclude]');
+            if (exclude && form.contains(exclude)) {
+                e.stopPropagation();
+                e.preventDefault();
+                var excludeId = String(exclude.dataset.networkId);
+                var picker = form.querySelector('#cost-explorer-card .searchable-picker');
+                var hidden = picker && picker.querySelector('[data-picker-value]');
+                var currentCsv = (hidden && hidden.value) || '';
+                var currentIds = currentCsv
+                    .split(',')
+                    .map(function (s) { return s.trim(); })
+                    .filter(function (s) { return s.length > 0; });
+                var nextIds;
+                var labelMap = {};
+                if (currentIds.length === 0) {
+                    // No filter active: exclude = "all populated networks except this one".
+                    // Walk the current ledger rows for the populated network IDs.
+                    var rowEls = form.querySelectorAll('[data-cost-explorer-scope-row]');
+                    rowEls.forEach(function (r) {
+                        var rid = String(r.dataset.networkId);
+                        if (rid && rid !== excludeId) {
+                            labelMap[rid] = r.dataset.networkLabel || rid;
+                        }
+                    });
+                    nextIds = Object.keys(labelMap);
+                } else {
+                    // Active filter: drop just this id from the current selection.
+                    nextIds = currentIds.filter(function (id) { return id !== excludeId; });
+                    // Pull labels from the picker list for the surviving ids so chips
+                    // render with the network name instead of the raw id.
+                    nextIds.forEach(function (id) {
+                        var btn = picker && picker.querySelector('[data-picker-list] button[data-id="' + id + '"]');
+                        if (btn) labelMap[id] = btn.dataset.label || id;
+                    });
+                }
+                setPickerSelection(nextIds, labelMap);
+                return;
+            }
+            var row = e.target.closest && e.target.closest('[data-cost-explorer-scope-row]');
+            if (row && form.contains(row)) {
+                var id = row.dataset.networkId;
+                var label = row.dataset.networkLabel || id;
+                var labelMap = {};
+                labelMap[String(id)] = label;
+                setPickerSelection([id], labelMap);
+                return;
+            }
+            var clear = e.target.closest && e.target.closest('[data-cost-explorer-scope-clear]');
+            if (clear && form.contains(clear)) {
+                setPickerSelection([], {});
+            }
+        });
+
+        // Network filter quick-action chips (All / None / AC / DC).
+        // Each chip sets the picker's selection to a predetermined ID list and
+        // triggers a single change event so HTMX fetches the new body once.
+        var quickWrap = form.querySelector('[data-cost-explorer-network-quickselect]');
+        if (quickWrap) {
+            function parseIds(csv) {
+                return (csv || '')
+                    .split(',')
+                    .map(function (s) { return s.trim(); })
+                    .filter(function (s) { return s.length > 0; });
+            }
+            // "clear" = empty list (no filter = show everything). The previous
+            // "all" (select every network) and "none" actions were redundant —
+            // an empty selection already means unfiltered.
+            var ACTION_IDS = {
+                clear: [],
+                ac: parseIds(quickWrap.dataset.acIds),
+                dc: parseIds(quickWrap.dataset.dcIds),
+            };
+            quickWrap.querySelectorAll('[data-quickselect-action]').forEach(function (chip) {
+                chip.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    var action = chip.dataset.quickselectAction;
+                    var targetIds = ACTION_IDS[action] || [];
+                    var targetSet = {};
+                    targetIds.forEach(function (id) { targetSet[id] = true; });
+
+                    var picker = quickWrap.querySelector('.searchable-picker');
+                    if (!picker) return;
+                    picker.querySelectorAll('[data-picker-list] button').forEach(function (btn) {
+                        var shouldBeActive = !!targetSet[btn.dataset.id];
+                        btn.classList.toggle('bg-brand-accent/15', shouldBeActive);
+                        btn.classList.toggle('text-brand-accent', shouldBeActive);
+                    });
+
+                    // Rebuild hidden value + chip strip from the new active set,
+                    // then fire one change event so HTMX swaps the body once.
+                    var hidden = picker.querySelector('[data-picker-value]');
+                    if (!hidden) return;
+                    var chipContainer = picker.querySelector('[data-picker-chip-container]');
+                    var activeButtons = picker.querySelectorAll('[data-picker-list] button.bg-brand-accent\\/15');
+                    var ids = [];
+                    var items = [];
+                    activeButtons.forEach(function (b) {
+                        ids.push(b.dataset.id);
+                        items.push({ id: b.dataset.id, label: b.dataset.label });
+                    });
+                    hidden.value = ids.join(',');
+                    if (chipContainer) {
+                        chipContainer.innerHTML = '';
+                        if (items.length === 0) {
+                            var placeholder = picker.dataset.placeholder || 'All networks';
+                            var ph = document.createElement('span');
+                            ph.className = 'text-base-content/50 text-sm';
+                            ph.textContent = placeholder;
+                            chipContainer.appendChild(ph);
+                        } else {
+                            items.forEach(function (item) {
+                                var c = document.createElement('span');
+                                c.className = 'badge badge-outline gap-1';
+                                c.setAttribute('data-chip-id', item.id);
+                                var lbl = document.createElement('span');
+                                lbl.className = 'truncate max-w-[10rem]';
+                                lbl.textContent = item.label;
+                                c.appendChild(lbl);
+                                var rm = document.createElement('button');
+                                rm.type = 'button';
+                                rm.className = 'btn btn-ghost btn-xs btn-circle leading-none';
+                                rm.setAttribute('data-id', item.id);
+                                rm.setAttribute('aria-label', 'Remove ' + item.label);
+                                rm.innerHTML = '&times;';
+                                rm.onmousedown = function (ev) {
+                                    ev.stopPropagation();
+                                    ev.preventDefault();
+                                };
+                                rm.onclick = function (ev) {
+                                    ev.stopPropagation();
+                                    if (window.LR && LR.searchablePicker) LR.searchablePicker.removeChip(rm);
+                                };
+                                c.appendChild(rm);
+                                chipContainer.appendChild(c);
+                            });
+                        }
+                    }
+                    if (window.htmx) htmx.trigger(hidden, 'change');
+                });
+            });
+        }
+    })();
+</script>

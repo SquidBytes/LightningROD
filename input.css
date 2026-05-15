@@ -25,6 +25,17 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
 #costs-content.htmx-request { opacity: 0.4; }
 #costs-content { transition: opacity 0.15s ease; }
 
+/* Cost Explorer card — loading state during HTMX swap (mirrors #costs-content above). */
+#cost-explorer-body.htmx-request { opacity: 0.4; }
+#cost-explorer-body { transition: opacity 0.15s ease; }
+
+/* Searchable picker — DaisyUI's dropdown-content only fades opacity/scale when
+   closed, so the invisible panel still catches clicks on whatever sits below
+   the trigger. Disable pointer-events while closed; re-enable on :focus-within
+   to keep the open panel interactive. */
+.searchable-picker .dropdown-content { pointer-events: none; }
+.searchable-picker:focus-within .dropdown-content { pointer-events: auto; }
+
 /* HTMX loading state for energy content region */
 #energy-content.htmx-request { opacity: 0.4; }
 #energy-content { transition: opacity 0.15s ease; }
