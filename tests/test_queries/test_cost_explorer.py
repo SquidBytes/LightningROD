@@ -84,6 +84,70 @@ async def test_query_cost_explorer_free_what_if_global(cost_scenario):
     assert what_if["total_paid_actual"] == baseline["total_paid_actual"]
 
 
+async def test_query_cost_explorer_free_what_if_per_network_multi(cost_scenario):
+    """Per-network rebill applies to every network in the passed list, not just one.
+
+    Guards WR-01: the form previously dropped all but the last selected
+    free-charging network, so a two-network rebill silently behaved like a
+    one-network rebill.
+    """
+    from datetime import datetime
+    from db.models.charging_session import EVChargingSession
+    from db.models.reference import EVChargingNetwork
+    from tests.test_queries.conftest import BASE_DATE, DEVICE_ID
+
+    db = cost_scenario["db"]
+
+    # Two free-charging networks, each with one free session.
+    free_x = EVChargingNetwork(
+        network_name="Free X", cost_per_kwh=0.0, is_free=True,
+        is_verified=True, source_system="test_fixture",
+    )
+    free_y = EVChargingNetwork(
+        network_name="Free Y", cost_per_kwh=0.0, is_free=True,
+        is_verified=True, source_system="test_fixture",
+    )
+    db.add_all([free_x, free_y])
+    await db.flush()
+    db.add_all([
+        EVChargingSession(
+            device_id=DEVICE_ID, energy_kwh=30.0, network_id=free_x.id,
+            session_start_utc=datetime(2025, 6, 5, 10, 0, 0),
+            is_complete=True, source_system="test_fixture",
+        ),
+        EVChargingSession(
+            device_id=DEVICE_ID, energy_kwh=20.0, network_id=free_y.id,
+            session_start_utc=datetime(2025, 6, 6, 10, 0, 0),
+            is_complete=True, source_system="test_fixture",
+        ),
+    ])
+    await db.flush()
+
+    baseline = await query_cost_explorer(db, time_range="all", reference_rate=0.40)
+    eligible = {n["network_id"] for n in baseline["free_charging_eligible_networks"]}
+    assert {free_x.id, free_y.id} <= eligible
+
+    # Rebill only Free X.
+    one = await query_cost_explorer(
+        db, time_range="all", free_charging_what_if=True,
+        free_charging_scope="per_network", free_charging_networks=[free_x.id],
+        reference_rate=0.40,
+    )
+    # Rebill both — must move further than the single-network rebill.
+    both = await query_cost_explorer(
+        db, time_range="all", free_charging_what_if=True,
+        free_charging_scope="per_network",
+        free_charging_networks=[free_x.id, free_y.id],
+        reference_rate=0.40,
+    )
+
+    # Free X rebill adds 30 kWh * 0.40 = 12.00; Free Y adds 20 * 0.40 = 8.00.
+    assert round(one["total_paid_what_if"] - baseline["total_paid_what_if"], 2) == 12.00
+    assert round(both["total_paid_what_if"] - baseline["total_paid_what_if"], 2) == 20.00
+    # Actuals are unaffected by the what-if.
+    assert both["total_paid_actual"] == baseline["total_paid_actual"]
+
+
 async def test_query_cost_explorer_subscription_counterfactual(cost_scenario):
     """With/Without/Net saved derive consistently when a subscription is active."""
     db = cost_scenario["db"]

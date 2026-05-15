@@ -7,7 +7,7 @@
         <div class="flex items-start justify-between gap-4">
             <div>
                 <h2 class="card-title text-lg">Cost Explorer</h2>
-                <p class="text-sm text-base-content/60 mt-0.5">Spend, reference comparison, and subscription net — for the active range.</p>
+                <p class="text-sm text-base-content/60 mt-0.5">Amount paid, reference comparison, and subscription information for the selected range.</p>
             </div>
             <p class="text-xs uppercase tracking-wide text-base-content/40 mt-1 whitespace-nowrap">{{ range_label }}</p>
         </div>
@@ -298,6 +298,26 @@
             var clear = e.target.closest && e.target.closest('[data-cost-explorer-scope-clear]');
             if (clear && form.contains(clear)) {
                 setPickerSelection([], {});
+                return;
+            }
+
+            // Free-charging per-network rebill picker: toggle a network in/out
+            // of the hidden CSV input, then fire one change so HTMX re-fetches
+            // the body. Delegated on the form so it survives body swaps.
+            var fwToggle = e.target.closest && e.target.closest('[data-free-what-if-toggle]');
+            if (fwToggle && form.contains(fwToggle)) {
+                var picker = fwToggle.closest('[data-free-what-if-picker]');
+                var hidden = picker && picker.parentNode.querySelector('[data-free-what-if-csv]');
+                if (!hidden) return;
+                var on = !(fwToggle.getAttribute('aria-pressed') === 'true');
+                fwToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+                fwToggle.classList.toggle('badge-primary', on);
+                var ids = [];
+                picker.querySelectorAll('[data-free-what-if-toggle]').forEach(function (b) {
+                    if (b.getAttribute('aria-pressed') === 'true') ids.push(b.dataset.networkId);
+                });
+                hidden.value = ids.join(',');
+                if (window.htmx) htmx.trigger(hidden, 'change');
             }
         });
 

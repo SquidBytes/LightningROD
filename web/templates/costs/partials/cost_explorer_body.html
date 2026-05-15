@@ -70,14 +70,24 @@
                 </div>
                 {% if free_what_if and free_what_if_scope == 'per_network' and cost_explorer.free_charging_eligible_networks %}
                 <p class="text-xs text-base-content/40 mt-1">Pick which free-charging networks to rebill:</p>
-                <div class="flex flex-wrap gap-1">
+                {# Single hidden CSV input mirrors the main network picker —
+                   repeated checkbox names collapse to the last value on POST,
+                   so the per-network rebill set is carried as one CSV token
+                   that _parse_csv_ids splits correctly. #}
+                {% set free_what_if_selected = (free_what_if_networks_csv or '').split(',') %}
+                <input type="hidden" name="free_what_if_networks"
+                       value="{{ free_what_if_networks_csv or '' }}"
+                       data-free-what-if-csv>
+                <div class="flex flex-wrap gap-1" data-free-what-if-picker>
                     {% for net in cost_explorer.free_charging_eligible_networks %}
-                    {% set is_selected = net.network_id|string in (free_what_if_networks_csv or '').split(',') %}
-                    <label class="badge badge-outline gap-1 cursor-pointer {% if is_selected %}badge-primary{% endif %}">
-                        <input type="checkbox" name="free_what_if_networks" value="{{ net.network_id }}"
-                               class="hidden" {% if is_selected %}checked{% endif %}>
+                    {% set is_selected = net.network_id|string in free_what_if_selected %}
+                    <button type="button"
+                            class="badge badge-outline gap-1 cursor-pointer {% if is_selected %}badge-primary{% endif %}"
+                            data-free-what-if-toggle
+                            data-network-id="{{ net.network_id }}"
+                            aria-pressed="{{ 'true' if is_selected else 'false' }}">
                         {{ net.network_name }}
-                    </label>
+                    </button>
                     {% endfor %}
                 </div>
                 {% elif free_what_if and free_what_if_scope == 'per_network' %}
