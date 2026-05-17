@@ -29,6 +29,11 @@
                 <div class="stat-value tabular-nums">${{ "%.2f"|format(strip.total_paid_actual) }}</div>
                 {% if strip.total_fees_paid > 0 %}
                 <div class="stat-desc text-base-content/40">including ${{ "%.2f"|format(strip.total_fees_paid) }} in subscriptions</div>
+                {# Energy-only total — sits directly above the estimated/vs-estimate
+                   sub-rows so the comparison reads energy-to-energy (estimated is
+                   reference-rate math with no fees). Only rendered when fees make
+                   the two differ; with no fees the headline IS the energy amount. #}
+                <div class="stat-desc text-base-content/60 tabular-nums mt-0.5">Paid in energy: ${{ "%.2f"|format(strip.total_paid_energy) }}</div>
                 {% endif %}
                 <div class="mt-2 flex flex-col gap-1">
                     {% if strip.estimated_total > 0 %}
