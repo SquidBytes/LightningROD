@@ -1,4 +1,5 @@
 {% from "partials/searchable_select.html" import searchable_select, searchable_select_item %}
+{% from "costs/partials/cost_breakdown.html" import cost_breakdown %}
 
 {# Cost Explorer card — replaces Actual/Estimated stat pair + Cost by Network grid + Savings Scenarios "vs Network Rate" tab. Sketch 002 Variant D. #}
 <div class="card bg-base-200 mb-6" id="cost-explorer-card">
@@ -26,41 +27,21 @@
             {# Slot 1 — Total spend. #}
             <div class="stat flex-1 px-0 sm:pr-6">
                 <div class="stat-title text-xs uppercase tracking-wide text-base-content/40">Total spend</div>
-                <div class="stat-value tabular-nums">${{ "%.2f"|format(strip.total_paid_actual) }}</div>
-                {% if strip.total_fees_paid > 0 %}
-                <div class="stat-desc text-base-content/40">including ${{ "%.2f"|format(strip.total_fees_paid) }} in subscriptions</div>
-                {# Energy-only total — sits directly above the estimated/vs-estimate
-                   sub-rows so the comparison reads energy-to-energy (estimated is
-                   reference-rate math with no fees). Only rendered when fees make
-                   the two differ; with no fees the headline IS the energy amount. #}
-                <div class="stat-desc text-base-content/60 tabular-nums mt-0.5">Paid in energy: ${{ "%.2f"|format(strip.total_paid_energy) }}</div>
-                {% endif %}
-                <div class="mt-2 flex flex-col gap-1">
-                    {% if strip.estimated_total > 0 %}
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem]">${{ "%.2f"|format(strip.estimated_total) }}</span>
-                        <span class="text-xs text-base-content/60">estimated total</span>
-                    </div>
-                    {% if strip.delta_actual_vs_estimated != 0 %}
-                    {% set delta = -strip.delta_actual_vs_estimated %}
-                    {% set delta_pct = (delta / strip.estimated_total * 100) if strip.estimated_total else 0 %}
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem] {% if delta <= 0 %}text-success{% else %}text-error{% endif %}">
-                            {% if delta > 0 %}+{% endif %}${{ "%.2f"|format(delta) }}
-                        </span>
-                        <span class="text-xs text-base-content/60">
-                            vs estimate · {% if delta_pct > 0 %}+{% endif %}{{ "%.0f"|format(delta_pct) }}%
-                        </span>
-                    </div>
-                    {% endif %}
-                    {% endif %}
-                    {% if has_free_charging and strip.free_charging_saved > 0 %}
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem] text-success">${{ "%.2f"|format(strip.free_charging_saved) }}</span>
-                        <span class="text-xs text-base-content/60">est. saved via free charging</span>
-                    </div>
-                    {% endif %}
+                {# Shared cost-breakdown stack — range-level data. Has a
+                   reference estimate so all five elements render. #}
+                {{ cost_breakdown(
+                    strip.total_paid_actual,
+                    strip.total_fees_paid,
+                    strip.total_paid_energy,
+                    estimated_energy_cost=(strip.estimated_total if strip.estimated_total > 0 else none),
+                ) }}
+                {% if has_free_charging and strip.free_charging_saved > 0 %}
+                {# Free-charging savings — separate from the cost-breakdown stack. #}
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span class="text-base font-semibold tabular-nums min-w-[5.5rem] text-success">${{ "%.2f"|format(strip.free_charging_saved) }}</span>
+                    <span class="text-xs text-base-content/60">est. saved via free charging</span>
                 </div>
+                {% endif %}
             </div>
 
             {# Slot 2 — Cost ratios. #}

@@ -54,7 +54,7 @@
     {% if delta != 0 %}
     {% set delta_pct = (delta / estimated_energy_cost * 100) if estimated_energy_cost else 0 %}
     <div class="text-sm font-semibold tabular-nums {% if delta <= 0 %}text-success{% else %}text-error{% endif %}">
-        {% if delta > 0 %}+{% endif %}${{ "%.2f"|format(delta) }}
+        {% if delta > 0 %}+${{ "%.2f"|format(delta) }}{% else %}-${{ "%.2f"|format(-delta) }}{% endif %}
         <span class="text-base-content/60 font-normal">vs estimate · {% if delta_pct > 0 %}+{% endif %}{{ "%.0f"|format(delta_pct) }}%</span>
     </div>
     {% endif %}

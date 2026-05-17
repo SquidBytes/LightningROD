@@ -2,44 +2,20 @@
    controls. Sits inside #cost-explorer-body in the shell template; the section
    endpoint returns this partial on its own so HTMX replaces only the inner
    content rather than nesting another full card. #}
+{% from "costs/partials/cost_breakdown.html" import cost_breakdown %}
 <div class="grid grid-cols-1 md:grid-cols-[360px_1fr] min-h-[540px]">
 
     <aside class="p-6 md:p-8 bg-base-200 md:border-r border-base-300 flex flex-col gap-6 justify-between">
         <div>
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">You paid</p>
-            {# Demoted below the range-level summary strip — the strip carries
-               the headline numbers now. This aside figure re-scopes with the
-               in-card network filter, so it stays as a labelled stat. #}
-            <p class="text-xl font-bold tabular-nums tracking-tight">
-                ${{ "%.2f"|format(cost_explorer.total_paid_actual) }}
-            </p>
-            {% if cost_explorer.total_fees_paid > 0 %}
-            {# Faint reminder that the big total above is fee-inclusive. #}
-            <p class="text-xs text-base-content/40 tabular-nums mt-0.5">
-                including ${{ "%.2f"|format(cost_explorer.total_fees_paid) }} in subscriptions
-            </p>
-            {# Energy-only sub-headline — sits directly above "Estimated" so the
-               reader can compare energy-to-energy (Estimated is reference-rate
-               math with no fees). Only rendered when fees make the two differ;
-               with no fees the big total already IS the energy amount.
-               Styled as a supporting stat — same value vocabulary as the strip's
-               "vs estimate" / the subscription block's "Net saved". #}
-            <p class="text-base font-semibold text-base-content/70 tabular-nums mt-1">
-                Paid in energy: ${{ "%.2f"|format(cost_explorer.total_paid_energy) }}
-            </p>
-            {% endif %}
-            {% if cost_explorer.estimated_total > 0 %}
-            <p class="text-base font-semibold text-base-content/70 tabular-nums mt-1">
-                Estimated ${{ "%.2f"|format(cost_explorer.estimated_total) }}
-                {% if cost_explorer.delta_actual_vs_estimated != 0 %}
-                {# Δ is an over/under comparison — colour it green when actual came
-                   in under the estimate, red when over, matching the strip delta. #}
-                <span class="text-sm font-semibold {% if cost_explorer.delta_actual_vs_estimated >= 0 %}text-success{% else %}text-error{% endif %}">
-                    · Δ {% if cost_explorer.delta_actual_vs_estimated > 0 %}+{% endif %}${{ "%.2f"|format(cost_explorer.delta_actual_vs_estimated) }}
-                </span>
-                {% endif %}
-            </p>
-            {% endif %}
+            {# Shared cost-breakdown stack — network-scoped data; re-renders with
+               the in-card network filter. Has a reference estimate so all five
+               elements render. #}
+            {{ cost_breakdown(
+                cost_explorer.total_paid_actual,
+                cost_explorer.total_fees_paid,
+                cost_explorer.total_paid_energy,
+                estimated_energy_cost=(cost_explorer.estimated_total if cost_explorer.estimated_total > 0 else none),
+            ) }}
             {% if cost_explorer.total_paid_what_if != cost_explorer.total_paid_actual %}
             <p class="text-sm text-base-content/60 tabular-nums mt-2">
                 Without free charging: ${{ "%.2f"|format(cost_explorer.total_paid_what_if) }}
