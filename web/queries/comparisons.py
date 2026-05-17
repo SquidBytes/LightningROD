@@ -10,9 +10,11 @@ from db.models.reference import GasPriceHistory
 from db.models.vehicle import EVVehicle
 from web.queries.costs import (
     build_time_filter,
+    calculate_monthly_fees_in_range,
     compute_session_cost,
     get_networks_by_name,
 )
+from web.queries.settings import get_all_subscriptions_by_network
 from web.unit_system import GAL_PER_LITER, LITER_PER_GAL, MI_PER_KM
 
 
@@ -42,6 +44,8 @@ def _empty_gas_result() -> dict:
     """Return a zeroed-out gas comparison result dict."""
     return {
         "ev_total": 0.0,
+        "ev_energy": 0.0,
+        "ev_fees": 0.0,
         "gas_total_low": 0.0,
         "gas_total_high": 0.0,
         "gas_total_station": 0.0,
@@ -82,7 +86,12 @@ async def query_gas_comparison(
     to MPG internally for the cost math.
 
     Returns dict with:
-    - ev_total, gas_total_low, gas_total_high
+    - ev_total: all-in EV cost (energy + subscription fees) — the basis for
+      the savings-vs-gas math, since the honest comparison against gasoline
+      uses out-of-pocket cost, not energy alone
+    - ev_energy: session energy cost only (sum of display_cost)
+    - ev_fees: subscription fees prorated over the session date range
+    - gas_total_low, gas_total_high
     - savings_low, savings_high, savings_pct_low, savings_pct_high
     - session_count, total_distance (km), ice_label, has_range
     """
@@ -112,6 +121,7 @@ async def query_gas_comparison(
     prices = list(price_result.scalars().all())
 
     networks_by_name = await get_networks_by_name(db)
+    subs_by_network = await get_all_subscriptions_by_network(db)
 
     # Build session query
     stmt = select(EVChargingSession)
@@ -124,7 +134,7 @@ async def query_gas_comparison(
     result = await db.execute(stmt)
     sessions = result.scalars().all()
 
-    ev_total = 0.0
+    ev_energy = 0.0
     gas_total_station = 0.0
     gas_total_average = 0.0
     station_has_data = False
@@ -133,6 +143,9 @@ async def query_gas_comparison(
     total_distance_km = 0.0
     station_prices_seen: list[float] = []
     average_prices_seen: list[float] = []
+    # Session date bounds drive subscription-fee proration for the all-in EV cost.
+    range_start_min = None
+    range_end_max = None
 
     for s in sessions:
         cost_info = compute_session_cost(s, networks_by_name)
@@ -177,9 +190,13 @@ async def query_gas_comparison(
             average_has_data = True
             average_prices_seen.append(average_price)
 
-        ev_total += cost_info["display_cost"]
+        ev_energy += cost_info["display_cost"]
         session_count += 1
         total_distance_km += distance_km
+
+        session_date = s.session_start_utc.date()
+        range_start_min = session_date if range_start_min is None else min(range_start_min, session_date)
+        range_end_max = session_date if range_end_max is None else max(range_end_max, session_date)
 
     # Determine low/high bounds from the two tracks
     if station_has_data and average_has_data:
@@ -196,6 +213,16 @@ async def query_gas_comparison(
         gas_total_low = gas_total_high = 0.0
         has_range = False
 
+    # Subscription fees the user paid out-of-pocket over the session range.
+    # The honest gas comparison is all-in EV cost (energy + fees) vs gasoline,
+    # so ev_total carries fees and the savings math is derived from it.
+    ev_fees = 0.0
+    if range_start_min is not None and range_end_max is not None:
+        for periods in subs_by_network.values():
+            ev_fees += calculate_monthly_fees_in_range(periods, range_start_min, range_end_max)
+
+    ev_total = ev_energy + ev_fees
+
     savings_low = gas_total_low - ev_total
     savings_high = gas_total_high - ev_total
     savings_pct_low = (savings_low / gas_total_low * 100) if gas_total_low > 0 else 0.0
@@ -203,6 +230,8 @@ async def query_gas_comparison(
 
     return {
         "ev_total": ev_total,
+        "ev_energy": ev_energy,
+        "ev_fees": ev_fees,
         "gas_total_low": gas_total_low,
         "gas_total_high": gas_total_high,
         "gas_total_station": gas_total_station,

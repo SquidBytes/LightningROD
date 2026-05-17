@@ -20,6 +20,19 @@
                         <p><span class="meta-label">Sessions:</span>{{ gas_comparison.session_count }}</p>
                     </div>
                     <p class="ledger-total">${{ "%.2f"|format(gas_comparison.ev_total) }}</p>
+                    {% if gas_comparison.ev_fees > 0 %}
+                    {# Faint reminder the all-in EV total above is fee-inclusive,
+                       mirroring the Cost Explorer card's "including $X in
+                       subscriptions" line. #}
+                    <p class="text-xs text-base-content/40 tabular-nums mt-0.5">
+                        including ${{ "%.2f"|format(gas_comparison.ev_fees) }} in subscriptions
+                    </p>
+                    {# Energy-only supporting figure — only rendered when fees
+                       make it differ from the all-in total. #}
+                    <p class="text-base font-semibold text-base-content/70 tabular-nums mt-1">
+                        Paid in energy: ${{ "%.2f"|format(gas_comparison.ev_energy) }}
+                    </p>
+                    {% endif %}
                     <p class="ledger-sub">
                         {{ "%.0f"|format(gas_comparison.total_distance or 0) }} {{ units.distance_label }}
                         {% if gas_comparison.ev_total and gas_comparison.total_distance and gas_comparison.total_distance > 0 %}
