@@ -112,8 +112,8 @@ suite — different goals (visual storytelling vs. behavior assertions), but
 shared infrastructure. The patterns proven out here that should carry over:
 
 **Selectors.** This codebase doesn't yet have `data-testid` attributes — the
-overview scene currently leans on `getByText("F-150 Lightning SR")` and a
-DOM query for `.plotly`, which are fragile. For E2E, add `data-testid` to
+overview scene leans on the `Home` page heading and a DOM query for
+`.plotly`, which are fragile. For E2E, add `data-testid` to
 the canonical surfaces (vehicle card, stat tile, chart container, primary
 nav links, drawer root, modal root, form submit buttons) and use
 `page.getByTestId(...)` everywhere. The gif-recorder can then drop its
