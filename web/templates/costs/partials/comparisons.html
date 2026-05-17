@@ -1,11 +1,9 @@
 {% from "costs/partials/cost_breakdown.html" import cost_breakdown %}
 {% if show_comparisons %}
-<!-- Savings Scenarios Section -->
 <div class="mt-8">
     <h2 class="text-xl font-bold text-base-content mb-1">Savings Scenarios</h2>
     <p class="text-base-content/60 text-sm mb-4">See how your EV charging costs compare to alternatives.</p>
 
-    <!-- Gasoline comparison panel -->
     {% if gas_comparison %}
     <div id="panel-gas">
         {% if gas_comparison.session_count > 0 %}
@@ -20,11 +18,8 @@
                         <p><span class="meta-label">Date range:</span>{{ range_label }}</p>
                         <p><span class="meta-label">Sessions:</span>{{ gas_comparison.session_count }}</p>
                     </div>
-                    {# Shared cost-breakdown stack — range-level gas-comparison
-                       data. The gas-comparison query produces no reference-rate
-                       estimate, so estimated_energy_cost is omitted and
-                       elements 4 + 5 do not render here (the gas-vs-EV savings
-                       columns handle this card's comparison separately). #}
+                    {# No reference estimate here — the estimate/delta rows are
+                       omitted; the gas-vs-EV columns handle the comparison. #}
                     {{ cost_breakdown(
                         gas_comparison.ev_total,
                         gas_comparison.ev_fees,

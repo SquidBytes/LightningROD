@@ -1,19 +1,14 @@
 {% from "partials/searchable_select.html" import searchable_select, searchable_select_item %}
 {% from "costs/partials/cost_breakdown.html" import cost_breakdown %}
 
-{# Cost Explorer card — replaces Actual/Estimated stat pair + Cost by Network grid + Savings Scenarios "vs Network Rate" tab. Sketch 002 Variant D. #}
 <div class="card bg-base-200 mb-6" id="cost-explorer-card">
 
-    {# Card header + two-slot summary strip (Sketch 003 D1). Replaces the old
-       "Cost Explorer" title and the three standalone summary cards. The strip
-       is range-scoped — it reads cost_explorer_strip (the unfiltered
-       aggregator call), so it does NOT change when the in-card network filter
-       is applied. #}
+    {# The strip reads cost_explorer_strip (the unfiltered aggregator call), so
+       it does NOT change when the in-card network filter is applied. #}
     {% set strip = cost_explorer_strip %}
     {% set has_free_charging = strip.free_session_count > 0 %}
     <div class="card-body p-6 pb-0 gap-0">
 
-        {# Header — date range left, session counts right. #}
         <div class="flex items-baseline justify-between flex-wrap gap-2">
             <span class="text-lg font-semibold">{{ range_label }}</span>
             <span class="text-base text-base-content/70 tabular-nums">
@@ -21,14 +16,11 @@
             </span>
         </div>
 
-        {# Two-slot strip — Total spend + Cost ratios. #}
         <div class="stats stats-vertical sm:stats-horizontal bg-transparent mt-3">
 
             {# Slot 1 — Total spend. #}
             <div class="stat flex-1 px-0 sm:pr-6">
-                <div class="stat-title text-xs uppercase tracking-wide text-base-content/40">Total spend</div>
-                {# Shared cost-breakdown stack — range-level data. Has a
-                   reference estimate so all five elements render. #}
+                <div class="stat-title text-xs uppercase tracking-wide text-base-content/40">Costs</div>
                 {{ cost_breakdown(
                     strip.total_paid_actual,
                     strip.total_fees_paid,
@@ -36,7 +28,6 @@
                     estimated_energy_cost=(strip.estimated_total if strip.estimated_total > 0 else none),
                 ) }}
                 {% if has_free_charging and strip.free_charging_saved > 0 %}
-                {# Free-charging savings — separate from the cost-breakdown stack. #}
                 <div class="mt-2 flex items-baseline gap-2">
                     <span class="text-base font-semibold tabular-nums min-w-[5.5rem] text-success">${{ "%.2f"|format(strip.free_charging_saved) }}</span>
                     <span class="text-xs text-base-content/60">est. saved via free charging</span>
@@ -100,11 +91,6 @@
                           data-tip="Restrict the card to specific networks. Only networks you've charged at appear in the list."
                           aria-label="Network filter tooltip">ⓘ</span>
                 </label>
-                {# Trigger + quick-action chips share a single row — mirrors the
-                   battery session picker's header layout (title on the left,
-                   picker on the right of a single flex row). The picker stays
-                   `flex-1` so it fills available space; chips collapse onto
-                   the next line on narrow viewports. #}
                 <div class="flex flex-wrap items-center gap-2">
                     <div class="flex-1 min-w-[200px]">
                         {% call searchable_select(
@@ -145,10 +131,8 @@
                 </div>
             </div>
 
-            {# Reference rate — segmented + dynamic input.
-               Both ref-mode panels (network/custom) are rendered; the matching
-               one is shown and the other hidden. Toggling ref_mode swaps
-               visibility client-side so the header survives body-only swaps. #}
+            {# Both ref-mode panels are rendered; the JS below shows the active
+               one so the header survives body-only swaps. #}
             {% set ref_mode_eff = ref_mode or 'network' %}
             <div class="flex flex-col gap-1 min-w-[240px]">
                 <label class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
@@ -191,11 +175,8 @@
 
         </div>
 
-        {# Body wrapper — the section endpoint returns just cost_explorer_body.html
-           so HTMX replaces this inner content rather than re-emitting the header.
-           Sits INSIDE the form so toggles rendered in the body (e.g. the
-           free-charging what-if in the left aside) are submitted with the rest
-           of the unified control state. #}
+        {# Body sits INSIDE the form so body-resident toggles (free-charging
+           what-if) post with the rest of the control state. #}
         <div id="cost-explorer-body">
             {% include "costs/partials/cost_explorer_body.html" %}
         </div>
@@ -204,12 +185,8 @@
 
 <script>
     (function () {
-        // Segmented-button groups inside the cost-explorer form are radio inputs
-        // styled as buttons; the browser handles the radio-group state but the
-        // DaisyUI btn-primary/btn-ghost classes are baked in server-side. When
-        // only the body swaps on change, the body-resident groups (e.g.
-        // free_what_if_scope) lose their listeners — delegate at the form level
-        // so the handler survives every swap.
+        // Segmented-button groups are styled radios. Delegate at the form level
+        // so body-resident groups keep working after a body-only swap.
         var form = document.getElementById('cost-explorer-form');
         if (!form) return;
         form.addEventListener('change', function (e) {
@@ -243,11 +220,8 @@
             });
         }
 
-        // Scope helper: drive the network picker programmatically and fire a
-        // single change event so the unified form (free-charging toggle,
-        // ref-rate, scope segmented, custom rate) submits with every control's
-        // current value preserved. Used by row-click scope, single-network
-        // "Clear scope ×", and the quick-action chips below.
+        // Drive the network picker programmatically and fire one change event
+        // so the whole form submits with every control's value preserved.
         function setPickerSelection(ids, labelById) {
             var picker = form.querySelector('#cost-explorer-card .searchable-picker');
             if (!picker) return false;
@@ -305,11 +279,8 @@
             return true;
         }
 
-        // Row click → scope to that one network. Delegated on the form so it
-        // survives body swaps that re-render the table rows.
-        //
-        // Per-row exclude button is checked FIRST and stops propagation, so
-        // clicking the icon never triggers the row-scope handler below.
+        // Row click → scope to that network. The exclude button is checked
+        // FIRST and stops propagation, so the icon never triggers row-scope.
         form.addEventListener('click', function (e) {
             var exclude = e.target.closest && e.target.closest('[data-cost-explorer-row-exclude]');
             if (exclude && form.contains(exclude)) {
@@ -365,8 +336,7 @@
             }
 
             // Free-charging per-network rebill picker: toggle a network in/out
-            // of the hidden CSV input, then fire one change so HTMX re-fetches
-            // the body. Delegated on the form so it survives body swaps.
+            // of the hidden CSV input, then fire one change to re-fetch the body.
             var fwToggle = e.target.closest && e.target.closest('[data-free-what-if-toggle]');
             if (fwToggle && form.contains(fwToggle)) {
                 var picker = fwToggle.closest('[data-free-what-if-picker]');
@@ -384,9 +354,7 @@
             }
         });
 
-        // Network filter quick-action chips (All / None / AC / DC).
-        // Each chip sets the picker's selection to a predetermined ID list and
-        // triggers a single change event so HTMX fetches the new body once.
+        // Network filter quick-action chips (Clear / AC / DC).
         var quickWrap = form.querySelector('[data-cost-explorer-network-quickselect]');
         if (quickWrap) {
             function parseIds(csv) {
@@ -395,9 +363,7 @@
                     .map(function (s) { return s.trim(); })
                     .filter(function (s) { return s.length > 0; });
             }
-            // "clear" = empty list (no filter = show everything). The previous
-            // "all" (select every network) and "none" actions were redundant —
-            // an empty selection already means unfiltered.
+            // "clear" = empty list; an empty selection already means unfiltered.
             var ACTION_IDS = {
                 clear: [],
                 ac: parseIds(quickWrap.dataset.acIds),
