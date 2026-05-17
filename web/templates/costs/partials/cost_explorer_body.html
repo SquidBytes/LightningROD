@@ -14,11 +14,15 @@
                 ${{ "%.2f"|format(cost_explorer.total_paid_actual) }}
             </p>
             {% if cost_explorer.total_fees_paid > 0 %}
-            {# Headline includes subscription fees the user paid out-of-pocket
-               (e.g. EA+, Tesla Premium monthly). The h2-equivalent subhead
-               surfaces the energy-only portion so the user can read the
-               protagonist as "total out-of-pocket; of which energy was X". #}
-            <p class="text-base font-semibold tabular-nums text-base-content/70 mt-0.5">
+            {# Faint reminder that the big total above is fee-inclusive. #}
+            <p class="text-xs text-base-content/40 tabular-nums mt-0.5">
+                including ${{ "%.2f"|format(cost_explorer.total_fees_paid) }} in subscriptions
+            </p>
+            {# Energy-only sub-headline — sits directly above "Estimated" so the
+               reader can compare energy-to-energy (Estimated is reference-rate
+               math with no fees). Only rendered when fees make the two differ;
+               with no fees the big total already IS the energy amount. #}
+            <p class="text-lg font-semibold tabular-nums text-base-content/70 mt-1">
                 Paid in energy: ${{ "%.2f"|format(cost_explorer.total_paid_energy) }}
             </p>
             {% endif %}
