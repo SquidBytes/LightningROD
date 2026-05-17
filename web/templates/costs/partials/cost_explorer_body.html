@@ -21,16 +21,20 @@
             {# Energy-only sub-headline — sits directly above "Estimated" so the
                reader can compare energy-to-energy (Estimated is reference-rate
                math with no fees). Only rendered when fees make the two differ;
-               with no fees the big total already IS the energy amount. #}
-            <p class="text-lg font-semibold tabular-nums text-base-content/70 mt-1">
+               with no fees the big total already IS the energy amount.
+               Styled as a supporting stat — same value vocabulary as the strip's
+               "vs estimate" / the subscription block's "Net saved". #}
+            <p class="text-base font-semibold text-base-content/70 tabular-nums mt-1">
                 Paid in energy: ${{ "%.2f"|format(cost_explorer.total_paid_energy) }}
             </p>
             {% endif %}
             {% if cost_explorer.estimated_total > 0 %}
-            <p class="text-base text-base-content/70 tabular-nums mt-1">
+            <p class="text-base font-semibold text-base-content/70 tabular-nums mt-1">
                 Estimated ${{ "%.2f"|format(cost_explorer.estimated_total) }}
                 {% if cost_explorer.delta_actual_vs_estimated != 0 %}
-                <span class="text-sm text-base-content/50">
+                {# Δ is an over/under comparison — colour it green when actual came
+                   in under the estimate, red when over, matching the strip delta. #}
+                <span class="text-sm font-semibold {% if cost_explorer.delta_actual_vs_estimated >= 0 %}text-success{% else %}text-error{% endif %}">
                     · Δ {% if cost_explorer.delta_actual_vs_estimated > 0 %}+{% endif %}${{ "%.2f"|format(cost_explorer.delta_actual_vs_estimated) }}
                 </span>
                 {% endif %}
