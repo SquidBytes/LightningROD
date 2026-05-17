@@ -45,7 +45,7 @@ async def test_smoke_charging_costs_cost_explorer_section(client):
     assert response.status_code == 200
     body = response.text
     # Body-only — must carry the protagonist headline.
-    assert "You paid" in body
+    assert "Total Paid" in body
     # Body-only — must NOT re-emit the control form (avoids nested header).
     assert "cost-explorer-form" not in body
     # Partial-only — must NOT contain the page shell.
