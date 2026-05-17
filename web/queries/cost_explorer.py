@@ -383,6 +383,7 @@ async def query_cost_explorer(
         ]
         scoped_network_name = ", ".join(names) if names else None
 
+    subscription_block: dict[str, Any]
     if all_periods_in_range and range_start_min and range_end_max:
         fee_breakdown = calculate_fee_breakdown(all_periods_in_range, range_start_min, range_end_max)
         with_fees_total = round(sum(b["fee_total"] for b in fee_breakdown), 2)
@@ -427,7 +428,7 @@ async def query_cost_explorer(
         # Stable display order: highest energy first, then alphabetical.
         per_subscription.sort(key=lambda r: (-r["energy_at_member_rate"], r["network_name"]))
 
-        subscription_block: dict[str, Any] = {
+        subscription_block = {
             "active": True,
             "with_total": with_total,
             "with_energy_at_member_rate": with_energy_only,
@@ -477,7 +478,7 @@ async def query_cost_explorer(
 
     # Subscription fees paid out-of-pocket in this range — folded into the
     # headline so "you paid" matches the user's actual spend.
-    total_fees_paid = float(subscription_block.get("with_fees_total", 0.0)) if subscription_block.get("active") else 0.0
+    total_fees_paid = float(subscription_block.get("with_fees_total") or 0.0) if subscription_block.get("active") else 0.0
     total_paid_energy = total_paid_actual
     total_paid_with_fees = total_paid_actual + total_fees_paid
     total_paid_what_if_with_fees = total_paid_what_if + total_fees_paid

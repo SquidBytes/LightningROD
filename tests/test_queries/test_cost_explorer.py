@@ -165,9 +165,10 @@ async def test_query_cost_explorer_free_what_if_per_network_multi(cost_scenario)
     one-network rebill.
     """
     from datetime import datetime
+
     from db.models.charging_session import EVChargingSession
     from db.models.reference import EVChargingNetwork
-    from tests.test_queries.conftest import BASE_DATE, DEVICE_ID
+    from tests.test_queries.conftest import DEVICE_ID
 
     db = cost_scenario["db"]
 
