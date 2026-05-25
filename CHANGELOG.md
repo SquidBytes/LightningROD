@@ -9,6 +9,16 @@ For feature documentation, see the docs site at
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.4.0] - 2026-05-25
+
+### Added
+
 - **Cost Explorer card** on the Costs page — interactive, view of prices and total spent. Replaces the old Actual/Estimated, Cost card & view.
   by Network, Savings vs Network, and Subscription Savings sections.
   - Multi-select network filter
