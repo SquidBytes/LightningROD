@@ -115,9 +115,13 @@ jobs:
           # Pin the image tag inside the bundled compose files to the
           # exact release version, so `docker compose up` pulls the right
           # thing instead of :dev.
-          sed -i "s|:\${LIGHTNINGROD_VERSION:-dev}|:${VERSION}|g" \
+          sed -i "s|:\${LIGHTNINGROD_VERSION:-latest}|:${VERSION}|g" \
               "${STAGE}/docker-compose.yml"
-          sed -i "s|:\${LIGHTNINGROD_VERSION:-dev}|:${VERSION}|g" \
+          sed -i "s|:\${LIGHTNINGROD_VERSION:-latest}|:${VERSION}|g" \
+              "${STAGE}/docker-compose.standalone.yml"
+          # Standalone compose lives under docker/ in-repo (env_file: ../.env).
+          # In release bundles it sits at the root and must use ./.env.
+          sed -i "s|env_file: ../.env|env_file: .env|g" \
               "${STAGE}/docker-compose.standalone.yml"
 
           cat > "${STAGE}/README.md" <<EOF
@@ -205,7 +209,7 @@ jobs:
           docker compose up -d
           ```
 
-          Both images are multi-arch: `linux/amd64` + `linux/arm64` (Apple Silicon, Raspberry Pi 4/5).
+          Image is multi-arch: `linux/amd64` + `linux/arm64` (Apple Silicon, Raspberry Pi 4/5).
 
           Then open http://localhost:8000 and go to Settings → Home Assistant to connect your HA instance.
 
