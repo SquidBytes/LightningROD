@@ -44,6 +44,7 @@ site/
 
 # Local
 notes/
+.understand-anything
 
 # Local SQLite dev DB (created by setupLR.sh --sqlite)
 lr-dev.db
