@@ -1,0 +1,66 @@
+<h3 class="text-lg font-bold mb-4">{{ 'Edit ICE Vehicle' if ice else 'Add ICE Vehicle' }}</h3>
+
+<form
+    {% if ice %}
+    hx-put="/settings/ice-vehicles/{{ ice.id }}"
+    {% else %}
+    hx-post="/settings/ice-vehicles"
+    {% endif %}
+    hx-target="#ice-vehicle-management-card"
+    hx-swap="outerHTML"
+    hx-on::after-request="if(event.detail.successful) closeIceVehicleModal()">
+
+    <p class="text-sm text-base-content/60 mb-4">Configure an ICE vehicle for gas savings comparison. Values are stored in metric and displayed in your configured units.</p>
+
+    {# Label — full width #}
+    <label class="form-control mb-4">
+        <div class="label"><span class="label-text text-xs">Label *</span></div>
+        <input type="text" name="label" required
+               value="{{ ice.label if ice else '' }}"
+               placeholder="e.g. 2022 Honda Civic"
+               class="input input-sm input-bordered w-full">
+        <div class="label"><span class="label-text-alt text-xs text-base-content/40">Shown in comparison cards on the Costs page.</span></div>
+    </label>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {# Combined fuel economy — required, in user units #}
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">Combined {{ units.fuel_efficiency_label }} *</span></div>
+            <input type="number" name="fuel_efficiency_display" step="0.1" min="0.1" required
+                   value="{% if fuel_efficiency_display is not none %}{{ '%.1f'|format(fuel_efficiency_display) }}{% endif %}"
+                   placeholder="{% if distance_unit == 'us' %}e.g. 28{% else %}e.g. 8.4{% endif %}"
+                   class="input input-sm input-bordered w-full">
+            <div class="label"><span class="label-text-alt text-xs text-base-content/40">EPA combined fuel economy of the comparison vehicle.</span></div>
+        </label>
+
+        {# Tank size — optional, in user units #}
+        <label class="form-control">
+            <div class="label"><span class="label-text text-xs">Tank ({{ units.fuel_volume_label }})</span></div>
+            <input type="number" name="tank_capacity_display" step="0.1" min="1"
+                   value="{% if tank_capacity_display is not none %}{{ '%.1f'|format(tank_capacity_display) }}{% endif %}"
+                   placeholder="{% if distance_unit == 'us' %}e.g. 14{% else %}e.g. 53{% endif %}"
+                   class="input input-sm input-bordered w-full">
+            <div class="label"><span class="label-text-alt text-xs text-base-content/40">Used when distance data is unavailable for percentage-based calculations.</span></div>
+        </label>
+    </div>
+
+    {# Default checkbox — full width below grid #}
+    <div class="form-control mt-4">
+        <label class="label cursor-pointer justify-start gap-3">
+            <input type="checkbox" name="is_default" value="true"
+                   {{ 'checked' if ice and ice.is_default }}
+                   class="checkbox checkbox-sm checkbox-primary">
+            <span class="label-text text-sm">Set as default ICE vehicle</span>
+        </label>
+        <div class="label"><span class="label-text-alt text-xs text-base-content/40">New charging sessions use this vehicle for gas savings calculations unless overridden.</span></div>
+    </div>
+
+    <div class="flex justify-end gap-2 mt-6">
+        <button type="button" onclick="closeIceVehicleModal()" class="btn btn-ghost btn-sm">
+            {{ 'Discard Changes' if ice else 'Discard Vehicle' }}
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">
+            {{ 'Save Changes' if ice else 'Add ICE Vehicle' }}
+        </button>
+    </div>
+</form>

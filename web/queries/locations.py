@@ -190,7 +190,7 @@ async def resolve_location(
     location_name: str | None = None,
     location_type: str | None = None,
     address_dict: dict | None = None,
-    source_system: str = "home_assistant",
+    source_system: str = "ha_fordpass",
     _location_data: dict | None = None,
     _network_name_raw: str | None = None,
 ) -> int | None:
@@ -210,7 +210,7 @@ async def resolve_location(
         location_name: name for the location
         location_type: explicit type override
         address_dict: dict with city/state/country from HA
-        source_system: origin identifier (default "home_assistant")
+        source_system: origin identifier (default "ha_fordpass")
         _location_data: raw HA location dict for home detection
         _network_name_raw: raw network name from HA for home detection
     """
@@ -262,6 +262,8 @@ async def resolve_location(
             matched.longitude = longitude
         if location_name and matched.location_name is None:
             matched.location_name = location_name
+        if network_id and matched.network_id is None:
+            matched.network_id = network_id
 
         await db.flush()
         return matched.id
@@ -331,6 +333,32 @@ async def resolve_location(
     db.add(new_loc)
     await db.flush()
     return new_loc.id
+
+
+async def get_location_network_id(
+    db: AsyncSession, location_id: int | None
+) -> int | None:
+    """Return the network_id of the given location, or None if unset/missing."""
+    if not location_id:
+        return None
+    result = await db.execute(
+        select(EVLocationLookup.network_id).where(EVLocationLookup.id == location_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def inherit_network_from_location(
+    db: AsyncSession,
+    network_id: int | None,
+    location_id: int | None,
+) -> int | None:
+    """Return network_id, inheriting from the location when unset and a location resolves.
+
+    No-op when network_id is already set or no location_id is available.
+    """
+    if network_id is not None or not location_id:
+        return network_id
+    return await get_location_network_id(db, location_id)
 
 
 async def _get_setting(db: AsyncSession, key: str) -> str | None:

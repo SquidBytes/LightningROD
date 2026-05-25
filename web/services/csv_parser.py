@@ -8,8 +8,9 @@ import csv
 import hashlib
 import io
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
@@ -767,7 +768,7 @@ def transform_rows(
             # Use registered parser or fall through as string
             parser = _DB_FIELD_PARSERS.get(db_col)
             if parser is not None:
-                db_row[db_col] = parser(raw_val)  # type: ignore[operator]
+                db_row[db_col] = cast(Callable[[str], object], parser)(raw_val)
             else:
                 # Numeric fallback for any unmapped field
                 db_row[db_col] = _str_or_none(raw_val)
@@ -1032,6 +1033,12 @@ async def import_rows(
                             )
                             if resolved_loc_id:
                                 clean_row["location_id"] = resolved_loc_id
+
+                    # Inherit network from the resolved location when row has none.
+                    from web.queries.locations import inherit_network_from_location
+                    clean_row["network_id"] = await inherit_network_from_location(
+                        db_session, clean_row.get("network_id"), clean_row.get("location_id")
+                    )
 
                     session_obj = EVChargingSession(**clean_row)
                     db_session.add(session_obj)

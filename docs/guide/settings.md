@@ -6,19 +6,22 @@ The settings page (`/settings`) is organized into focused tabs. Most updates app
 
 ## Tab Overview
 
+The General tab is the default on load.
+
 | Tab | What it manages |
 |-----|-----------------|
-| Vehicles | Vehicle profiles, battery presets, active vehicle selection |
-| General | Comparison display toggles, gas price history, gas-price HA sensors, unit and timezone preferences |
+| General | Units, timezone, comparison display toggles, developer tools, About |
+| Vehicles | EV profiles, battery presets, active vehicle selection |
 | Networks | Networks, locations, charger stalls, subscription periods |
-| CSV Import | Template download and bulk session import flow |
-| Home Assistant | HA connection settings, status, reconnect/disconnect, history backfill |
+| Fuel | ICE vehicle fleet, gas price history, fuel price trend chart |
+| Import | CSV template download and bulk session import flow |
+| Data Sources | Home Assistant FordPass and gas-price source adapters (URL, token, sensor IDs, enable/disable) |
 
 ## Vehicles Tab
 
-Use this tab to manage vehicle profiles and choose the active vehicle for vehicle-specific pages like Charging Sessions, Costs, Charging Performance, Battery Analytics, and Driving.
+Use this tab to manage EV profiles and choose the active vehicle for vehicle-specific pages like Charging Sessions, Costs, Charging Performance, Battery Analytics, and Driving.
 
-Each vehicle includes a name, make/model/year, usable capacity, gross battery capacity, VIN or device ID, and ICE comparison fields.
+Each vehicle includes a name, make/model/year, usable capacity, gross battery capacity, and VIN or device ID. ICE comparison vehicles live on the [Fuel tab](#fuel-tab) and are no longer attached to the EV record.
 
 ### Usable vs Gross Pack Capacity
 
@@ -76,7 +79,6 @@ The network modal has three tabs:
 
 Location `cost_per_kwh` overrides network `cost_per_kwh` when computing estimated costs.
 
-
 ### Charger Stalls
 
 Each location can have multiple stalls with different hardware details:
@@ -123,19 +125,6 @@ Toggle which comparison sections appear on the Costs page:
 - Gasoline comparison
 - Network rate comparison
 
-### Gas Price History
-
-Keep month-by-month gas price history with two tracks:
-
-- Station price (your usual station)
-- Average price (regional average)
-
-These values are used in the gas comparison cards.
-
-### Gas Price Sensors (Home Assistant)
-
-You can also connect Home Assistant sensor entity IDs for station and average gas prices.
-
 ### Unit Preferences
 
 LightningROD stores distances, temperatures, efficiency, and volume in metric in the database, then converts them for display. Distance and temperature are controlled separately, so you can mix them if you want:
@@ -153,18 +142,54 @@ Set your local timezone, such as `America/New_York`. The app displays timestamps
 
 This setting is also used as the default for CSV imports.
 
-## Home Assistant Tab
+## Fuel Tab
 
-Use this tab to connect LightningROD to Home Assistant for automatic session detection and vehicle telemetry. See the dedicated [Home Assistant Integration](home-assistant.md) guide for details.
+The Fuel tab holds everything that powers gas comparisons on the Costs page.
 
-The tab includes:
+### ICE Vehicles
 
-- **Connection settings** -- HA URL, long-lived access token, VIN override, unit system, auto-connect toggle
-- **Connection status** -- Live status badge, event counters, detected VIN, and error display (polls every 10 seconds)
-- **Controls** -- Reconnect, disconnect, and history backfill buttons
+A multi-row table of internal-combustion vehicles used for gas savings comparison. One vehicle is marked **Default** and is used for new charging sessions; you can keep additional vehicles in the table to swap which one drives the comparison.
 
-## CSV Import Tab
+| Field | Description |
+|-------|-------------|
+| Label | Vehicle name (e.g., "2024 F-150 XLT 2.7L") |
+| Combined fuel economy | Stored in metric (L/100km); shown in your configured units |
+| Tank capacity | Stored in litres; shown in your configured volume unit |
+| Default | The vehicle used by the gas-comparison cards on Costs |
+
+Add, edit, delete, and **Set Default** are all available per row. You cannot delete the default vehicle — promote another row first.
+
+### Display Options
+
+Toggle which comparison sections appear on the Costs page: comparison section, gasoline comparison, network rate comparison.
+
+### Gas Price History
+
+Month-by-month gas price history with two tracks:
+
+- **Station price** — your usual station
+- **Average price** — regional average
+
+Values are stored in metric ($/L) and converted to your configured volume unit for display. The history feeds the gas comparison cards on Costs.
+
+### Fuel Price Trend
+
+A chart of Station vs Average gas prices over time, in your configured volume unit.
+
+## Import Tab
 
 Use this tab for bulk imports. It includes template download, timezone selection, automatic column matching, preview, inline fixes, duplicate handling, and a final summary.
 
 See the dedicated [CSV Import](csv-import.md) guide for the full flow.
+
+## Data Sources Tab
+
+Configure the source adapters LightningROD reads from. Two adapters ship today:
+
+- **HA FordPass** — Home Assistant URL, long-lived access token, VIN override, unit system, auto-connect toggle, plus live connection status, event counters, and Reconnect / Disconnect / Backfill controls.
+- **HA Gas Price** — Home Assistant sensor entity IDs for station and average gas prices.
+
+Each adapter has its own enable toggle, so you can disable one source without unwiring the other. See the [Home Assistant Integration](home-assistant.md) guide for the full FordPass flow.
+
+!!! tip "Looking for the old Home Assistant tab?"
+    Home Assistant settings now live on this tab as the **HA FordPass** card.

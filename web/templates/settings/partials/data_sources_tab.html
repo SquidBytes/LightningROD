@@ -1,0 +1,13 @@
+<div class="space-y-4">
+    {% for card in cards %}
+        {% include "settings/partials/data_source_card.html" with context %}
+    {% endfor %}
+</div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Settings saved.</span>
+  </div>
+</div>
+{% endif %}

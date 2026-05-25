@@ -1,4 +1,4 @@
-"""Route handlers for dashboard."""
+"""Home dashboard route."""
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse

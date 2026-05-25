@@ -67,7 +67,7 @@
                 hx-get="/charging/sessions/{{ session.id }}/detail?{% if not loop.first %}prev_id={{ sessions[loop.index0 - 1].session.id }}&{% endif %}{% if not loop.last %}next_id={{ sessions[loop.index0 + 1].session.id }}{% endif %}"
                 hx-target="#drawer-body"
                 hx-swap="innerHTML"
-                onclick="openDrawer()"
+                onclick="openDrawer(); markRowSelected({{ session.id }});"
             >
                 <td class="group-edit-col hidden" onclick="event.stopPropagation()"><input type="checkbox" class="checkbox checkbox-sm session-checkbox" value="{{ session.id }}"></td>
                 <!-- Date -->

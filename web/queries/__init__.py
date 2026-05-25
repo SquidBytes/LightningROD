@@ -1,2 +1,1 @@
-"""Package for web.queries modules."""
-
+"""Query-layer helpers used by routes and services."""

@@ -9,6 +9,7 @@ import pytest
 import db.models.battery_status  # noqa: F401
 import db.models.charging_session  # noqa: F401
 import db.models.trip_metrics  # noqa: F401
+import db.models.vehicle_status  # noqa: F401
 
 # Trigger model imports so Base.metadata is fully populated.
 from db.models import Base  # re-exported from db.models.__init__
@@ -22,6 +23,7 @@ _WATCHED_TABLES: set[str] = {
     "ev_trip_metrics",
     "ev_charging_session",
     "ev_battery_status",
+    "ev_vehicle_status",
 }
 
 # Column-name substrings that indicate a unit-ful physical quantity.
@@ -51,6 +53,10 @@ _EXEMPTIONS: set[tuple[str, str]] = {
     # electrical_efficiency is a dimensionless trip-score field (0-100) per
     # ha-fordpass; matches 'efficiency' token but is NOT a unit-ful quantity.
     ("ev_trip_metrics", "electrical_efficiency"),
+    # odometer_start/end derived at write-time from ev_vehicle_status.odometer
+    # (closest-reading lookup); not a direct HA-source field, so no FieldContract.
+    ("ev_trip_metrics", "odometer_start"),
+    ("ev_trip_metrics", "odometer_end"),
     # Already-SI scalar columns that don't match any token would not need
     # exemptions, but we keep the SI groupings for documentation parity.
 }

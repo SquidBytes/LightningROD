@@ -22,21 +22,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
 from web.queries.vehicles import get_active_vehicle, get_all_vehicles
+from web.services.ingestion import supervisor
+from web.services.sources.registry import REGISTRY
 from web.services.units import detection
 from web.services.units.contracts import FieldContract
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="web/templates")
 
-# Explicit manifest. Keep in sync with scripts/gen_data_sources_doc.py.
-_ADAPTER_MODULES: list[tuple[str, str]] = [
-    ("ha_fordpass", "web.services.sources.ha_fordpass.adapter"),
-]
-
 
 def _contract_key(c: FieldContract) -> str:
     """Key convention matches ha_fordpass.adapter._record_last_seen."""
-    return f"{c.source_entity_pattern}|{c.source_attribute}"
+    return f"{c.source_locator.pattern}|{c.source_attribute}"
 
 
 def _load_groups() -> list[dict[str, Any]]:
@@ -60,16 +57,17 @@ def _load_groups() -> list[dict[str, Any]]:
         (r.entity_pattern, r.attribute): r for r in detection.snapshot()
     }
 
-    for source_name, module_path in _ADAPTER_MODULES:
-        module = importlib.import_module(module_path)
+    for descriptor in REGISTRY:
+        source_name = descriptor.source_name
+        module = importlib.import_module(descriptor.adapter_module)
         contracts: list[FieldContract] = list(getattr(module, "FIELD_CONTRACTS", []))
         last_seen: dict[str, dict[str, Any]] = dict(getattr(module, "_last_seen_raw", {}))
-        rows = []
+        rows: list[dict[str, Any]] = []
         covered: set[tuple[str, str]] = set()
         for c in sorted(
-            contracts, key=lambda x: (x.source_entity_pattern, x.source_attribute)
+            contracts, key=lambda x: (x.source_locator.pattern, x.source_attribute)
         ):
-            key = (c.source_entity_pattern, c.source_attribute)
+            key = (c.source_locator.pattern, c.source_attribute)
             covered.add(key)
             rows.append(
                 {
@@ -107,5 +105,6 @@ async def data_sources_page(
             "active_vehicle": active_vehicle,
             "all_vehicles": all_vehicles,
             "groups": _load_groups(),
+            "runtimes": supervisor.health(),
         },
     )

@@ -1,4 +1,4 @@
-"""Route handlers for charging."""
+"""Charging overview route."""
 
 from fastapi import APIRouter
 

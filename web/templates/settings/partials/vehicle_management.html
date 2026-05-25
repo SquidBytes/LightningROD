@@ -20,7 +20,7 @@
                 </thead>
                 <tbody>
                     {% for vehicle in vehicles %}
-                    <tr>
+                    <tr class="{% if just_saved_row_id == vehicle.id %}ring-2 ring-inset ring-success rounded{% endif %}">
                         <td class="font-medium">{{ vehicle.display_name }}</td>
                         <td class="text-base-content/60 text-sm">
                             {% if vehicle.make or vehicle.model %}
@@ -95,3 +95,11 @@
         </div>
     </div>
 </div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Vehicle saved.</span>
+  </div>
+</div>
+{% endif %}

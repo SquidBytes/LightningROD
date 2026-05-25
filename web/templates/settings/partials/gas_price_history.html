@@ -1,12 +1,4 @@
-{% if saved %}
-<div class="alert alert-success text-sm mb-3">Settings saved.</div>
-{% endif %}
-
-<h3 class="text-sm font-semibold mb-2">Gas Price History</h3>
-<p class="text-xs text-base-content/60 mb-4">
-    Track gas prices over time with two tracks: <strong>Station</strong> (your regular station, e.g. Costco)
-    and <strong>Average</strong> (regional average). Both are used to calculate a savings range on the Costs page.
-</p>
+{# Heading + intro live on the wrapper card in fuel_tab.html — not duplicated here. #}
 
 {# Add new entry form (collapsible) #}
 <details class="collapse collapse-arrow bg-base-300 mb-4">
@@ -32,7 +24,7 @@
                        class="input input-sm input-bordered w-full">
             </label>
             <label class="form-control">
-                <div class="label"><span class="label-text text-xs">Station Price</span></div>
+                <div class="label"><span class="label-text text-xs">Station Price ({{ units.fuel_volume_label }})</span></div>
                 <div class="flex items-center gap-1">
                     <span class="text-base-content/40 text-sm">$</span>
                     <input type="number" name="station_price" step="0.01" min="0"
@@ -41,7 +33,7 @@
                 </div>
             </label>
             <label class="form-control">
-                <div class="label"><span class="label-text text-xs">Average Price</span></div>
+                <div class="label"><span class="label-text text-xs">Average Price ({{ units.fuel_volume_label }})</span></div>
                 <div class="flex items-center gap-1">
                     <span class="text-base-content/40 text-sm">$</span>
                     <input type="number" name="average_price" step="0.01" min="0"
@@ -63,18 +55,18 @@
         <thead>
             <tr>
                 <th>Month/Year</th>
-                <th>Station Price</th>
-                <th>Average Price</th>
+                <th>Station ({{ units.fuel_volume_label }})</th>
+                <th>Average ({{ units.fuel_volume_label }})</th>
                 <th>Source</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
             {% for price in gas_prices %}
-            <tr>
+            <tr class="{% if just_saved_row_id == price.id %}ring-2 ring-inset ring-success rounded{% endif %}">
                 <td>{{ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][price.month - 1] }} {{ price.year }}</td>
-                <td>{% if price.station_price is not none %}${{ "%.2f"|format(price.station_price) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
-                <td>{% if price.average_price is not none %}${{ "%.2f"|format(price.average_price) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
+                <td>{% if price.station_price_display is not none %}${{ "%.2f"|format(price.station_price_display) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
+                <td>{% if price.average_price_display is not none %}${{ "%.2f"|format(price.average_price_display) }}{% else %}<span class="text-base-content/30">--</span>{% endif %}</td>
                 <td><span class="badge badge-sm badge-ghost">{{ price.source or 'manual' }}</span></td>
                 <td>
                     <button hx-delete="/settings/gas-prices/{{ price.id }}"
@@ -98,6 +90,14 @@
    shows the manually-editable monthly history. Link over for the sensor wiring. #}
 <div class="mt-6 pt-4 border-t border-base-content/10 text-xs text-base-content/60">
     Home Assistant gas sensors are configured and tested on the
-    <a href="/settings?tab=hass" class="link link-hover">Home Assistant tab</a>.
+    <a href="/settings?tab=data_sources" class="link link-hover">Data Sources tab</a>.
     Historical readings from those sensors appear in the monthly table above.
 </div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Gas prices saved.</span>
+  </div>
+</div>
+{% endif %}

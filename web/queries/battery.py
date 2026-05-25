@@ -7,18 +7,22 @@ with adaptive downsampling, plus Plotly chart builders for each.
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import Date, cast, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.dialect import date_trunc_compat
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
+from db.models.reference import EVChargingNetwork
 from db.models.vehicle_status import EVVehicleStatus
 from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
+from web.unit_system import format_user_local
 
 # Module-level cache for reference charge curve JSON data
 _CURVE_CACHE: dict[str, dict] = {}
@@ -28,12 +32,12 @@ _CURVE_CACHE: dict[str, dict] = {}
 # ---------------------------------------------------------------------------
 
 
-def build_battery_time_filter(range_str: str):
-    """Return a SQLAlchemy where clause for EVBatteryStatus.recorded_at.
+def _battery_time_cutoff(range_str: str) -> datetime | None:
+    """Return the cutoff datetime for a given range string, or None for 'all'.
 
-    Same logic as costs.build_time_filter but targets EVBatteryStatus.recorded_at.
-    Returns None for 'all' (no filter).
-    Accepts: '7d', '30d', '90d', 'ytd', '1y', 'all'
+    Shared math used by both EVBatteryStatus and EVVehicleStatus filters so a
+    single mapping ('7d' -> 7 days ago, etc.) drives every battery-page query.
+    Accepts: '7d', '30d', '90d', 'ytd', '1y', 'all'.
     """
     if not range_str or range_str == "all":
         return None
@@ -41,18 +45,26 @@ def build_battery_time_filter(range_str: str):
     now = datetime.now(UTC)
 
     if range_str == "7d":
-        cutoff = now - timedelta(days=7)
-    elif range_str == "30d":
-        cutoff = now - timedelta(days=30)
-    elif range_str == "90d":
-        cutoff = now - timedelta(days=90)
-    elif range_str == "ytd":
-        cutoff = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    elif range_str == "1y":
-        cutoff = now - timedelta(days=365)
-    else:
-        return None
+        return now - timedelta(days=7)
+    if range_str == "30d":
+        return now - timedelta(days=30)
+    if range_str == "90d":
+        return now - timedelta(days=90)
+    if range_str == "ytd":
+        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    if range_str == "1y":
+        return now - timedelta(days=365)
+    return None
 
+
+def build_battery_time_filter(range_str: str):
+    """Return a SQLAlchemy where clause for EVBatteryStatus.recorded_at.
+
+    Returns None for 'all' (no filter).
+    """
+    cutoff = _battery_time_cutoff(range_str)
+    if cutoff is None:
+        return None
     return EVBatteryStatus.recorded_at >= cutoff
 
 
@@ -100,7 +112,9 @@ async def query_soc_timeline(
         else:
             bucket = "2 hours"
 
-        bucket_col = func.date_trunc(bucket, EVBatteryStatus.recorded_at).label("bucket")
+        bucket_col = date_trunc_compat(
+            bucket, EVBatteryStatus.recorded_at, dialect=db.bind.dialect
+        ).label("bucket")
         stmt = (
             select(
                 bucket_col,
@@ -110,6 +124,9 @@ async def query_soc_timeline(
             )
             .where(EVBatteryStatus.hv_battery_soc.isnot(None))
             .group_by(bucket_col)
+            # SOC ordering regression lock: ASC keeps the most-recent reading
+            # on the right edge of the chart. Do not flip without coordinating
+            # the chart-builder hover/legend logic.
             .order_by(bucket_col)
         )
         if time_filter is not None:
@@ -128,7 +145,8 @@ async def query_soc_timeline(
             for row in result.all()
         ]
 
-    # Fetch all rows for smaller datasets
+    # Fetch all rows for smaller datasets. SOC ordering regression lock:
+    # ASC order keeps the most-recent reading on the right edge of the chart.
     stmt = select(
         EVBatteryStatus.recorded_at,
         EVBatteryStatus.hv_battery_soc,
@@ -265,7 +283,7 @@ async def query_degradation_data(
 
     Returns list of dicts with keys: date, max_capacity.
     """
-    date_col = cast(EVBatteryStatus.recorded_at, Date)
+    date_col = date_trunc_compat("day", EVBatteryStatus.recorded_at, dialect=db.bind.dialect)
 
     stmt = (
         select(
@@ -290,6 +308,183 @@ async def query_degradation_data(
     ]
 
 
+async def query_battery_temp_timeline(
+    db: AsyncSession,
+    time_range: str = "7d",
+    device_id: str | None = None,
+) -> list[dict]:
+    """Battery pack temperature timeline for the battery-temp chart.
+
+    Mirrors the SOC timeline shape: filters out NULL hv_battery_temperature,
+    orders ASC so the most-recent reading sits on the right edge, and applies
+    adaptive 30min/1h/2h downsampling above 800 rows.
+    Returns list of dicts with keys: recorded_at, hv_battery_temperature.
+    """
+    stmt = (
+        select(
+            EVBatteryStatus.recorded_at,
+            EVBatteryStatus.hv_battery_temperature,
+        )
+        .where(EVBatteryStatus.hv_battery_temperature.isnot(None))
+        .order_by(EVBatteryStatus.recorded_at)
+    )
+
+    time_filter = build_battery_time_filter(time_range)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVBatteryStatus.device_id == device_id)
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    if not rows:
+        return []
+
+    df = pd.DataFrame(rows, columns=["recorded_at", "hv_battery_temperature"])
+    df["hv_battery_temperature"] = df["hv_battery_temperature"].astype(float)
+
+    if len(df) > 800:
+        df = df.set_index("recorded_at")
+        if len(df) > 5000:
+            bucket = "2h"
+        elif len(df) > 2000:
+            bucket = "1h"
+        else:
+            bucket = "30min"
+        df = (
+            df.resample(bucket)
+            .agg({"hv_battery_temperature": "mean"})
+            .dropna(subset=["hv_battery_temperature"])
+            .reset_index()
+        )
+
+    return [
+        {
+            "recorded_at": row["recorded_at"],
+            "hv_battery_temperature": float(row["hv_battery_temperature"]),
+        }
+        for _, row in df.iterrows()
+    ]
+
+
+async def query_outside_temp_timeline(
+    db: AsyncSession,
+    time_range: str = "7d",
+    device_id: str | None = None,
+) -> list[dict]:
+    """Outside-air temperature timeline sourced from EVVehicleStatus.
+
+    Reuses the shared cutoff math from _battery_time_cutoff (build_battery_time_filter
+    is bound to EVBatteryStatus). Returns list of dicts with keys:
+    recorded_at, outside_temperature.
+    """
+    stmt = (
+        select(
+            EVVehicleStatus.recorded_at,
+            EVVehicleStatus.outside_temperature,
+        )
+        .where(EVVehicleStatus.outside_temperature.isnot(None))
+        .order_by(EVVehicleStatus.recorded_at)
+    )
+
+    cutoff = _battery_time_cutoff(time_range)
+    if cutoff is not None:
+        stmt = stmt.where(EVVehicleStatus.recorded_at >= cutoff)
+    if device_id:
+        stmt = stmt.where(EVVehicleStatus.device_id == device_id)
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    if not rows:
+        return []
+
+    df = pd.DataFrame(rows, columns=["recorded_at", "outside_temperature"])
+    df["outside_temperature"] = df["outside_temperature"].astype(float)
+
+    if len(df) > 800:
+        df = df.set_index("recorded_at")
+        if len(df) > 5000:
+            bucket = "2h"
+        elif len(df) > 2000:
+            bucket = "1h"
+        else:
+            bucket = "30min"
+        df = (
+            df.resample(bucket)
+            .agg({"outside_temperature": "mean"})
+            .dropna(subset=["outside_temperature"])
+            .reset_index()
+        )
+
+    return [
+        {
+            "recorded_at": row["recorded_at"],
+            "outside_temperature": float(row["outside_temperature"]),
+        }
+        for _, row in df.iterrows()
+    ]
+
+
+_TELEMETRY_FIELDS: tuple[str, ...] = (
+    "hv_battery_temperature",
+    "hv_battery_voltage",
+    "hv_battery_amperage",
+    "hv_battery_kw",
+)
+
+
+async def query_battery_telemetry(
+    db: AsyncSession,
+    device_id: str | None = None,
+    days: int = 7,
+) -> dict:
+    """Latest value + recent sparkline series for HV-pack telemetry fields.
+
+    Returns a dict shaped:
+        {
+            "latest": {
+                "<field>": {"value": float, "recorded_at": datetime} | None,
+                ...
+            },
+            "series": {
+                "<field>": [{"recorded_at": dt, "value": float}, ...],
+                ...
+            },
+        }
+
+    A field's `latest` is None when no row in `days` carried a non-null reading.
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+
+    cols = [getattr(EVBatteryStatus, name) for name in _TELEMETRY_FIELDS]
+    stmt = (
+        select(EVBatteryStatus.recorded_at, *cols)
+        .where(EVBatteryStatus.recorded_at >= cutoff)
+        .order_by(EVBatteryStatus.recorded_at)
+    )
+    if device_id:
+        stmt = stmt.where(EVBatteryStatus.device_id == device_id)
+
+    rows = (await db.execute(stmt)).all()
+
+    series: dict[str, list[dict]] = {f: [] for f in _TELEMETRY_FIELDS}
+    latest: dict[str, dict | None] = {f: None for f in _TELEMETRY_FIELDS}
+
+    for row in rows:
+        ts = row.recorded_at
+        for field in _TELEMETRY_FIELDS:
+            value = getattr(row, field)
+            if value is None:
+                continue
+            v = float(value)
+            series[field].append({"recorded_at": ts, "value": v})
+            latest[field] = {"value": v, "recorded_at": ts}
+
+    return {"latest": latest, "series": series}
+
+
 async def query_recent_sessions_for_picker(
     db: AsyncSession,
     device_id: str | None = None,
@@ -297,7 +492,8 @@ async def query_recent_sessions_for_picker(
 ) -> list[dict]:
     """Query recent charging sessions for the charge curve session dropdown.
 
-    Returns list of dicts with keys: id, session_start_utc, location_name, energy_kwh.
+    Returns list of dicts with keys: id, session_start_utc, location_name,
+    energy_kwh, charge_type, network_name, network_color.
     """
     stmt = (
         select(
@@ -305,6 +501,13 @@ async def query_recent_sessions_for_picker(
             EVChargingSession.session_start_utc,
             EVChargingSession.location_name,
             EVChargingSession.energy_kwh,
+            EVChargingSession.charge_type,
+            EVChargingNetwork.network_name,
+            EVChargingNetwork.color,
+        )
+        .outerjoin(
+            EVChargingNetwork,
+            EVChargingSession.network_id == EVChargingNetwork.id,
         )
         .order_by(EVChargingSession.session_start_utc.desc())
         .limit(limit)
@@ -320,6 +523,9 @@ async def query_recent_sessions_for_picker(
             "session_start_utc": row.session_start_utc,
             "location_name": row.location_name,
             "energy_kwh": float(row.energy_kwh) if row.energy_kwh else None,
+            "charge_type": row.charge_type,
+            "network_name": row.network_name,
+            "network_color": row.color,
         }
         for row in result.all()
     ]
@@ -387,8 +593,9 @@ async def query_degradation_by_mileage(
     Returns list of dicts: {odometer, max_capacity, date, recorded_at}.
     Empty list if no valid data after merge.
     """
-    # Daily max capacity with latest timestamp per day
-    date_col = cast(EVBatteryStatus.recorded_at, Date)
+    # Daily max capacity with latest timestamp per day. Use date_trunc_compat
+    # for portability — `cast(col, Date)` reads back as integer-year on SQLite.
+    date_col = date_trunc_compat("day", EVBatteryStatus.recorded_at, dialect=db.bind.dialect)
     cap_stmt = (
         select(
             date_col.label("date"),
@@ -457,7 +664,7 @@ async def query_degradation_by_mileage(
         odo_df,
         left_on="latest_ts",
         right_on="recorded_at",
-        tolerance=pd.Timedelta("4h"),
+        tolerance=timedelta(hours=4),
         direction="nearest",
     )
 
@@ -474,65 +681,6 @@ async def query_degradation_by_mileage(
             "recorded_at": row["latest_ts"],
         }
         for _, row in merged.iterrows()
-    ]
-
-
-async def query_lv_battery_timeline(
-    db: AsyncSession,
-    time_range: str = "7d",
-    device_id: str | None = None,
-) -> list[dict]:
-    """Query 12v battery voltage and level timeline with adaptive downsampling.
-
-    Returns list of dicts: {recorded_at, voltage, level}.
-    """
-    stmt = (
-        select(
-            EVBatteryStatus.recorded_at,
-            EVBatteryStatus.lv_battery_voltage,
-            EVBatteryStatus.lv_battery_level,
-        )
-        .where(EVBatteryStatus.lv_battery_voltage.isnot(None))
-        .order_by(EVBatteryStatus.recorded_at)
-    )
-
-    time_filter = build_battery_time_filter(time_range)
-    if time_filter is not None:
-        stmt = stmt.where(time_filter)
-    if device_id:
-        stmt = stmt.where(EVBatteryStatus.device_id == device_id)
-
-    result = await db.execute(stmt)
-    rows = result.all()
-
-    if not rows:
-        return []
-
-    df = pd.DataFrame(rows, columns=["recorded_at", "voltage", "level"])
-
-    # Adaptive downsampling matching SOC timeline thresholds
-    if len(df) > 800:
-        df = df.set_index("recorded_at")
-        if len(df) > 5000:
-            bucket = "2h"
-        elif len(df) > 2000:
-            bucket = "1h"
-        else:
-            bucket = "30min"
-        df = (
-            df.resample(bucket)
-            .agg({"voltage": "mean", "level": "mean"})
-            .dropna(subset=["voltage"])
-            .reset_index()
-        )
-
-    return [
-        {
-            "recorded_at": row["recorded_at"],
-            "voltage": float(row["voltage"]) if pd.notna(row["voltage"]) else None,
-            "level": float(row["level"]) if pd.notna(row["level"]) else None,
-        }
-        for _, row in df.iterrows()
     ]
 
 
@@ -588,10 +736,13 @@ def build_soc_timeline_chart(
     charging_regions: list[tuple[int, int]],
     distance_factor: float = 1.0,
     range_label: str = "km",
+    user_tz: str | None = None,
 ) -> str:
     """Build SOC timeline Plotly chart with color-coded charging regions.
 
     Range values are metric (km) in the DB; distance_factor converts to display.
+    ``user_tz`` is an IANA timezone for hover-tooltip formatting; falls back to
+    UTC when None/unset.
     Returns HTML string. Empty string if no data.
     """
     if not data:
@@ -607,7 +758,7 @@ def build_soc_timeline_chart(
     hover_texts = []
     for row in data:
         ts = row["recorded_at"]
-        ts_str = ts.strftime("%b %d, %Y %H:%M") if hasattr(ts, "strftime") else str(ts)
+        ts_str = format_user_local(ts, user_tz, "%b %d, %Y %H:%M")
         soc = row.get("soc")
         kw = row.get("kw")
         rng = row.get("range")
@@ -687,10 +838,188 @@ def build_soc_timeline_chart(
     )
 
 
+def build_battery_temp_chart(
+    temp_data: list[dict],
+    outside_data: list[dict],
+    charging_regions: list[tuple],
+    temp_factor_f: bool = False,
+    temp_label: str = "°C",
+) -> str | None:
+    """Dual-line battery + outside temp chart with charging-region overlays.
+
+    Mirrors build_soc_timeline_chart: connectgaps=False to render gaps as
+    breaks, and charging-region rectangles batched into a single
+    update_layout(shapes=...) call (loop form is O(n^2)).
+
+    Args:
+        temp_data: rows from query_battery_temp_timeline.
+        outside_data: rows from query_outside_temp_timeline.
+        charging_regions: list of (start_ts, end_ts) timestamp tuples (NOT
+            index tuples) — the route handler resolves SOC indices to
+            timestamps before calling this so x-coords align even though
+            battery-temp and SOC time series have different cadences.
+        temp_factor_f: when True, °C values are converted to °F before plot.
+        temp_label: axis-title unit label (e.g. "°C" or "°F").
+
+    Returns Plotly chart HTML, or None when no data on either trace.
+    """
+    if not temp_data and not outside_data:
+        return None
+
+    pio.templates.default = "plotly_dark"
+    fig = go.Figure()
+
+    def _conv(c):
+        if c is None:
+            return None
+        return (float(c) * 9.0 / 5.0) + 32.0 if temp_factor_f else float(c)
+
+    if temp_data:
+        batt_x = [pt["recorded_at"] for pt in temp_data]
+        batt_y = [_conv(pt["hv_battery_temperature"]) for pt in temp_data]
+        fig.add_trace(
+            go.Scatter(
+                x=batt_x,
+                y=batt_y,
+                mode="lines",
+                name="Battery",
+                line=dict(color="#47A8E5", width=2),
+                connectgaps=False,
+                hoverinfo="x+y+name",
+            )
+        )
+
+    if outside_data:
+        out_x = [pt["recorded_at"] for pt in outside_data]
+        out_y = [_conv(pt["outside_temperature"]) for pt in outside_data]
+        fig.add_trace(
+            go.Scatter(
+                x=out_x,
+                y=out_y,
+                mode="lines",
+                name="Outside Air",
+                line=dict(color="#94a3b8", width=2, dash="dash"),
+                connectgaps=False,
+                hoverinfo="x+y+name",
+            )
+        )
+
+    # Charging-region overlays — batched shapes (NEVER loop add_vrect).
+    # charging_regions is a list of (start_ts, end_ts) timestamp tuples so
+    # x-coords align with the temp series even when the SOC and temp time
+    # bases differ.
+    region_shapes = [
+        dict(
+            type="rect",
+            xref="x",
+            yref="paper",
+            x0=start_ts,
+            x1=end_ts,
+            y0=0,
+            y1=1,
+            fillcolor="rgba(74, 222, 128, 0.25)",
+            layer="below",
+            line=dict(width=0),
+        )
+        for start_ts, end_ts in charging_regions
+    ]
+    if region_shapes:
+        fig.update_layout(shapes=region_shapes)
+
+    fig.update_layout(
+        height=350,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e5e7eb",
+        margin=dict(l=20, r=20, t=30, b=20),
+        xaxis=dict(title=""),
+        yaxis=dict(title=f"Temperature ({temp_label})"),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified",
+        hoverlabel=_HOVER_LABEL,
+    )
+
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
+    )
+
+
+_SPARKLINE_CONFIG = {"displayModeBar": False, "staticPlot": True, "displaylogo": False}
+
+
+def build_metric_sparkline(
+    series: list[dict],
+    color: str = "#47A8E5",
+    height: int = 48,
+    transform=None,
+    zero_line: bool = False,
+) -> str | None:
+    """Tiny inline sparkline for a single battery telemetry metric.
+
+    Renders a chrome-less line trace with no axes, hover, or modebar — designed
+    to sit under a numeric headline value.
+
+    Args:
+        series: list of {"recorded_at", "value"} from query_battery_telemetry.
+        color: line color (hex).
+        height: pixel height of the chart.
+        transform: optional callable mapping each raw value (already a float)
+            to its displayed value, e.g. C-to-F conversion.
+        zero_line: when True, draws a faint horizontal reference line at y=0.
+            Use for signed metrics (current, power) where below-zero indicates
+            charging — saves having to call that out in the tooltip.
+
+    Returns Plotly HTML, or None when series has fewer than 2 points (a single
+    point can't draw a line).
+    """
+    if not series or len(series) < 2:
+        return None
+
+    pio.templates.default = "plotly_dark"
+    xs = [pt["recorded_at"] for pt in series]
+    ys = [transform(pt["value"]) if transform else pt["value"] for pt in series]
+
+    fig = go.Figure(
+        go.Scatter(
+            x=xs,
+            y=ys,
+            mode="lines",
+            line=dict(color=color, width=1.5),
+            hoverinfo="skip",
+        )
+    )
+    layout_kwargs: dict[str, Any] = dict(
+        height=height,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0, r=0, t=2, b=2),
+        xaxis=dict(visible=False, fixedrange=True),
+        yaxis=dict(visible=False, fixedrange=True),
+        showlegend=False,
+    )
+    if zero_line:
+        # Faint horizontal reference at y=0 spanning the full plot — separates
+        # discharging (above) from charging (below) without needing axis labels.
+        layout_kwargs["shapes"] = [
+            dict(
+                type="line",
+                xref="paper", x0=0, x1=1,
+                yref="y", y0=0, y1=0,
+                line=dict(color="rgba(229,231,235,0.35)", width=1, dash="dot"),
+            )
+        ]
+    fig.update_layout(**layout_kwargs)
+    return _wrap_chart(
+        fig.to_html(full_html=False, include_plotlyjs=False, config=_SPARKLINE_CONFIG)
+    )
+
+
 def build_charge_curve_chart(
     data: dict,
     ref_curve: list[dict] | None = None,
     avg_curve: list[dict] | None = None,
+    charge_type: str | None = None,
 ) -> str:
     """Build charge curve chart with SOC% on X-axis, kW on Y-axis (industry standard).
 
@@ -701,11 +1030,23 @@ def build_charge_curve_chart(
         data: Dict from query_charge_curve with detailed, fallback, session keys.
         ref_curve: Reference charge curve points [{soc, kw}, ...] from JSON.
         avg_curve: Average charge curve points [{soc, kw}, ...] from query.
+        charge_type: 'AC' or 'DC' (or None). AC sessions cap the y-axis at
+            25 kW and suppress the synthetic-DC reference overlay; DC keeps
+            the 200 kW cap and the reference curve.
 
     Returns HTML string. Empty string if no data at all.
     """
     if not data or not data.get("session"):
         return ""
+
+    # AC sessions never benefit from the synthetic-DC reference curve and need
+    # a tighter y-axis range to read at all. Apply the branch BEFORE traces
+    # are added so the AC ref_curve is dropped at the source, not just hidden.
+    if charge_type == "AC":
+        y_max = 25.0
+        ref_curve = None
+    else:
+        y_max = 200.0
 
     detailed = data.get("detailed", [])
     fallback = data.get("fallback", {})
@@ -806,7 +1147,7 @@ def build_charge_curve_chart(
         font_color="#e5e7eb",
         margin=dict(l=20, r=20, t=30, b=20),
         xaxis=dict(title="SOC %", range=[0, 100]),
-        yaxis=dict(title="Charging Power (kW)"),
+        yaxis=dict(title="Charging Power (kW)", range=[0, y_max]),
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",
@@ -827,11 +1168,17 @@ def build_charge_curve_chart(
     )
 
 
-def _build_degradation_chart_date_based(data: list[dict], rated_capacity_kwh: float) -> str:
+def _build_degradation_chart_date_based(
+    data: list[dict],
+    rated_capacity_kwh: float,
+    user_tz: str | None = None,
+) -> str:
     """Build date-based battery degradation trend chart (fallback).
 
     Used when no odometer data is available. Y-axis: percentage of rated capacity.
     Includes linear trend with 90-day projection.
+    ``user_tz`` is an IANA timezone for hover-tooltip formatting; falls back to
+    UTC when None/unset.
     Returns HTML string. Empty string if no data.
     """
     if not data or rated_capacity_kwh <= 0:
@@ -847,7 +1194,7 @@ def _build_degradation_chart_date_based(data: list[dict], rated_capacity_kwh: fl
     hover_texts = []
     for i, row in enumerate(data):
         d = row["date"]
-        d_str = d.strftime("%b %d, %Y") if hasattr(d, "strftime") else str(d)
+        d_str = format_user_local(d, user_tz, "%b %d, %Y")
         hover_texts.append(
             f"<b>{d_str}</b><br>"
             f"Capacity: {capacities[i]:.1f} kWh<br>"
@@ -942,12 +1289,15 @@ def build_degradation_chart(
     rated_capacity_kwh: float,
     distance_factor: float = 1.0,
     distance_label: str = "km",
+    user_tz: str | None = None,
 ) -> str:
     """Build mileage-based battery degradation chart with trend line and date annotations.
 
     X-axis: odometer in display unit, Y-axis: battery capacity (kWh raw).
     Odometer values from DB are metric (km); distance_factor converts to display.
     Falls back to date-based chart if no odometer data available.
+    ``user_tz`` is an IANA timezone for hover-tooltip / date-annotation
+    formatting; falls back to UTC when None/unset.
     Returns HTML string. Empty string if no data.
     """
     if not data or rated_capacity_kwh <= 0:
@@ -961,7 +1311,9 @@ def build_degradation_chart(
 
     if not has_odometer:
         # Fall back to date-based chart
-        return _build_degradation_chart_date_based(data, rated_capacity_kwh)
+        return _build_degradation_chart_date_based(
+            data, rated_capacity_kwh, user_tz=user_tz
+        )
 
     pio.templates.default = "plotly_dark"
     fig = go.Figure()
@@ -973,7 +1325,7 @@ def build_degradation_chart(
     hover_texts = []
     for i, row in enumerate(data):
         d = row.get("date")
-        d_str = d.strftime("%b %d, %Y") if d is not None else str(d)
+        d_str = format_user_local(d, user_tz, "%b %d, %Y") if d is not None else str(d)
         odo = odometers[i]
         cap = float(row["max_capacity"])
         hover_texts.append(
@@ -1053,7 +1405,7 @@ def build_degradation_chart(
         dict(
             x=odometers[i],
             y=annotation_y,
-            text=data[i]["date"].strftime("%b %d"),
+            text=format_user_local(data[i]["date"], user_tz, "%b %d"),
             showarrow=False,
             font=dict(size=9, color="#6b7280"),
         )
@@ -1073,63 +1425,6 @@ def build_degradation_chart(
         yaxis=dict(title="Battery Capacity (kWh)"),
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        hovermode="x unified",
-        hoverlabel=_HOVER_LABEL,
-    )
-
-    return _wrap_chart(
-        fig.to_html(full_html=False, include_plotlyjs=False, config=_PLOTLY_CONFIG)
-    )
-
-
-def build_lv_battery_chart(data: list[dict]) -> str:
-    """Build 12v battery voltage-over-time line chart.
-
-    Returns HTML string. Empty string if no data.
-    """
-    if not data:
-        return ""
-
-    pio.templates.default = "plotly_dark"
-    fig = go.Figure()
-
-    timestamps = [row["recorded_at"] for row in data]
-    voltages = [row.get("voltage") for row in data]
-
-    # Build hover text with level info
-    hover_texts = []
-    for row in data:
-        ts = row["recorded_at"]
-        ts_str = ts.strftime("%b %d, %Y %H:%M") if hasattr(ts, "strftime") else str(ts)
-        parts = [f"<b>{ts_str}</b>"]
-        v = row.get("voltage")
-        if v is not None:
-            parts.append(f"Voltage: {v:.2f}V")
-        lvl = row.get("level")
-        if lvl is not None:
-            parts.append(f"Level: {lvl:.0f}%")
-        hover_texts.append("<br>".join(parts))
-
-    fig.add_trace(
-        go.Scatter(
-            x=timestamps,
-            y=voltages,
-            mode="lines",
-            name="12V Voltage",
-            line=dict(color="#a78bfa", width=2),
-            hovertext=hover_texts,
-            hoverinfo="text",
-        )
-    )
-
-    fig.update_layout(
-        height=250,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#e5e7eb",
-        margin=dict(l=20, r=20, t=20, b=20),
-        yaxis=dict(title="Voltage (V)"),
-        showlegend=False,
         hovermode="x unified",
         hoverlabel=_HOVER_LABEL,
     )

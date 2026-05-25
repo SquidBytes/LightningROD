@@ -1,2 +1,1 @@
-"""Package for db modules."""
-
+"""Database engine, models, migrations, and SQL helpers."""

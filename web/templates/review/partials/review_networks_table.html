@@ -49,7 +49,7 @@
                     <span class="badge badge-sm badge-ghost">{{ net_session_counts.get(net.id, 0) }}</span>
                 </td>
                 <td>
-                    {% if net.source_system == 'home_assistant' %}
+                    {% if net.source_system == 'ha_fordpass' %}
                     <span class="badge badge-sm badge-info">HA</span>
                     {% elif net.source_system == 'csv_import' %}
                     <span class="badge badge-sm badge-accent">CSV</span>

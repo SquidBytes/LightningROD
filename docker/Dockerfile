@@ -21,9 +21,16 @@ ENV LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION}
 LABEL org.opencontainers.image.title="LightningROD" \
       org.opencontainers.image.description="Self-hosted charging analytics for Ford electric vehicles" \
       org.opencontainers.image.version="${LIGHTNINGROD_VERSION}" \
-      org.opencontainers.image.source="https://github.com/aminorjourney/LightningROD"
+      org.opencontainers.image.source="https://github.com/SquidBytes/LightningROD"
 
 WORKDIR /app
+
+# Pre-create the data directory so it exists before entrypoint runs.
+# Container filesystems are ephemeral; /data is the conventional mount
+# point for SQLite-standalone deployments (mount a named volume here
+# to persist the database file).
+RUN mkdir -p /data && chmod 777 /data
+VOLUME /data
 
 # Install uv for fast dependency resolution
 RUN pip install uv
@@ -48,6 +55,6 @@ EXPOSE 8000
 # Liveness + readiness via /healthz (returns 503 if the DB is unreachable).
 # Uses Python stdlib so no extra packages are needed in the slim image.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).status == 200 else 1)" || exit 1
+    CMD python -c "import os, urllib.request, sys; sys.exit(0 if urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT','8000')}/healthz\", timeout=3).status == 200 else 1)" || exit 1
 
 ENTRYPOINT ["./docker/entrypoint.sh"]

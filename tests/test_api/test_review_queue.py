@@ -105,7 +105,7 @@ async def test_unverify_network_does_not_change_source_system(client, db_session
         db_session,
         network_name="Misverified Net",
         is_verified=True,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
     await db_session.commit()
 
@@ -118,7 +118,7 @@ async def test_unverify_network_does_not_change_source_system(client, db_session
         )
     ).scalar_one()
     assert refreshed.is_verified is False
-    assert refreshed.source_system == "home_assistant", (
+    assert refreshed.source_system == "ha_fordpass", (
         "unverify must not change source_system"
     )
 
@@ -131,7 +131,7 @@ async def test_unverify_location_does_not_change_source_system(client, db_sessio
         db_session,
         location_name="Misverified Loc",
         is_verified=True,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
     await db_session.commit()
 
@@ -144,7 +144,7 @@ async def test_unverify_location_does_not_change_source_system(client, db_sessio
         )
     ).scalar_one()
     assert refreshed.is_verified is False
-    assert refreshed.source_system == "home_assistant", (
+    assert refreshed.source_system == "ha_fordpass", (
         "unverify must not change source_system"
     )
 
@@ -1235,7 +1235,7 @@ async def test_promote_location_creates_network_and_verifies(client, db_session)
         location_name="RV Park Charger",
         is_verified=False,
         network_id=None,
-        source_system="home_assistant",
+        source_system="ha_fordpass",
     )
     await db_session.commit()
 

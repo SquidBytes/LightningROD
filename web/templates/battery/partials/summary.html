@@ -1,8 +1,8 @@
 <!-- Summary Cards -->
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
 
-    <!-- Est. Degradation (radial gauge) -->
-    <div class="card bg-base-200">
+    <!-- Est. Degradation + Pack Capacity (combined) -->
+    <div class="card bg-base-200 lg:col-span-1">
         <div class="card-body items-center text-center">
             <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2 flex items-center gap-1 justify-center">
                 <span>Est. Degradation</span>
@@ -16,7 +16,26 @@
                      role="progressbar">
                     {{ "%.0f"|format(summary.health_pct) }}%
                 </div>
-                <p class="text-xs text-base-content/40 mt-1">Estimated from capacity data</p>
+                {% if summary.current_capacity is not none %}
+                    <dl class="mt-3 text-sm space-y-0.5 text-left self-start">
+                        <div class="flex gap-2">
+                            <dt class="text-base-content/50 font-light">Last Reported:</dt>
+                            <dd class="text-base-content/80 tabular-nums">{{ "%.1f"|format(summary.current_capacity) }} kWh</dd>
+                        </div>
+                        <div class="flex gap-2">
+                            <dt class="text-base-content/50 font-light">Factory:</dt>
+                            <dd class="text-base-content/80 tabular-nums">{{ "%.1f"|format(summary.rated_capacity) }} kWh</dd>
+                        </div>
+                        {% if summary.capacity_delta is not none %}
+                        <div class="flex gap-2">
+                            <dt class="text-base-content/50 font-light">Delta:</dt>
+                            <dd class="tabular-nums {% if summary.capacity_delta < 0 %}text-error{% else %}text-success{% endif %}">
+                                {{ "%+.1f"|format(summary.capacity_delta) }} kWh
+                            </dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                {% endif %}
             {% else %}
                 <p class="text-2xl font-semibold text-base-content/30">--</p>
                 <p class="text-xs text-base-content/30 mt-1">Requires capacity data</p>
@@ -24,81 +43,49 @@
         </div>
     </div>
 
-    <!-- Pack Capacity (gross - matches FordPass maximumBatteryCapacity) -->
-    <div class="card bg-base-200">
+    <!-- HV Pack Telemetry — 4-metric grid with sparklines + card-level freshness -->
+    <div class="card bg-base-200 lg:col-span-3">
         <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
-                <span>Pack Capacity</span>
-                <span class="cursor-help tooltip tooltip-bottom"
-                      data-tip="{{ tooltips.battery_pack_capacity }}"
-                      aria-label="{{ tooltips.battery_pack_capacity }}">ⓘ</span>
-            </p>
-            {% if summary.current_capacity is not none %}
-                <p class="text-2xl font-bold">{{ "%.1f"|format(summary.current_capacity) }} <span class="text-base font-normal text-base-content/60">kWh</span></p>
-                <p class="text-sm text-base-content/60 mt-1">
-                    vs {{ "%.1f"|format(summary.rated_capacity) }} kWh new
-                    {% if summary.capacity_delta is not none %}
-                        {% if summary.capacity_delta < 0 %}
-                            <span class="text-error">({{ "%.1f"|format(summary.capacity_delta) }} kWh)</span>
-                        {% else %}
-                            <span class="text-success">(+{{ "%.1f"|format(summary.capacity_delta) }} kWh)</span>
-                        {% endif %}
-                    {% endif %}
+            <div class="flex items-center justify-between mb-3 gap-2">
+                <p class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                    <span>HV Pack Telemetry</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="{{ tooltips.battery_telemetry }}"
+                          aria-label="{{ tooltips.battery_telemetry }}">ⓘ</span>
                 </p>
-                <p class="text-xs text-base-content/40 mt-1">Gross pack kWh as reported by the vehicle</p>
-            {% else %}
-                <p class="text-2xl font-semibold text-base-content/30">--</p>
-                <p class="text-xs text-base-content/30 mt-1">Requires capacity data</p>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Range -->
-    <div class="card bg-base-200">
-        <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
-                <span>Range</span>
-                <span class="cursor-help tooltip tooltip-bottom"
-                      data-tip="{{ tooltips.battery_range }}"
-                      aria-label="{{ tooltips.battery_range }}">ⓘ</span>
-            </p>
-            {% if summary.latest_range is not none %}
-                <p class="text-2xl font-bold">{{ "%.0f"|format(summary.latest_range) }} <span class="text-base font-normal text-base-content/60">{{ units.range_label }}</span></p>
-                {% if summary.rated_range is not none %}
-                    <p class="text-sm text-base-content/60 mt-1">
-                        vs {{ "%.0f"|format(summary.rated_range) }} {{ units.range_label }} new
-                        {% if summary.range_delta is not none %}
-                            <span class="text-error">({{ "%.0f"|format(summary.range_delta) }} {{ units.range_label }})</span>
-                        {% endif %}
+                {% if telemetry_latest_at %}
+                    <p class="text-[0.65rem] text-base-content/40 tabular-nums">
+                        {{ telemetry_latest_at|localtime(user_tz|default('UTC'), "%b %-d %H:%M") }}
                     </p>
-                {% else %}
-                    <p class="text-sm text-base-content/60 mt-1">Latest recorded range</p>
                 {% endif %}
-            {% else %}
-                <p class="text-2xl font-semibold text-base-content/30">--</p>
-                <p class="text-xs text-base-content/30 mt-1">Requires range data</p>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- 12V Battery -->
-    <div class="card bg-base-200">
-        <div class="card-body">
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
-                <span>12V Battery</span>
-                <span class="cursor-help tooltip tooltip-bottom"
-                      data-tip="{{ tooltips.battery_12v }}"
-                      aria-label="{{ tooltips.battery_12v }}">ⓘ</span>
-            </p>
-            {% if summary.lv_voltage is not none %}
-                <p class="text-2xl font-bold">{{ "%.1f"|format(summary.lv_voltage) }} <span class="text-base font-normal text-base-content/60">V</span></p>
-                {% if summary.lv_level is not none %}
-                    <p class="text-sm text-base-content/60 mt-1">Level: {{ "%.0f"|format(summary.lv_level) }}%</p>
-                {% endif %}
-            {% else %}
-                <p class="text-2xl font-semibold text-base-content/30">--</p>
-                <p class="text-xs text-base-content/30 mt-1">No 12V data available</p>
-            {% endif %}
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {% set _slug_map = {
+                    'hv_battery_temperature': 'battery_pack_temp',
+                    'hv_battery_voltage':     'battery_voltage',
+                    'hv_battery_amperage':    'battery_amperage',
+                    'hv_battery_kw':          'battery_power',
+                } %}
+                {% for key, m in telemetry.items() %}
+                <div>
+                    <p class="text-[0.65rem] uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                        <span>{{ m.label }}</span>
+                        <span class="cursor-help tooltip tooltip-bottom"
+                              data-tip="{{ tooltips[_slug_map[key]] }}"
+                              aria-label="{{ tooltips[_slug_map[key]] }}">ⓘ</span>
+                    </p>
+                    {% if m.value is not none %}
+                        <p class="text-xl font-bold leading-tight tabular-nums">
+                            {{ m.fmt.format(m.value) }}<span class="text-sm font-normal text-base-content/60 ml-0.5">{{ m.unit }}</span>
+                        </p>
+                        {% if m.sparkline %}<div class="mt-1">{{ m.sparkline | safe }}</div>{% endif %}
+                    {% else %}
+                        <p class="text-xl font-semibold text-base-content/30">—</p>
+                        <p class="text-[0.65rem] text-base-content/30 mt-1">No recent data</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
         </div>
     </div>
 
@@ -124,6 +111,26 @@
     </div>
 </div>
 
+<!-- Battery Temperature -->
+<div class="card bg-base-200 mb-4">
+    <div class="card-body">
+        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3 flex items-center gap-1">
+            <span>Battery Temperature</span>
+            <span class="cursor-help tooltip tooltip-bottom"
+                  data-tip="{{ tooltips.battery_temp_over_time }}"
+                  aria-label="{{ tooltips.battery_temp_over_time }}">ⓘ</span>
+        </h3>
+        <div id="battery-temp-chart"
+             hx-get="/battery?section=battery_temp&range={{ active_range }}"
+             hx-trigger="revealed"
+             hx-swap="innerHTML">
+            <div class="flex justify-center py-8">
+                <span class="loading loading-spinner loading-md text-base-content/30"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Charge Curve -->
 <div class="card bg-base-200 mb-4">
     <div class="card-body">
@@ -134,22 +141,48 @@
                       data-tip="{{ tooltips.battery_charge_curve }}"
                       aria-label="{{ tooltips.battery_charge_curve }}">ⓘ</span>
             </h3>
-            <select id="session-picker"
-                    class="select select-sm select-bordered w-auto max-w-xs"
-                    hx-get="/battery"
-                    hx-target="#battery-content"
-                    hx-swap="innerHTML"
-                    hx-include="[name='range']"
-                    name="session">
-                <option value="">Select a session...</option>
+            {% from "partials/searchable_select.html" import searchable_select, searchable_select_item %}
+            {% macro _session_trigger_label(s, user_tz) %}{% if s.session_start_utc %}{{ s.session_start_utc|localtime(user_tz|default('UTC'), "%b %-d, %H:%M") }}{% endif %}{% if s.location_name %} · {{ s.location_name }}{% elif s.network_name %} · {{ s.network_name }}{% endif %}{% endmacro %}
+            {% set _ns = namespace(selected_label='') %}
+            {% if active_session and sessions_list %}
                 {% for s in sessions_list %}
-                <option value="{{ s.id }}" {{ 'selected' if active_session and s.id == active_session }}>
-                    {% if s.session_start_utc %}{{ s.session_start_utc|localtime(user_tz|default('UTC'), "%b %-d, %H:%M") }}{% endif %}
-                    {% if s.location_name %} - {{ s.location_name }}{% endif %}
-                    {% if s.energy_kwh %} ({{ "%.1f"|format(s.energy_kwh) }} kWh){% endif %}
-                </option>
+                    {% if s.id == active_session %}{% set _ns.selected_label = _session_trigger_label(s, user_tz)|trim %}{% endif %}
                 {% endfor %}
-            </select>
+            {% endif %}
+            {% call searchable_select(
+                id='session-picker',
+                name='session',
+                value=active_session or '',
+                placeholder='Select a session...',
+                selected_label=_ns.selected_label,
+                search_placeholder='Search sessions...',
+                filter_chips=[{'key': 'AC', 'label': 'AC'}, {'key': 'DC', 'label': 'DC'}],
+                htmx_get='/battery?section=charge_curve',
+                htmx_target='#charge-curve-content',
+                htmx_include="[name='range']"
+            ) %}
+                {% if sessions_list %}
+                    {% for s in sessions_list %}
+                        {% set _datetime = s.session_start_utc|localtime(user_tz|default('UTC'), "%b %-d %H:%M") if s.session_start_utc else '' %}
+                        {% set _energy = ("%.1f kWh"|format(s.energy_kwh)) if s.energy_kwh else '' %}
+                        {% set _primary = s.location_name or s.network_name or 'Unknown location' %}
+                        {{ searchable_select_item(
+                            item_id=s.id,
+                            label=_primary,
+                            trigger_label=_session_trigger_label(s, user_tz)|trim,
+                            color=s.network_color,
+                            badge=s.charge_type,
+                            badge_variant=('info' if s.charge_type == 'DC' else 'ghost'),
+                            meta=(_datetime ~ ((' · ' ~ _energy) if _energy else '')),
+                            filter_key=(s.charge_type or ''),
+                            active=(active_session == s.id),
+                            search=(_datetime ~ ' ' ~ (s.location_name or '') ~ ' ' ~ (s.network_name or '') ~ ' ' ~ _energy ~ ' ' ~ (s.charge_type or ''))
+                        ) }}
+                    {% endfor %}
+                {% else %}
+                    <li class="px-3 py-2 text-sm text-base-content/60">No sessions available</li>
+                {% endif %}
+            {% endcall %}
         </div>
         <!-- Pass active range as hidden input for HTMX session picker -->
         <input type="hidden" name="range" value="{{ active_range }}">
@@ -165,7 +198,7 @@
             </div>
         {% else %}
             <div id="charge-curve-content">
-                <p class="text-base-content/40 text-sm py-8 text-center">Select a session above to view its charge curve.</p>
+                <p class="text-base-content/40 text-sm py-8 text-center">No charging sessions in this time range.</p>
             </div>
         {% endif %}
         {% if ref_curve_name %}
@@ -184,20 +217,6 @@
                   aria-label="{{ tooltips.battery_degradation_trend }}">ⓘ</span>
         </h3>
         <div hx-get="/battery?section=degradation&range={{ active_range }}"
-             hx-trigger="revealed"
-             hx-swap="innerHTML">
-            <div class="flex justify-center py-8">
-                <span class="loading loading-spinner loading-md text-base-content/30"></span>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 12V Battery Voltage Trend -->
-<div class="card bg-base-200 mb-4">
-    <div class="card-body">
-        <h3 class="card-title text-sm font-medium text-base-content/60 mb-3">12V Battery Voltage</h3>
-        <div hx-get="/battery?section=lv_battery&range={{ active_range }}"
              hx-trigger="revealed"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8">
@@ -241,10 +260,10 @@
 
             // Only auto-select if within 2 hours of a session start
             if (bestSession && bestDiff < 2 * 60 * 60 * 1000) {
-                var picker = document.getElementById('session-picker');
-                if (picker) {
-                    picker.value = bestSession.id;
-                    htmx.trigger(picker, 'change');
+                var btn = document.querySelector(
+                    '[data-picker="session-picker"] [data-picker-list] button[data-id="' + bestSession.id + '"]');
+                if (btn && window.LR && LR.searchablePicker) {
+                    LR.searchablePicker.select(btn);
                 }
             }
         });

@@ -20,15 +20,17 @@ def clear_processor_state():
     """Clear shared in-memory processor state before and after each test.
 
     This prevents cross-test leakage from pending status buffers and the
-    adapter's ``_last_seen_raw`` cache.
+    adapter's ``_last_seen_raw`` cache. Tuple-keyed pending dicts in
+    ha_fordpass.handlers are cleared unconditionally — dict.clear() removes
+    every entry regardless of config_id, preserving per-test reset semantics.
     """
-    from web.services import hass_processor
+    from web.services.sources.ha_fordpass import handlers as fordpass_handlers
 
-    hass_processor._last_trip_values.clear()
-    hass_processor._pending_vehicle_status.clear()
-    hass_processor._pending_vehicle_status_ts.clear()
-    hass_processor._pending_battery_status.clear()
-    hass_processor._pending_battery_status_ts.clear()
+    fordpass_handlers._last_trip_values.clear()
+    fordpass_handlers._pending_vehicle_status.clear()
+    fordpass_handlers._pending_vehicle_status_ts.clear()
+    fordpass_handlers._pending_battery_status.clear()
+    fordpass_handlers._pending_battery_status_ts.clear()
 
     try:
         from web.services.sources.ha_fordpass.adapter import _last_seen_raw
@@ -38,11 +40,11 @@ def clear_processor_state():
 
     yield
     # Also clear after test for good measure
-    hass_processor._last_trip_values.clear()
-    hass_processor._pending_vehicle_status.clear()
-    hass_processor._pending_vehicle_status_ts.clear()
-    hass_processor._pending_battery_status.clear()
-    hass_processor._pending_battery_status_ts.clear()
+    fordpass_handlers._last_trip_values.clear()
+    fordpass_handlers._pending_vehicle_status.clear()
+    fordpass_handlers._pending_vehicle_status_ts.clear()
+    fordpass_handlers._pending_battery_status.clear()
+    fordpass_handlers._pending_battery_status_ts.clear()
 
     try:
         from web.services.sources.ha_fordpass.adapter import _last_seen_raw

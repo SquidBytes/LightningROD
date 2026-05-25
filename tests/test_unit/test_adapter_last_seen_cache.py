@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 import pytest
 
 from web.services.sources.ha_fordpass import adapter
-from web.services.units.contracts import FieldContract
+from web.services.units.contracts import FieldContract, SourceLocator, SourceLocatorKind
 
 pytestmark = pytest.mark.unit
 
@@ -23,7 +23,7 @@ def clear_cache():
 
 def _sample_contract() -> FieldContract:
     return FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_metrics",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="xevBatteryMaximumRange",
         source_unit="km",
         target_db_table="ev_battery_status",
@@ -37,7 +37,7 @@ def test_record_last_seen_writes_key():
     c = _sample_contract()
     adapter._record_last_seen(c, raw_value=418.0, converted=418.0)
 
-    key = f"{c.source_entity_pattern}|{c.source_attribute}"
+    key = f"{c.source_locator.pattern}|{c.source_attribute}"
     assert key in adapter._last_seen_raw
     entry = adapter._last_seen_raw[key]
     assert entry["value"] == 418.0
@@ -55,7 +55,7 @@ def test_record_last_seen_updates_existing_key():
     adapter._record_last_seen(c, raw_value=100, converted=100)
     adapter._record_last_seen(c, raw_value=200, converted=200)
 
-    key = f"{c.source_entity_pattern}|{c.source_attribute}"
+    key = f"{c.source_locator.pattern}|{c.source_attribute}"
     # Only one entry per key, and it holds the latest value.
     assert len(adapter._last_seen_raw) == 1
     assert adapter._last_seen_raw[key]["value"] == 200
@@ -68,7 +68,7 @@ def test_record_last_seen_effective_unit_overrides_contract_unit():
     elveh-shaped contracts that resolve UoM per event.
     """
     c = FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_elveh",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="tripEfficiency",
         source_unit="km",
         target_db_table="ev_trip_metrics",
@@ -77,7 +77,7 @@ def test_record_last_seen_effective_unit_overrides_contract_unit():
         notes="",
     )
     adapter._record_last_seen(c, raw_value=2.5, converted=4.02, effective_unit="mi")
-    key = f"{c.source_entity_pattern}|{c.source_attribute}"
+    key = f"{c.source_locator.pattern}|{c.source_attribute}"
     entry = adapter._last_seen_raw[key]
     assert entry["unit"] == "mi"
     assert entry["value"] == 2.5
@@ -97,7 +97,7 @@ def test_ha_unit_system_converted_imperial_resolves_to_mi():
     must resolve the effective source unit to `mi` and convert 64 -> ~103 km.
     """
     c = FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_energytransferlogentry",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_energytransferlogentry", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="plugDetails.totalDistanceAdded",
         source_unit="km",  # declared default only — ha_config wins
         target_db_table="ev_charging_session",
@@ -120,7 +120,7 @@ def test_ha_unit_system_converted_imperial_resolves_to_mi():
 def test_ha_unit_system_converted_metric_stays_km():
     """Same contract on metric HA resolves to km and passes the value through."""
     c = FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_energytransferlogentry",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_energytransferlogentry", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="plugDetails.totalDistanceAdded",
         source_unit="km",
         target_db_table="ev_charging_session",
@@ -146,7 +146,7 @@ def test_ha_unit_system_converted_missing_config_falls_back():
     so ingestion still produces a value instead of dropping the field.
     """
     c = FieldContract(
-        source_entity_pattern="sensor.fordpass_{vin}_energytransferlogentry",
+        source_locator=SourceLocator("sensor.fordpass_{vin}_energytransferlogentry", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="plugDetails.totalDistanceAdded",
         source_unit="km",
         target_db_table="ev_charging_session",

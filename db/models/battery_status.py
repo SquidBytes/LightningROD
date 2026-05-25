@@ -1,22 +1,18 @@
-"""Database models for battery status."""
+"""Battery telemetry snapshot model."""
 
 from datetime import datetime
 
-from sqlalchemy import Index, Numeric, SmallInteger, String, text
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy import DateTime, Index, Numeric, SmallInteger, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
 
 # PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = TIMESTAMP(timezone=True)
+TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVBatteryStatus(Base):
-    """EV HV and LV battery status snapshots (21 columns).
-
-    Source: 002_create_target_tables.sql, ev_battery_status table.
-    """
+    """HV/LV battery telemetry captured over time."""
 
     __tablename__ = "ev_battery_status"
 
@@ -53,13 +49,12 @@ class EVBatteryStatus(Base):
     # Pipeline metadata
     source_system: Mapped[str | None] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
+        TIMESTAMPTZ, nullable=False, server_default=func.now()
     )
     original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
-    # Pipeline schema version. NULL = legacy rows from the suspect conversion
-    # era around 2026-03-21 (commit abd736b). Value 2 = adapter-driven ingest
-    # with declared source units.
+    # Pipeline schema version. NULL = older rows with uncertain unit provenance.
+    # Value 2 = adapter-driven ingest with declared source units.
     ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (

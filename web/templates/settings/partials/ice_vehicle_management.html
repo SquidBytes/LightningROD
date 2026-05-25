@@ -1,0 +1,81 @@
+<div id="ice-vehicle-management-card" class="card bg-base-200">
+    <div class="card-body">
+        <h2 class="card-title text-base font-semibold">ICE Vehicles</h2>
+        <p class="text-base-content/60 text-sm">Manage internal-combustion vehicles used for gas savings comparison. Mark one as default for new charging sessions.</p>
+        {% if delete_error %}
+        <div class="alert alert-error text-sm">{{ delete_error }}</div>
+        {% endif %}
+        <div class="overflow-x-auto">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th>Label</th>
+                        <th class="w-32">Combined {{ units.fuel_efficiency_label }}</th>
+                        <th class="w-32">Tank ({{ units.fuel_volume_label }})</th>
+                        <th class="w-20">Default</th>
+                        <th class="text-right w-40">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ice in ice_vehicles %}
+                    <tr class="{% if just_saved_row_id == ice.id %}ring-2 ring-inset ring-success rounded{% endif %}">
+                        <td class="font-medium">{{ ice.label }}</td>
+                        <td class="text-base-content/60 text-sm">
+                            {% if ice.fuel_efficiency_display is not none %}
+                                {{ "%.1f"|format(ice.fuel_efficiency_display) }}
+                            {% else %}
+                                <span class="text-base-content/30">--</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-base-content/60 text-sm">
+                            {% if ice.tank_capacity_display is not none %}
+                                {{ "%.1f"|format(ice.tank_capacity_display) }}
+                            {% else %}
+                                <span class="text-base-content/30">--</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if ice.is_default %}
+                                <span class="badge badge-success badge-sm">Default</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <div class="flex justify-end gap-1">
+                                {% if not ice.is_default %}
+                                <button hx-post="/settings/ice-vehicles/{{ ice.id }}/set-default"
+                                        hx-target="#ice-vehicle-management-card" hx-swap="outerHTML"
+                                        class="btn btn-ghost btn-xs text-success"
+                                        title="Set as default ICE vehicle">Set Default</button>
+                                {% endif %}
+                                <button type="button" onclick="openIceVehicleModal({{ ice.id }})"
+                                        class="btn btn-ghost btn-xs">Edit</button>
+                                <button hx-delete="/settings/ice-vehicles/{{ ice.id }}"
+                                        hx-target="#ice-vehicle-management-card" hx-swap="outerHTML"
+                                        hx-confirm="Delete {{ ice.label }}?"
+                                        class="btn btn-error btn-ghost btn-xs">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="py-4 text-center text-base-content/40">No ICE vehicles configured. Add one to enable gas savings comparison on the Costs page.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-4">
+            <button type="button" onclick="openIceVehicleModal(0)" class="btn btn-primary btn-sm">
+                Add ICE Vehicle
+            </button>
+        </div>
+    </div>
+</div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>ICE vehicle saved.</span>
+  </div>
+</div>
+{% endif %}

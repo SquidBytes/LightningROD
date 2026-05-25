@@ -22,33 +22,6 @@
       {% include "partials/filter_bar.html" %}
     {% endwith %}
 
-    <!-- Sort controls -->
-    <div class="flex items-center gap-2 mb-4">
-        <span class="text-base-content/60 text-sm">Sort by:</span>
-        <div class="join">
-            {% set sort_options = [("date", "Date"), ("distance", "Distance"), ("efficiency", "Efficiency"), ("temperature", "Temp"), ("score", "Score")] %}
-            {% for value, label in sort_options %}
-            <button type="button"
-                onclick="setTripSort('{{ value }}')"
-                class="join-item btn btn-sm {% if sort_by == value %}btn-primary{% else %}btn-ghost{% endif %}"
-                data-sort-btn="{{ value }}"
-            >{{ label }}</button>
-            {% endfor %}
-        </div>
-        <button type="button"
-            onclick="toggleSortDir()"
-            class="btn btn-ghost btn-sm btn-square"
-            title="Toggle sort direction"
-            id="sort-dir-btn"
-        >
-            {% if sort_dir == 'asc' %}
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
-            {% else %}
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
-            {% endif %}
-        </button>
-    </div>
-
     <!-- Drawer wrapper for trip detail panel -->
     <div class="drawer drawer-end">
         <input id="trip-drawer" type="checkbox" class="drawer-toggle" />
@@ -105,34 +78,7 @@
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
-<!-- Toast container -->
-<div id="toast-container" class="fixed top-4 right-4 z-[70] space-y-2"></div>
-
 <script>
-// Hidden inputs for sort state (inside filter-form)
-(function() {
-    var form = document.getElementById('filter-form');
-    if (!form) return;
-
-    // Add sort hidden inputs if not present
-    if (!form.querySelector('[name="sort"]')) {
-        var sortInput = document.createElement('input');
-        sortInput.type = 'hidden';
-        sortInput.name = 'sort';
-        sortInput.id = 'trip_sort_input';
-        sortInput.value = '{{ sort_by }}';
-        form.appendChild(sortInput);
-    }
-    if (!form.querySelector('[name="dir"]')) {
-        var dirInput = document.createElement('input');
-        dirInput.type = 'hidden';
-        dirInput.name = 'dir';
-        dirInput.id = 'trip_dir_input';
-        dirInput.value = '{{ sort_dir }}';
-        form.appendChild(dirInput);
-    }
-})();
-
 // Auto-open drawer when HTMX loads content into it
 document.body.addEventListener('htmx:afterSettle', function(evt) {
     if (evt.target.id === 'trip-drawer-body') {
@@ -140,7 +86,7 @@ document.body.addEventListener('htmx:afterSettle', function(evt) {
     }
 });
 
-// Phase 26: Escape key closes the Trips drawer when it is open
+// Escape key closes the Trips drawer when it is open
 document.addEventListener('keydown', function(e) {
     if (e.key !== 'Escape') return;
     var drawer = document.getElementById('trip-drawer');
@@ -149,43 +95,35 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-function setTripSort(value) {
-    document.getElementById('trip_sort_input').value = value;
-    // Reset to page 1
-    var pageInput = document.getElementById('page_input');
-    if (pageInput) pageInput.value = '1';
-    // Update button states
-    document.querySelectorAll('[data-sort-btn]').forEach(function(btn) {
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-ghost');
+// Accent inset ring on the clicked trip row so the user can see which row's
+// detail is in the drawer. Cleared by save-toast.js on any click outside
+// drawer/modal surfaces.
+function markRowSelected(tripId) {
+    var allRings = ['ring-2', 'ring-inset', 'ring-success', 'ring-accent', 'rounded'];
+    var accentRing = ['ring-2', 'ring-inset', 'ring-accent', 'rounded'];
+    document.querySelectorAll('#driving-sessions-content tbody tr').forEach(function(row) {
+        allRings.forEach(function(c) { row.classList.remove(c); });
     });
-    var activeBtn = document.querySelector('[data-sort-btn="' + value + '"]');
-    if (activeBtn) {
-        activeBtn.classList.remove('btn-ghost');
-        activeBtn.classList.add('btn-primary');
-    }
-    htmx.trigger(document.body, 'filterChanged');
-}
-
-function toggleSortDir() {
-    var dirInput = document.getElementById('trip_dir_input');
-    dirInput.value = dirInput.value === 'asc' ? 'desc' : 'asc';
-    var pageInput = document.getElementById('page_input');
-    if (pageInput) pageInput.value = '1';
-    htmx.trigger(document.body, 'filterChanged');
+    var target = document.querySelector('#driving-sessions-content tr[hx-get*="/driving/sessions/' + tripId + '/drawer"]');
+    if (target) accentRing.forEach(function(c) { target.classList.add(c); });
 }
 
 function showToast(message, type) {
-    var container = document.getElementById('toast-container');
     var toast = document.createElement('div');
-    var cls = type === 'success' ? 'alert alert-success' : 'alert alert-error';
-    toast.className = cls + ' text-sm shadow-lg transform transition-all duration-300';
-    toast.textContent = message;
-    container.appendChild(toast);
-    setTimeout(function() {
-        toast.classList.add('opacity-0', 'translate-x-4');
-        setTimeout(function() { toast.remove(); }, 300);
-    }, 3000);
+    toast.className = 'toast toast-bottom toast-end z-50';
+    toast.setAttribute('data-auto-dismiss', '3000');
+    var alertEl = document.createElement('div');
+    alertEl.className = 'alert ' + (type === 'success' ? 'alert-success' : 'alert-error');
+    var span = document.createElement('span');
+    span.textContent = message;
+    alertEl.appendChild(span);
+    toast.appendChild(alertEl);
+    document.body.appendChild(toast);
+    if (window.LR && LR.scheduleDismiss) {
+        LR.scheduleDismiss(document);
+    } else {
+        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+    }
 }
 
 document.body.addEventListener('trip-created', function() {

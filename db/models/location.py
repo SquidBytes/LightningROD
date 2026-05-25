@@ -1,22 +1,18 @@
-"""Database models for location."""
+"""Vehicle GPS location snapshot model."""
 
 from datetime import datetime
 
-from sqlalchemy import Index, Numeric, String, Text, text
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy import DateTime, Index, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
 
 # PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = TIMESTAMP(timezone=True)
+TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVLocation(Base):
-    """GPS location time series (13 columns).
-
-    Source: 002_create_target_tables.sql, ev_location table.
-    """
+    """GPS location point captured for a vehicle at a timestamp."""
 
     __tablename__ = "ev_location"
 
@@ -41,7 +37,7 @@ class EVLocation(Base):
     # Pipeline metadata
     source_system: Mapped[str | None] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
+        TIMESTAMPTZ, nullable=False, server_default=func.now()
     )
     original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 

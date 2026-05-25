@@ -1,26 +1,24 @@
-# Standalone compose — builds the all-in-one image with embedded PostgreSQL.
-# Usage (from repo root): docker compose -f docker/docker-compose.standalone.yml up --build
+# Standalone compose — single web container with embedded SQLite at /data/lightningrod.db.
+# Usage (from repo root): docker compose -f docker/docker-compose.standalone.yml up -d
 name: lightningrod-standalone
 
 services:
   lightningrod:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.standalone
-      args:
-        LIGHTNINGROD_VERSION: ${LIGHTNINGROD_VERSION:-dev}
-    # Tag as lightningrod:<version>-standalone so it's clearly distinct from
-    # the two-container lightningrod-web:<version> build.
-    image: lightningrod:${LIGHTNINGROD_VERSION:-dev}-standalone
+    # Same image as the default compose stack — this variant differs only
+    # in env (DATABASE_URL → SQLite) and volume layout (/data instead of pgdata).
+    image: ${LIGHTNINGROD_IMAGE:-ghcr.io/squidbytes/lightningrod-web}:${LIGHTNINGROD_VERSION:-latest}
     container_name: lightningrod-standalone
     ports:
       - "${APP_PORT:-8000}:8000"
     env_file: ../.env
+    # DATABASE_URL here overrides whatever is in .env so the standalone
+    # variant always runs against the embedded SQLite file.
     environment:
-      - LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION:-dev}
+      - LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION:-latest}
+      - DATABASE_URL=sqlite+aiosqlite:////data/lightningrod.db
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - lightningrod-data:/data
     restart: unless-stopped
 
 volumes:
-  pgdata:
+  lightningrod-data:

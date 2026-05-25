@@ -1,23 +1,19 @@
-"""Database models for vehicle status."""
+"""Vehicle status snapshot model."""
 
 from datetime import datetime
 
-from sqlalchemy import Index, Numeric, String, text
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
+from sqlalchemy import DateTime, Index, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
+from db.types import JSONStorage
 
 # PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = TIMESTAMP(timezone=True)
+TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class EVVehicleStatus(Base):
-    """Vehicle operational status snapshots (31 columns).
-
-    Source: 002_create_target_tables.sql, ev_vehicle_status table.
-    Includes 12 dynamics fields from updated FordPass ha-fordpass integration (2026-02).
-    """
+    """Operational, drivetrain, environment, and structured vehicle status."""
 
     __tablename__ = "ev_vehicle_status"
 
@@ -40,33 +36,32 @@ class EVVehicleStatus(Base):
     ignition_status: Mapped[str | None] = mapped_column(String)
     remote_start_status: Mapped[str | None] = mapped_column(String)
 
-    # Temperatures and torque
-    coolant_temp: Mapped[float | None] = mapped_column(Numeric)
+    # Torque
     torque_at_transmission: Mapped[float | None] = mapped_column(Numeric)
 
-    # Structured status (JSONB)
-    door_lock_status: Mapped[dict | None] = mapped_column(JSONB)
-    tire_pressure: Mapped[dict | None] = mapped_column(JSONB)
-    indicators: Mapped[dict | None] = mapped_column(JSONB)
+    # Structured status (cross-dialect JSON storage)
+    door_lock_status: Mapped[dict | None] = mapped_column(JSONStorage)
+    tire_pressure: Mapped[dict | None] = mapped_column(JSONStorage)
+    indicators: Mapped[dict | None] = mapped_column(JSONStorage)
 
-    # Dynamics fields (new — from updated FordPass ha-fordpass integration, 2026-02)
+    # Dynamics fields from FordPass telemetry.
     brake_torque: Mapped[float | None] = mapped_column(Numeric)
     wheel_torque_status: Mapped[str | None] = mapped_column(String)
     yaw_rate: Mapped[float | None] = mapped_column(Numeric)
     acceleration: Mapped[float | None] = mapped_column(Numeric)
-    engine_speed: Mapped[float | None] = mapped_column(Numeric)
-    outside_temperature: Mapped[float | None] = mapped_column(Numeric)
-    cabin_temperature: Mapped[float | None] = mapped_column(Numeric)
     deep_sleep_status: Mapped[str | None] = mapped_column(String)
     device_connectivity: Mapped[str | None] = mapped_column(String)
     evcc_status: Mapped[str | None] = mapped_column(String)
     seatbelt_status: Mapped[str | None] = mapped_column(String)
-    remote_start_countdown: Mapped[float | None] = mapped_column(Numeric)
+
+    # Environment (time-series, populated from per-sensor HA entities)
+    outside_temperature: Mapped[float | None] = mapped_column(Numeric)
+    cabin_temperature: Mapped[float | None] = mapped_column(Numeric)
 
     # Pipeline metadata
     source_system: Mapped[str | None] = mapped_column(String(100))
     ingested_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=text("NOW()")
+        TIMESTAMPTZ, nullable=False, server_default=func.now()
     )
     original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 

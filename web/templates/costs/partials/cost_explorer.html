@@ -1,0 +1,442 @@
+{% from "partials/searchable_select.html" import searchable_select, searchable_select_item %}
+{% from "costs/partials/cost_breakdown.html" import cost_breakdown %}
+
+<div class="card bg-base-200 mb-6" id="cost-explorer-card">
+
+    {# The strip reads cost_explorer_strip (the unfiltered aggregator call), so
+       it does NOT change when the in-card network filter is applied. #}
+    {% set strip = cost_explorer_strip %}
+    {% set has_free_charging = strip.free_session_count > 0 %}
+    <div class="card-body p-6 pb-0 gap-0">
+
+        <div class="flex items-baseline justify-between flex-wrap gap-2">
+            <span class="text-lg font-semibold">{{ range_label }}</span>
+            <span class="text-base text-base-content/70 tabular-nums">
+                {{ strip.total_sessions }} {{ "session" if strip.total_sessions == 1 else "sessions" }}{% if has_free_charging %} · <span class="text-success">{{ strip.free_session_count }} free</span>{% endif %}
+            </span>
+        </div>
+
+        <div class="stats stats-vertical sm:stats-horizontal bg-transparent mt-3">
+
+            {# Slot 1 — Total spend. #}
+            <div class="stat flex-1 px-0 sm:pr-6">
+                <div class="stat-title text-xs uppercase tracking-wide text-base-content/40">Costs</div>
+                {{ cost_breakdown(
+                    strip.total_paid_actual,
+                    strip.total_fees_paid,
+                    strip.total_paid_energy,
+                    estimated_energy_cost=(strip.estimated_total if strip.estimated_total > 0 else none),
+                ) }}
+                {% if has_free_charging and strip.free_charging_saved > 0 %}
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span class="text-base font-semibold tabular-nums min-w-[5.5rem] text-success">${{ "%.2f"|format(strip.free_charging_saved) }}</span>
+                    <span class="text-xs text-base-content/60">est. saved via free charging</span>
+                </div>
+                {% endif %}
+            </div>
+
+            {# Slot 2 — Cost ratios. #}
+            <div class="stat flex-1 px-0 sm:pl-6">
+                <div class="stat-title text-xs uppercase tracking-wide text-base-content/40">Cost ratios</div>
+                <div class="stat-value tabular-nums">
+                    {% if strip.cost_per_kwh is not none %}${{ "%.3f"|format(strip.cost_per_kwh) }}<span class="text-base font-normal text-base-content/60"> / kWh</span>{% else %}<span class="text-base-content/40">—</span>{% endif %}
+                </div>
+                <div class="stat-desc text-base-content/40">{{ "%.1f"|format(strip.total_kwh) }} kWh charged</div>
+                <div class="mt-2 flex flex-col gap-1">
+                    {% if strip.cost_per_session is not none %}
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem]">${{ "%.2f"|format(strip.cost_per_session) }}</span>
+                        <span class="text-xs text-base-content/60">per session</span>
+                    </div>
+                    {% endif %}
+                    {% if strip.cost_per_distance is not none %}
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem]">${{ "%.3f"|format(strip.cost_per_distance) }}</span>
+                        <span class="text-xs text-base-content/60">per {{ units.distance_label }}</span>
+                    </div>
+                    {% endif %}
+                    {% if has_free_charging and strip.cost_per_free_session is not none %}
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-base font-semibold tabular-nums min-w-[5.5rem]">${{ "%.2f"|format(strip.cost_per_free_session) }}</span>
+                        <span class="text-xs text-base-content/60">est. cost per free session</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <form id="cost-explorer-form"
+          hx-get="/charging/costs"
+          hx-include="#cost-explorer-form"
+          hx-target="#cost-explorer-body"
+          hx-swap="innerHTML"
+          hx-push-url="true"
+          hx-trigger="change">
+        <input type="hidden" name="range" value="{{ active_range }}">
+        <input type="hidden" name="section" value="cost_explorer">
+        <div class="flex flex-wrap items-end gap-6 px-6 py-4 bg-base-300/40 border-y border-base-300">
+
+            {# Networks multi-select column #}
+            {% set ac_network_ids_csv = (ac_network_ids or []) | join(',') %}
+            {% set dc_network_ids_csv = (dc_network_ids or []) | join(',') %}
+            <div class="flex-1 min-w-[280px]"
+                 data-cost-explorer-network-quickselect
+                 data-ac-ids="{{ ac_network_ids_csv }}"
+                 data-dc-ids="{{ dc_network_ids_csv }}">
+                <label class="text-xs uppercase tracking-wide text-base-content/40 mb-1 flex items-center gap-1">
+                    <span>Network filter</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="Restrict the card to specific networks. Only networks you've charged at appear in the list."
+                          aria-label="Network filter tooltip">ⓘ</span>
+                </label>
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex-1 min-w-[200px]">
+                        {% call searchable_select(
+                            id='cost-explorer-networks',
+                            name='networks',
+                            value=selected_networks_csv or '',
+                            placeholder='All networks',
+                            multiple=true,
+                            selected_items=selected_network_items or [],
+                            trigger_class='select select-sm select-bordered w-full',
+                            wrapper_class='block w-full',
+                            width_class='w-96',
+                            align=''
+                        ) %}
+                            {% for net in networks %}
+                            {{ searchable_select_item(
+                                item_id=net.id,
+                                label=net.network_name,
+                                color=net.color or '#6B7280',
+                                active=(selected_networks_csv and (net.id|string in (selected_networks_csv or '').split(','))),
+                                search=net.network_name
+                            ) }}
+                            {% endfor %}
+                        {% endcall %}
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1">
+                        <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="clear"
+                                title="Clear the filter — show all networks">Clear</button>
+                        {% if ac_network_ids %}
+                        <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="ac"
+                                title="Networks where you've charged AC">AC</button>
+                        {% endif %}
+                        {% if dc_network_ids %}
+                        <button type="button" class="btn btn-xs btn-ghost" data-quickselect-action="dc"
+                                title="Networks where you've charged DC">DC</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {# Both ref-mode panels are rendered; the JS below shows the active
+               one so the header survives body-only swaps. #}
+            {% set ref_mode_eff = ref_mode or 'network' %}
+            <div class="flex flex-col gap-1 min-w-[240px]">
+                <label class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                    <span>Compare vs</span>
+                    <span class="cursor-help tooltip tooltip-bottom"
+                          data-tip="The per-kWh rate the ledger compares your actual paid cost against. The Δ column is what you paid minus this reference."
+                          aria-label="Compare vs tooltip">ⓘ</span>
+                </label>
+                <div class="join" data-segmented-group="ref_mode">
+                    <input type="radio" name="ref_mode" value="network"
+                           class="join-item btn btn-sm {% if ref_mode_eff == 'network' %}btn-primary{% else %}btn-ghost{% endif %}"
+                           {% if ref_mode_eff == 'network' %}checked{% endif %}
+                           aria-label="Network rate">
+                    <input type="radio" name="ref_mode" value="custom"
+                           class="join-item btn btn-sm {% if ref_mode_eff == 'custom' %}btn-primary{% else %}btn-ghost{% endif %}"
+                           {% if ref_mode_eff == 'custom' %}checked{% endif %}
+                           aria-label="Custom">
+                </div>
+                <select name="ref_network_id"
+                        class="select select-sm select-bordered w-full mt-1{% if ref_mode_eff != 'network' %} hidden{% endif %}"
+                        data-ref-mode-panel="network"
+                        {% if ref_mode_eff != 'network' %}disabled{% endif %}>
+                    <option value="">— select —</option>
+                    {% for net in networks if not net.is_free and net.cost_per_kwh %}
+                    <option value="{{ net.id }}" {% if ref_network_id == net.id %}selected{% endif %}>
+                        {{ net.network_name }} (${{ "%.3f"|format(net.cost_per_kwh|float) }}/kWh)
+                    </option>
+                    {% endfor %}
+                </select>
+                <label class="input input-sm input-bordered flex items-center gap-1 mt-1{% if ref_mode_eff != 'custom' %} hidden{% endif %}"
+                       data-ref-mode-panel="custom">
+                    <span class="text-base-content/50">$</span>
+                    <input type="number" name="ref_value" step="0.001" min="0" placeholder="0.000"
+                           value="{{ '%.3f'|format(ref_value) if ref_value else '' }}"
+                           class="grow tabular-nums"
+                           {% if ref_mode_eff != 'custom' %}disabled{% endif %}>
+                    <span class="text-base-content/50 text-xs">/ kWh</span>
+                </label>
+            </div>
+
+        </div>
+
+        {# Body sits INSIDE the form so body-resident toggles (free-charging
+           what-if) post with the rest of the control state. #}
+        <div id="cost-explorer-body">
+            {% include "costs/partials/cost_explorer_body.html" %}
+        </div>
+    </form>
+</div>
+
+<script>
+    (function () {
+        // Segmented-button groups are styled radios. Delegate at the form level
+        // so body-resident groups keep working after a body-only swap.
+        var form = document.getElementById('cost-explorer-form');
+        if (!form) return;
+        form.addEventListener('change', function (e) {
+            if (!(e.target instanceof HTMLInputElement)) return;
+            if (e.target.type !== 'radio') return;
+            var group = e.target.closest('[data-segmented-group]');
+            if (!group || !form.contains(group)) return;
+            group.querySelectorAll('input[type="radio"]').forEach(function (radio) {
+                var on = radio.checked;
+                radio.classList.toggle('btn-primary', on);
+                radio.classList.toggle('btn-ghost', !on);
+            });
+        });
+
+        // ref_mode toggle: show the matching ref-mode panel, hide+disable the
+        // other so its value is not posted with the form.
+        var refModeGroup = form.querySelector('[data-segmented-group="ref_mode"]');
+        if (refModeGroup) {
+            refModeGroup.addEventListener('change', function (e) {
+                if (!(e.target instanceof HTMLInputElement)) return;
+                if (e.target.name !== 'ref_mode') return;
+                var active = e.target.value;
+                form.querySelectorAll('[data-ref-mode-panel]').forEach(function (panel) {
+                    var on = panel.dataset.refModePanel === active;
+                    panel.classList.toggle('hidden', !on);
+                    panel.querySelectorAll('input, select').forEach(function (input) {
+                        input.disabled = !on;
+                    });
+                    if (panel.tagName === 'SELECT') panel.disabled = !on;
+                });
+            });
+        }
+
+        // Drive the network picker programmatically and fire one change event
+        // so the whole form submits with every control's value preserved.
+        function setPickerSelection(ids, labelById) {
+            var picker = form.querySelector('#cost-explorer-card .searchable-picker');
+            if (!picker) return false;
+            var targetSet = {};
+            ids.forEach(function (id) { targetSet[String(id)] = true; });
+            picker.querySelectorAll('[data-picker-list] button').forEach(function (btn) {
+                var on = !!targetSet[btn.dataset.id];
+                btn.classList.toggle('bg-brand-accent/15', on);
+                btn.classList.toggle('text-brand-accent', on);
+            });
+            var hidden = picker.querySelector('[data-picker-value]');
+            if (!hidden) return false;
+            var chipContainer = picker.querySelector('[data-picker-chip-container]');
+            hidden.value = ids.map(String).join(',');
+            if (chipContainer) {
+                chipContainer.innerHTML = '';
+                if (ids.length === 0) {
+                    var placeholder = picker.dataset.placeholder || 'All networks';
+                    var ph = document.createElement('span');
+                    ph.className = 'text-base-content/50 text-sm';
+                    ph.textContent = placeholder;
+                    chipContainer.appendChild(ph);
+                } else {
+                    ids.forEach(function (id) {
+                        var label = (labelById && labelById[String(id)]) ||
+                            (picker.querySelector('[data-picker-list] button[data-id="' + id + '"]') || {}).dataset?.label ||
+                            String(id);
+                        var c = document.createElement('span');
+                        c.className = 'badge badge-outline gap-1';
+                        c.setAttribute('data-chip-id', String(id));
+                        var lbl = document.createElement('span');
+                        lbl.className = 'truncate max-w-[10rem]';
+                        lbl.textContent = label;
+                        c.appendChild(lbl);
+                        var rm = document.createElement('button');
+                        rm.type = 'button';
+                        rm.className = 'btn btn-ghost btn-xs btn-circle leading-none';
+                        rm.setAttribute('data-id', String(id));
+                        rm.setAttribute('aria-label', 'Remove ' + label);
+                        rm.innerHTML = '&times;';
+                        rm.onmousedown = function (ev) {
+                            ev.stopPropagation();
+                            ev.preventDefault();
+                        };
+                        rm.onclick = function (ev) {
+                            ev.stopPropagation();
+                            if (window.LR && LR.searchablePicker) LR.searchablePicker.removeChip(rm);
+                        };
+                        c.appendChild(rm);
+                        chipContainer.appendChild(c);
+                    });
+                }
+            }
+            if (window.htmx) htmx.trigger(hidden, 'change');
+            return true;
+        }
+
+        // Row click → scope to that network. The exclude button is checked
+        // FIRST and stops propagation, so the icon never triggers row-scope.
+        form.addEventListener('click', function (e) {
+            var exclude = e.target.closest && e.target.closest('[data-cost-explorer-row-exclude]');
+            if (exclude && form.contains(exclude)) {
+                e.stopPropagation();
+                e.preventDefault();
+                var excludeId = String(exclude.dataset.networkId);
+                var picker = form.querySelector('#cost-explorer-card .searchable-picker');
+                var hidden = picker && picker.querySelector('[data-picker-value]');
+                var currentCsv = (hidden && hidden.value) || '';
+                var currentIds = currentCsv
+                    .split(',')
+                    .map(function (s) { return s.trim(); })
+                    .filter(function (s) { return s.length > 0; });
+                var nextIds;
+                var labelMap = {};
+                if (currentIds.length === 0) {
+                    // No filter active: exclude = "all populated networks except this one".
+                    // Walk the current ledger rows for the populated network IDs.
+                    var rowEls = form.querySelectorAll('[data-cost-explorer-scope-row]');
+                    rowEls.forEach(function (r) {
+                        var rid = String(r.dataset.networkId);
+                        if (rid && rid !== excludeId) {
+                            labelMap[rid] = r.dataset.networkLabel || rid;
+                        }
+                    });
+                    nextIds = Object.keys(labelMap);
+                } else {
+                    // Active filter: drop just this id from the current selection.
+                    nextIds = currentIds.filter(function (id) { return id !== excludeId; });
+                    // Pull labels from the picker list for the surviving ids so chips
+                    // render with the network name instead of the raw id.
+                    nextIds.forEach(function (id) {
+                        var btn = picker && picker.querySelector('[data-picker-list] button[data-id="' + id + '"]');
+                        if (btn) labelMap[id] = btn.dataset.label || id;
+                    });
+                }
+                setPickerSelection(nextIds, labelMap);
+                return;
+            }
+            var row = e.target.closest && e.target.closest('[data-cost-explorer-scope-row]');
+            if (row && form.contains(row)) {
+                var id = row.dataset.networkId;
+                var label = row.dataset.networkLabel || id;
+                var labelMap = {};
+                labelMap[String(id)] = label;
+                setPickerSelection([id], labelMap);
+                return;
+            }
+            var clear = e.target.closest && e.target.closest('[data-cost-explorer-scope-clear]');
+            if (clear && form.contains(clear)) {
+                setPickerSelection([], {});
+                return;
+            }
+
+            // Free-charging per-network rebill picker: toggle a network in/out
+            // of the hidden CSV input, then fire one change to re-fetch the body.
+            var fwToggle = e.target.closest && e.target.closest('[data-free-what-if-toggle]');
+            if (fwToggle && form.contains(fwToggle)) {
+                var picker = fwToggle.closest('[data-free-what-if-picker]');
+                var hidden = picker && picker.parentNode.querySelector('[data-free-what-if-csv]');
+                if (!hidden) return;
+                var on = !(fwToggle.getAttribute('aria-pressed') === 'true');
+                fwToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+                fwToggle.classList.toggle('badge-primary', on);
+                var ids = [];
+                picker.querySelectorAll('[data-free-what-if-toggle]').forEach(function (b) {
+                    if (b.getAttribute('aria-pressed') === 'true') ids.push(b.dataset.networkId);
+                });
+                hidden.value = ids.join(',');
+                if (window.htmx) htmx.trigger(hidden, 'change');
+            }
+        });
+
+        // Network filter quick-action chips (Clear / AC / DC).
+        var quickWrap = form.querySelector('[data-cost-explorer-network-quickselect]');
+        if (quickWrap) {
+            function parseIds(csv) {
+                return (csv || '')
+                    .split(',')
+                    .map(function (s) { return s.trim(); })
+                    .filter(function (s) { return s.length > 0; });
+            }
+            // "clear" = empty list; an empty selection already means unfiltered.
+            var ACTION_IDS = {
+                clear: [],
+                ac: parseIds(quickWrap.dataset.acIds),
+                dc: parseIds(quickWrap.dataset.dcIds),
+            };
+            quickWrap.querySelectorAll('[data-quickselect-action]').forEach(function (chip) {
+                chip.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    var action = chip.dataset.quickselectAction;
+                    var targetIds = ACTION_IDS[action] || [];
+                    var targetSet = {};
+                    targetIds.forEach(function (id) { targetSet[id] = true; });
+
+                    var picker = quickWrap.querySelector('.searchable-picker');
+                    if (!picker) return;
+                    picker.querySelectorAll('[data-picker-list] button').forEach(function (btn) {
+                        var shouldBeActive = !!targetSet[btn.dataset.id];
+                        btn.classList.toggle('bg-brand-accent/15', shouldBeActive);
+                        btn.classList.toggle('text-brand-accent', shouldBeActive);
+                    });
+
+                    // Rebuild hidden value + chip strip from the new active set,
+                    // then fire one change event so HTMX swaps the body once.
+                    var hidden = picker.querySelector('[data-picker-value]');
+                    if (!hidden) return;
+                    var chipContainer = picker.querySelector('[data-picker-chip-container]');
+                    var activeButtons = picker.querySelectorAll('[data-picker-list] button.bg-brand-accent\\/15');
+                    var ids = [];
+                    var items = [];
+                    activeButtons.forEach(function (b) {
+                        ids.push(b.dataset.id);
+                        items.push({ id: b.dataset.id, label: b.dataset.label });
+                    });
+                    hidden.value = ids.join(',');
+                    if (chipContainer) {
+                        chipContainer.innerHTML = '';
+                        if (items.length === 0) {
+                            var placeholder = picker.dataset.placeholder || 'All networks';
+                            var ph = document.createElement('span');
+                            ph.className = 'text-base-content/50 text-sm';
+                            ph.textContent = placeholder;
+                            chipContainer.appendChild(ph);
+                        } else {
+                            items.forEach(function (item) {
+                                var c = document.createElement('span');
+                                c.className = 'badge badge-outline gap-1';
+                                c.setAttribute('data-chip-id', item.id);
+                                var lbl = document.createElement('span');
+                                lbl.className = 'truncate max-w-[10rem]';
+                                lbl.textContent = item.label;
+                                c.appendChild(lbl);
+                                var rm = document.createElement('button');
+                                rm.type = 'button';
+                                rm.className = 'btn btn-ghost btn-xs btn-circle leading-none';
+                                rm.setAttribute('data-id', item.id);
+                                rm.setAttribute('aria-label', 'Remove ' + item.label);
+                                rm.innerHTML = '&times;';
+                                rm.onmousedown = function (ev) {
+                                    ev.stopPropagation();
+                                    ev.preventDefault();
+                                };
+                                rm.onclick = function (ev) {
+                                    ev.stopPropagation();
+                                    if (window.LR && LR.searchablePicker) LR.searchablePicker.removeChip(rm);
+                                };
+                                c.appendChild(rm);
+                                chipContainer.appendChild(c);
+                            });
+                        }
+                    }
+                    if (window.htmx) htmx.trigger(hidden, 'change');
+                });
+            });
+        }
+    })();
+</script>

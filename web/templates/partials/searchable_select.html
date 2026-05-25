@@ -1,0 +1,172 @@
+{# Searchable dropdown component — replaces a native <select> with a themed,
+   keyboard-blur-closeable DaisyUI dropdown that supports live text search,
+   optional filter chips, and rich item content (color dot, badge, secondary
+   meta).  Behavior lives in static/js/searchable-picker.js loaded by base.html.
+
+   Usage:
+       {% from "partials/searchable_select.html" import searchable_select,
+            searchable_select_item %}
+
+       {% call searchable_select(
+           id='session-picker',
+           name='session',
+           value=active_session or '',
+           selected_label=trigger_label_for_active,
+           placeholder='Select a session...',
+           filter_chips=[{'key': 'AC', 'label': 'AC'},
+                         {'key': 'DC', 'label': 'DC'}],
+           htmx_get='/battery?section=charge_curve',
+           htmx_target='#charge-curve-content',
+           htmx_include="[name='range']"
+       ) %}
+           {% for s in items %}
+               {{ searchable_select_item(
+                   item_id=s.id,
+                   label=s.location_name,
+                   trigger_label=s.full_label,
+                   color=s.network_color,
+                   badge=s.charge_type,
+                   meta=s.compact_meta,
+                   filter_key=s.charge_type or '',
+                   active=(value == s.id),
+                   search=s.search_blob
+               ) }}
+           {% endfor %}
+       {% endcall %}
+
+   For minimal use (search-only, no chips/colors/meta) just omit the optional
+   args — only `id`, `name`, and the item's `item_id` + `label` are required. #}
+
+{# `align`: 'end' (default) anchors the panel to the right so it extends left;
+   '' anchors left so the panel extends right — needed for left-edge form
+   fields, else an overflow-clipping ancestor swallows the panel.
+
+   `wrapper_class` adds classes to the dropdown root. DaisyUI's `.dropdown` is
+   `inline-block`; pass `block w-full max-w-xs` for a full-width trigger.
+
+   Multi-select: pass `multiple=true` and `selected_items=[{id,label},...]` to
+   render a chip strip; the hidden input then stores a CSV of selected IDs. #}
+{% macro searchable_select(
+    id,
+    name,
+    value='',
+    placeholder='Select...',
+    selected_label='',
+    width_class='w-96',
+    trigger_class='select select-sm select-bordered w-auto max-w-xs',
+    searchable=true,
+    search_placeholder='Search...',
+    filter_chips=[],
+    align='end',
+    wrapper_class='',
+    htmx_get='',
+    htmx_target='',
+    htmx_swap='innerHTML',
+    htmx_include='',
+    multiple=false,
+    selected_items=[]
+) %}
+<div class="searchable-picker dropdown{% if align %} dropdown-{{ align }}{% endif %}{% if wrapper_class %} {{ wrapper_class }}{% endif %}" data-picker="{{ id }}">
+    <div tabindex="0" role="button"
+         class="{{ trigger_class }} flex items-center text-left">
+        {% if not multiple %}
+        <span data-picker-label class="truncate">{{ selected_label or placeholder }}</span>
+        {% else %}
+        <div class="flex flex-wrap gap-1 items-center min-h-[1.5rem]" data-picker-chip-container>
+            {% if not selected_items %}
+            <span class="text-base-content/50 text-sm">{{ placeholder }}</span>
+            {% else %}
+            {% for item in selected_items %}
+            <span class="badge badge-outline gap-1" data-chip-id="{{ item.id }}">
+                <span class="truncate max-w-[10rem]">{{ item.label }}</span>
+                <button type="button"
+                        class="btn btn-ghost btn-xs btn-circle leading-none"
+                        data-id="{{ item.id }}"
+                        aria-label="Remove {{ item.label }}"
+                        onmousedown="event.stopPropagation(); event.preventDefault();"
+                        onclick="event.stopPropagation(); LR.searchablePicker.removeChip(this)">&times;</button>
+            </span>
+            {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    <div tabindex="0"
+         class="dropdown-content bg-base-100 border border-base-content/15 rounded-box z-[100] {{ width_class }} shadow-xl mt-1 flex flex-col max-h-96">
+        {% if searchable or filter_chips %}
+        <div class="p-2 border-b border-base-content/10 space-y-2">
+            {% if searchable %}
+            <input type="text"
+                   data-picker-search
+                   class="input input-sm input-bordered w-full"
+                   placeholder="{{ search_placeholder }}"
+                   oninput="LR.searchablePicker.filter(this)"
+                   onclick="event.stopPropagation()">
+            {% endif %}
+            {% if filter_chips %}
+            <div class="flex flex-wrap items-center gap-1 text-xs" data-picker-chips>
+                <span class="text-base-content/60 mr-1">Filter:</span>
+                <button type="button" data-filter-key=""
+                        class="badge badge-sm badge-neutral"
+                        onclick="LR.searchablePicker.setFilter(this)">All</button>
+                {% for chip in filter_chips %}
+                <button type="button" data-filter-key="{{ chip.key }}"
+                        class="badge badge-sm badge-ghost"
+                        onclick="LR.searchablePicker.setFilter(this)">{{ chip.label }}</button>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        <ul data-picker-list class="p-1 overflow-y-auto overflow-x-hidden flex-1 min-h-0">
+            {{ caller() }}
+        </ul>
+    </div>
+    <input type="hidden"
+           data-picker-value
+           data-multiple="{{ 'true' if multiple else 'false' }}"
+           name="{{ name }}"
+           value="{{ value or '' }}"
+           {% if htmx_get %}hx-get="{{ htmx_get }}"{% endif %}
+           {% if htmx_target %}hx-target="{{ htmx_target }}"{% endif %}
+           hx-swap="{{ htmx_swap }}"
+           {% if htmx_include %}hx-include="{{ htmx_include }}"{% endif %}
+           hx-trigger="change">
+</div>
+{% endmacro %}
+
+
+{% macro searchable_select_item(
+    item_id,
+    label,
+    trigger_label=none,
+    color=none,
+    badge=none,
+    badge_variant='ghost',
+    meta=none,
+    filter_key='',
+    active=false,
+    search=''
+) %}
+<li data-search="{{ search or label }}" data-filter-key="{{ filter_key or '' }}">
+    <button type="button"
+            class="w-full text-left px-3 py-2 rounded-md hover:bg-base-content/10 transition-colors flex items-center justify-between gap-3 {{ 'bg-brand-accent/15 text-brand-accent' if active }}"
+            data-id="{{ item_id }}"
+            data-label="{{ (trigger_label if trigger_label is not none else label)|trim }}"
+            onclick="LR.searchablePicker.select(this)">
+        <span class="flex items-center gap-2 min-w-0 flex-1">
+            {% if color %}
+            <span class="h-2 w-2 rounded-full flex-shrink-0"
+                  style="background:{{ color }}" aria-hidden="true"></span>
+            {% endif %}
+            <span class="truncate text-sm">{{ label }}</span>
+        </span>
+        {% if badge or meta %}
+        <span class="flex items-center gap-2 flex-shrink-0 text-xs text-base-content/60">
+            {% if badge %}<span class="badge badge-xs badge-{{ badge_variant }} font-semibold">{{ badge }}</span>{% endif %}
+            {% if meta %}<span class="font-mono whitespace-nowrap">{{ meta }}</span>{% endif %}
+        </span>
+        {% endif %}
+    </button>
+</li>
+{% endmacro %}

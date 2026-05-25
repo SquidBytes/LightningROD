@@ -19,14 +19,8 @@ from pathlib import Path
 # script is run from the repository root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from web.services.sources.registry import REGISTRY  # noqa: E402
 from web.services.units.contracts import FieldContract  # noqa: E402
-
-# Explicit manifest of known adapters. Append a tuple here when a new adapter
-# lands. The registry remains the source of truth; this list only enumerates
-# which modules to read.
-_ADAPTER_MODULES: list[tuple[str, str]] = [
-    ("ha_fordpass", "web.services.sources.ha_fordpass.adapter"),
-]
 
 _OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "data-sources.md"
 
@@ -36,10 +30,10 @@ def discover_adapters() -> list[tuple[str, list[FieldContract]]]:
     import importlib
 
     out: list[tuple[str, list[FieldContract]]] = []
-    for source_name, module_path in _ADAPTER_MODULES:
-        module = importlib.import_module(module_path)
+    for descriptor in REGISTRY:
+        module = importlib.import_module(descriptor.adapter_module)
         contracts = list(getattr(module, "FIELD_CONTRACTS", []))
-        out.append((source_name, contracts))
+        out.append((descriptor.source_name, contracts))
     out.sort(key=lambda pair: pair[0])
     return out
 
@@ -67,13 +61,13 @@ def render_markdown(groups: list[tuple[str, list[FieldContract]]]) -> str:
         lines.append("|---|---|---|---|---|---|---|")
         sorted_contracts = sorted(
             contracts,
-            key=lambda c: (c.source_entity_pattern, c.source_attribute),
+            key=lambda c: (c.source_locator.pattern, c.source_attribute),
         )
         for c in sorted_contracts:
             # Escape pipe characters in notes so they don't break the table.
             notes = (c.notes or "").replace("|", "\\|").replace("\n", " ")
             lines.append(
-                f"| `{c.source_entity_pattern}` "
+                f"| `{c.source_locator.pattern}` "
                 f"| `{c.source_attribute}` "
                 f"| `{c.source_unit}` "
                 f"| `{c.target_db_table}` "

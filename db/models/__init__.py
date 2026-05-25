@@ -1,4 +1,4 @@
-"""Package for db.models modules."""
+"""SQLAlchemy model package."""
 
 # Import Base and ALL model classes so Alembic's autogenerate sees all tables.
 # CRITICAL: Every model module must be imported here. If a module is missing,
@@ -6,6 +6,8 @@
 from db.models.base import Base
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
+from db.models.data_source_config import DataSourceConfig
+from db.models.ice_vehicle import IceVehicle
 from db.models.location import EVLocation
 from db.models.reference import (
     AppSettings,
@@ -22,6 +24,7 @@ from db.models.vehicle_status import EVVehicleStatus
 
 __all__ = [
     "Base",
+    "DataSourceConfig",
     "EVChargingSession",
     "EVBatteryStatus",
     "EVTripMetrics",
@@ -32,6 +35,7 @@ __all__ = [
     "EVLocationLookup",
     "EVStatistics",
     "EVVehicle",
+    "IceVehicle",
     "AppSettings",
     "GasPriceHistory",
     "GasPriceReading",

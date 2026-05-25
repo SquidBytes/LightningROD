@@ -1,0 +1,50 @@
+{# Cost breakdown stack — shared 5-element layout for the Cost Explorer strip,
+   the "You paid" aside, and the Savings Scenarios EV column.
+
+   Rows follow the Cost Ratios value-left / label-right flow: bold value in a
+   fixed-width column so every right-side label aligns vertically.
+
+   Args:
+     total_paid             — all-in total (energy + fees). Required.
+     fees                   — subscription fees portion. Required.
+     energy_cost            — energy-only cost. Required.
+     estimated_energy_cost  — reference-rate energy estimate; omit/None to
+                              drop the estimate and delta rows.
+#}
+{% macro cost_breakdown(total_paid, fees, energy_cost, estimated_energy_cost=None) %}
+<div class="flex flex-col gap-1">
+
+    <div class="flex items-baseline gap-2">
+        <span class="text-2xl font-bold tabular-nums leading-tight min-w-[6rem]">${{ "%.2f"|format(total_paid) }}</span>
+        <span class="text-xs text-base-content/60">Total Paid</span>
+    </div>
+
+    {% if fees > 0 %}
+    <p class="text-xs text-base-content/40 tabular-nums">includes ${{ "%.2f"|format(fees) }} in subscriptions</p>
+
+    <div class="flex items-baseline gap-2">
+        <span class="text-lg font-semibold tabular-nums leading-tight min-w-[6rem]">${{ "%.2f"|format(energy_cost) }}</span>
+        <span class="text-xs text-base-content/60">Energy Cost</span>
+    </div>
+    {% endif %}
+
+    {% if estimated_energy_cost is not none %}
+    <div class="flex items-baseline gap-2">
+        <span class="text-base font-semibold tabular-nums leading-tight text-base-content/70 min-w-[6rem]">${{ "%.2f"|format(estimated_energy_cost) }}</span>
+        <span class="text-xs text-base-content/60">Estimated Energy Cost</span>
+    </div>
+
+    {% set delta = energy_cost - estimated_energy_cost %}
+    {% if delta != 0 %}
+    {% set delta_pct = (delta / estimated_energy_cost * 100) if estimated_energy_cost else 0 %}
+    <div class="flex items-baseline gap-2">
+        <span class="text-sm font-semibold tabular-nums min-w-[6rem] {% if delta <= 0 %}text-success{% else %}text-error{% endif %}">
+            {% if delta > 0 %}+${{ "%.2f"|format(delta) }}{% else %}-${{ "%.2f"|format(-delta) }}{% endif %}
+        </span>
+        <span class="text-xs text-base-content/60">vs estimate · {% if delta_pct > 0 %}+{% endif %}{{ "%.0f"|format(delta_pct) }}%</span>
+    </div>
+    {% endif %}
+    {% endif %}
+
+</div>
+{% endmacro %}

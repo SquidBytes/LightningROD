@@ -1,0 +1,164 @@
+{% set is_ha = card.descriptor.source_name == 'ha_fordpass' %}
+<div class="card bg-base-200 max-w-2xl">
+    <div class="card-body">
+        <div class="flex items-baseline justify-between">
+            <div>
+                <h2 class="card-title text-base font-semibold">
+                    {% if is_ha %}Home Assistant{% else %}{{ card.descriptor.display_name }}{% endif %}
+                </h2>
+                <p class="text-base-content/60 text-sm -mt-1">
+                    {% if is_ha %}Configure the connection to your Home Assistant instance and the integrations LightningROD reads from it.
+                    {% else %}Configure the connection to your {{ card.descriptor.display_name }} instance.{% endif %}
+                </p>
+            </div>
+            <div class="flex items-baseline">
+                {% if is_ha %}
+                    {% set state = card.health.connection_state or 'disconnected' %}
+                    {% if state == 'connected' %}
+                        <span class="badge badge-success">connected</span>
+                    {% elif state == 'reconnecting' or state == 'connecting' %}
+                        <span class="badge badge-warning">{{ state }}</span>
+                    {% else %}
+                        <span class="badge badge-error">{{ state }}</span>
+                    {% endif %}
+                    {% if card.last_seen %}
+                        <span class="text-xs text-base-content/60 ml-2">last event {{ card.last_seen }}</span>
+                    {% else %}
+                        <span class="text-xs text-base-content/60 ml-2">no events yet</span>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <form hx-post="/settings/data-sources/{{ card.descriptor.source_name }}"
+              hx-target="closest .card" hx-swap="outerHTML"
+              class="space-y-4 mt-4">
+
+            {# Connection: URL + Token (shared across all HA integrations) #}
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">URL</span></div>
+                <input type="url" name="ha_url"
+                       value="{{ card.config.ha_url if card.config else '' }}"
+                       placeholder="http://homeassistant.local:8123"
+                       class="input input-bordered w-full" required>
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Full URL including port (e.g. http://192.168.1.100:8123)</span>
+                </div>
+            </label>
+            <br>
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Long-Lived Access Token</span></div>
+                <div class="join w-full">
+                    <input type="password" name="ha_token" id="ha-token-input-{{ card.descriptor.source_name }}"
+                           value="{{ card.masked_token }}"
+                           placeholder="Long-lived access token"
+                           class="input input-bordered join-item w-full" required>
+                    <button type="button" class="btn btn-square join-item"
+                            onclick="(function(id){var i=document.getElementById(id);i.type=i.type==='password'?'text':'password';})('ha-token-input-{{ card.descriptor.source_name }}')"
+                            title="Toggle visibility">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
+                    </button>
+                </div>
+                {% if card.masked_token %}
+                <div class="label">
+                    <span class="label-text-alt text-success">Token saved. Leave unchanged to keep current token.</span>
+                </div>
+                {% else %}
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Generate in HA: Profile &gt; Long-Lived Access Tokens &gt; Create Token</span>
+                </div>
+                {% endif %}
+            </label>
+            <br>
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-3">
+                    <input type="checkbox" name="ha_auto_connect"
+                           {{ 'checked' if not card.config or card.config.ha_auto_connect }}
+                           value="true"
+                           class="toggle toggle-primary">
+                    <span class="label-text font-semibold">Auto-connect on startup</span>
+                </label>
+            </div>
+
+            {% if is_ha %}
+            <div class="divider my-1"></div>
+            <div>
+                <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/70">FordPass</h3>
+                <p class="text-base-content/50 text-xs mt-0.5">Vehicle data ingested from the FordPass HA integration.</p>
+            </div>
+
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">VIN Override</span></div>
+                <input type="text" name="ha_vin_override"
+                       value="{{ card.config.ha_vin_override if card.config and card.config.ha_vin_override else '' }}"
+                       placeholder="Auto-detected from entity IDs"
+                       class="input input-bordered w-full">
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Leave blank to auto-detect from HA entity names</span>
+                </div>
+            </label>
+            <br>
+            <label class="form-control w-full max-w-xs">
+                <div class="label"><span class="label-text font-semibold">Unit System</span></div>
+                <select name="ha_unit_system" class="select select-bordered w-full">
+                    <option value="auto" {{ 'selected' if not card.config or card.config.ha_unit_system == 'auto' }}>Auto-detect</option>
+                    <option value="metric" {{ 'selected' if card.config and card.config.ha_unit_system == 'metric' }}>Metric</option>
+                    <option value="imperial" {{ 'selected' if card.config and card.config.ha_unit_system == 'imperial' }}>Imperial</option>
+                </select>
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Auto-detect reads HA configuration on connect</span>
+                </div>
+            </label>
+
+            <div class="divider my-1"></div>
+            <div>
+                <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/70">Gas Price Sensors</h3>
+                <p class="text-base-content/50 text-xs mt-0.5">HA entities feeding the gas price tracker. Leave blank to skip.</p>
+            </div>
+
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Station Price Sensor</span></div>
+                <input type="text" name="gas_sensor_station_entity_id"
+                       value="{{ card.gas_sensor_station_entity_id or '' }}"
+                       placeholder="sensor.gasbuddy_station_price"
+                       class="input input-bordered w-full">
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Your regular station (e.g. Costco).</span>
+                </div>
+            </label>
+            <br>
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Regional Average Sensor</span></div>
+                <input type="text" name="gas_sensor_average_entity_id"
+                       value="{{ card.gas_sensor_average_entity_id or '' }}"
+                       placeholder="sensor.gasbuddy_state_average"
+                       class="input input-bordered w-full">
+                <div class="label">
+                    <span class="label-text-alt text-base-content/40">Regional / state average for savings comparison.</span>
+                </div>
+            </label>
+            {% endif %}
+
+            {% if errors %}
+            <div class="alert alert-error text-sm">
+                {% for err in errors %}<div>{{ err.loc | join('.') }}: {{ err.msg }}</div>{% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="pt-2">
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Settings saved.</span>
+  </div>
+</div>
+{% endif %}

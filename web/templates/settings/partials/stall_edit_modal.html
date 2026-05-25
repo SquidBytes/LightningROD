@@ -3,7 +3,7 @@
 <form hx-put="/settings/stalls/{{ stall.id }}"
       hx-target="#stall-container-{{ location_id }}"
       hx-swap="outerHTML"
-      hx-on::after-request="if(event.detail.successful) document.getElementById('stall-edit-modal').close()">
+      hx-on::after-request="if(event.detail.successful) closeStallEditModal()">
     <input type="hidden" name="location_id" value="{{ location_id }}">
     <div class="grid grid-cols-4 gap-4">
         {# Row 1 #}

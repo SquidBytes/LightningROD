@@ -15,7 +15,7 @@ LOCKED_AVG_EFFICIENCY = (
     "Arithmetic mean of per-session mi/kWh, not total distance divided by total energy."
 )
 
-ALLOWED_PAGE_PREFIXES = {"performance", "costs", "battery", "driving", "home"}
+ALLOWED_PAGE_PREFIXES = {"performance", "costs", "battery", "driving", "home", "fuel"}
 
 
 def test_avg_efficiency_copy_locked():

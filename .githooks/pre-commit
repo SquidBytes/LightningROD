@@ -2,9 +2,8 @@
 #
 # LightningROD pre-commit hook.
 #
-# Current checks on staged Python changes:
-# - ruff lint
-# - reference hygiene (no internal planning shorthand in added comments/docstrings)
+# Content checks (PII + reference hygiene) run via scripts/checker.py.
+# Lint (ruff) and types (mypy, advisory) run after.
 #
 # Activate once per clone:
 #     git config core.hooksPath .githooks
@@ -17,56 +16,42 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-# Find staged .py files (Added / Copied / Modified / Renamed, excluding deletions)
-mapfile -t staged_py < <(git diff --cached --name-only --diff-filter=ACMR -- '*.py')
-
-if [ "${#staged_py[@]}" -eq 0 ]; then
-    # No Python changes to lint — let the commit through unchanged.
-    exit 0
-fi
-
-# Locate ruff — prefer the repo venv so the hook matches CI exactly.
-if [ -x "$REPO_ROOT/.venv/bin/ruff" ]; then
-    RUFF="$REPO_ROOT/.venv/bin/ruff"
-elif command -v ruff >/dev/null 2>&1; then
-    RUFF="ruff"
-else
-    echo "pre-commit: ruff not found on PATH and no .venv/bin/ruff."
-    echo "            Install dev deps with: uv sync --locked"
-    echo "            Skipping lint; CI will still check."
-    exit 0
-fi
-
-echo "pre-commit: running ruff on ${#staged_py[@]} staged Python file(s)..."
-if ! "$RUFF" check "${staged_py[@]}"; then
-    echo
-    echo "pre-commit: ruff reported issues. Fix with:"
-    echo "    $RUFF check --fix ${staged_py[*]}"
-    echo
-    echo "Or bypass (not recommended): git commit --no-verify"
-    exit 1
-fi
-
+# Pick the interpreter — prefer the repo venv so behavior matches CI.
 if [ -x "$REPO_ROOT/.venv/bin/python" ]; then
     PYTHON="$REPO_ROOT/.venv/bin/python"
 elif command -v python3 >/dev/null 2>&1; then
     PYTHON="python3"
 else
-    echo "pre-commit: python3 not found; cannot run reference hygiene check."
-    echo "            Install Python or use the repo .venv."
+    echo "pre-commit: python3 not found; cannot run content checks." >&2
     exit 1
 fi
 
-echo "pre-commit: checking reference hygiene on added comment/docstring lines..."
-if ! "$PYTHON" scripts/check_reference_hygiene.py --staged --paths "${staged_py[@]}"; then
+# --- Content checks: PII scan + reference hygiene ---
+"$PYTHON" scripts/checker.py
+
+# --- ruff lint on staged Python ---
+mapfile -t staged_py < <(git diff --cached --name-only --diff-filter=ACMR -- '*.py')
+if [ "${#staged_py[@]}" -eq 0 ]; then
+    exit 0
+fi
+
+if [ -x "$REPO_ROOT/.venv/bin/ruff" ]; then
+    RUFF="$REPO_ROOT/.venv/bin/ruff"
+elif command -v ruff >/dev/null 2>&1; then
+    RUFF="ruff"
+else
+    echo "pre-commit: ruff not found; skipping lint (CI will still check)."
+    exit 0
+fi
+
+echo "pre-commit: ruff on ${#staged_py[@]} staged Python file(s)..."
+if ! "$RUFF" check "${staged_py[@]}"; then
     echo
-    echo "pre-commit: reference hygiene check failed."
-    echo "            Remove internal planning IDs/references (e.g. D2, D-B3, 'Phase 29', CONTEXT.md)"
-    echo "            from new comments/docstrings, then restage."
+    echo "pre-commit: ruff issues. Fix with: $RUFF check --fix ${staged_py[*]}"
     exit 1
 fi
 
-# Locate mypy — prefer the repo venv so the hook matches CI exactly.
+# --- mypy (advisory; does not block) ---
 if [ -x "$REPO_ROOT/.venv/bin/mypy" ]; then
     MYPY="$REPO_ROOT/.venv/bin/mypy"
 elif command -v mypy >/dev/null 2>&1; then
@@ -74,14 +59,10 @@ elif command -v mypy >/dev/null 2>&1; then
 else
     MYPY=""
 fi
-
 if [ -n "$MYPY" ]; then
-    echo "pre-commit: running mypy (advisory — does not block commit)..."
-    if ! "$MYPY" web/ config.py db/ --no-error-summary 2>&1; then
-        echo
-        echo "pre-commit: mypy reported type errors (advisory only — commit not blocked)."
-        echo "            Fix before push — CI will enforce this."
-    fi
+    echo "pre-commit: mypy (advisory)..."
+    "$MYPY" web/ config.py db/ --no-error-summary 2>&1 || \
+        echo "pre-commit: mypy reported issues (not blocking; CI will enforce)."
 fi
 
 exit 0

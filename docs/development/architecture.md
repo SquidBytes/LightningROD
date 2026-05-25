@@ -26,12 +26,10 @@ LightningROD/
 ├── docker-compose.yml       # Production stack (web + db) — invoked from repo root
 ├── docker/                  # All other docker artifacts
 │   ├── Dockerfile           # Multi-stage build (Node CSS + Python app)
-│   ├── Dockerfile.standalone  # All-in-one image with embedded PostgreSQL
 │   ├── docker-compose.dev.yml       # Dev override (exposes db port)
 │   ├── docker-compose.test.yml      # Dedicated test postgres on 5433
-│   ├── docker-compose.standalone.yml # Standalone build/run
-│   ├── entrypoint.sh                # Migrations + uvicorn startup
-│   └── entrypoint.standalone.sh     # PostgreSQL bootstrap + migrations + uvicorn
+│   ├── docker-compose.standalone.yml # Single-container SQLite deploy (pull/run)
+│   └── entrypoint.sh                # Migrations + uvicorn startup
 ├── input.css                # Tailwind v4 + DaisyUI source styles
 ├── package.json             # Node deps (tailwindcss, daisyui)
 │

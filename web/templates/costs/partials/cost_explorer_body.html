@@ -1,0 +1,274 @@
+{# Cost Explorer card body — HTMX swap target for #cost-explorer-body. #}
+{% from "costs/partials/cost_breakdown.html" import cost_breakdown %}
+<div class="grid grid-cols-1 md:grid-cols-[360px_1fr] min-h-[540px]">
+
+    <aside class="p-6 md:p-8 bg-base-200 md:border-r border-base-300 flex flex-col gap-6 justify-between">
+        <div>
+            {{ cost_breakdown(
+                cost_explorer.total_paid_actual,
+                cost_explorer.total_fees_paid,
+                cost_explorer.total_paid_energy,
+                estimated_energy_cost=(cost_explorer.estimated_total if cost_explorer.estimated_total > 0 else none),
+            ) }}
+            {% if cost_explorer.total_paid_what_if != cost_explorer.total_paid_actual %}
+            <p class="text-sm text-base-content/60 tabular-nums mt-2">
+                Without free charging: ${{ "%.2f"|format(cost_explorer.total_paid_what_if) }}
+                <span class="text-error">+${{ "%.2f"|format(cost_explorer.total_paid_what_if - cost_explorer.total_paid_actual) }}</span>
+            </p>
+            {% endif %}
+
+            {# Free-charging what-if lives in the aside, not the header, because
+               its only visible effects are the sub-line above and the chart. #}
+            <div class="mt-3 flex flex-col gap-1">
+                <label class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
+                    <span>Free-charging what-if</span>
+                    <span class="cursor-help tooltip tooltip-right"
+                          data-tip="Re-bill free-charging sessions at the reference rate to see what they would have cost. Affects this aside and the trend chart only."
+                          aria-label="Free charging what-if tooltip">ⓘ</span>
+                </label>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <input type="checkbox" name="free_what_if" value="1"
+                           class="toggle toggle-sm {% if free_what_if %}toggle-success{% endif %}"
+                           {% if free_what_if %}checked{% endif %}
+                           aria-label="Enable free-charging what-if">
+                    {% set scope_eff = free_what_if_scope or 'global' %}
+                    <div class="join" data-segmented-group="free_what_if_scope">
+                        <input type="radio" name="free_what_if_scope" value="global"
+                               class="join-item btn btn-xs {% if scope_eff == 'global' %}btn-primary{% else %}btn-ghost{% endif %}"
+                               {% if scope_eff == 'global' %}checked{% endif %}
+                               {% if not free_what_if %}disabled{% endif %}
+                               aria-label="Apply to all free networks">
+                        <input type="radio" name="free_what_if_scope" value="per_network"
+                               class="join-item btn btn-xs {% if scope_eff == 'per_network' %}btn-primary{% else %}btn-ghost{% endif %}"
+                               {% if scope_eff == 'per_network' %}checked{% endif %}
+                               {% if not free_what_if or not cost_explorer.free_charging_eligible_networks %}disabled{% endif %}
+                               aria-label="Pick which free networks">
+                    </div>
+                </div>
+                {% if free_what_if and free_what_if_scope == 'per_network' and cost_explorer.free_charging_eligible_networks %}
+                <p class="text-xs text-base-content/40 mt-1">Pick which free-charging networks to rebill:</p>
+                {# One hidden CSV input carries the rebill set — repeated
+                   checkbox names would collapse to the last value on POST. #}
+                {% set free_what_if_selected = (free_what_if_networks_csv or '').split(',') %}
+                <input type="hidden" name="free_what_if_networks"
+                       value="{{ free_what_if_networks_csv or '' }}"
+                       data-free-what-if-csv>
+                <div class="flex flex-wrap gap-1" data-free-what-if-picker>
+                    {% for net in cost_explorer.free_charging_eligible_networks %}
+                    {% set is_selected = net.network_id|string in free_what_if_selected %}
+                    <button type="button"
+                            class="badge badge-outline gap-1 cursor-pointer {% if is_selected %}badge-primary{% endif %}"
+                            data-free-what-if-toggle
+                            data-network-id="{{ net.network_id }}"
+                            aria-pressed="{{ 'true' if is_selected else 'false' }}">
+                        {{ net.network_name }}
+                    </button>
+                    {% endfor %}
+                </div>
+                {% elif free_what_if and free_what_if_scope == 'per_network' %}
+                <p class="text-xs text-base-content/40 mt-1">No free-charging networks in this range.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Subscription counterfactual — scoped to in-filter networks when a
+           network filter is active. #}
+        <div class="mt-auto">
+            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Subscription savings</p>
+            {% if cost_explorer.subscription.active %}
+            <div class="text-sm tabular-nums space-y-1">
+                <div class="flex justify-between">
+                    <span>With <span class="text-base-content/60">you paid</span></span>
+                    <span class="font-semibold">${{ "%.2f"|format(cost_explorer.subscription.with_total) }}</span>
+                </div>
+                {% for s in cost_explorer.subscription.subscriptions %}
+                <div class="flex justify-between pl-3 text-xs text-base-content/60">
+                    <span>{{ s.network_name }} energy at member rate</span>
+                    <span>${{ "%.2f"|format(s.energy_at_member_rate) }}</span>
+                </div>
+                <div class="flex justify-between pl-3 text-xs text-base-content/60">
+                    <span>{{ s.network_name }} member fee</span>
+                    <span>${{ "%.2f"|format(s.member_fee) }}</span>
+                </div>
+                {% endfor %}
+                <div class="flex justify-between">
+                    <span>Without <span class="text-base-content/60">non-member rate</span></span>
+                    <span class="font-semibold">${{ "%.2f"|format(cost_explorer.subscription.without_total) }}</span>
+                </div>
+                <div class="flex justify-between border-t border-base-300 pt-2 mt-1">
+                    <span class="font-semibold">Net saved</span>
+                    <span class="font-bold {% if cost_explorer.subscription.net_saved >= 0 %}text-success{% else %}text-error{% endif %}">
+                        {% if cost_explorer.subscription.net_saved >= 0 %}+{% endif %}${{ "%.2f"|format(cost_explorer.subscription.net_saved) }}
+                    </span>
+                </div>
+                {% if cost_explorer.subscription.scoped_network_name %}
+                <p class="text-xs text-base-content/40 mt-2">
+                    Scoped to {{ cost_explorer.subscription.scoped_network_name }}
+                </p>
+                {% endif %}
+            </div>
+            {% elif cost_explorer.subscription.scoped_network_name %}
+            <p class="text-sm text-base-content/50">No subscription active for {{ cost_explorer.subscription.scoped_network_name }}</p>
+            {% else %}
+            <p class="text-sm text-base-content/50">No subscription active</p>
+            {% endif %}
+        </div>
+    </aside>
+
+    <main class="p-6 md:p-8">
+        <div class="flex items-baseline justify-between gap-2 mb-3">
+            <p class="text-xs uppercase tracking-wide text-base-content/40">Reference comparison</p>
+            {% if cost_explorer.reference_rate <= 0 %}
+            <p class="text-xs text-base-content/40">Set a reference rate above to see Δ</p>
+            {% endif %}
+        </div>
+
+        {% if cost_explorer.single_network_detail %}
+        {# Single-network detail — collapses table to a rich one-row panel #}
+        {% set detail = cost_explorer.single_network_detail %}
+        {% set row = cost_explorer.by_network[0] %}
+        <div class="rounded-box bg-base-100/50 border border-base-300 p-4">
+            <div class="flex items-center gap-2 mb-3">
+                <span class="w-3 h-3 rounded-full inline-block" style="background-color: {{ row.color }}"></span>
+                <span class="text-lg font-semibold">{{ detail.network_name }}</span>
+                <button type="button"
+                        class="btn btn-ghost btn-xs ml-auto"
+                        data-cost-explorer-scope-clear>
+                    Clear scope ×
+                </button>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm tabular-nums">
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-base-content/40">Effective rate</p>
+                    <p class="text-xl font-bold">${{ "%.3f"|format(detail.effective_rate_per_kwh) }}<span class="text-xs text-base-content/60 font-normal">/kWh</span></p>
+                </div>
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-base-content/40">Sessions</p>
+                    <p class="text-xl font-bold">{{ row.session_count }}</p>
+                    <p class="text-xs text-base-content/60">{{ detail.free_session_count }} free · {{ detail.paid_session_count }} paid</p>
+                </div>
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-base-content/40">Total paid</p>
+                    <p class="text-xl font-bold">${{ "%.2f"|format(row.total_paid) }}</p>
+                    <p class="text-xs text-base-content/60">{{ "%.1f"|format(row.total_kwh) }} kWh</p>
+                </div>
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-base-content/40">vs reference</p>
+                    {% if cost_explorer.reference_rate > 0 %}
+                    <p class="text-xl font-bold tabular-nums {% if row.delta <= 0 %}text-success{% else %}text-error{% endif %}">
+                        {% if row.delta > 0 %}+{% endif %}${{ "%.2f"|format(row.delta) }}
+                    </p>
+                    <p class="text-xs text-base-content/60">at ${{ "%.2f"|format(row.total_at_reference) }}</p>
+                    {% else %}
+                    <p class="text-xl font-bold text-base-content/40">—</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        {# Multi-row ledger table — one row per network #}
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr class="text-xs uppercase tracking-wide text-base-content/40">
+                        <th class="w-6"></th>
+                        <th>Network</th>
+                        <th class="text-right tabular-nums">Sessions</th>
+                        <th class="text-right tabular-nums">Energy</th>
+                        <th class="text-right tabular-nums">Paid</th>
+                        <th class="text-right tabular-nums">At ref</th>
+                        <th class="text-right tabular-nums">Δ</th>
+                        <th class="w-6"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in cost_explorer.by_network %}
+                    <tr class="cursor-pointer hover:bg-base-300/40"
+                        data-cost-explorer-scope-row
+                        data-network-id="{{ row.network_id }}"
+                        data-network-label="{{ row.network_name }}">
+                        <td><span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color: {{ row.color }}"></span></td>
+                        <td>{{ row.network_name }}</td>
+                        <td class="text-right tabular-nums">{{ row.session_count }}</td>
+                        <td class="text-right tabular-nums">{{ "%.1f"|format(row.total_kwh) }} kWh</td>
+                        <td class="text-right tabular-nums">
+                            ${{ "%.2f"|format(row.total_paid) }}
+                            <div class="text-xs text-base-content/50 font-normal tabular-nums">${{ "%.3f"|format(row.effective_rate_per_kwh) }}/kWh</div>
+                        </td>
+                        <td class="text-right tabular-nums">
+                            {% if cost_explorer.reference_rate > 0 %}
+                            ${{ "%.2f"|format(row.total_at_reference) }}
+                            {% else %}
+                            <span class="text-base-content/40">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right tabular-nums {% if row.delta <= 0 %}text-success{% else %}text-error{% endif %}">
+                            {% if cost_explorer.reference_rate > 0 %}
+                                {% if row.delta > 0 %}+{% endif %}${{ "%.2f"|format(row.delta) }}
+                            {% else %}
+                            <span class="text-base-content/40">—</span>
+                            {% endif %}
+                        </td>
+                        {# Per-row exclude — inverse of row-click-to-scope. #}
+                        <td class="text-right">
+                            <button type="button"
+                                    class="btn btn-ghost btn-xs btn-circle text-base-content/40 hover:text-error"
+                                    data-cost-explorer-row-exclude
+                                    data-network-id="{{ row.network_id }}"
+                                    data-network-label="{{ row.network_name }}"
+                                    title="Exclude {{ row.network_name }}"
+                                    aria-label="Exclude {{ row.network_name }} from the filter">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                </svg>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="border-t-2 border-base-content/20 font-semibold">
+                        <td></td>
+                        <td>Total</td>
+                        <td class="text-right tabular-nums">{{ cost_explorer.totals_row.session_count }}</td>
+                        <td class="text-right tabular-nums">{{ "%.1f"|format(cost_explorer.totals_row.total_kwh) }} kWh</td>
+                        <td class="text-right tabular-nums">
+                            ${{ "%.2f"|format(cost_explorer.totals_row.total_paid) }}
+                            {% if cost_explorer.totals_row.paid_per_kwh is not none %}
+                            <div class="text-xs text-base-content/50 font-normal tabular-nums">${{ "%.2f"|format(cost_explorer.totals_row.paid_per_kwh) }}/kWh</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-right tabular-nums">
+                            {% if cost_explorer.reference_rate > 0 %}
+                            ${{ "%.2f"|format(cost_explorer.totals_row.total_at_reference) }}
+                            {% if cost_explorer.totals_row.reference_label %}
+                            <div class="text-xs text-base-content/50 font-normal tabular-nums">{{ cost_explorer.totals_row.reference_label }}</div>
+                            {% endif %}
+                            {% else %}<span class="text-base-content/40">—</span>{% endif %}
+                        </td>
+                        <td class="text-right tabular-nums {% if cost_explorer.totals_row.delta <= 0 %}text-success{% else %}text-error{% endif %}">
+                            {% if cost_explorer.reference_rate > 0 %}
+                                {% if cost_explorer.totals_row.delta > 0 %}+{% endif %}${{ "%.2f"|format(cost_explorer.totals_row.delta) }}
+                            {% else %}<span class="text-base-content/40">—</span>{% endif %}
+                        </td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        {% if cost_explorer.unconfigured_count > 0 %}
+        <p class="text-xs text-base-content/40 mt-2">
+            {{ cost_explorer.unconfigured_count }} {{ "session" if cost_explorer.unconfigured_count == 1 else "sessions" }} excluded (no configured network)
+        </p>
+        {% endif %}
+        {% endif %}
+    </main>
+</div>
+
+{% if cost_explorer_chart %}
+<div class="border-t border-base-300 bg-base-200/50 p-6">
+    <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Monthly trend</p>
+    {{ cost_explorer_chart | safe }}
+</div>
+{% endif %}

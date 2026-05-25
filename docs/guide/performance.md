@@ -4,6 +4,8 @@ The charging performance page (`/charging/performance`) shows how you charge: en
 
 ![charging performance](../assets/images/lr_performance.gif)
 
+![charging performance](../assets/images/lr_performance.gif)
+
 !!! note "Renamed from Energy"
     This page was `/charging/energy` in earlier releases. The route and sidebar label changed in v0.3 to better match what the page shows and to keep it separate from **Driving Performance**.
 

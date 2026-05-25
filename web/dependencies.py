@@ -1,4 +1,4 @@
-"""Module for dependencies."""
+"""FastAPI dependency providers."""
 
 from collections.abc import AsyncGenerator
 
