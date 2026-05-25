@@ -40,6 +40,79 @@ async def test_query_cost_explorer_totals(cost_scenario):
     assert abs(result["total_at_reference"] - round(expected_at_ref, 2)) < 0.05
 
 
+async def test_query_cost_explorer_range_level_totals_and_ratios(cost_scenario):
+    """Range-level counts, distance, and all-in cost ratios derive consistently."""
+    db = cost_scenario["db"]
+
+    result = await query_cost_explorer(db, time_range="all", reference_rate=0.50)
+
+    # Counts mirror the ledger totals row.
+    assert result["total_sessions"] == result["totals_row"]["session_count"]
+    assert result["total_kwh"] == result["totals_row"]["total_kwh"]
+    assert result["total_distance"] >= 0.0
+    assert result["free_session_count"] >= 0
+
+    # $/kWh = all-in total / total kWh.
+    if result["total_kwh"] > 0:
+        expected_kwh = round(
+            result["total_paid_actual"] / result["total_kwh"], 3
+        )
+        assert result["cost_per_kwh"] == expected_kwh
+    # $/session = all-in total / session count.
+    if result["total_sessions"] > 0:
+        expected_session = round(
+            result["total_paid_actual"] / result["total_sessions"], 2
+        )
+        assert result["cost_per_session"] == expected_session
+    # $/km divides by raw km distance (the route converts to display units).
+    if result["total_distance"] > 0:
+        expected_dist = round(
+            result["total_paid_actual"] / result["total_distance"], 4
+        )
+        assert result["cost_per_distance_km"] == expected_dist
+    else:
+        assert result["cost_per_distance_km"] is None
+
+
+async def test_query_cost_explorer_strip_ignores_network_filter(cost_scenario):
+    """Range-level strip figures stay constant when a network filter is applied.
+
+    The card's summary strip is range-scoped; the route calls the aggregator a
+    second time without the filter and reads the strip keys from there.
+    """
+    db = cost_scenario["db"]
+
+    unscoped = await query_cost_explorer(db, time_range="all", reference_rate=0.50)
+    first_net_id = unscoped["by_network"][0]["network_id"]
+    scoped = await query_cost_explorer(
+        db, time_range="all", network_ids=[first_net_id], reference_rate=0.50
+    )
+
+    # The scoped call narrows its own totals — that's expected. The route uses
+    # the UNSCOPED call for the strip, so this test asserts the unscoped figure
+    # is the broader one (the strip is built from it).
+    assert unscoped["total_sessions"] >= scoped["total_sessions"]
+    assert unscoped["total_paid_actual"] >= scoped["total_paid_actual"]
+
+
+async def test_query_cost_explorer_free_charging_strip_figures(cost_scenario):
+    """free_charging_saved and cost_per_free_session populate when free sessions exist."""
+    db = cost_scenario["db"]
+
+    result = await query_cost_explorer(db, time_range="all", reference_rate=0.40)
+
+    if result["free_session_count"] > 0:
+        assert result["free_charging_saved"] >= 0.0
+        if result["cost_per_free_session"] is not None:
+            expected = round(
+                result["free_charging_saved"] / result["free_session_count"], 2
+            )
+            assert result["cost_per_free_session"] == expected
+    else:
+        assert result["free_charging_saved"] == 0.0
+        assert result["cost_per_free_session"] is None
+
+
 async def test_query_cost_explorer_network_filter(cost_scenario):
     """Network filter scopes both totals and the by_network breakdown."""
     db = cost_scenario["db"]
@@ -82,6 +155,71 @@ async def test_query_cost_explorer_free_what_if_global(cost_scenario):
         assert what_if["total_paid_what_if"] == baseline["total_paid_actual"]
     # Actual must NOT change between the two calls.
     assert what_if["total_paid_actual"] == baseline["total_paid_actual"]
+
+
+async def test_query_cost_explorer_free_what_if_per_network_multi(cost_scenario):
+    """Per-network rebill applies to every network in the passed list, not just one.
+
+    Guards WR-01: the form previously dropped all but the last selected
+    free-charging network, so a two-network rebill silently behaved like a
+    one-network rebill.
+    """
+    from datetime import datetime
+
+    from db.models.charging_session import EVChargingSession
+    from db.models.reference import EVChargingNetwork
+    from tests.test_queries.conftest import DEVICE_ID
+
+    db = cost_scenario["db"]
+
+    # Two free-charging networks, each with one free session.
+    free_x = EVChargingNetwork(
+        network_name="Free X", cost_per_kwh=0.0, is_free=True,
+        is_verified=True, source_system="test_fixture",
+    )
+    free_y = EVChargingNetwork(
+        network_name="Free Y", cost_per_kwh=0.0, is_free=True,
+        is_verified=True, source_system="test_fixture",
+    )
+    db.add_all([free_x, free_y])
+    await db.flush()
+    db.add_all([
+        EVChargingSession(
+            device_id=DEVICE_ID, energy_kwh=30.0, network_id=free_x.id,
+            session_start_utc=datetime(2025, 6, 5, 10, 0, 0),
+            is_complete=True, source_system="test_fixture",
+        ),
+        EVChargingSession(
+            device_id=DEVICE_ID, energy_kwh=20.0, network_id=free_y.id,
+            session_start_utc=datetime(2025, 6, 6, 10, 0, 0),
+            is_complete=True, source_system="test_fixture",
+        ),
+    ])
+    await db.flush()
+
+    baseline = await query_cost_explorer(db, time_range="all", reference_rate=0.40)
+    eligible = {n["network_id"] for n in baseline["free_charging_eligible_networks"]}
+    assert {free_x.id, free_y.id} <= eligible
+
+    # Rebill only Free X.
+    one = await query_cost_explorer(
+        db, time_range="all", free_charging_what_if=True,
+        free_charging_scope="per_network", free_charging_networks=[free_x.id],
+        reference_rate=0.40,
+    )
+    # Rebill both — must move further than the single-network rebill.
+    both = await query_cost_explorer(
+        db, time_range="all", free_charging_what_if=True,
+        free_charging_scope="per_network",
+        free_charging_networks=[free_x.id, free_y.id],
+        reference_rate=0.40,
+    )
+
+    # Free X rebill adds 30 kWh * 0.40 = 12.00; Free Y adds 20 * 0.40 = 8.00.
+    assert round(one["total_paid_what_if"] - baseline["total_paid_what_if"], 2) == 12.00
+    assert round(both["total_paid_what_if"] - baseline["total_paid_what_if"], 2) == 20.00
+    # Actuals are unaffected by the what-if.
+    assert both["total_paid_actual"] == baseline["total_paid_actual"]
 
 
 async def test_query_cost_explorer_subscription_counterfactual(cost_scenario):

@@ -38,6 +38,8 @@ For feature documentation, see the docs site at
 - Charging sessions auto-inherit the network from a resolved location when the location has one.
 - `uuid5` used for Trip ingestion to cut down on duplicates (hopefully) 
 - Timezone dropdowns in Settings and CSV Import are now searchable with regional filters.
+- The three summary cards on the Costs page are folded into a Total spend and Cost ratios strip atop the Cost Explorer card.
+- The Savings Scenarios card now compares your all-in EV cost (energy plus subscription fees) against gas, with the energy-only figure shown beneath.
 
 ### Fixed
 
@@ -45,6 +47,7 @@ For feature documentation, see the docs site at
   - Non-Docker upgraders: see `db/migrations/README.md`.
 - Datetimes correctly use configured timezone (converted to UTC on storage) and render based on configured settings.
 - Charge-curve session picker no longer scrolls the page back to the top — only the curve card swaps.
+- Free-charging what-if rebill now applies to every selected network, not just the last one ticked.
 
 ### Removed
 

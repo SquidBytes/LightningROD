@@ -1,11 +1,6 @@
-/* Searchable dropdown picker — shared client behavior.
- *
- * Powers the macro pair in partials/searchable_select.html.  Each picker is a
- * `.searchable-picker` wrapper carrying a hidden form input, a label span,
- * a search input, optional filter chips, and a list of `<button>` items.  All
- * coordination happens via `closest('.searchable-picker')` and data-attributes
- * so there's no per-instance state baked into the markup — multiple pickers
- * coexist on the same page without colliding.
+/* Searchable dropdown picker — client behavior for searchable_select.html.
+ * Coordination is via `closest('.searchable-picker')` + data-attributes, so
+ * multiple pickers coexist on one page without per-instance state.
  */
 (function () {
     window.LR = window.LR || {};
@@ -26,9 +21,7 @@
         });
     }
 
-    // Multi-mode helper: recompute hidden value + chip strip from the set of
-    // currently-active list items. Private to the IIFE — callers reach it via
-    // LR.searchablePicker.select / removeChip.
+    // Recompute the hidden value + chip strip from the active list items.
     function rebuildMultiState(picker) {
         var hidden = picker.querySelector('[data-picker-value]');
         var chipContainer = picker.querySelector('[data-picker-chip-container]');
@@ -68,10 +61,8 @@
             btn.setAttribute('data-id', item.id);
             btn.setAttribute('aria-label', 'Remove ' + item.label);
             btn.innerHTML = '&times;';
-            // Stop the click from bubbling up to the trigger (DaisyUI dropdown
-            // opens via focus on the role="button" wrapper). preventDefault on
-            // mousedown keeps focus from moving to the trigger before the click
-            // handler runs — otherwise the dropdown re-opens on chip x.
+            // preventDefault on mousedown keeps focus off the trigger, so the
+            // DaisyUI dropdown does not re-open when the chip × is clicked.
             btn.onmousedown = function (e) {
                 e.stopPropagation();
                 e.preventDefault();
@@ -85,13 +76,9 @@
         });
     }
 
-    // When a picker opens, scroll its active item into view so the highlight
-    // is visible in long lists (e.g. timezone) instead of buried below the fold.
-    // Gate to the trigger element (the only descendant with an explicit
-    // role="button"). Running on every focusin would re-scroll during a
-    // list-item click: focus moves to the clicked <button> on mousedown, the
-    // handler jumps the list back to the still-active item, and the mouseup
-    // lands on a different row — swallowing the selection.
+    // On open, scroll the active item into view. Gated to the trigger
+    // (role="button") — running on every focusin would re-scroll during a
+    // list-item click and swallow the selection.
     document.addEventListener('focusin', function (e) {
         var picker = root(e.target);
         if (!picker) return;
@@ -110,9 +97,8 @@
             var isMulti = hidden.dataset.multiple === 'true';
 
             if (isMulti) {
-                // Toggle active class on clicked item; rebuild hidden value + chip strip
-                // from all active items. Do NOT blur — the dropdown stays open so the
-                // user can keep selecting.
+                // Toggle the clicked item and rebuild state. Do NOT blur — the
+                // dropdown stays open for further selection.
                 var wasActive = btn.classList.contains('bg-brand-accent/15');
                 if (wasActive) {
                     btn.classList.remove('bg-brand-accent/15', 'text-brand-accent');
@@ -124,7 +110,7 @@
                 return;
             }
 
-            // Single-mode (existing behavior) — preserved as-is.
+            // Single-mode.
             var label = picker.querySelector('[data-picker-label]');
             if (!label) return;
 

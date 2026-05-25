@@ -69,9 +69,7 @@ services:
     restart: unless-stopped
 
   web:
-    build:
-      context: /mnt/user/appdata/LightningROD
-      dockerfile: /mnt/user/appdata/LightningROD/docker/Dockerfile
+    image: ghcr.io/squidbytes/lightningrod-web:latest
     ports:
       - "8000:8000"
     env_file: .env

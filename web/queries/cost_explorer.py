@@ -162,38 +162,13 @@ async def query_cost_explorer(
     reference_network_id: int | None = None,
     reference_network_name: str | None = None,
 ) -> dict[str, Any]:
-    """Aggregate Cost Explorer card payload for the active filter set.
+    """Aggregate the Cost Explorer card payload for the active filter set.
 
-    Honors network multi-select, the free-charging what-if (global/per-network),
-    reference-rate (resolved to a float by caller), and the subscription counterfactual.
-    All currency values are `round(value, 2)` at the boundary.
+    Honors network multi-select, the free-charging what-if, reference rate, and
+    the subscription counterfactual. Currency values are rounded at the boundary.
 
-    Returns dict with:
-    - total_paid_actual: float — total out-of-pocket = session energy paid +
-      subscription fees overlapping the active range. Includes fees so the
-      headline reflects what the user actually paid, not just energy cost.
-    - total_paid_energy: float — session energy only (sum of display_cost);
-      use this for like-for-like comparison with estimated_total or for
-      reconciling against totals_row.total_paid (which stays energy-only so
-      the ledger table footer matches the per-row sum).
-    - total_paid_what_if: float — total_paid_actual + delta from free-rebill
-      (== total_paid_actual when what_if=False)
-    - estimated_total, delta_actual_vs_estimated: float — Estimated − Energy
-      (apples-to-apples, both exclude subscription fees)
-    - reference_rate, reference_network_id, reference_network_name, total_at_reference,
-      total_savings_vs_reference
-    - subscription: dict (active, with_total, with_energy_at_member_rate, with_fees_count,
-                          with_fees_per_month, with_fees_total, without_total, net_saved,
-                          fee_breakdown)
-    - by_network: list[dict] — one row per network in scope, keyed on network_id
-    - totals_row: dict — totals across by_network. Includes `paid_per_kwh` and
-      `reference_per_kwh` (None when energy/reference is zero) and a
-      `reference_label` ready for the ledger tfoot sub-line (e.g.
-      "Blink - $0.40/kWh" in network mode, "$0.52/kWh" in custom mode).
-    - monthly_trend: list[dict] — [{month, paid, at_reference}, ...]
-    - unconfigured_count: int — sessions skipped due to missing network config
-    - free_charging_eligible_networks: list[dict] — networks with >=1 free session (per-net UI)
-    - single_network_detail: dict | None — extra fields when len(by_network) == 1
+    The summary-strip keys are range-scoped, not network-filtered — the route
+    calls this aggregator a second time with `network_ids=None` for the strip.
     """
     networks_by_id = await get_networks_by_id(db)
     subs_by_network = await get_all_subscriptions_by_network(db)
@@ -212,6 +187,7 @@ async def query_cost_explorer(
             EVChargingSession.device_id,
             EVChargingSession.session_start_utc,
             EVChargingSession.estimated_cost,
+            EVChargingSession.distance_added,
         )
     ).where(EVChargingSession.energy_kwh > 0)
 
@@ -234,6 +210,9 @@ async def query_cost_explorer(
     total_paid_what_if = 0.0
     estimated_total = 0.0
     total_at_reference = 0.0
+    total_distance = 0.0
+    free_session_count = 0
+    free_charging_saved = 0.0
     with_energy = 0.0
     without_energy = 0.0
     unconfigured_count = 0
@@ -243,9 +222,7 @@ async def query_cost_explorer(
     free_eligible_ids: set[int] = set()
     range_start_min: date | None = None
     range_end_max: date | None = None
-    # Per-network subscription-energy accumulator: only counts sessions where
-    # compute_session_cost flagged subscription_active. Used to drive the
-    # per-subscription breakdown rendered in the aside.
+    # Per-network accumulator: only sessions flagged subscription_active.
     subscription_energy_by_network: dict[int, float] = {}
 
     per_net_scope_set = set(free_charging_networks or [])
@@ -260,13 +237,12 @@ async def query_cost_explorer(
             unconfigured_count += 1
             continue
 
-        # Range bounds drive subscription fee proration below.
+        # Range bounds drive subscription-fee proration below.
         session_date = s.session_start_utc.date() if s.session_start_utc else None
         if session_date:
             range_start_min = session_date if range_start_min is None else min(range_start_min, session_date)
             range_end_max = session_date if range_end_max is None else max(range_end_max, session_date)
 
-        # Track free-charging eligible networks for the per-network mode UI.
         if (cost_info.get("is_free") or (network and getattr(network, "is_free", False))) and s.network_id:
             free_eligible_ids.add(s.network_id)
 
@@ -291,8 +267,19 @@ async def query_cost_explorer(
         if cost_info.get("estimated_cost") is not None:
             estimated_total += float(cost_info["estimated_cost"])
 
-        # Subscription counterfactual: With = display_cost (already member-rate),
-        # Without = non_member_cost when subscription active, else display_cost.
+        # distance_added is stored in km; the route converts to display units.
+        if s.distance_added is not None and s.distance_added > 0:
+            total_distance += float(s.distance_added)
+
+        # On a free session, estimated_cost is the "would-have-cost" — the
+        # dollars saved by charging free.
+        if is_free_session:
+            free_session_count += 1
+            if cost_info.get("estimated_cost") is not None:
+                free_charging_saved += float(cost_info["estimated_cost"])
+
+        # Counterfactual: With = display_cost (member rate), Without =
+        # non_member_cost when a subscription is active, else display_cost.
         with_energy += paid
         if cost_info.get("subscription_active") and cost_info.get("non_member_cost") is not None:
             without_energy += float(cost_info["non_member_cost"])
@@ -331,7 +318,6 @@ async def query_cost_explorer(
             monthly_paid[month_key] = monthly_paid.get(month_key, 0.0) + paid_what_if
             monthly_at_ref[month_key] = monthly_at_ref.get(month_key, 0.0) + hypothetical_at_ref
 
-    # Finalize by_network rows.
     by_network_list: list[dict[str, Any]] = []
     for row in by_network.values():
         kwh = row["total_kwh"]
@@ -344,8 +330,7 @@ async def query_cost_explorer(
     by_network_list.sort(key=lambda r: r["total_paid"], reverse=True)
 
     totals_kwh = round(sum(r["total_kwh"] for r in by_network_list), 2)
-    # Effective $/kWh sublines for the ledger tfoot. Guarded against zero-energy
-    # ranges (template renders the bare $/kWh row as "—" when None).
+    # None on a zero-energy range — the template renders "—".
     totals_paid_per_kwh = (
         round(total_paid_actual / totals_kwh, 2) if totals_kwh > 0 else None
     )
@@ -353,9 +338,8 @@ async def query_cost_explorer(
         totals_reference_per_kwh = round(total_at_reference / totals_kwh, 2)
     else:
         totals_reference_per_kwh = None
-    # Label for the reference sub-line. Network mode prefixes with the
-    # reference network name ("Blink - $0.40/kWh"); custom mode renders the
-    # bare rate. None when no reference is configured.
+    # Reference sub-line label — network mode prefixes the network name, custom
+    # mode renders the bare rate.
     if reference_rate > 0:
         if reference_network_name:
             reference_label = f"{reference_network_name} - ${reference_rate:.2f}/kWh"
@@ -375,9 +359,8 @@ async def query_cost_explorer(
         "reference_label": reference_label,
     }
 
-    # Subscription block: collect every period overlapping the session range.
-    # When a network filter is active, only include periods on those networks —
-    # the block then reflects the scoped view rather than global totals.
+    # Collect every subscription period overlapping the range, scoped to the
+    # filtered networks when a network filter is active.
     scope_network_ids: set[int] = set(network_ids) if network_ids else set()
     all_periods_in_range: list[EVNetworkSubscription] = []
     for sub_network_id, periods in subs_by_network.items():
@@ -391,8 +374,6 @@ async def query_cost_explorer(
             if p_start <= range_end_max and p_end >= range_start_min:
                 all_periods_in_range.append(p)
 
-    # Surface the scoped-network label so the template can label or hide the
-    # block when no subscription applies to the active network filter.
     scoped_network_name: str | None = None
     if scope_network_ids:
         names = [
@@ -402,22 +383,20 @@ async def query_cost_explorer(
         ]
         scoped_network_name = ", ".join(names) if names else None
 
+    subscription_block: dict[str, Any]
     if all_periods_in_range and range_start_min and range_end_max:
         fee_breakdown = calculate_fee_breakdown(all_periods_in_range, range_start_min, range_end_max)
         with_fees_total = round(sum(b["fee_total"] for b in fee_breakdown), 2)
         with_fees_count = sum(b["months"] for b in fee_breakdown)
-        # Headline "Fees · N × $Y" picks the most-recent period's monthly_fee; templates
-        # that want a full per-period rendering can fall back to fee_breakdown.
+        # Headline rate is the most-recent period's monthly_fee.
         with_fees_per_month = fee_breakdown[-1]["fee_per_month"] if fee_breakdown else 0.0
         with_energy_only = round(with_energy, 2)
         with_total = round(with_energy_only + with_fees_total, 2)
         without_total = round(without_energy, 2)
         net_saved = round(without_total - with_total, 2)
 
-        # Per-subscription rows for the aside breakdown: one entry per network
-        # with a fee_breakdown contribution. Energy comes from
-        # subscription_energy_by_network (sessions where subscription_active),
-        # fees come from the fee_breakdown bucketed by period.network_id.
+        # Per-subscription rows for the aside: energy from
+        # subscription_energy_by_network, fees bucketed by period.network_id.
         per_network_fees: dict[int, dict[str, Any]] = {}
         for b in fee_breakdown:
             nid = b["period"].network_id
@@ -429,7 +408,6 @@ async def query_cost_explorer(
                 }
             per_network_fees[nid]["fee_total"] += float(b["fee_total"])
             per_network_fees[nid]["months"] += int(b["months"])
-            # Carry the most-recent period's monthly fee as the headline rate.
             per_network_fees[nid]["fee_per_month"] = float(b["fee_per_month"])
 
         subscription_network_ids = sorted(
@@ -450,7 +428,7 @@ async def query_cost_explorer(
         # Stable display order: highest energy first, then alphabetical.
         per_subscription.sort(key=lambda r: (-r["energy_at_member_rate"], r["network_name"]))
 
-        subscription_block: dict[str, Any] = {
+        subscription_block = {
             "active": True,
             "with_total": with_total,
             "with_energy_at_member_rate": with_energy_only,
@@ -498,26 +476,45 @@ async def query_cost_explorer(
         if nid in networks_by_id
     ]
 
-    # Subscription fees the user actually paid out-of-pocket in this range.
-    # When a subscription is active, these are real recurring charges separate
-    # from per-session energy cost — the headline must reflect them so
-    # "you paid" matches what's left the user's wallet.
-    total_fees_paid = float(subscription_block.get("with_fees_total", 0.0)) if subscription_block.get("active") else 0.0
+    # Subscription fees paid out-of-pocket in this range — folded into the
+    # headline so "you paid" matches the user's actual spend.
+    total_fees_paid = float(subscription_block.get("with_fees_total") or 0.0) if subscription_block.get("active") else 0.0
     total_paid_energy = total_paid_actual
     total_paid_with_fees = total_paid_actual + total_fees_paid
     total_paid_what_if_with_fees = total_paid_what_if + total_fees_paid
 
+    # Strip cost ratios — all-in total over each denominator, None when the
+    # denominator is zero. $/distance is raw $/km; the route converts it.
+    total_sessions = totals_row["session_count"]
+    cost_per_kwh = round(total_paid_with_fees / totals_kwh, 3) if totals_kwh > 0 else None
+    cost_per_session = round(total_paid_with_fees / total_sessions, 2) if total_sessions > 0 else None
+    cost_per_distance_km = (
+        round(total_paid_with_fees / total_distance, 4) if total_distance > 0 else None
+    )
+    # Average estimated cost of a free session had it been billed.
+    cost_per_free_session = (
+        round(free_charging_saved / free_session_count, 2) if free_session_count > 0 else None
+    )
+
     return {
-        # Headline value: energy + subscription fees in range.
+        # Headline: energy + subscription fees in range.
         "total_paid_actual": round(total_paid_with_fees, 2),
-        # Energy-only sum — keeps the ledger table footer ↔ row arithmetic
-        # consistent and powers the "Energy $X · Fees $Y" breakdown sub-line.
+        # Energy-only — keeps the ledger footer ↔ row arithmetic consistent.
         "total_paid_energy": round(total_paid_energy, 2),
         "total_fees_paid": round(total_fees_paid, 2),
         "total_paid_what_if": round(total_paid_what_if_with_fees, 2),
         "estimated_total": round(estimated_total, 2),
-        # Estimated is energy-only; compare like-for-like so the delta is meaningful.
+        # Estimated is energy-only; compare like-for-like.
         "delta_actual_vs_estimated": round(estimated_total - total_paid_energy, 2),
+        "total_sessions": total_sessions,
+        "total_kwh": totals_kwh,
+        "total_distance": round(total_distance, 2),
+        "free_session_count": free_session_count,
+        "free_charging_saved": round(free_charging_saved, 2),
+        "cost_per_kwh": cost_per_kwh,
+        "cost_per_session": cost_per_session,
+        "cost_per_distance_km": cost_per_distance_km,
+        "cost_per_free_session": cost_per_free_session,
         "reference_rate": reference_rate,
         "reference_network_id": reference_network_id,
         "reference_network_name": reference_network_name,

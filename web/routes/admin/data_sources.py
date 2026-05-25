@@ -62,7 +62,7 @@ def _load_groups() -> list[dict[str, Any]]:
         module = importlib.import_module(descriptor.adapter_module)
         contracts: list[FieldContract] = list(getattr(module, "FIELD_CONTRACTS", []))
         last_seen: dict[str, dict[str, Any]] = dict(getattr(module, "_last_seen_raw", {}))
-        rows = []
+        rows: list[dict[str, Any]] = []
         covered: set[tuple[str, str]] = set()
         for c in sorted(
             contracts, key=lambda x: (x.source_locator.pattern, x.source_attribute)

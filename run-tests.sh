@@ -9,6 +9,8 @@ set -euo pipefail
 #   ./run-tests.sh --backend=postgres                # Explicit PG backend (default)
 #   ./run-tests.sh --backend=sqlite                  # SQLite dialect-compat suite
 #   ./run-tests.sh --backend=all                     # Both backends, fail-fast
+#   ./run-tests.sh --down                             # Auto-stop test DB after pytest
+#   ./run-tests.sh --down-volumes                     # Auto-stop + remove test DB volumes
 #   ./run-tests.sh -m db                             # Run only DB-marked tests
 #   ./run-tests.sh -m query                          # Run only query tests
 #   ./run-tests.sh tests/test_api/                   # Run API integration tests
@@ -20,11 +22,18 @@ cd "$SCRIPT_DIR"
 
 # --- --backend selector ---
 BACKEND="postgres"
+AUTO_DOWN="0"
+DOWN_VOLUMES="0"
 PYTEST_ARGS=()
 
 for arg in "$@"; do
     case "$arg" in
         --backend=*) BACKEND="${arg#*=}" ;;
+        --down)      AUTO_DOWN="1" ;;
+        --down-volumes)
+            AUTO_DOWN="1"
+            DOWN_VOLUMES="1"
+            ;;
         *)           PYTEST_ARGS+=("$arg") ;;
     esac
 done
@@ -63,16 +72,31 @@ case "$BACKEND" in
 esac
 
 # --- Postgres path: docker-compose + pytest flow ---
+TEST_COMPOSE_FILE="docker/docker-compose.test.yml"
+
+cleanup_test_db() {
+    if [ "$AUTO_DOWN" != "1" ]; then
+        return
+    fi
+    echo "Tearing down test database..."
+    if [ "$DOWN_VOLUMES" = "1" ]; then
+        docker compose -f "$TEST_COMPOSE_FILE" down -v
+    else
+        docker compose -f "$TEST_COMPOSE_FILE" down
+    fi
+}
+
+trap cleanup_test_db EXIT
 
 # Start test DB container
 echo "Starting test database..."
-docker compose -f docker/docker-compose.test.yml up -d test-db
+docker compose -f "$TEST_COMPOSE_FILE" up -d test-db
 
 # Wait for healthcheck
 echo "Waiting for test DB to be ready..."
 retries=0
 max_retries=30
-until docker compose -f docker/docker-compose.test.yml exec test-db pg_isready -U lightningrod_test -d lightningrod_test 2>/dev/null; do
+until docker compose -f "$TEST_COMPOSE_FILE" exec test-db pg_isready -U lightningrod_test -d lightningrod_test 2>/dev/null; do
     retries=$((retries + 1))
     if [ "$retries" -ge "$max_retries" ]; then
         echo "ERROR: Test DB failed to start after ${max_retries} attempts"

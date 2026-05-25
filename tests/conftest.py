@@ -37,9 +37,11 @@ os.environ["DATABASE_URL"] = TEST_DB_URL
 import pytest
 import pytest_asyncio
 from sqlalchemy import event
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 _migrations_done = False
+_db_unavailable_reason: str | None = None
 
 
 def _attach_sqlite_pragmas(engine):
@@ -119,21 +121,33 @@ async def db_session():
     does internal operations (like autoflush), it creates sub-savepoints
     within the test transaction rather than committing.
     """
+    global _db_unavailable_reason
+    if _db_unavailable_reason is not None:
+        pytest.skip(_db_unavailable_reason)
+
     engine = create_async_engine(TEST_DB_URL, echo=False)
     _attach_sqlite_pragmas(engine)
-    async with engine.connect() as conn:
-        trans = await conn.begin()
-        session = AsyncSession(
-            bind=conn,
-            expire_on_commit=False,
-            join_transaction_mode="create_savepoint",
+    try:
+        async with engine.connect() as conn:
+            trans = await conn.begin()
+            session = AsyncSession(
+                bind=conn,
+                expire_on_commit=False,
+                join_transaction_mode="create_savepoint",
+            )
+
+            yield session
+
+            await session.close()
+            await trans.rollback()
+    except (OperationalError, OSError) as exc:
+        _db_unavailable_reason = (
+            "Test database unavailable "
+            f"({TEST_DB_URL}); skipping DB-backed tests. Root error: {exc}"
         )
-
-        yield session
-
-        await session.close()
-        await trans.rollback()
-    await engine.dispose()
+        pytest.skip(_db_unavailable_reason)
+    finally:
+        await engine.dispose()
 
 
 @pytest.fixture(autouse=True)

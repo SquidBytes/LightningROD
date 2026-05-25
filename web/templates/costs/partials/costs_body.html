@@ -1,0 +1,10 @@
+{# Costs page body — Cost Explorer card + savings comparisons. Returned on its
+   own for filter-bar date-range swaps, and embedded in costs/index.html. #}
+{% if cost_explorer_strip.unconfigured_count > 0 %}
+<p class="text-xs text-base-content/40 mb-4">
+    {{ cost_explorer_strip.unconfigured_count }} {{ "session" if cost_explorer_strip.unconfigured_count == 1 else "sessions" }} excluded (no configured network)
+</p>
+{% endif %}
+
+{% include "costs/partials/cost_explorer.html" %}
+{% include "costs/partials/comparisons.html" %}

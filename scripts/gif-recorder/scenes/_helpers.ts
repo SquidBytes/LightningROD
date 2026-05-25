@@ -21,25 +21,24 @@ export async function expectVisible(page: Page, selector: string) {
 }
 
 /**
- * Wait for N Plotly charts to actually paint their SVG. The chart container
- * div appears in the DOM before Plotly hydrates — checking for `.plotly`
- * count alone leaves blank frames.
+ * Wait for N full-size Plotly charts to actually paint their SVG. The chart
+ * container div appears in the DOM before Plotly hydrates — checking for
+ * `.plotly` count alone leaves blank frames.
+ *
+ * Pages mix full charts with tiny inline sparklines (also `.plotly`, ~48px
+ * tall and rendered first in DOM order — e.g. battery's HV Pack Telemetry).
+ * Count only containers taller than 50px so sparklines don't satisfy — or
+ * starve — the wait.
  */
 export async function waitForCharts(page: Page, count = 1, timeoutMs = 15_000) {
   await page.waitForFunction(
     (n) => {
-      const containers = Array.from(
+      const charts = Array.from(
         document.querySelectorAll<HTMLElement>(".plotly"),
+      ).filter(
+        (el) => el.querySelector(".main-svg") !== null && el.offsetHeight > 50,
       );
-      return (
-        containers.length >= n &&
-        containers
-          .slice(0, n)
-          .every(
-            (el) =>
-              el.querySelector(".main-svg") !== null && el.offsetHeight > 50,
-          )
-      );
+      return charts.length >= n;
     },
     count,
     { timeout: timeoutMs },

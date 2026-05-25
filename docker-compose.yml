@@ -17,21 +17,15 @@ services:
     restart: unless-stopped
 
   web:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      args:
-        # Stamp the version into the image at build time
-        LIGHTNINGROD_VERSION: ${LIGHTNINGROD_VERSION:-dev}
-    # Tag the built image as lightningrod-web:<version> 
-    image: lightningrod-web:${LIGHTNINGROD_VERSION:-dev}
+    # Pull prebuilt image from GHCR for grab-and-go self-hosted deploys.
+    image: ${LIGHTNINGROD_IMAGE:-ghcr.io/squidbytes/lightningrod-web}:${LIGHTNINGROD_VERSION:-latest}
     container_name: lightningrod-web
     ports:
       - "${APP_PORT:-8000}:8000"
     env_file: .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
-      - LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION:-dev}
+      - LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION:-latest}
     depends_on:
       db:
         condition: service_healthy

@@ -8,9 +8,11 @@
       {% include "partials/filter_bar.html" %}
     {% endwith %}
 
-    <!-- HTMX swap target — includes summary cards, network breakdown, charts, and comparisons -->
+    <!-- HTMX swap target — Cost Explorer card + savings comparisons.
+         The body partial below is also returned on its own for filter-bar
+         date-range swaps. -->
     <div id="costs-content">
-        {% include "costs/partials/summary_cards.html" %}
+        {% include "costs/partials/costs_body.html" %}
     </div>
 </div>
 {% endblock %}

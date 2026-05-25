@@ -14,13 +14,6 @@ from web.queries.cost_explorer import (
     get_charge_type_network_groupings,
     query_cost_explorer,
 )
-from web.queries.costs import (
-    avg_cost_per_session,
-    cost_per_kwh,
-    cost_per_mile,
-    free_charging_savings,
-    query_cost_summary,
-)
 from web.queries.ice_vehicles import get_default_ice_vehicle
 from web.queries.settings import (
     get_all_networks,
@@ -63,11 +56,9 @@ async def costs(
     ref_value: float | None = None,
     hx_request: Annotated[str | None, Header()] = None,
 ):
-    # Vehicle scoping
     active_device_id = await get_active_device_id(db)
     active_vehicle = await get_active_vehicle(db)
 
-    # Parse Cost Explorer control params + resolve reference rate.
     def _parse_csv_ids(raw: str | None) -> list[int]:
         if not raw:
             return []
@@ -81,9 +72,7 @@ async def costs(
     all_networks = await get_all_networks(db)
     networks_by_id_lookup = {n.id: n for n in all_networks}
 
-    # Networks grouped by session-history AC/DC mix — powers the Network filter
-    # quick-action chips (All / None / AC / DC). A network can appear in both
-    # groupings if the user has both AC and DC sessions on it.
+    # AC/DC groupings power the network-filter quick-action chips.
     charge_type_groupings = await get_charge_type_network_groupings(
         db, time_range=range or "all", device_id=active_device_id
     )
@@ -103,8 +92,6 @@ async def costs(
 
     unit_ctx = await get_unit_context(db)
 
-    summary = await query_cost_summary(db, time_range=range or "all", device_id=active_device_id)
-
     cost_explorer = await query_cost_explorer(
         db,
         time_range=range or "all",
@@ -122,39 +109,36 @@ async def costs(
         reference_network_name=ref_network_name_eff,
     )
 
+    # The strip is range-scoped — re-run the aggregator unfiltered, but reuse
+    # the filtered result when no filter is active to skip a redundant query.
+    if selected_network_ids:
+        cost_explorer_strip = await query_cost_explorer(
+            db,
+            time_range=range or "all",
+            device_id=active_device_id,
+            reference_rate=reference_rate,
+        )
+    else:
+        cost_explorer_strip = cost_explorer
+
+    # Convert the raw $/km ratio to the user's distance unit.
+    strip_distance_factor = 1.0 / MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
+    cost_per_distance = cost_explorer_strip.get("cost_per_distance_km")
+    cost_explorer_strip = {
+        **cost_explorer_strip,
+        "cost_per_distance": (
+            round(cost_per_distance * strip_distance_factor, 4)
+            if cost_per_distance is not None
+            else None
+        ),
+    }
+
     selected_network_items = [
         {"id": str(nid), "label": networks_by_id_lookup[nid].network_name}
         for nid in selected_network_ids
         if nid in networks_by_id_lookup
     ]
 
-    # Summary-row ratios + free-charging sub-line.
-    # Helpers return None when denominator is 0 — pre-format to "—" here so
-    # the template never sees NaN/$0.00 for empty ranges.
-    avg_per_session_val = await avg_cost_per_session(
-        db, device_id=active_device_id, time_range=range or "all"
-    )
-    cost_per_mile_val = await cost_per_mile(
-        db, device_id=active_device_id, time_range=range or "all"
-    )
-    cost_per_kwh_val = await cost_per_kwh(
-        db, device_id=active_device_id, time_range=range or "all"
-    )
-    free_charging_savings_val = await free_charging_savings(
-        db, device_id=active_device_id, time_range=range or "all"
-    )
-
-    def _fmt_dollars(v):
-        return "—" if v is None else f"${v:,.2f}"
-
-    avg_per_session_formatted = _fmt_dollars(avg_per_session_val)
-    cost_per_mile_formatted = _fmt_dollars(cost_per_mile_val)
-    cost_per_kwh_formatted = _fmt_dollars(cost_per_kwh_val)
-
-    # Build network colors map for consistent chart coloring
-    network_colors = {n.network_name: (n.color or '#6B7280') for n in all_networks}
-
-    # Load comparison settings
     toggle_keys = ["comparison_section_visible", "comparison_gas_enabled", "comparison_network_enabled"]
     toggles = await get_app_settings_dict(db, toggle_keys)
     show_comparisons = toggles.get("comparison_section_visible", "true") != "false"
@@ -174,13 +158,10 @@ async def costs(
     all_vehicles = await get_all_vehicles(db)
     distance_factor = MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
 
-    # Convert gas_comparison total_distance (km) to display units
     if gas_comparison is not None and gas_comparison.get("total_distance") is not None:
         gas_comparison["total_distance"] = gas_comparison["total_distance"] * distance_factor
 
-    # Surface HA sensor friendly names for the ledger surface.
-    # Fallback is the raw entity_id when the setting is blank; the template
-    # renders the entity_id as-is rather than a hardcoded label.
+    # HA sensor friendly names — fall back to the raw entity_id when blank.
     if gas_comparison is not None:
         sensor_settings = await get_app_settings_dict(
             db,
@@ -197,11 +178,8 @@ async def costs(
     range_label = RANGE_LABELS.get(active_range, "Custom range")
 
     if section == "cost_explorer":
-        # Body-only partial — replaces #cost-explorer-body inside the shell, so
-        # the form/header strip is NOT re-emitted (avoids nested duplication).
-        # The free-charging what-if controls now live IN the aside (their effect
-        # is only visible there + on the chart), so they need their state passed
-        # to the section partial too.
+        # Body-only partial — the header strip is not re-emitted. The aside's
+        # free-charging what-if state must still be passed through.
         section_context = {
             **unit_ctx,
             "cost_explorer": cost_explorer,
@@ -215,8 +193,8 @@ async def costs(
 
     context = {
         **unit_ctx,
-        "summary": summary,
         "cost_explorer": cost_explorer,
+        "cost_explorer_strip": cost_explorer_strip,
         "cost_explorer_chart": cost_explorer_chart,
         "active_range": active_range,
         "range_label": range_label,
@@ -236,18 +214,10 @@ async def costs(
         "ref_network_id": ref_network_id_eff,
         "ref_value": ref_value,
         "toggles": toggles,
-        "network_colors": network_colors,
         "active_vehicle": active_vehicle,
         "all_vehicles": all_vehicles,
-        "avg_per_session_val": avg_per_session_val,
-        "cost_per_mile_val": cost_per_mile_val,
-        "cost_per_kwh_val": cost_per_kwh_val,
-        "free_charging_savings_val": free_charging_savings_val,
-        "avg_per_session_formatted": avg_per_session_formatted,
-        "cost_per_mile_formatted": cost_per_mile_formatted,
-        "cost_per_kwh_formatted": cost_per_kwh_formatted,
     }
 
     if hx_request:
-        return templates.TemplateResponse(request, "costs/partials/summary_cards.html", context)
+        return templates.TemplateResponse(request, "costs/partials/costs_body.html", context)
     return templates.TemplateResponse(request, "costs/index.html", context)

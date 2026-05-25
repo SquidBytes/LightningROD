@@ -11,9 +11,9 @@ test("overview", async ({ page }) => {
   await gotoAndWait(page, "/");
   await hideCursor(page);
 
-  await expect(page.getByText("F-150 Lightning SR").first()).toBeVisible({
-    timeout: 15_000,
-  });
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 }),
+  ).toBeVisible({ timeout: 15_000 });
   await waitForCharts(page, 2);
   await settle(page, 800);
 

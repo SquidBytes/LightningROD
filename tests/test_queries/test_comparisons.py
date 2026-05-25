@@ -3,14 +3,18 @@
 Tests gas comparison and network rate comparison calculations.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import delete
 
 from db.models.charging_session import EVChargingSession
 from db.models.ice_vehicle import IceVehicle
-from db.models.reference import EVChargingNetwork, GasPriceHistory
+from db.models.reference import (
+    EVChargingNetwork,
+    EVNetworkSubscription,
+    GasPriceHistory,
+)
 from db.models.vehicle import EVVehicle
 from web.queries.comparisons import query_gas_comparison
 
@@ -116,7 +120,10 @@ async def test_gas_comparison(db_session):
         db, vehicle=vehicle, ice_vehicle=ice, time_range="all"
     )
 
-    # EV costs: each session = kwh * 0.35 -> 14.00 + 10.50 + 17.50 = 42.00
+    # EV costs: each session = kwh * 0.35 -> 14.00 + 10.50 + 17.50 = 42.00.
+    # No subscription configured, so ev_total == ev_energy and ev_fees == 0.
+    assert result["ev_energy"] == pytest.approx(42.00, abs=0.01)
+    assert result["ev_fees"] == pytest.approx(0.00, abs=0.01)
     assert result["ev_total"] == pytest.approx(42.00, abs=0.01)
     assert result["session_count"] == 3
     # total_distance is in km (metric base)
@@ -133,6 +140,41 @@ async def test_gas_comparison(db_session):
     assert result["savings_high"] == pytest.approx(60.48 - 42.00, abs=0.01)
     assert result["has_range"] is True
     assert result["ice_label"] == "2024 Ford Explorer 25 MPG"
+
+
+async def test_gas_comparison_ev_total_includes_subscription_fees(db_session):
+    """EV total in the savings comparison is all-in: energy + subscription fees."""
+    db = db_session
+    data = await _setup_comparison_data(db)
+    vehicle = data["vehicle"]
+    ice = data["ice"]
+    net = data["network"]
+
+    # One subscription period covering June 2025 (the session month) at $7/mo.
+    # calculate_monthly_fees_in_range counts any touched calendar month as one,
+    # so the June 1-3 session range yields exactly 1 month -> $7.00 in fees.
+    sub = EVNetworkSubscription(
+        network_id=net.id,
+        member_rate=0.30,
+        monthly_fee=7.00,
+        start_date=date(2025, 6, 1),
+        end_date=date(2025, 6, 30),
+    )
+    db.add(sub)
+    await db.flush()
+
+    result = await query_gas_comparison(
+        db, vehicle=vehicle, ice_vehicle=ice, time_range="all"
+    )
+
+    # Energy-only stays at 42.00; fees add $7.00; all-in total is 49.00.
+    assert result["ev_energy"] == pytest.approx(42.00, abs=0.01)
+    assert result["ev_fees"] == pytest.approx(7.00, abs=0.01)
+    assert result["ev_total"] == pytest.approx(49.00, abs=0.01)
+
+    # Savings = gas - all-in EV: 57.60 - 49.00 and 60.48 - 49.00.
+    assert result["savings_low"] == pytest.approx(57.60 - 49.00, abs=0.01)
+    assert result["savings_high"] == pytest.approx(60.48 - 49.00, abs=0.01)
 
 
 async def test_gas_comparison_no_ice_vehicle(db_session):

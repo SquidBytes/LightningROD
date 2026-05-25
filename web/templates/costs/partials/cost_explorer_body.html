@@ -1,34 +1,15 @@
-{# Cost Explorer card body — swap target for the form/row-click/clear-scope
-   controls. Sits inside #cost-explorer-body in the shell template; the section
-   endpoint returns this partial on its own so HTMX replaces only the inner
-   content rather than nesting another full card. #}
+{# Cost Explorer card body — HTMX swap target for #cost-explorer-body. #}
+{% from "costs/partials/cost_breakdown.html" import cost_breakdown %}
 <div class="grid grid-cols-1 md:grid-cols-[360px_1fr] min-h-[540px]">
 
     <aside class="p-6 md:p-8 bg-base-200 md:border-r border-base-300 flex flex-col gap-6 justify-between">
         <div>
-            <p class="text-xs uppercase tracking-wide text-base-content/40 mb-1">You paid</p>
-            <p class="text-4xl font-bold tabular-nums tracking-tight">
-                ${{ "%.2f"|format(cost_explorer.total_paid_actual) }}
-            </p>
-            {% if cost_explorer.total_fees_paid > 0 %}
-            {# Headline includes subscription fees the user paid out-of-pocket
-               (e.g. EA+, Tesla Premium monthly). The h2-equivalent subhead
-               surfaces the energy-only portion so the user can read the
-               protagonist as "total out-of-pocket; of which energy was X". #}
-            <p class="text-2xl font-semibold tabular-nums text-base-content/70 mt-0.5">
-                Paid in energy: ${{ "%.2f"|format(cost_explorer.total_paid_energy) }}
-            </p>
-            {% endif %}
-            {% if cost_explorer.estimated_total > 0 %}
-            <p class="text-base text-base-content/70 tabular-nums mt-1">
-                Estimated ${{ "%.2f"|format(cost_explorer.estimated_total) }}
-                {% if cost_explorer.delta_actual_vs_estimated != 0 %}
-                <span class="text-sm text-base-content/50">
-                    · Δ {% if cost_explorer.delta_actual_vs_estimated > 0 %}+{% endif %}${{ "%.2f"|format(cost_explorer.delta_actual_vs_estimated) }}
-                </span>
-                {% endif %}
-            </p>
-            {% endif %}
+            {{ cost_breakdown(
+                cost_explorer.total_paid_actual,
+                cost_explorer.total_fees_paid,
+                cost_explorer.total_paid_energy,
+                estimated_energy_cost=(cost_explorer.estimated_total if cost_explorer.estimated_total > 0 else none),
+            ) }}
             {% if cost_explorer.total_paid_what_if != cost_explorer.total_paid_actual %}
             <p class="text-sm text-base-content/60 tabular-nums mt-2">
                 Without free charging: ${{ "%.2f"|format(cost_explorer.total_paid_what_if) }}
@@ -36,12 +17,8 @@
             </p>
             {% endif %}
 
-            {# Free-charging what-if + scope — lives in the aside (not the
-               header) because its only visible effects are the "Without free
-               charging" sub-line above and the chart's "You paid" trace below.
-               Keeping it next to where it acts avoids the user toggling a
-               control in the header and seeing no change in the ledger they
-               were looking at. #}
+            {# Free-charging what-if lives in the aside, not the header, because
+               its only visible effects are the sub-line above and the chart. #}
             <div class="mt-3 flex flex-col gap-1">
                 <label class="text-xs uppercase tracking-wide text-base-content/40 flex items-center gap-1">
                     <span>Free-charging what-if</span>
@@ -70,14 +47,22 @@
                 </div>
                 {% if free_what_if and free_what_if_scope == 'per_network' and cost_explorer.free_charging_eligible_networks %}
                 <p class="text-xs text-base-content/40 mt-1">Pick which free-charging networks to rebill:</p>
-                <div class="flex flex-wrap gap-1">
+                {# One hidden CSV input carries the rebill set — repeated
+                   checkbox names would collapse to the last value on POST. #}
+                {% set free_what_if_selected = (free_what_if_networks_csv or '').split(',') %}
+                <input type="hidden" name="free_what_if_networks"
+                       value="{{ free_what_if_networks_csv or '' }}"
+                       data-free-what-if-csv>
+                <div class="flex flex-wrap gap-1" data-free-what-if-picker>
                     {% for net in cost_explorer.free_charging_eligible_networks %}
-                    {% set is_selected = net.network_id|string in (free_what_if_networks_csv or '').split(',') %}
-                    <label class="badge badge-outline gap-1 cursor-pointer {% if is_selected %}badge-primary{% endif %}">
-                        <input type="checkbox" name="free_what_if_networks" value="{{ net.network_id }}"
-                               class="hidden" {% if is_selected %}checked{% endif %}>
+                    {% set is_selected = net.network_id|string in free_what_if_selected %}
+                    <button type="button"
+                            class="badge badge-outline gap-1 cursor-pointer {% if is_selected %}badge-primary{% endif %}"
+                            data-free-what-if-toggle
+                            data-network-id="{{ net.network_id }}"
+                            aria-pressed="{{ 'true' if is_selected else 'false' }}">
                         {{ net.network_name }}
-                    </label>
+                    </button>
                     {% endfor %}
                 </div>
                 {% elif free_what_if and free_what_if_scope == 'per_network' %}
@@ -86,9 +71,8 @@
             </div>
         </div>
 
-        {# Subscription counterfactual block — sits at the bottom of the aside.
-           When a network filter is active, the block only shows subscriptions
-           covering an in-scope network; otherwise a short note replaces it. #}
+        {# Subscription counterfactual — scoped to in-filter networks when a
+           network filter is active. #}
         <div class="mt-auto">
             <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Subscription savings</p>
             {% if cost_explorer.subscription.active %}
@@ -97,9 +81,6 @@
                     <span>With <span class="text-base-content/60">you paid</span></span>
                     <span class="font-semibold">${{ "%.2f"|format(cost_explorer.subscription.with_total) }}</span>
                 </div>
-                {# Per-subscription breakdown: one network energy line + one network fee
-                   line per active subscription. Narrows automatically when the network
-                   filter is active (the aggregator scopes `subscriptions` already). #}
                 {% for s in cost_explorer.subscription.subscriptions %}
                 <div class="flex justify-between pl-3 text-xs text-base-content/60">
                     <span>{{ s.network_name }} energy at member rate</span>
@@ -228,11 +209,7 @@
                             <span class="text-base-content/40">—</span>
                             {% endif %}
                         </td>
-                        {# Per-row exclude action — quick "filter out just this one"
-                           inverse of the row-click-to-scope. Hidden in
-                           single-network view (see {% if single_network_detail %}
-                           branch above) since there's nothing meaningful to exclude
-                           when one row is already in scope. #}
+                        {# Per-row exclude — inverse of row-click-to-scope. #}
                         <td class="text-right">
                             <button type="button"
                                     class="btn btn-ghost btn-xs btn-circle text-base-content/40 hover:text-error"
@@ -289,7 +266,6 @@
     </main>
 </div>
 
-{# Monthly trend strip — inside the swap envelope so it refreshes with the body. #}
 {% if cost_explorer_chart %}
 <div class="border-t border-base-300 bg-base-200/50 p-6">
     <p class="text-xs uppercase tracking-wide text-base-content/40 mb-2">Monthly trend</p>

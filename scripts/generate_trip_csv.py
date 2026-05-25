@@ -109,6 +109,13 @@ def parse_ts(s: str) -> datetime:
     return datetime.fromisoformat(s)
 
 
+def require_str(value: object, field_name: str) -> str:
+    """Narrow loosely-typed row values to str for timestamp parsing."""
+    if isinstance(value, str):
+        return value
+    raise TypeError(f"Expected string for {field_name}, got {type(value).__name__}")
+
+
 def derive_trips(sessions: list[dict]) -> list[dict]:
     """Derive trips from gaps between charging sessions.
 
@@ -234,12 +241,21 @@ def derive_trips(sessions: list[dict]) -> list[dict]:
 
     # Also add some standalone errands on days without charges
     # (weekends, short grocery runs, etc.)
-    existing_dates = {parse_ts(t["start_time"]).date() for t in trips}
+    existing_dates = {
+        parse_ts(require_str(t.get("start_time"), "start_time")).date()
+        for t in trips
+    }
 
     # Add ~15 extra errand trips scattered through the date range
     if trips:
-        first_date = min(parse_ts(t["start_time"]) for t in trips)
-        last_date = max(parse_ts(t["end_time"]) for t in trips)
+        first_date = min(
+            parse_ts(require_str(t.get("start_time"), "start_time"))
+            for t in trips
+        )
+        last_date = max(
+            parse_ts(require_str(t.get("end_time"), "end_time"))
+            for t in trips
+        )
         total_days = (last_date - first_date).days
 
         extra_count = 0

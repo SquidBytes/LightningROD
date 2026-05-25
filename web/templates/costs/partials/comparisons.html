@@ -1,10 +1,9 @@
+{% from "costs/partials/cost_breakdown.html" import cost_breakdown %}
 {% if show_comparisons %}
-<!-- Savings Scenarios Section -->
 <div class="mt-8">
     <h2 class="text-xl font-bold text-base-content mb-1">Savings Scenarios</h2>
     <p class="text-base-content/60 text-sm mb-4">See how your EV charging costs compare to alternatives.</p>
 
-    <!-- Gasoline comparison panel -->
     {% if gas_comparison %}
     <div id="panel-gas">
         {% if gas_comparison.session_count > 0 %}
@@ -19,7 +18,13 @@
                         <p><span class="meta-label">Date range:</span>{{ range_label }}</p>
                         <p><span class="meta-label">Sessions:</span>{{ gas_comparison.session_count }}</p>
                     </div>
-                    <p class="ledger-total">${{ "%.2f"|format(gas_comparison.ev_total) }}</p>
+                    {# No reference estimate here — the estimate/delta rows are
+                       omitted; the gas-vs-EV columns handle the comparison. #}
+                    {{ cost_breakdown(
+                        gas_comparison.ev_total,
+                        gas_comparison.ev_fees,
+                        gas_comparison.ev_energy,
+                    ) }}
                     <p class="ledger-sub">
                         {{ "%.0f"|format(gas_comparison.total_distance or 0) }} {{ units.distance_label }}
                         {% if gas_comparison.ev_total and gas_comparison.total_distance and gas_comparison.total_distance > 0 %}
