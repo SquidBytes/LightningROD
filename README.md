@@ -27,7 +27,7 @@ If you find LightningROD useful, and would like to, you can [buy me a coffee](ht
 > 
 ## Features
 
-- **Charging analytics** — session CRUD, network/location/stall management, cost hierarchy (location override → network → subscription), EVSE loss and utilization metrics.
+- **Charging analytics** — session CRUD, network/location/stall management, and a Cost Explorer for spend by network with free-charging what-ifs, subscription savings, and custom-rate comparisons.
 - **Battery & trip analytics** — SOC timeline, charge curves with reference overlay, estimated degradation (based on reported capacity and milage), HV pack telemetry, trip-by-trip efficiency and regen.
 - **Home Assistant ingestion** — real-time WebSocket capture, auto-detected charging sessions and history backfill
 - **CSV import and manual entry** — for data outside Home Assistant (work in progress, not recommended currently)

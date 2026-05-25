@@ -9,7 +9,14 @@ For feature documentation, see the docs site at
 
 ### Added
 
-- Settings → **Fuel** tab — multi-ICE-vehicle table (mark one as default), gas price history, and a fuel price trend chart. Gas/ICE configuration relocated out of General.
+- **Cost Explorer card** on the Costs page — interactive, view of prices and total spent. Replaces the old Actual/Estimated, Cost card & view.
+  by Network, Savings vs Network, and Subscription Savings sections.
+  - Multi-select network filter
+  - Free-charging "what-if"
+  - Reference-rate comparison (pick a network or enter a custom $/kWh)
+  - Per-network ledger with Δ vs reference 
+  - Subscription "With / Without / Net saved" readout
+- #36 - Settings → **Fuel** tab — multi-ICE-vehicle table (mark one as default), gas price history, and a fuel price trend chart. Gas/ICE configuration relocated out of General.
 - Settings → **Data Sources** tab — register and configure HA-FordPass and HA gas-price sources
 - Battery page **HV Pack Telemetry** card — temperature, voltage, amperage, and power, each with a 7-day sparkline.
 - Battery page **Battery Temperature Over Time** chart with battery (solid) + outside-air (dashed) traces and charging-region overlays.
@@ -22,6 +29,8 @@ For feature documentation, see the docs site at
 
 ### Changed
 
+- Docker deployments pull from GHCR images instead of needing to be built locally
+  - Documentation updated
 - SQLite is the default for docker/docker-compose.standalone.yml
   - Docker compose still uses Postgres.
     - The `DATABASE_URL` in `.env` is now an optional override allowing for external database connection
@@ -31,11 +40,10 @@ For feature documentation, see the docs site at
     - Still working on fixes for CSV imports
   - Data Sources tab adjusted for future data source options
     - Large backend changes for data source adapters to make alternative vehicle support easier in the future
-- Gas prices and ICE fuel-economy / tank-capacity are stored in metric and converted to your configured units at display time.
+- Gas prices and ICE fuel-economy / tank-capacity are stored in metric and converted for display
 - `/battery` charge curve defaults to the most recent session of any type. 
   - AC charging sessions y-axis caps at 25 kW
   - DC reference curve hidden (when AC session selected, DC session remain the same)
-- Charging sessions auto-inherit the network from a resolved location when the location has one.
 - `uuid5` used for Trip ingestion to cut down on duplicates (hopefully) 
 - Timezone dropdowns in Settings and CSV Import are now searchable with regional filters.
 - The three summary cards on the Costs page are folded into a Total spend and Cost ratios strip atop the Cost Explorer card.
@@ -43,6 +51,7 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- #16 - Charging sessions correctly auto-inherit the network from a resolved location when the location has one.
 - Docker entrypoint auto-recovers v0.3.x databases stamped at squashed-away revisions. 
   - Non-Docker upgraders: see `db/migrations/README.md`.
 - Datetimes correctly use configured timezone (converted to UTC on storage) and render based on configured settings.
