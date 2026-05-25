@@ -16,9 +16,9 @@ Only `docker-compose.yml` lives at the repo root -- it's the default stack you g
 
 | File | What it is | Command |
 |------|------------|---------|
-| `docker-compose.yml` *(repo root)* | The default two-container stack: web app + PostgreSQL. **Start here.** | `docker compose up --build -d` |
-| `docker/Dockerfile` | Multi-stage image for the web container (Node builds CSS, Python runs the app). Used by both deployment paths. | *(built automatically)* |
-| `docker/docker-compose.standalone.yml` | Compose wrapper for the single-container SQLite deployment. Reuses the slim image with `DATABASE_URL` pointed at `/data/lightningrod.db` and a named volume mounted at `/data`. | `docker compose -f docker/docker-compose.standalone.yml up --build -d` |
+| `docker-compose.yml` *(repo root)* | The default two-container stack: web app + PostgreSQL. **Start here.** | `docker compose up -d` |
+| `docker/docker-compose.standalone.yml` | Compose wrapper for the single-container SQLite deployment. Reuses the same hosted image with `DATABASE_URL` pointed at `/data/lightningrod.db` and a named volume mounted at `/data`. | `docker compose -f docker/docker-compose.standalone.yml up -d` |
+| `docker/Dockerfile` | Multi-stage image build recipe (Node builds CSS, Python runs the app). Mainly for local development or custom images. | `docker build -f docker/Dockerfile -t lightningrod-web:dev .` |
 
 ### For contributors (development & tests)
 
@@ -59,7 +59,7 @@ Only `docker-compose.yml` lives at the repo root -- it's the default stack you g
     Start the stack:
 
     ```bash
-    docker compose up --build -d
+    docker compose up -d
     ```
 
 === "With Reverse Proxy"
@@ -67,7 +67,7 @@ Only `docker-compose.yml` lives at the repo root -- it's the default stack you g
     If you're running behind a reverse proxy (Traefik, nginx, Caddy), you may want to remove the port mapping and configure your proxy to route to the container directly.
 
     ```bash
-    docker compose up --build -d
+    docker compose up -d
     ```
 
     Point your proxy at the `web` service on port 8000.
@@ -112,7 +112,8 @@ Your data is stored in a named Docker volume (`pgdata`) and persists across rest
 
 ```bash
 git pull
-docker compose up --build -d
+docker compose pull
+docker compose up -d
 ```
 
 Migrations run automatically on startup, so schema changes are applied when you update.
@@ -128,16 +129,16 @@ Runs the application in a single container with an embedded SQLite database stor
     cd LightningROD
     ```
 
-    Build and run:
+    Pull and run:
 
     ```bash
-    docker build -f docker/Dockerfile -t lightningrod-web:dev .
+    docker pull ghcr.io/squidbytes/lightningrod-web:latest
     docker run -d \
       -p 8000:8000 \
       -v lightningrod-data:/data \
       -e DATABASE_URL=sqlite+aiosqlite:////data/lightningrod.db \
       --name lightningrod \
-      lightningrod-web:dev
+      ghcr.io/squidbytes/lightningrod-web:latest
     ```
 
 === "docker compose (standalone)"
@@ -151,7 +152,7 @@ Runs the application in a single container with an embedded SQLite database stor
     Start the standalone stack (the compose file overrides `DATABASE_URL` to point at the SQLite file regardless of what is in `.env`):
 
     ```bash
-    docker compose -f docker/docker-compose.standalone.yml up --build -d
+    docker compose -f docker/docker-compose.standalone.yml up -d
     ```
 
 The app will be available at `http://localhost:8000` (or your configured `APP_PORT`).
@@ -183,19 +184,43 @@ docker compose -f docker/docker-compose.standalone.yml up -d
 
 ```bash
 git pull
-docker build -f docker/Dockerfile -t lightningrod-web:dev .
+docker pull ghcr.io/squidbytes/lightningrod-web:latest
 docker stop lightningrod && docker rm lightningrod
 docker run -d \
   -p 8000:8000 \
   -v lightningrod-data:/data \
   -e DATABASE_URL=sqlite+aiosqlite:////data/lightningrod.db \
   --name lightningrod \
-  lightningrod-web:dev
+  ghcr.io/squidbytes/lightningrod-web:latest
 ```
 
 Or with compose:
 
 ```bash
 git pull
-docker compose -f docker/docker-compose.standalone.yml up --build -d
+docker compose -f docker/docker-compose.standalone.yml pull
+docker compose -f docker/docker-compose.standalone.yml up -d
+```
+
+## Local Image Build (Optional)
+
+If you want to build locally, build and run a local image tag.
+
+### Build local image
+
+```bash
+docker build -f docker/Dockerfile -t lightningrod-web:dev .
+```
+
+### Use local image with default compose (Postgres)
+
+```bash
+LIGHTNINGROD_IMAGE=lightningrod-web LIGHTNINGROD_VERSION=dev docker compose up -d
+```
+
+### Use local image with standalone compose (SQLite)
+
+```bash
+LIGHTNINGROD_IMAGE=lightningrod-web LIGHTNINGROD_VERSION=dev \
+docker compose -f docker/docker-compose.standalone.yml up -d
 ```

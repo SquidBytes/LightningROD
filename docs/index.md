@@ -60,7 +60,7 @@ In short: more fields means better calculations, safer backfills, and fewer assu
 git clone https://github.com/SquidBytes/LightningROD.git
 cd LightningROD
 cp .env.example .env
-docker compose up --build -d
+docker compose up -d
 ```
 
 The app will be available at `http://localhost:8000`. See [Installation](getting-started/installation.md) for full details.

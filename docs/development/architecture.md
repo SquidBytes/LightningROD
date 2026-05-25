@@ -28,7 +28,7 @@ LightningROD/
 │   ├── Dockerfile           # Multi-stage build (Node CSS + Python app)
 │   ├── docker-compose.dev.yml       # Dev override (exposes db port)
 │   ├── docker-compose.test.yml      # Dedicated test postgres on 5433
-│   ├── docker-compose.standalone.yml # Single-container SQLite build/run
+│   ├── docker-compose.standalone.yml # Single-container SQLite deploy (pull/run)
 │   └── entrypoint.sh                # Migrations + uvicorn startup
 ├── input.css                # Tailwind v4 + DaisyUI source styles
 ├── package.json             # Node deps (tailwindcss, daisyui)
