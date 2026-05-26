@@ -75,6 +75,7 @@ services:
     env_file: .env
     environment:
       - POSTGRES_HOST=db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy
