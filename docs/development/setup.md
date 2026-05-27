@@ -13,7 +13,7 @@ Run LightningROD locally outside of Docker for development, with hot-reload and 
 
 ### 1. Install dependencies
 
-```bash
+```bash title="" 
 git clone https://github.com/SquidBytes/LightningROD.git
 cd LightningROD
 uv sync
@@ -22,7 +22,7 @@ npm install
 
 ### 2. Configure environment
 
-```bash
+```bash title="" 
 cp .env.example .env
 ```
 
@@ -32,25 +32,25 @@ The defaults work for local development. No changes needed unless you want diffe
 
 The dev compose override exposes PostgreSQL on port 5432 so you can connect with local tools:
 
-```bash
+```bash title="" 
 docker compose -f docker-compose.yml -f docker/docker-compose.dev.yml up db -d
 ```
 
 ### 4. Run migrations
 
-```bash
+```bash title="" 
 uv run alembic upgrade head
 ```
 
 ### 5. Build CSS
 
-```bash
+```bash title="" 
 npx @tailwindcss/cli -i input.css -o web/static/css/output.css
 ```
 
 For auto-rebuild on file changes during development:
 
-```bash
+```bash title="" 
 npx @tailwindcss/cli -i input.css -o web/static/css/output.css --watch
 ```
 
@@ -58,13 +58,13 @@ npx @tailwindcss/cli -i input.css -o web/static/css/output.css --watch
 
 Import your own charging session data from a CSV export.
 
-```bash
+```bash title="" 
 uv run python scripts/seed.py --vin YOUR_VIN_HERE
 ```
 
 ### 7. Start the dev server
 
-```bash
+```bash title="" 
 uv run uvicorn web.main:app --reload --port 8000
 ```
 
@@ -74,7 +74,7 @@ Open [http://localhost:8000](http://localhost:8000). The server auto-reloads whe
 
 When you modify a model in `db/models/`, create a migration:
 
-```bash
+```bash title="" 
 # Auto-generate from model changes
 uv run alembic revision --autogenerate -m "description of change"
 
@@ -87,13 +87,13 @@ uv run alembic upgrade head
 
 ## Running Tests
 
-```bash
+```bash title="" 
 uv run pytest
 ```
 
 ## Linting
 
-```bash
+```bash title="" 
 uv run ruff check .
 uv run ruff format .
 ```
@@ -102,7 +102,7 @@ The active ruff ruleset covers `E4/E7/E9/F` (pycodestyle + pyflakes), `I` (isort
 
 ## Type Checking
 
-```bash
+```bash title="" 
 uv run mypy .
 ```
 
@@ -112,6 +112,6 @@ mypy is configured in `pyproject.toml` with the `pydantic.mypy` plugin. `ignore_
 
 With the dev compose stack running, PostgreSQL is available at `localhost:5432`:
 
-```bash
+```bash title="" 
 psql -h localhost -U lightningrod -d lightningrod
 ```

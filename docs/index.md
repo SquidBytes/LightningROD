@@ -56,7 +56,7 @@ In short: more fields means better calculations, safer backfills, and fewer assu
 
 ## Quick Start
 
-```bash
+```bash title="" 
 git clone https://github.com/SquidBytes/LightningROD.git
 cd LightningROD
 cp .env.example .env

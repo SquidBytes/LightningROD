@@ -34,7 +34,7 @@ This means Tailwind v4 and DaisyUI v5 require Node 20+ for compilation, but the 
 
 Install npm dependencies and run the Tailwind CLI:
 
-```bash
+```bash title="" 
 npm install
 npx @tailwindcss/cli -i input.css -o web/static/css/output.css --watch
 ```
