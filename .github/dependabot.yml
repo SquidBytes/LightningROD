@@ -5,7 +5,7 @@ updates:
     directory: "/"
     target-branch: "dev"
     schedule:
-      interval: weekly
+      interval: monthly
       day: monday
     open-pull-requests-limit: 5
     commit-message:
@@ -14,19 +14,16 @@ updates:
       - dependencies
       - python
     groups:
-      python-minor-patch:
+      python-all:
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
 
   # ----- npm (package.json / package-lock.json) -----
   - package-ecosystem: npm
     directory: "/"
     target-branch: "dev"
     schedule:
-      interval: weekly
+      interval: monthly
       day: monday
     open-pull-requests-limit: 3
     commit-message:
@@ -35,19 +32,16 @@ updates:
       - dependencies
       - javascript
     groups:
-      npm-minor-patch:
+      npm-all:
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
 
   # ----- Docker base images (docker/Dockerfile) -----
   - package-ecosystem: docker
     directory: "/docker"
     target-branch: "dev"
     schedule:
-      interval: weekly
+      interval: monthly
       day: monday
     open-pull-requests-limit: 3
     commit-message:
@@ -66,6 +60,7 @@ updates:
     target-branch: "dev"
     schedule:
       interval: monthly
+      day: monday
     open-pull-requests-limit: 3
     commit-message:
       prefix: "chore(ci)"
