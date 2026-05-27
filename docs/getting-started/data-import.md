@@ -9,14 +9,14 @@ LightningROD starts with an empty database. The seed script imports charging ses
 
 === "Docker"
 
-    ```bash
+    ```bash title="" 
     # Place your CSV in the data/ directory, then:
     docker compose exec web uv run python scripts/seed.py --vin YOUR_VIN_HERE
     ```
 
 === "Local Development"
 
-    ```bash
+    ```bash title="" 
     uv run python scripts/seed.py --vin YOUR_VIN_HERE
     ```
 
@@ -32,7 +32,7 @@ LightningROD starts with an empty database. The seed script imports charging ses
 
 Preview the import before committing:
 
-```bash
+```bash title="" 
 uv run python scripts/seed.py --vin YOUR_VIN_HERE --dry-run
 ```
 

@@ -76,14 +76,14 @@ Alembic manages schema versioning with an async-compatible `env.py`.
 
 === "Autogenerate (database running)"
 
-    ```bash
+    ```bash title="" 
     uv run alembic revision --autogenerate -m "add new column"
     uv run alembic upgrade head
     ```
 
 === "Manual (no database)"
 
-    ```bash
+    ```bash title="" 
     uv run alembic revision -m "add new column"
     # Edit the generated file in db/migrations/versions/
     uv run alembic upgrade head
