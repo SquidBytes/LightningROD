@@ -37,7 +37,7 @@ Only `docker-compose.yml` lives at the repo root -- it's the default stack you g
 
 === "Standard"
 
-    ```bash
+    ```bash title=""
     git clone https://github.com/SquidBytes/LightningROD.git
     cd LightningROD
     cp .env.example .env
@@ -49,16 +49,15 @@ Only `docker-compose.yml` lives at the repo root -- it's the default stack you g
     POSTGRES_USER=lightningrod
     POSTGRES_PASSWORD=your-secure-password  # (1)!
     POSTGRES_DB=lightningrod
-    POSTGRES_HOST=localhost
     APP_PORT=8000
-    DEBUG=false
+    APP_DEBUG=false
     ```
 
     1. Change this from the default `changeme` before running in production.
 
     Start the stack:
 
-    ```bash
+    ```bash title=""
     docker compose up -d
     ```
 
@@ -66,7 +65,7 @@ Only `docker-compose.yml` lives at the repo root -- it's the default stack you g
 
     If you're running behind a reverse proxy (Traefik, nginx, Caddy), you may want to remove the port mapping and configure your proxy to route to the container directly.
 
-    ```bash
+    ```bash title=""
     docker compose up -d
     ```
 
@@ -88,7 +87,7 @@ The Docker build uses a multi-stage process: Node 22 compiles Tailwind CSS + Dai
 
 ## Verify It's Running
 
-```bash
+```bash title=""
 docker compose ps
 ```
 
@@ -98,7 +97,7 @@ The database starts empty. See [Data Import](data-import.md) to load your chargi
 
 ## Stopping and Restarting
 
-```bash
+```bash title=""
 # Stop
 docker compose down
 
@@ -110,7 +109,7 @@ Your data is stored in a named Docker volume (`pgdata`) and persists across rest
 
 ## Updating
 
-```bash
+```bash title=""
 git pull
 docker compose pull
 docker compose up -d
@@ -124,14 +123,14 @@ Runs the application in a single container with an embedded SQLite database stor
 
 === "docker run"
 
-    ```bash
+    ```bash title=""
     git clone https://github.com/SquidBytes/LightningROD.git
     cd LightningROD
     ```
 
     Pull and run:
 
-    ```bash
+    ```bash title=""
     docker pull ghcr.io/squidbytes/lightningrod-web:latest
     docker run -d \
       -p 8000:8000 \
@@ -143,15 +142,18 @@ Runs the application in a single container with an embedded SQLite database stor
 
 === "docker compose (standalone)"
 
-    ```bash
+    ```bash title="" 
     git clone https://github.com/SquidBytes/LightningROD.git
     cd LightningROD
     cp .env.example .env
     ```
+    
+    !!! note
+        The Postgres values in `.env` (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`) are unused in standalone mode. Only `APP_PORT`, `APP_DEBUG`, and `DEMO_MODE` apply here.
 
-    Start the standalone stack (the compose file overrides `DATABASE_URL` to point at the SQLite file regardless of what is in `.env`):
+    Start the standalone stack:
 
-    ```bash
+    ```bash title="" 
     docker compose -f docker/docker-compose.standalone.yml up -d
     ```
 
@@ -171,7 +173,7 @@ The standalone entrypoint is the same `docker/entrypoint.sh` used by the default
 
 ### Stopping and Restarting (Standalone)
 
-```bash
+```bash title="" 
 # docker run
 docker stop lightningrod && docker start lightningrod
 
@@ -182,7 +184,7 @@ docker compose -f docker/docker-compose.standalone.yml up -d
 
 ### Updating (Standalone)
 
-```bash
+```bash title="" 
 git pull
 docker pull ghcr.io/squidbytes/lightningrod-web:latest
 docker stop lightningrod && docker rm lightningrod
@@ -196,7 +198,7 @@ docker run -d \
 
 Or with compose:
 
-```bash
+```bash title="" 
 git pull
 docker compose -f docker/docker-compose.standalone.yml pull
 docker compose -f docker/docker-compose.standalone.yml up -d
@@ -208,19 +210,19 @@ If you want to build locally, build and run a local image tag.
 
 ### Build local image
 
-```bash
+```bash title="" 
 docker build -f docker/Dockerfile -t lightningrod-web:dev .
 ```
 
 ### Use local image with default compose (Postgres)
 
-```bash
+```bash title="" 
 LIGHTNINGROD_IMAGE=lightningrod-web LIGHTNINGROD_VERSION=dev docker compose up -d
 ```
 
 ### Use local image with standalone compose (SQLite)
 
-```bash
+```bash title="" 
 LIGHTNINGROD_IMAGE=lightningrod-web LIGHTNINGROD_VERSION=dev \
 docker compose -f docker/docker-compose.standalone.yml up -d
 ```

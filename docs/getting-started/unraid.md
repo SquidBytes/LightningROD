@@ -14,7 +14,7 @@ Run LightningROD on Unraid with Docker Compose Manager.
 
 Open a terminal on your Unraid server (SSH, local terminal, or terminal add-on), then run:
 
-```bash
+```bash title="" 
 git clone https://github.com/SquidBytes/LightningROD.git /mnt/user/appdata/LightningROD/
 ```
 
@@ -74,7 +74,10 @@ services:
       - "8000:8000"
     env_file: .env
     environment:
-      - POSTGRES_HOST=db
+      # Required: the app reads DATABASE_URL directly and will not start without it.
+      # The asyncpg driver scheme is required (plain postgresql:// will fail with
+      # a missing psycopg2 error). The ${POSTGRES_*} values are pulled from .env.
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy
@@ -136,3 +139,23 @@ Click **Compose Up**.
 - Confirm the `db` and `web` services are running in Docker Compose Manager
 
 You can now continue with [Configuration](configuration.md) and [Data Import](data-import.md).
+
+## Alternative: Standalone (SQLite)
+
+If you'd rather run a single container with an embedded SQLite database instead of the two-container Postgres stack, use this Compose file at step 5 in place of the one above. The `POSTGRES_*` values in `.env` are unused in this mode -- only `APP_PORT`, `APP_DEBUG`, and `DEMO_MODE` apply.
+
+```yaml title="docker-compose.yml (standalone)"
+services:
+  lightningrod:
+    image: ghcr.io/squidbytes/lightningrod-web:latest
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////data/lightningrod.db
+    volumes:
+      - /mnt/user/appdata/LightningROD/data:/data
+    restart: unless-stopped
+```
+
+The bind mount puts the SQLite file at `/mnt/user/appdata/LightningROD/data/lightningrod.db` on your array so it's backed up alongside the rest of your appdata. Everything else (steps 1-4, 6-7) stays the same.
