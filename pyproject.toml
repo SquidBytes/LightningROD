@@ -16,7 +16,7 @@ dependencies = [
     "pydantic>=2.13.3",
     "pydantic-settings>=2.14.0",
     "python-dotenv>=1.2.2",
-    "python-multipart>=0.0.27",
+    "python-multipart>=0.0.30",
     "sqlalchemy[asyncio]>=2.0.50",
     "uvicorn[standard]>=0.48.0",
     "plotly>=6.0.0",
@@ -28,13 +28,13 @@ dependencies = [
 dev = [
     "httpx>=0.28.1",
     "pytest>=9.0.3",
-    "pytest-asyncio>=1.3.0",
-    "ruff>=0.15.12",
-    "hypothesis>=6.152.4",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.15.15",
+    "hypothesis>=6.155.1",
     "mypy>=1.20.2",
     "sqlglot>=30.6.0",
     "types-python-dateutil>=2.9.0.20260408",
-    "ty>=0.0.34",
+    "ty>=0.0.42",
 ]
 
 [tool.pytest.ini_options]
