@@ -291,12 +291,30 @@ def build_driving_score_radar(trip) -> str:
         "Overall": getattr(trip, "driving_score", None),
     }
 
-    # Convert to floats, default to 0
-    values = {k: float(v) if v is not None else 0 for k, v in scores.items()}
-
-    # Return empty if all are 0 or None
-    if all(v == 0 for v in values.values()):
+    # Missing sub-scores drop out entirely (0 is ha-fordpass's "unmeasured"
+    # sentinel) instead of rendering as real 0-score radar spokes.
+    values = {
+        k: float(v) for k, v in scores.items() if v is not None and float(v) != 0
+    }
+    if not values:
         return ""
+
+    # A radar needs at least 3 axes to read as a shape. With fewer (e.g. only
+    # the Overall score backfilled from the metrics sensor), render a compact
+    # radial stat instead of a degenerate spike.
+    if len(values) < 3:
+        label, score = (
+            ("Overall", values["Overall"]) if "Overall" in values
+            else next(iter(values.items()))
+        )
+        return (
+            '<div class="flex items-center gap-4 py-2">'
+            f'<div class="radial-progress text-primary" role="progressbar" '
+            f'style="--value:{score:.0f}; --size:4.5rem; --thickness:4px;">'
+            f'<span class="text-lg font-bold">{score:.0f}</span></div>'
+            f'<span class="text-sm text-base-content/60">{label} driving score</span>'
+            "</div>"
+        )
 
     pio.templates.default = "plotly_dark"
 
