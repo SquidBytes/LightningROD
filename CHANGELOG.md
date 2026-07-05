@@ -11,8 +11,14 @@ For feature documentation, see the docs site at
 
 ### Changed
 
+- Dashboard network charts group networks beyond the top 7 into an "Other"
+  bucket so many-network installs stay readable
+
 ### Fixed
 
+- Dashboard Charging Efficiency card now shows utilization for EVSE-mapped
+  sessions even when no wall-metered energy exists (loss reads N/A with a
+  hint instead of hiding the whole card)
 - Duplicate trip entries with incorrect distances for vehicles set to imperial
   display units on a metric Home Assistant install
 - Trip duration not populating on trip lists and detail views
