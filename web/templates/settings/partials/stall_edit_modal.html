@@ -37,7 +37,7 @@
         <label class="form-control">
             <span class="label-text text-xs mb-1">kW</span>
             <input type="number" name="rated_kw" id="edit-stall-kw-{{ stall.id }}" step="0.1" min="0"
-                   value="{{ stall.rated_kw if stall.rated_kw else '' }}"
+                   value="{% if stall.rated_kw %}{{ "%.1f"|format(stall.rated_kw) }}{% endif %}"
                    class="input input-sm input-bordered">
         </label>
         <label class="form-control">

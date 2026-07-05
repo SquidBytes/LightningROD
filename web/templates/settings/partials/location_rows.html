@@ -59,7 +59,7 @@
                 <input type="number" name="longitude" step="0.000001" value="{{ loc.longitude or '' }}" placeholder="Lon"
                        class="input input-sm input-bordered w-24">
                 <input type="number" name="cost_per_kwh" step="0.0001" min="0"
-                       value="{{ loc.cost_per_kwh if loc.cost_per_kwh is not none else '' }}"
+                       value="{% if loc.cost_per_kwh is not none %}{{ "%.4f"|format(loc.cost_per_kwh) }}{% endif %}"
                        placeholder="Cost/kWh (inherit)"
                        class="input input-sm input-bordered w-32">
             </div>

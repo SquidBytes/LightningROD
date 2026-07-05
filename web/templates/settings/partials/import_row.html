@@ -120,13 +120,13 @@
                             <div class="form-control">
                                 <label class="label"><span class="label-text text-xs">Energy (kWh)</span></label>
                                 <input type="number" step="0.01" name="energy_kwh"
-                                       value="{% if row.get('energy_kwh') is not none %}{{ row.get('energy_kwh') }}{% endif %}"
+                                       value="{% if row.get('energy_kwh') is not none %}{{ "%.2f"|format(row.get('energy_kwh')) }}{% endif %}"
                                        class="input input-bordered input-sm">
                             </div>
                             <div class="form-control">
                                 <label class="label"><span class="label-text text-xs">Cost ($)</span></label>
                                 <input type="number" step="0.01" name="cost"
-                                       value="{% if row.get('cost') is not none %}{{ row.get('cost') }}{% endif %}"
+                                       value="{% if row.get('cost') is not none %}{{ "%.2f"|format(row.get('cost')) }}{% endif %}"
                                        class="input input-bordered input-sm">
                             </div>
                             <div class="form-control">
