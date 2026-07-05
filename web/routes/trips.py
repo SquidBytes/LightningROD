@@ -367,7 +367,8 @@ async def create_trip(
         end_time=parsed_date,
         start_time=parsed_date,
         distance=distance_km,
-        duration=duration_minutes,
+        # duration column is canonical seconds; the form field is minutes.
+        duration=duration_minutes * 60 if duration_minutes is not None else None,
         energy_consumed=energy_consumed,
         efficiency=calc_efficiency,
         source_system="manual",

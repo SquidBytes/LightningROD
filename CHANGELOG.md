@@ -13,6 +13,12 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Duplicate trip entries with incorrect distances for vehicles set to imperial
+  display units on a metric Home Assistant install
+- Trip duration not populating on trip lists and detail views
+- Manual trip entry stored its duration 60× too short
+- Trip start time now recorded for trips ingested from Home Assistant
+
 ### Removed
 
 ## [0.4.0] - 2026-05-25

@@ -95,6 +95,53 @@ async def test_reporter_64mi_103km_charge_added(db_session):
     )
 
 
+async def test_reporter_no_duplicate_trip_from_elveh_and_events(db_session):
+    """Lock: elveh fallback + events adapter must produce ONE trip row, in km.
+
+    2026-06 reporter scenario (imperial FordPass display + metric HA): every
+    trip appeared twice — 122 km (correct, events) and 196.34 km (elveh
+    tripDistanceTraveled, already km, re-converted mi->km via the elveh state
+    uom). With the ha_unit_system_converted contract both paths agree and the
+    predicate match dedups them into a single enriched row.
+    """
+    from web.services.sources.ha_fordpass import handlers as fp_handlers
+    from web.services.sources.ha_fordpass.handlers import handle_battery_status
+
+    fp_handlers._last_trip_values.clear()
+
+    payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
+    ha_config = {"unit_system": "metric"}
+
+    # elveh fires first (creates the trip row via the legacy fallback) ...
+    elveh_entity = "sensor.fordpass_YOUR_VIN_elveh"
+    await handle_battery_status(
+        "elveh", payload[elveh_entity], ha_config, "YOUR_VIN", db_session
+    )
+    # ... then the events entity fires for the same physical trip.
+    events_entity = "sensor.fordpass_YOUR_VIN_events"
+    await process_event(events_entity, payload[events_entity], db_session, ha_config)
+    await db_session.flush()
+
+    trips = (
+        await db_session.execute(select(EVTripMetrics))
+    ).scalars().all()
+    assert len(trips) == 1, (
+        REGRESSION_MESSAGE
+        + f"  expected 1 deduped trip row, got {len(trips)}: "
+        + str([(t.distance, t.source_system) for t in trips])
+    )
+    trip = trips[0]
+    assert trip.distance == pytest.approx(19.0, abs=0.5), (
+        REGRESSION_MESSAGE + f"  got {trip.distance} km (expected 19.0, NOT 30.6)"
+    )
+    # Duration arrives as "0:30:00" on elveh and 1800 s on events — either
+    # way the stored canonical value is seconds.
+    assert trip.duration == pytest.approx(1800.0, abs=1.0), (
+        f"duration not canonicalized: {trip.duration!r}"
+    )
+    assert trip.start_time is not None
+
+
 async def test_reporter_260mi_418km_max_range(db_session):
     """Lock: max range 418 km must store as 418 km hv_battery_max_range, NOT ~673 km.
 
