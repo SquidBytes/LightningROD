@@ -19,6 +19,8 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- CSV import duplicate detection crashed on SQLite installs (PostgreSQL-only
+  SQL in the dedup query)
 - AC vs DC donut (and chart-metric switches) no longer render off-center
   after switching kWh/Sessions/Cost until the window was resized
 - Custom From/To date filters now work on the Costs, Battery, Charging
