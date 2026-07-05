@@ -14,7 +14,10 @@ It has two pages under the sidebar's `DRIVING` group:
 
 ![trip sessions](../assets/images/lr_trips.gif)
 
-A paginated table of trips with ten columns: number, date, distance, duration, temperature, energy used, reported efficiency, calculated efficiency, driving score, and regeneration.
+A paginated table of trips with nine columns: number, date, distance, duration, temperature, energy used, efficiency, driving score, and regeneration.
+
+!!! note "Where efficiency comes from"
+    Efficiency is calculated by LightningROD as distance / energy from the trip data. The vehicle's dash may show a lower number for the same trip because its own figure includes climate and accessory energy, while the API's `energy_consumed` covers propulsion only. No independent vehicle-reported efficiency is available through Home Assistant today.
 
 Click any row to open a slide-out detail drawer with:
 

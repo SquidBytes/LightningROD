@@ -18,11 +18,19 @@ For feature documentation, see the docs site at
 
 ### Changed
 
+- Trip tables and detail views show a single calculated Efficiency — the old
+  "Reported" figure was the HA integration computing the identical ratio, not
+  a value from the vehicle
 - Dashboard network charts group networks beyond the top 7 into an "Other"
   bucket so many-network installs stay readable
 
 ### Fixed
 
+- Battery health and degradation compared Wh-scale capacity readings against
+  the rated kWh capacity (health showed absurd percentages and ignored the
+  user-set gross capacity); existing rows are repaired on upgrade
+- Trip driving-score radar renders a compact overall-score stat instead of a
+  degenerate spike when per-category scores are unavailable
 - Range Regenerated card on Driving Analytics showed "No data available" —
   regen and driving score now also ingest from the always-enabled metrics
   sensor instead of relying solely on elveh trip attributes
