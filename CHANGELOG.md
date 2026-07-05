@@ -16,6 +16,10 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Edit forms no longer show floating-point noise (15+ decimal places) in
+  power, SOC, voltage, cost, and capacity fields
+- Group-edit bar: choosing a Network now reliably refreshes the Location
+  dropdown (a previously opened drawer could send its stale network along)
 - Dashboard Charging Efficiency card now shows utilization for EVSE-mapped
   sessions even when no wall-metered energy exists (loss reads N/A with a
   hint instead of hiding the whole card)

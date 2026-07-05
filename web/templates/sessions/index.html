@@ -41,10 +41,12 @@
                 <span id="selected-count" class="text-base text-base-content/70 font-medium whitespace-nowrap min-w-[100px]">0 selected</span>
 
                 <div class="form-control">
-                    {# Network combobox → location <select> cascade (D-D6 pure HTMX, no fetch()).
+                    {# Network combobox → location <select> cascade (pure HTMX, no fetch()).
                        resolveNetworkCombobox() sets the hidden #bulk-network-id synchronously,
                        then HTMX's hx-trigger="change" on the text input issues hx-get with the
-                       hidden's value included (hx-include selector targets [data-network-hidden]). #}
+                       hidden's value included. hx-include must target #bulk-network-id by id:
+                       a bare [data-network-hidden] selector also matches the drawer/modal
+                       comboboxes and sends their stale network_id along. #}
                     <input type="hidden" name="network_id" id="bulk-network-id" value="" data-network-hidden>
                     <input type="text" id="bulk-network" list="bulk-network-list"
                            placeholder="Network..."
@@ -53,7 +55,7 @@
                            oninput="resolveNetworkCombobox(this); htmx.trigger(this, 'change');"
                            hx-get="/locations/by-network"
                            hx-trigger="change"
-                           hx-include="[data-network-hidden]"
+                           hx-include="#bulk-network-id"
                            hx-target="#bulk-location-id"
                            hx-swap="innerHTML"
                            hx-params="network_id"
