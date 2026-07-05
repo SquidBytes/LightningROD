@@ -1084,10 +1084,12 @@ async def _handle_events_entity(
     odometer_end = await _closest_odometer(db, device_id, recorded_at)
 
     start_time = None
+    odometer_start = None
     if duration:
         from datetime import timedelta
 
         start_time = recorded_at - timedelta(seconds=duration)
+        odometer_start = await _closest_odometer(db, device_id, start_time)
 
     record = EVTripMetrics(
         # Deterministic uuid5 when tripUpdateTime is available; uuid4 fallback
@@ -1105,6 +1107,7 @@ async def _handle_events_entity(
         ambient_temp=ambient,
         cabin_temp=cabin,
         outside_air_temp=outside_air,
+        odometer_start=odometer_start,
         odometer_end=odometer_end,
         is_complete=True,
         source_system="ha_fordpass",
