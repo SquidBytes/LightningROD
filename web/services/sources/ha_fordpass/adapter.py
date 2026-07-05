@@ -148,6 +148,27 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_unit="km",
         notes="Canonical metric source; replaces elveh.maximumBatteryRange",
     ),
+    # Pack capacity: the raw API reports Wh (131 kWh pack -> 131000), same
+    # SI-raw convention as xevBatteryPower (W). Storing it unconverted made
+    # battery health read ~91,000% against the user's rated-kWh setting.
+    FieldContract(
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
+        source_attribute="xevBatteryCapacity",
+        source_unit="Wh",
+        target_db_table="ev_battery_status",
+        target_db_column="hv_battery_capacity",
+        target_unit="kWh",
+        notes="Raw Wh -> kWh; health/degradation compare against rated kWh",
+    ),
+    FieldContract(
+        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
+        source_attribute="maximumBatteryCapacity",
+        source_unit="Wh",
+        target_db_table="ev_battery_status",
+        target_db_column="hv_battery_capacity",
+        target_unit="kWh",
+        notes="Elveh mirror of xevBatteryCapacity; raw Wh passthrough in ha-fordpass",
+    ),
 
     # --- ev_battery_status: hv_battery_temperature --------------------------
     # Source is sensor.fordpass_{vin}_elvehcharging.batteryTemperature.
@@ -906,7 +927,12 @@ async def _handle_metrics_entity(
     # SI-already scalar attributes pass through without conversion
     hv_soc = _safe_float(attrs.get("xevBatteryStateOfCharge"))
     hv_actual_soc = _safe_float(attrs.get("xevBatteryActualStateOfCharge"))
-    hv_capacity = _safe_float(attrs.get("xevBatteryCapacity"))
+    cap_contract = lookup_contract(pattern, "xevBatteryCapacity")
+    hv_capacity = (
+        convert(cap_contract, attrs.get("xevBatteryCapacity"), new_state, ha_config)
+        if cap_contract
+        else None
+    )
     hv_voltage = _safe_float(attrs.get("xevBatteryVoltage"))
     hv_amperage = _safe_float(attrs.get("xevBatteryAmperage"))
     # xevBatteryPower is reported in W by the integration; convert to kW for the hv_battery_kw column

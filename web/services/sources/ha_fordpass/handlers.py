@@ -606,10 +606,19 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         hv_voltage = _safe_float(attrs.get("batteryVoltage"))
         hv_amperage = _safe_float(attrs.get("batteryAmperage"))
         hv_kw = _safe_float(attrs.get("batterykW"))
-        # FordPass `maximumBatteryCapacity` is the GROSS pack capacity
-        # (total installed cell kWh). Battery health math on /battery
-        # compares against ev_vehicles.battery_gross_capacity_kwh.
-        hv_capacity = _safe_float(attrs.get("maximumBatteryCapacity"))
+        # `maximumBatteryCapacity` mirrors the raw-Wh xevBatteryCapacity;
+        # the contract converts to kWh so /battery health math compares
+        # against the vehicle's rated-kWh setting.
+        _cap_contract = ha_fordpass.lookup_contract(
+            "sensor.fordpass_{vin}_elveh", "maximumBatteryCapacity"
+        )
+        hv_capacity = (
+            ha_fordpass.convert(
+                _cap_contract, attrs.get("maximumBatteryCapacity"), new_state, ha_config
+            )
+            if _cap_contract
+            else None
+        )
         hv_actual_soc = _safe_float(attrs.get("batteryActualCharge"))
         motor_voltage = _safe_float(attrs.get("motorVoltage"))
         motor_amperage = _safe_float(attrs.get("motorAmperage"))
