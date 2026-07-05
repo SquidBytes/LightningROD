@@ -38,3 +38,31 @@ async def test_phase_25_driving_sessions_htmx_range_filter(client):
     # Partial omits the full page <h1>; summary card title is present.
     assert "Trip History" not in response.text
     assert "Total Trips" in response.text
+
+
+async def test_delete_trip(client, db_session):
+    """DELETE /driving/sessions/{id} removes the trip and fires trip-deleted."""
+    from sqlalchemy import select
+
+    from db.models.trip_metrics import EVTripMetrics
+    from tests.factories.trips import TripFactory
+    from tests.factories.vehicles import VehicleFactory
+
+    vehicle = await VehicleFactory.create(db_session)
+    trip = await TripFactory.create(db_session, device_id=vehicle.device_id)
+
+    response = await client.delete(f"/driving/sessions/{trip.id}")
+    assert response.status_code == 200
+    assert response.headers.get("hx-trigger") == "trip-deleted"
+
+    remaining = (
+        await db_session.execute(
+            select(EVTripMetrics).where(EVTripMetrics.id == trip.id)
+        )
+    ).scalar_one_or_none()
+    assert remaining is None
+
+
+async def test_delete_trip_missing_returns_404(client):
+    response = await client.delete("/driving/sessions/999999")
+    assert response.status_code == 404

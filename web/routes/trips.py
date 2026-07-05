@@ -398,3 +398,28 @@ async def create_trip(
 
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/driving/sessions", status_code=303)
+
+
+@router.delete("/sessions/{trip_id}")
+async def delete_trip(
+    trip_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
+    )
+    trip = result.scalar_one_or_none()
+    if trip is None:
+        return HTMLResponse(content="Trip not found.", status_code=404)
+
+    await db.delete(trip)
+    await db.commit()
+
+    return Response(
+        content="",
+        status_code=200,
+        headers={
+            "HX-Trigger": "trip-deleted",
+            "HX-Reswap": "none",
+        },
+    )

@@ -29,7 +29,7 @@
             <!-- HTMX swap target -->
             <div id="driving-sessions-content"
                  hx-get="/driving/sessions"
-                 hx-trigger="trip-created from:body"
+                 hx-trigger="trip-created from:body, trip-deleted from:body"
                  hx-target="#driving-sessions-content"
                  hx-swap="innerHTML"
                  hx-include="#filter-form"
@@ -84,6 +84,12 @@ document.body.addEventListener('htmx:afterSettle', function(evt) {
     if (evt.target.id === 'trip-drawer-body') {
         document.getElementById('trip-drawer').checked = true;
     }
+});
+
+// Close the drawer after a trip is deleted (the list refreshes via hx-trigger)
+document.body.addEventListener('trip-deleted', function() {
+    var drawer = document.getElementById('trip-drawer');
+    if (drawer) drawer.checked = false;
 });
 
 // Escape key closes the Trips drawer when it is open
