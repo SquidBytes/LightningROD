@@ -116,6 +116,16 @@ async def test_locations_by_network_without_id_returns_placeholder(client, db_se
 
 
 @pytest.mark.db
+async def test_locations_by_network_tolerates_empty_and_garbage_id(client, db_session):
+    """The combobox's cleared/partial-typed state sends network_id= (empty) —
+    it must reset the options, not 422 and leave stale ones in the select."""
+    for qs in ("network_id=", "network_id=notanumber"):
+        response = await client.get(f"/locations/by-network?{qs}")
+        assert response.status_code == 200
+        assert "select network first" in response.text.lower()
+
+
+@pytest.mark.db
 async def test_create_session_inherits_network_from_location(client, db_session):
     """POST /charging/sessions with a location_id but no network_id inherits the
     network from the resolved location. Mirrors the manual-add flow where a

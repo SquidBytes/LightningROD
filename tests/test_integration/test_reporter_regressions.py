@@ -142,6 +142,53 @@ async def test_reporter_no_duplicate_trip_from_elveh_and_events(db_session):
     assert trip.start_time is not None
 
 
+@pytest.mark.parametrize(
+    ("fixture_name", "unit_system"),
+    [
+        ("metric_ha_metric_vehicle.json", "metric"),
+        ("metric_ha_imperial_vehicle.json", "metric"),
+        ("imperial_ha_metric_vehicle.json", "us_customary"),
+        ("imperial_ha_imperial_vehicle.json", "us_customary"),
+    ],
+)
+async def test_elveh_trip_distance_canonical_km_across_unit_matrix(
+    db_session, fixture_name, unit_system
+):
+    """Lock: elveh-only trip ingestion stores ~19 km on every HA/vehicle combo.
+
+    ha-fordpass localizes elveh trip attrs to the HA unit system (metric HA
+    -> 19 km, imperial HA -> 11.81 mi); the ha_unit_system_converted contract
+    must convert every combo back to canonical km. The elveh STATE uom (which
+    tracks the vehicle display system) must play no part.
+    """
+    from web.services.sources.ha_fordpass import handlers as fp_handlers
+    from web.services.sources.ha_fordpass.handlers import handle_battery_status
+
+    fp_handlers._last_trip_values.clear()
+
+    payload = json.loads((FIXTURES_DIR / fixture_name).read_text())
+    ha_config = {"unit_system": unit_system}
+
+    elveh_entity = "sensor.fordpass_YOUR_VIN_elveh"
+    await handle_battery_status(
+        "elveh", payload[elveh_entity], ha_config, "YOUR_VIN", db_session
+    )
+    await db_session.flush()
+
+    trip = (
+        await db_session.execute(
+            select(EVTripMetrics).order_by(EVTripMetrics.id.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    assert trip is not None, f"elveh fallback wrote no trip row for {fixture_name}"
+    assert float(trip.distance) == pytest.approx(19.0, abs=0.1), (
+        REGRESSION_MESSAGE
+        + f"  {fixture_name}: got {trip.distance} km (expected ~19.0)"
+    )
+    # "0:30:00" tripDuration string parses to canonical seconds.
+    assert float(trip.duration) == pytest.approx(1800.0, abs=1.0)
+
+
 async def test_reporter_260mi_418km_max_range(db_session):
     """Lock: max range 418 km must store as 418 km hv_battery_max_range, NOT ~673 km.
 
