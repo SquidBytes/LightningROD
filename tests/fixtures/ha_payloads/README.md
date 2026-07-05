@@ -48,10 +48,16 @@ Filenames follow `{ha_unit_system}_ha_{vehicle_display}_vehicle.json`:
   Every other attribute on the energytransferlogentry payload (batteryTemperature,
   outsidetemp, stateOfCharge, power, energyConsumed, chargerType) is raw
   passthrough and stays in its native SI unit across HA unit systems.
-- `sensor.fordpass_YOUR_VIN_elveh` **attributes** — per D-B4 (see 29-CONTEXT.md)
-  these are **not read** by the new adapter. Attribute values (e.g.
-  `tripDistanceTraveled=19`) stay labeled in source units (km) across fixtures
-  specifically so a faulty adapter that reads them is caught by the matrix tests.
+- `sensor.fordpass_YOUR_VIN_elveh` **attributes** — **HA-unit-system-converted**.
+  ha-fordpass builds `tripDistanceTraveled`, `tripEfficiency`,
+  `tripRangeRegenerated`, `maximumBatteryRange` via `localize_distance` and the
+  trip temps via `localize_temperature` (per fordpass_handler.py), so fixture
+  values follow the HA unit system: metric HA → km/°C, imperial HA → mi/°F.
+  `tripDuration` is `str(timedelta)` (e.g. `"0:30:00"`); `tripEnergyConsumed`
+  is always kWh. NOTE: the elveh **state** `unit_of_measurement` tracks the
+  vehicle display system, NOT the HA system — `metric_ha_imperial` carries
+  km-valued trip attrs under a `mi` state uom on purpose; resolving trip attrs
+  from the state uom is the historical double-conversion bug.
 - `sensor.fordpass_YOUR_VIN_elveh.state` — main state; HA has already performed
   unit conversion per `unit_of_measurement`. 260 km ↔ 162 mi is the 2026 F-150
   Lightning reporter scenario anchor.

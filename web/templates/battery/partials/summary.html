@@ -121,7 +121,7 @@
                   aria-label="{{ tooltips.battery_temp_over_time }}">ⓘ</span>
         </h3>
         <div id="battery-temp-chart"
-             hx-get="/battery?section=battery_temp&range={{ active_range }}"
+             hx-get="/battery?section=battery_temp&range={{ active_range }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}"
              hx-trigger="revealed"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8">
@@ -189,7 +189,7 @@
         {% if active_session %}
             {# If session selected, load immediately via section endpoint #}
             <div id="charge-curve-content"
-                 hx-get="/battery?section=charge_curve&range={{ active_range }}&session={{ active_session }}"
+                 hx-get="/battery?section=charge_curve&range={{ active_range }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}&session={{ active_session }}"
                  hx-trigger="revealed"
                  hx-swap="innerHTML">
                 <div class="flex justify-center py-8">
@@ -216,7 +216,7 @@
                   data-tip="{{ tooltips.battery_degradation_trend }}"
                   aria-label="{{ tooltips.battery_degradation_trend }}">ⓘ</span>
         </h3>
-        <div hx-get="/battery?section=degradation&range={{ active_range }}"
+        <div hx-get="/battery?section=degradation&range={{ active_range }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}"
              hx-trigger="revealed"
              hx-swap="innerHTML">
             <div class="flex justify-center py-8">

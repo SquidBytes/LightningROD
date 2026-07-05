@@ -57,6 +57,12 @@ def _attach_sqlite_pragmas(engine):
 
     @event.listens_for(engine.sync_engine, "connect")
     def _set_sqlite_pragmas(dbapi_connection, connection_record):
+        # Disable pysqlite's legacy implicit-transaction handling so
+        # SQLAlchemy fully owns BEGIN/COMMIT. Without this, session.commit()
+        # inside a test commits the OUTER transaction for real and the
+        # fixture's rollback-isolation silently leaks rows across tests
+        # (the SQLite suite's classic "empty table has 10 rows" failures).
+        dbapi_connection.isolation_level = None
         cursor = dbapi_connection.cursor()
         try:
             cursor.execute("PRAGMA foreign_keys = ON")
@@ -65,6 +71,11 @@ def _attach_sqlite_pragmas(engine):
             cursor.execute("PRAGMA busy_timeout = 5000")
         finally:
             cursor.close()
+
+    @event.listens_for(engine.sync_engine, "begin")
+    def _do_begin(conn):
+        # Emit our own BEGIN (part of the same pysqlite recipe).
+        conn.exec_driver_sql("BEGIN")
 
 
 def _run_alembic_migrations():

@@ -9,6 +9,17 @@
         <div class="flex items-center gap-2">
             <button
                 type="button"
+                onclick="exportSessionsCsv()"
+                class="btn btn-outline btn-sm gap-2"
+                title="Download the sessions matching the current filters as CSV"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                Export CSV
+            </button>
+            <button
+                type="button"
                 id="group-edit-toggle"
                 onclick="toggleGroupEdit()"
                 class="btn btn-outline btn-sm gap-2"
@@ -41,10 +52,12 @@
                 <span id="selected-count" class="text-base text-base-content/70 font-medium whitespace-nowrap min-w-[100px]">0 selected</span>
 
                 <div class="form-control">
-                    {# Network combobox → location <select> cascade (D-D6 pure HTMX, no fetch()).
+                    {# Network combobox → location <select> cascade (pure HTMX, no fetch()).
                        resolveNetworkCombobox() sets the hidden #bulk-network-id synchronously,
                        then HTMX's hx-trigger="change" on the text input issues hx-get with the
-                       hidden's value included (hx-include selector targets [data-network-hidden]). #}
+                       hidden's value included. hx-include must target #bulk-network-id by id:
+                       a bare [data-network-hidden] selector also matches the drawer/modal
+                       comboboxes and sends their stale network_id along. #}
                     <input type="hidden" name="network_id" id="bulk-network-id" value="" data-network-hidden>
                     <input type="text" id="bulk-network" list="bulk-network-list"
                            placeholder="Network..."
@@ -53,7 +66,7 @@
                            oninput="resolveNetworkCombobox(this); htmx.trigger(this, 'change');"
                            hx-get="/locations/by-network"
                            hx-trigger="change"
-                           hx-include="[data-network-hidden]"
+                           hx-include="#bulk-network-id"
                            hx-target="#bulk-location-id"
                            hx-swap="innerHTML"
                            hx-params="network_id"
@@ -304,6 +317,15 @@ document.body.addEventListener('session-created', function(evt) {
         }, 200);
     }
 });
+
+// --- CSV export: reuse the live filter form so the download matches the view ---
+function exportSessionsCsv() {
+    var form = document.getElementById('filter-form');
+    var params = form ? new URLSearchParams(new FormData(form)) : new URLSearchParams();
+    params.delete('page');
+    params.delete('per_page');
+    window.location = '/charging/sessions/export.csv?' + params.toString();
+}
 
 // --- Group Edit ---
 var _groupEditActive = false;

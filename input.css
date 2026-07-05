@@ -203,6 +203,16 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
   }
 }
 
+/* Three-way ledger: EV column + one column per gas comparison model. */
+.ledger-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 1024px) {
+  .ledger-grid-3 { grid-template-columns: 1fr; }
+  .ledger-grid-3 .ledger-col + .ledger-col {
+    border-left: none;
+    border-top: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  }
+}
+
 .ledger-col-label {
   font-size: var(--text-xs);
   text-transform: uppercase;

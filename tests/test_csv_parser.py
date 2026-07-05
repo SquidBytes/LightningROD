@@ -227,9 +227,9 @@ async def test_detect_duplicates_marks_exact_match():
         }
     ]
 
-    # Mock DB session
+    # Mock DB session — Layer 1 reads scalars() off the Core select result
     mock_result = MagicMock()
-    mock_result.fetchall.return_value = [(existing_session_id,)]
+    mock_result.scalars.return_value = [existing_session_id]
 
     mock_db = AsyncMock()
     mock_db.execute = AsyncMock(return_value=mock_result)

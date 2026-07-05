@@ -46,6 +46,8 @@ async def trips(
     request: Request,
     db: AsyncSession = Depends(get_db),
     range: str | None = "30d",
+    date_from: str | None = None,
+    date_to: str | None = None,
     sort_by: str | None = None,
     sort_dir: str | None = None,
     sort: str | None = None,
@@ -53,7 +55,8 @@ async def trips(
     page: int = 1,
     hx_request: Annotated[str | None, Header()] = None,
 ):
-    time_range = range or "30d"
+    # A custom date window suppresses the preset fallback so the window applies.
+    time_range = range or ("all" if (date_from or date_to) else "30d")
     # Accept the new sort_by/sort_dir form fields; fall back to the legacy
     # sort/dir aliases so deep-linked URLs from before the column-header
     # switch keep working.
@@ -77,6 +80,8 @@ async def trips(
         sort_by=sort_by,
         sort_dir=sort_dir,
         device_id=active_device_id,
+        date_from=date_from,
+        date_to=date_to,
     )
 
     # Convert summary totals to display units
@@ -96,6 +101,8 @@ async def trips(
         "total": total,
         "summary": summary,
         "active_range": time_range,
+        "date_from": date_from,
+        "date_to": date_to,
         "sort_by": sort_by,
         "sort_dir": sort_dir,
         "page": page,
@@ -367,7 +374,8 @@ async def create_trip(
         end_time=parsed_date,
         start_time=parsed_date,
         distance=distance_km,
-        duration=duration_minutes,
+        # duration column is canonical seconds; the form field is minutes.
+        duration=duration_minutes * 60 if duration_minutes is not None else None,
         energy_consumed=energy_consumed,
         efficiency=calc_efficiency,
         source_system="manual",
@@ -390,3 +398,28 @@ async def create_trip(
 
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/driving/sessions", status_code=303)
+
+
+@router.delete("/sessions/{trip_id}")
+async def delete_trip(
+    trip_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
+    )
+    trip = result.scalar_one_or_none()
+    if trip is None:
+        return HTMLResponse(content="Trip not found.", status_code=404)
+
+    await db.delete(trip)
+    await db.commit()
+
+    return Response(
+        content="",
+        status_code=200,
+        headers={
+            "HX-Trigger": "trip-deleted",
+            "HX-Reswap": "none",
+        },
+    )

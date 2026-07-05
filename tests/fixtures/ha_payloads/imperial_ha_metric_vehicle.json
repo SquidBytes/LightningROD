@@ -6,14 +6,14 @@
       "unit_of_measurement": "mi",
       "friendly_name": "fordpass YOUR_VIN Elveh",
       "icon": "mdi:car-electric",
-      "tripDistanceTraveled": 19,
-      "tripDuration": 30,
+      "tripDistanceTraveled": 11.81,
+      "tripDuration": "0:30:00",
       "tripEnergyConsumed": 7.6,
-      "tripEfficiency": 2.5,
-      "tripRangeRegenerated": 2.1,
-      "tripAmbientTemp": 15,
-      "tripOutsideAirAmbientTemp": 15,
-      "tripCabinTemp": 20,
+      "tripEfficiency": 1.55,
+      "tripRangeRegenerated": 1.3,
+      "tripAmbientTemp": 59.0,
+      "tripOutsideAirAmbientTemp": 59.0,
+      "tripCabinTemp": 68.0,
       "tripElectricalEfficiency": 2.5,
       "tripDrivingScore": 85,
       "tripSpeed": 60,
@@ -52,7 +52,7 @@
     "attributes": {
       "friendly_name": "fordpass YOUR_VIN EV Charging",
       "batteryTemperature": 77.0,
-      "unit_of_measurement": "°F"
+      "unit_of_measurement": "\u00b0F"
     }
   },
   "sensor.fordpass_YOUR_VIN_metrics": {
@@ -68,7 +68,9 @@
       "xevBatteryActualStateOfCharge": 77,
       "xevBatteryVoltage": 390.0,
       "xevBatteryAmperage": 5.0,
-      "xevBatteryPower": 1950
+      "xevBatteryPower": 1950,
+      "tripXevBatteryRangeRegenerated": 2.1,
+      "tripXevBatteryChargeRegenerated": 85
     },
     "last_changed": "2026-04-19T12:00:00+00:00",
     "last_updated": "2026-04-19T12:00:00+00:00"
@@ -139,7 +141,7 @@
     "entity_id": "sensor.fordpass_YOUR_VIN_outsidetemp",
     "state": "60",
     "attributes": {
-      "unit_of_measurement": "°F",
+      "unit_of_measurement": "\u00b0F",
       "friendly_name": "fordpass YOUR_VIN Outside Temp",
       "icon": "mdi:thermometer",
       "ambientTemp": 60

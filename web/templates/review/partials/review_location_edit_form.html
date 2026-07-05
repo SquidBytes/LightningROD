@@ -72,7 +72,7 @@ mid-close, the Thread A bug this plan fixes).
         <label class="form-control">
             <div class="label"><span class="label-text text-sm">Cost/kWh</span></div>
             <input type="number" name="cost_per_kwh" step="0.0001" min="0"
-                   value="{{ loc.cost_per_kwh if loc.cost_per_kwh is not none else '' }}"
+                   value="{% if loc.cost_per_kwh is not none %}{{ "%.4f"|format(loc.cost_per_kwh) }}{% endif %}"
                    placeholder="Inherit"
                    class="input input-bordered w-full">
         </label>

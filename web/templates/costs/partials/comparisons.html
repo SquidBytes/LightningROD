@@ -6,35 +6,49 @@
 
     {% if gas_comparison %}
     <div id="panel-gas">
-        {% if gas_comparison.session_count > 0 %}
+        {% set has_energy = gas_comparison.session_count > 0 %}
+        {% set has_distance = distance_comparison and distance_comparison.has_data %}
+        {% if has_energy or has_distance %}
+        {# One EV column; each gas model gets its own comparison column. All
+           deltas are computed against the same displayed EV total. #}
+        {% set ev = distance_comparison if has_distance else gas_comparison %}
         <div class="ledger">
-            <div class="ledger-grid">
+            <div class="ledger-grid{% if has_energy and has_distance %} ledger-grid-3{% endif %}">
                 <div class="ledger-col">
-                    <p class="ledger-col-label">Your EV</p>
+                    <p class="ledger-col-label">Your EV — actual spend</p>
                     <div class="ledger-meta">
                         {% if active_vehicle %}
                         <p><span class="meta-label">Vehicle:</span>{{ active_vehicle.display_name }}</p>
                         {% endif %}
                         <p><span class="meta-label">Date range:</span>{{ range_label }}</p>
-                        <p><span class="meta-label">Sessions:</span>{{ gas_comparison.session_count }}</p>
+                        <p><span class="meta-label">Sessions:</span>{{ ev.session_count }}</p>
+                        {% if has_distance %}
+                        <p><span class="meta-label">Driven:</span>{{ "%.0f"|format(distance_comparison.total_distance or 0) }} {{ units.distance_label }}
+                            <span class="text-base-content/40">({{ "odometer" if distance_comparison.distance_source == "odometer" else "trip log" }})</span></p>
+                        {% endif %}
                     </div>
-                    {# No reference estimate here — the estimate/delta rows are
-                       omitted; the gas-vs-EV columns handle the comparison. #}
                     {{ cost_breakdown(
-                        gas_comparison.ev_total,
-                        gas_comparison.ev_fees,
-                        gas_comparison.ev_energy,
+                        ev.ev_total,
+                        ev.ev_fees,
+                        ev.ev_energy,
                     ) }}
                     <p class="ledger-sub">
-                        {{ "%.0f"|format(gas_comparison.total_distance or 0) }} {{ units.distance_label }}
-                        {% if gas_comparison.ev_total and gas_comparison.total_distance and gas_comparison.total_distance > 0 %}
-                            · {{ "%.1f"|format((gas_comparison.ev_total / gas_comparison.total_distance) * 100) }} ¢/{{ units.distance_label }} all-in
+                        {% if has_distance and ev.ev_total and distance_comparison.total_distance and distance_comparison.total_distance > 0 %}
+                            {{ "%.1f"|format((ev.ev_total / distance_comparison.total_distance) * 100) }} ¢/{{ units.distance_label }} all-in
+                        {% elif not has_distance and ev.ev_total and gas_comparison.total_distance and gas_comparison.total_distance > 0 %}
+                            {{ "%.0f"|format(gas_comparison.total_distance) }} {{ units.distance_label }} range added
+                            · {{ "%.1f"|format((ev.ev_total / gas_comparison.total_distance) * 100) }} ¢/{{ units.distance_label }} all-in
                         {% endif %}
                     </p>
                 </div>
 
+                {% if has_energy %}
                 <div class="ledger-col">
-                    <p class="ledger-col-label">If you'd used gas</p>
+                    <p class="ledger-col-label">Charge-for-charge on gas</p>
+                    <div class="ledger-meta">
+                        <p><span class="meta-label">Basis:</span>energy charged as fuel</p>
+                        <p><span class="meta-label">Range added:</span>{{ "%.0f"|format(gas_comparison.total_distance or 0) }} {{ units.distance_label }}</p>
+                    </div>
 
                     <div class="ledger-item">
                         <div>
@@ -54,9 +68,9 @@
                         </div>
                         {% endif %}
                         <div class="item-delta">
-                            − ${{ "%.2f"|format((gas_comparison.gas_total_station - gas_comparison.ev_total) if gas_comparison.gas_total_station > gas_comparison.ev_total else 0) }} saved
+                            − ${{ "%.2f"|format((gas_comparison.gas_total_station - ev.ev_total) if gas_comparison.gas_total_station > ev.ev_total else 0) }} saved
                             {% if gas_comparison.gas_total_station > 0 %}
-                                ({{ "%.0f"|format(((gas_comparison.gas_total_station - gas_comparison.ev_total) / gas_comparison.gas_total_station) * 100) }}% less)
+                                ({{ "%.0f"|format(((gas_comparison.gas_total_station - ev.ev_total) / gas_comparison.gas_total_station) * 100) }}% less)
                             {% endif %}
                         </div>
                     </div>
@@ -80,27 +94,99 @@
                         </div>
                         {% endif %}
                         <div class="item-delta">
-                            − ${{ "%.2f"|format((gas_comparison.gas_total_average - gas_comparison.ev_total) if gas_comparison.gas_total_average > gas_comparison.ev_total else 0) }} saved
+                            − ${{ "%.2f"|format((gas_comparison.gas_total_average - ev.ev_total) if gas_comparison.gas_total_average > ev.ev_total else 0) }} saved
                             {% if gas_comparison.gas_total_average > 0 %}
-                                ({{ "%.0f"|format(((gas_comparison.gas_total_average - gas_comparison.ev_total) / gas_comparison.gas_total_average) * 100) }}% less)
+                                ({{ "%.0f"|format(((gas_comparison.gas_total_average - ev.ev_total) / gas_comparison.gas_total_average) * 100) }}% less)
                             {% endif %}
                         </div>
                     </div>
                     {% endif %}
                 </div>
+                {% endif %}
+
+                {% if has_distance %}
+                {% set ice_eff = distance_comparison.ice_l_per_100km|cvt_fuel_eff(distance_unit) %}
+                <div class="ledger-col">
+                    <p class="ledger-col-label">Mile-for-mile in your {{ distance_comparison.ice_label }}</p>
+                    <div class="ledger-meta">
+                        <p><span class="meta-label">Basis:</span>distance driven at {{ ("%.0f" if distance_unit == "us" else "%.1f")|format(ice_eff) }} {{ units.fuel_efficiency_label }}</p>
+                        <p><span class="meta-label">Driven:</span>{{ "%.0f"|format(distance_comparison.total_distance or 0) }} {{ units.distance_label }}
+                            <span class="text-base-content/40">({{ "odometer" if distance_comparison.distance_source == "odometer" else "trip log" }})</span></p>
+                    </div>
+
+                    {% if distance_comparison.station_price_min is not none %}
+                    <div class="ledger-item">
+                        <div>
+                            <div class="item-label">{{ gas_comparison.station_friendly_name or "Favorite station" }}</div>
+                            <div class="item-source">favorite station</div>
+                        </div>
+                        <div class="item-cost">${{ "%.2f"|format(distance_comparison.gas_total_station) }}</div>
+                        <div class="item-price-range">
+                            {% if distance_comparison.station_price_max > distance_comparison.station_price_min %}
+                                ${{ "%.2f"|format(distance_comparison.station_price_min) }} – ${{ "%.2f"|format(distance_comparison.station_price_max) }} / gal
+                            {% else %}
+                                ${{ "%.2f"|format(distance_comparison.station_price_min) }} / gal
+                            {% endif %}
+                        </div>
+                        <div class="item-delta">
+                            − ${{ "%.2f"|format((distance_comparison.gas_total_station - ev.ev_total) if distance_comparison.gas_total_station > ev.ev_total else 0) }} saved
+                            {% if distance_comparison.gas_total_station > 0 %}
+                                ({{ "%.0f"|format(((distance_comparison.gas_total_station - ev.ev_total) / distance_comparison.gas_total_station) * 100) }}% less)
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if distance_comparison.has_range %}
+                    <div class="ledger-item">
+                        <div>
+                            <div class="item-label">{{ gas_comparison.average_friendly_name or "Regional average" }}</div>
+                            <div class="item-source">regional reference</div>
+                        </div>
+                        <div class="item-cost">${{ "%.2f"|format(distance_comparison.gas_total_average) }}</div>
+                        {% if distance_comparison.average_price_min is not none %}
+                        <div class="item-price-range">
+                            {% if distance_comparison.average_price_max > distance_comparison.average_price_min %}
+                                ${{ "%.2f"|format(distance_comparison.average_price_min) }} – ${{ "%.2f"|format(distance_comparison.average_price_max) }} / gal
+                            {% else %}
+                                ${{ "%.2f"|format(distance_comparison.average_price_min) }} / gal
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        <div class="item-delta">
+                            − ${{ "%.2f"|format((distance_comparison.gas_total_average - ev.ev_total) if distance_comparison.gas_total_average > ev.ev_total else 0) }} saved
+                            {% if distance_comparison.gas_total_average > 0 %}
+                                ({{ "%.0f"|format(((distance_comparison.gas_total_average - ev.ev_total) / distance_comparison.gas_total_average) * 100) }}% less)
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
 
             <div class="ledger-footer">
-                {% if gas_comparison.has_range %}
-                    <span class="footer-label">Estimated savings range over this period</span>
-                    <span class="footer-amount">${{ "%.2f"|format(gas_comparison.savings_low) }} – ${{ "%.2f"|format(gas_comparison.savings_high) }}</span>
-                {% else %}
-                    <span class="footer-label">Estimated savings over this period</span>
-                    <span class="footer-amount">${{ "%.2f"|format(gas_comparison.savings_low) }}</span>
-                {% endif %}
+                <span class="footer-label">Estimated savings over this period</span>
+                <span class="footer-amount">
+                    {% if has_energy %}
+                        {% set e_low = gas_comparison.gas_total_low - ev.ev_total %}
+                        {% set e_high = gas_comparison.gas_total_high - ev.ev_total %}
+                        {% if gas_comparison.has_range %}${{ "%.2f"|format(e_low) }} – ${{ "%.2f"|format(e_high) }}{% else %}${{ "%.2f"|format(e_low) }}{% endif %} charge-for-charge
+                    {% endif %}
+                    {% if has_energy and has_distance %} · {% endif %}
+                    {% if has_distance %}
+                        {% set d_low = distance_comparison.gas_total_low - ev.ev_total %}
+                        {% set d_high = distance_comparison.gas_total_high - ev.ev_total %}
+                        {% if distance_comparison.has_range %}${{ "%.2f"|format(d_low) }} – ${{ "%.2f"|format(d_high) }}{% else %}${{ "%.2f"|format(d_low) }}{% endif %} mile-for-mile
+                    {% endif %}
+                </span>
             </div>
         </div>
-        <p class="caption">Based on the the configured comparison vehicle, and fuel price history. Update in Settings -> Fuel.</p>
+        <p class="caption">
+            Charge-for-charge prices the energy you charged as gasoline (via range added, or tank fraction).
+            Mile-for-mile fuels the distance you actually drove at the comparison vehicle's real-world efficiency.
+            Both use monthly fuel price history — update in Settings -> Fuel.
+        </p>
         {% else %}
         <p class="text-sm text-base-content/40">No fuel comparison data available. Configure in Settings -> Fuel.</p>
         {% endif %}

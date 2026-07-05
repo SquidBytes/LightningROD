@@ -57,23 +57,31 @@ def test_elveh_state_read_time_uom_lookup():
     # Adapter, reading state=162 with uom="mi", must convert to km = ~260
 
 
-# Trip distance must come from events data, not elveh attributes.
+# Elveh unit-bearing trip/range attributes are HA-unit-system localized
+# (ha-fordpass fordpass_handler.py routes them through localize_distance),
+# so their contracts must resolve from ha_config.unit_system — never from
+# the elveh state's unit_of_measurement, which tracks the vehicle display
+# system and caused the duplicate-trip double-conversion bug.
 
-def test_elveh_tripDistanceTraveled_not_read():
-    """Adapter contracts must not source trip distance from
-    elveh.tripDistanceTraveled (or any elveh.trip* attribute). Trip data comes
-    from the events entity xev-key-off-trip-segment-data instead.
-    """
-    elveh_trip_reads = [
-        c for c in FIELD_CONTRACTS
-        if "elveh" in c.source_locator.pattern
-        and "tripDistance" in c.source_attribute
-    ]
-    assert not elveh_trip_reads, (
-        "adapter reads trip distance from elveh attributes: "
-        f"{[(c.source_locator.pattern, c.source_attribute) for c in elveh_trip_reads]}. "
-        "Trip data must come from sensor.{vin}_events.xev-key-off-trip-segment-data."
-    )
+def test_elveh_distance_contracts_are_ha_localized():
+    elveh_distance_attrs = {
+        "tripDistanceTraveled",
+        "tripEfficiency",
+        "tripRangeRegenerated",
+        "maximumBatteryRange",
+    }
+    seen = set()
+    for c in FIELD_CONTRACTS:
+        if "elveh" not in c.source_locator.pattern:
+            continue
+        if c.source_attribute in elveh_distance_attrs:
+            seen.add(c.source_attribute)
+            assert c.ha_unit_system_converted, (
+                f"elveh.{c.source_attribute} must be ha_unit_system_converted=True; "
+                "resolving it via the elveh state uom double-converts for "
+                "imperial-display vehicles on metric HA"
+            )
+    assert seen == elveh_distance_attrs, f"missing elveh contracts: {elveh_distance_attrs - seen}"
 
 
 # Deterministic trip-id helper — closes the cross-source dedup invariant.
@@ -137,22 +145,23 @@ def test_score_invalid_returns_null():
     assert _score_or_null("nope") is None
 
 
-# Duration canonicalization — events emit seconds, elveh emits minutes.
+# Duration canonicalization — events emit seconds; elveh emits str(timedelta)
+# ("0:41:18") on current ha-fordpass, bare minutes on older builds.
 
 def test_duration_canonicalized_to_seconds_from_elveh():
-    """elveh tripDuration=25 (minutes) -> stored as 1500.0 seconds."""
-    from web.services.sources.ha_fordpass.handlers import (
-        _duration_to_seconds_from_minutes,
-    )
+    from web.services.sources.ha_fordpass.handlers import _duration_to_seconds
 
-    assert _duration_to_seconds_from_minutes(25) == 1500.0
-    assert _duration_to_seconds_from_minutes("25") == 1500.0
+    assert _duration_to_seconds("0:41:18") == 2478.0
+    assert _duration_to_seconds("1:00:00") == 3600.0
+    assert _duration_to_seconds("1 day, 2:03:04") == 93784.0
+    # Legacy numeric minutes
+    assert _duration_to_seconds(25) == 1500.0
+    assert _duration_to_seconds("25") == 1500.0
 
 
-def test_duration_to_seconds_from_minutes_handles_none():
-    from web.services.sources.ha_fordpass.handlers import (
-        _duration_to_seconds_from_minutes,
-    )
+def test_duration_to_seconds_handles_invalid():
+    from web.services.sources.ha_fordpass.handlers import _duration_to_seconds
 
-    assert _duration_to_seconds_from_minutes(None) is None
-    assert _duration_to_seconds_from_minutes("") is None
+    assert _duration_to_seconds(None) is None
+    assert _duration_to_seconds("") is None
+    assert _duration_to_seconds("not:a:time") is None

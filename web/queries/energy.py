@@ -1,7 +1,7 @@
 """Energy and charging-performance aggregation helpers."""
 
 import statistics
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 
 import pandas as pd
 import plotly.express as px
@@ -15,6 +15,7 @@ from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
 from web.queries.costs import build_time_filter
+from web.queries.time_window import resolve_time_window, window_clause
 
 # Adjustable without hunting through code
 MOVING_AVG_WINDOW = 10
@@ -46,35 +47,27 @@ def _wrap_chart(html: str) -> str:
     return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
-def build_time_filter_trip(range_str: str):
+def build_time_filter_trip(
+    range_str: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+):
     """Return a SQLAlchemy where clause for EVTripMetrics.start_time.
 
-    Same logic as costs.build_time_filter but targets EVTripMetrics.start_time.
-    Returns None for 'all' (no filter).
-    Accepts: '7d', '30d', '90d', 'ytd', '1y', 'all'
+    Same semantics as costs.build_time_filter but targets EVTripMetrics.start_time.
+    Returns None when unbounded.
     """
-    if not range_str or range_str == "all":
-        return None
-
-    now = datetime.now(UTC)
-
-    if range_str == "7d":
-        cutoff = now - timedelta(days=7)
-    elif range_str == "30d":
-        cutoff = now - timedelta(days=30)
-    elif range_str == "90d":
-        cutoff = now - timedelta(days=90)
-    elif range_str == "ytd":
-        cutoff = datetime(now.year, 1, 1, tzinfo=UTC)
-    elif range_str == "1y":
-        cutoff = now - timedelta(days=365)
-    else:
-        return None
-
-    return EVTripMetrics.start_time >= cutoff
+    start, end = resolve_time_window(range_str, date_from, date_to)
+    return window_clause(EVTripMetrics.start_time, start, end)
 
 
-async def query_energy_summary(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> dict:
+async def query_energy_summary(
+    db: AsyncSession,
+    time_range: str = "all",
+    device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict:
     """Compute energy summary from EVChargingSession rows.
 
     Returns dict with:
@@ -94,7 +87,7 @@ async def query_energy_summary(db: AsyncSession, time_range: str = "all", device
     """
     # Reuse build_time_filter from costs (targets EVChargingSession.session_start_utc)
     stmt = select(EVChargingSession).where(EVChargingSession.energy_kwh.isnot(None))
-    time_filter = build_time_filter(time_range)
+    time_filter = build_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
     if device_id:
@@ -177,6 +170,8 @@ async def monthly_energy_series(
     db: AsyncSession,
     time_range: str = "all",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[tuple[datetime, float]]:
     """Return (month_start, total_energy_kwh) per month in the filter range.
 
@@ -197,7 +192,7 @@ async def monthly_energy_series(
         .group_by("m")
         .order_by("m")
     )
-    time_filter = build_time_filter(time_range)
+    time_filter = build_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
     if device_id is not None:
@@ -211,6 +206,8 @@ async def charging_speed_series(
     db: AsyncSession,
     time_range: str = "all",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[tuple[datetime, float]]:
     """Return (month_start, average_kw) per month in the filter range.
 
@@ -238,7 +235,7 @@ async def charging_speed_series(
         .group_by("m")
         .order_by("m")
     )
-    time_filter = build_time_filter(time_range)
+    time_filter = build_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
     if device_id is not None:
@@ -260,6 +257,8 @@ async def efficiency_over_time_series(
     db: AsyncSession,
     time_range: str = "all",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[tuple[datetime, float]]:
     """Return (session_start, km_per_kwh) per session with usable energy+distance.
 
@@ -283,7 +282,7 @@ async def efficiency_over_time_series(
         .where(EVChargingSession.session_start_utc.isnot(None))
         .order_by(EVChargingSession.session_start_utc)
     )
-    time_filter = build_time_filter(time_range)
+    time_filter = build_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
     if device_id is not None:
@@ -296,20 +295,26 @@ async def efficiency_over_time_series(
     ]
 
 
-async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> dict | None:
+async def query_regen_summary(
+    db: AsyncSession,
+    time_range: str = "all",
+    device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict | None:
     """Compute regen braking summary from EVTripMetrics.
     Returns None when ev_trip_metrics has no rows with range_regenerated data
     (triggers "No data available" card state in the template).
     Returns dict with:
     regen_total: float
     trip_count: int
-    NOTE: range_regenerated units are ambiguous — likely "miles of range recovered"
-    but not confirmed. Template uses generic "range units" label.
-    TODO: Validate range_regenerated units against raw fordpass API response.
+    NOTE: range_regenerated is stored canonical km. Source-verified against
+    ha-fordpass: metrics tripXevBatteryRangeRegenerated routes through
+    localize_distance, and the adapter contract converts back to km.
     PITFALL: SUM on empty/null data returns NULL not 0. Count-first guard prevents
     TypeError: float(None).
     """
-    trip_filter = build_time_filter_trip(time_range)
+    trip_filter = build_time_filter_trip(time_range, date_from, date_to)
 
     # Count-first guard: check rows with range_regenerated data
     count_stmt = select(func.count()).where(
@@ -347,7 +352,11 @@ async def query_regen_summary(db: AsyncSession, time_range: str = "all", device_
 
 
 async def query_regen_for_chart(
-    db: AsyncSession, time_range: str = "all", device_id: str | None = None,
+    db: AsyncSession,
+    time_range: str = "all",
+    device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[dict] | None:
     """Return per-trip regen data for chart secondary y-axis overlay.
 
@@ -356,7 +365,7 @@ async def query_regen_for_chart(
     Returns None if no rows found.
     Returns list of dicts: [{date: start_time, range_regenerated: float}, ...]
     """
-    trip_filter = build_time_filter_trip(time_range)
+    trip_filter = build_time_filter_trip(time_range, date_from, date_to)
 
     stmt = select(EVTripMetrics).where(EVTripMetrics.range_regenerated.isnot(None))
     if trip_filter is not None:
@@ -393,13 +402,19 @@ async def query_regen_for_chart(
     return chart_data
 
 
-async def query_monthly_energy(db: AsyncSession, time_range: str = "all", device_id: str | None = None) -> list[dict]:
+async def query_monthly_energy(
+    db: AsyncSession,
+    time_range: str = "all",
+    device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[dict]:
     """Return monthly kWh grouped by charge type for stacked area chart.
 
     Returns list of dicts: [{"month": "2025-01", "charge_type": "AC", "kwh": 45.2}, ...]
     """
     stmt = select(EVChargingSession).where(EVChargingSession.energy_kwh.isnot(None))
-    time_filter = build_time_filter(time_range)
+    time_filter = build_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
     if device_id:
@@ -628,6 +643,7 @@ def build_efficiency_chart(
                 mode="lines",
                 name=f"{MOVING_AVG_WINDOW}-session avg",
                 line=dict(color="#facc15", width=2, dash="dash"),
+                hovertemplate="<b>%{x|%b %d, %Y}</b><br>%{y:.2f}<extra>avg</extra>",
             ),
             secondary_y=False,
         )
@@ -643,6 +659,7 @@ def build_efficiency_chart(
                 name="Range Recovered",
                 line=dict(color="#4ade80", dash="dot", width=1.5),
                 opacity=0.7,
+                hovertemplate="<b>%{x|%b %d, %Y}</b><br>%{y:.1f}<extra>Range Recovered</extra>",
             ),
             secondary_y=True,
         )
@@ -676,6 +693,7 @@ def build_efficiency_chart(
                 mode="lines",
                 name=f"{MOVING_AVG_WINDOW}-session avg",
                 line=dict(color="#facc15", width=2, dash="dash"),
+                hovertemplate="<b>%{x|%b %d, %Y}</b><br>%{y:.2f}<extra>avg</extra>",
             )
         )
 
@@ -960,6 +978,8 @@ async def query_synthetic_curve_inputs(
     db: AsyncSession,
     time_range: str = "all",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> dict:
     """Collect DC-session peak kW values for synthetic curve aggregation.
 
@@ -976,7 +996,7 @@ async def query_synthetic_curve_inputs(
         EVChargingSession.charger_rated_kw,
     ).where(EVChargingSession.charge_type == "DC")
 
-    time_filter = build_time_filter(time_range)
+    time_filter = build_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
     if device_id is not None:
@@ -1003,6 +1023,8 @@ async def has_real_charge_curve_data(
     db: AsyncSession,
     time_range: str = "all",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> bool:
     """True iff any DC session in window has >= 3 EVBatteryStatus rows within its
     [session_start_utc, session_end_utc] span.
@@ -1017,7 +1039,7 @@ async def has_real_charge_curve_data(
         EVChargingSession.device_id,
     ).where(EVChargingSession.charge_type == "DC")
 
-    time_filter = build_time_filter(time_range)
+    time_filter = build_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         sess_stmt = sess_stmt.where(time_filter)
     if device_id is not None:

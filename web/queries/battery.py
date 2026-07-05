@@ -22,6 +22,7 @@ from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargingNetwork
 from db.models.vehicle_status import EVVehicleStatus
 from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
+from web.queries.time_window import resolve_time_window, window_clause
 from web.unit_system import format_user_local
 
 # Module-level cache for reference charge curve JSON data
@@ -32,40 +33,19 @@ _CURVE_CACHE: dict[str, dict] = {}
 # ---------------------------------------------------------------------------
 
 
-def _battery_time_cutoff(range_str: str) -> datetime | None:
-    """Return the cutoff datetime for a given range string, or None for 'all'.
-
-    Shared math used by both EVBatteryStatus and EVVehicleStatus filters so a
-    single mapping ('7d' -> 7 days ago, etc.) drives every battery-page query.
-    Accepts: '7d', '30d', '90d', 'ytd', '1y', 'all'.
-    """
-    if not range_str or range_str == "all":
-        return None
-
-    now = datetime.now(UTC)
-
-    if range_str == "7d":
-        return now - timedelta(days=7)
-    if range_str == "30d":
-        return now - timedelta(days=30)
-    if range_str == "90d":
-        return now - timedelta(days=90)
-    if range_str == "ytd":
-        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    if range_str == "1y":
-        return now - timedelta(days=365)
-    return None
-
-
-def build_battery_time_filter(range_str: str):
+def build_battery_time_filter(
+    range_str: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+):
     """Return a SQLAlchemy where clause for EVBatteryStatus.recorded_at.
 
-    Returns None for 'all' (no filter).
+    Accepts presets '7d', '30d', '90d', 'ytd', '1y', 'all' plus an optional
+    custom yyyy-mm-dd window (applied when no preset is active).
+    Returns None when unbounded.
     """
-    cutoff = _battery_time_cutoff(range_str)
-    if cutoff is None:
-        return None
-    return EVBatteryStatus.recorded_at >= cutoff
+    start, end = resolve_time_window(range_str, date_from, date_to)
+    return window_clause(EVBatteryStatus.recorded_at, start, end)
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +57,8 @@ async def query_soc_timeline(
     db: AsyncSession,
     time_range: str = "7d",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[dict]:
     """Query SOC timeline data with adaptive time-bucket downsampling.
 
@@ -87,7 +69,7 @@ async def query_soc_timeline(
     Returns list of dicts with keys: recorded_at, soc, kw, range.
     Empty list when no data found.
     """
-    time_filter = build_battery_time_filter(time_range)
+    time_filter = build_battery_time_filter(time_range, date_from, date_to)
 
     # Count rows first to decide downsampling strategy
     count_stmt = select(func.count()).select_from(EVBatteryStatus).where(
@@ -312,6 +294,8 @@ async def query_battery_temp_timeline(
     db: AsyncSession,
     time_range: str = "7d",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[dict]:
     """Battery pack temperature timeline for the battery-temp chart.
 
@@ -329,7 +313,7 @@ async def query_battery_temp_timeline(
         .order_by(EVBatteryStatus.recorded_at)
     )
 
-    time_filter = build_battery_time_filter(time_range)
+    time_filter = build_battery_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
     if device_id:
@@ -372,11 +356,13 @@ async def query_outside_temp_timeline(
     db: AsyncSession,
     time_range: str = "7d",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[dict]:
     """Outside-air temperature timeline sourced from EVVehicleStatus.
 
-    Reuses the shared cutoff math from _battery_time_cutoff (build_battery_time_filter
-    is bound to EVBatteryStatus). Returns list of dicts with keys:
+    Reuses the shared window math (build_battery_time_filter is bound to
+    EVBatteryStatus). Returns list of dicts with keys:
     recorded_at, outside_temperature.
     """
     stmt = (
@@ -388,9 +374,12 @@ async def query_outside_temp_timeline(
         .order_by(EVVehicleStatus.recorded_at)
     )
 
-    cutoff = _battery_time_cutoff(time_range)
-    if cutoff is not None:
-        stmt = stmt.where(EVVehicleStatus.recorded_at >= cutoff)
+    time_filter = window_clause(
+        EVVehicleStatus.recorded_at,
+        *resolve_time_window(time_range, date_from, date_to),
+    )
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
     if device_id:
         stmt = stmt.where(EVVehicleStatus.device_id == device_id)
 
@@ -584,6 +573,8 @@ async def query_degradation_by_mileage(
     db: AsyncSession,
     time_range: str = "all",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[dict]:
     """Query daily max battery capacity correlated with odometer mileage.
 
@@ -607,7 +598,7 @@ async def query_degradation_by_mileage(
         .order_by(date_col)
     )
 
-    time_filter = build_battery_time_filter(time_range)
+    time_filter = build_battery_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         cap_stmt = cap_stmt.where(time_filter)
     if device_id:
@@ -885,7 +876,7 @@ def build_battery_temp_chart(
                 name="Battery",
                 line=dict(color="#47A8E5", width=2),
                 connectgaps=False,
-                hoverinfo="x+y+name",
+                hovertemplate="%{x}<br>%{y:.1f}\u00b0<extra>Battery</extra>",
             )
         )
 
@@ -900,7 +891,7 @@ def build_battery_temp_chart(
                 name="Outside Air",
                 line=dict(color="#94a3b8", width=2, dash="dash"),
                 connectgaps=False,
-                hoverinfo="x+y+name",
+                hovertemplate="%{x}<br>%{y:.1f}\u00b0<extra>Outside Air</extra>",
             )
         )
 

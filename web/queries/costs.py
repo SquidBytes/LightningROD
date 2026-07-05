@@ -1,6 +1,5 @@
 """Charging cost calculations, summaries, and charts."""
 
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
@@ -13,6 +12,7 @@ from db.models.reference import (
     EVLocationLookup,
     EVNetworkSubscription,
 )
+from web.queries.time_window import resolve_time_window, window_clause
 
 # km -> miles factor; distance_added is stored in km.
 _KM_TO_MI = 0.621371
@@ -32,31 +32,19 @@ def _wrap_chart(html: str) -> str:
     return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
-def build_time_filter(range_str: str):
+def build_time_filter(
+    range_str: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+):
     """Return a SQLAlchemy where clause for EVChargingSession.session_start_utc.
 
-    Returns None for 'all' (no filter).
-    Accepts: '7d', '30d', '90d', 'ytd', '1y', 'all'
+    Accepts presets '7d', '30d', '90d', 'ytd', '1y', 'all' plus an optional
+    custom yyyy-mm-dd window (applied when no preset is active).
+    Returns None when unbounded.
     """
-    if not range_str or range_str == "all":
-        return None
-
-    now = datetime.now(UTC)
-
-    if range_str == "7d":
-        cutoff = now - timedelta(days=7)
-    elif range_str == "30d":
-        cutoff = now - timedelta(days=30)
-    elif range_str == "90d":
-        cutoff = now - timedelta(days=90)
-    elif range_str == "ytd":
-        cutoff = datetime(now.year, 1, 1, tzinfo=UTC)
-    elif range_str == "1y":
-        cutoff = now - timedelta(days=365)
-    else:
-        return None
-
-    return EVChargingSession.session_start_utc >= cutoff
+    start, end = resolve_time_window(range_str, date_from, date_to)
+    return window_clause(EVChargingSession.session_start_utc, start, end)
 
 
 def find_active_subscription(

@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -826,23 +826,27 @@ async def detect_duplicates(rows: list[dict], db_session: AsyncSession) -> list[
         Updated rows list with _status and optional _matched_id set.
     """
     # Collect session_ids from non-error rows
-    session_ids = [
-        str(row["session_id"])
-        for row in rows
-        if row.get("_status") != "error" and row.get("session_id") is not None
-    ]
+    session_uuids: list[uuid.UUID] = []
+    for row in rows:
+        if row.get("_status") == "error" or row.get("session_id") is None:
+            continue
+        try:
+            session_uuids.append(uuid.UUID(str(row["session_id"])))
+        except ValueError:
+            continue
 
-    # Layer 1: deterministic session_id match
+    # Layer 1: deterministic session_id match. Core select so the IN clause
+    # compiles on both PostgreSQL and SQLite (= ANY(...) is PG-only).
     matched_ids: set[str] = set()
-    if session_ids:
+    if session_uuids:
+        from db.models.charging_session import EVChargingSession
+
         result = await db_session.execute(
-            text(
-                "SELECT session_id FROM ev_charging_session "
-                "WHERE session_id = ANY(:ids)"
-            ),
-            {"ids": session_ids},
+            select(EVChargingSession.session_id).where(
+                EVChargingSession.session_id.in_(session_uuids)
+            )
         )
-        for (sid,) in result.fetchall():
+        for sid in result.scalars():
             matched_ids.add(str(sid))
 
     # Apply Layer 1 matches
