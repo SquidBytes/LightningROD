@@ -467,10 +467,10 @@ def _record_last_seen(
 ) -> None:
     """Record the last-seen raw value for diagnostic display.
 
-    `effective_unit` overrides `contract.source_unit` when a read-time UoM
-    fallback was used. `method` captures how the unit was resolved
-    (declared / ha_unit_system_converted / read_time_uom / declared_fallback)
-    so the data-sources page can show the reason per field.
+    `effective_unit` overrides `contract.source_unit` when the HA-unit-system
+    path resolved a different unit. `method` captures how the unit was
+    resolved (declared / ha_unit_system_converted / declared_fallback) so the
+    data-sources page can show the reason per field.
     """
     key = f"{contract.source_locator.pattern}|{contract.source_attribute}"
     _last_seen_raw[key] = {

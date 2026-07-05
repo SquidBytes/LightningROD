@@ -1,7 +1,7 @@
 """Dashboard network-chart bucketing — many-CPO readability."""
 
-from types import SimpleNamespace
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from web.queries.dashboard import (
     _MAX_CHART_NETWORKS,

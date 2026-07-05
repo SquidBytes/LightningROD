@@ -709,8 +709,8 @@ def resolve_source_unit(
         try:
             # adapter._resolve_source_unit returns (unit, method). The method
             # returned from the adapter (declared / ha_unit_system_converted /
-            # read_time_uom / declared_fallback) is richer than the detection
-            # layer's "declared" bucket — we still label the detection record
+            # declared_fallback) is richer than the detection layer's
+            # "declared" bucket — we still label the detection record
             # "declared" here because the contract existed, but the adapter's
             # observability path captures the nuance per-event.
             resolved, _adapter_method = ha_fordpass._resolve_source_unit(
