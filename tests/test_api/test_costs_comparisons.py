@@ -44,5 +44,8 @@ async def test_costs_page_renders_mile_for_mile_section(client, db_session):
     response = await client.get("/charging/costs")
     assert response.status_code == 200
     assert "Mile-for-mile in your 25 MPG Wagon" in response.text
-    assert "Charge-for-charge" in response.text
+    assert "Charge-for-charge on gas" in response.text
+    assert "ledger-grid-3" in response.text
     assert "odometer" in response.text
+    # Single EV column: the "Your EV" label appears exactly once.
+    assert response.text.count("Your EV — actual spend") == 1
