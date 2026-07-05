@@ -16,6 +16,11 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Custom From/To date filters now work on the Costs, Battery, Charging
+  Performance, Trip Sessions, and Driving Analytics pages (previously they
+  silently reset the view to All-time; only Charging Sessions honored them)
+- Chart tooltips no longer show full-precision floats (battery temperature,
+  efficiency moving average, range recovered, gas price trends)
 - Edit forms no longer show floating-point noise (15+ decimal places) in
   power, SOC, voltage, cost, and capacity fields
 - Group-edit bar: choosing a Network now reliably refreshes the Location
