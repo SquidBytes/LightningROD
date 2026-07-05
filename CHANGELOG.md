@@ -9,6 +9,9 @@ For feature documentation, see the docs site at
 
 ### Added
 
+- Export CSV button on the Charging Sessions page — downloads the sessions
+  matching the current filters (dates, charge type, network, sort)
+
 ### Changed
 
 - Dashboard network charts group networks beyond the top 7 into an "Other"
@@ -16,6 +19,8 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- AC vs DC donut (and chart-metric switches) no longer render off-center
+  after switching kWh/Sessions/Cost until the window was resized
 - Custom From/To date filters now work on the Costs, Battery, Charging
   Performance, Trip Sessions, and Driving Analytics pages (previously they
   silently reset the view to All-time; only Charging Sessions honored them)
