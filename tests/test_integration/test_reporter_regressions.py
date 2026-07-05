@@ -189,6 +189,69 @@ async def test_elveh_trip_distance_canonical_km_across_unit_matrix(
     assert float(trip.duration) == pytest.approx(1800.0, abs=1.0)
 
 
+async def test_metrics_backfills_trip_regen_and_score(db_session):
+    """Lock: metrics entity NULL-fills regen + driving score on the newest trip.
+
+    Regen previously only ingested via the elveh fallback, which many installs
+    never emit — leaving the Range Regenerated card at 'No data available'.
+    tripXevBatteryRangeRegenerated (raw km) and tripXevBatteryChargeRegenerated
+    (driving score %) live on the always-enabled metrics entity.
+    """
+    payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
+    ha_config = {"unit_system": "metric"}
+
+    # Events entity creates the trip row (no regen fields on that payload)...
+    await process_event(
+        "sensor.fordpass_YOUR_VIN_events", payload["sensor.fordpass_YOUR_VIN_events"],
+        db_session, ha_config,
+    )
+    # ...then the metrics entity fires on the same poll cycle.
+    await process_event(
+        "sensor.fordpass_YOUR_VIN_metrics", payload["sensor.fordpass_YOUR_VIN_metrics"],
+        db_session, ha_config,
+    )
+    await db_session.flush()
+
+    trip = (
+        await db_session.execute(
+            select(EVTripMetrics).order_by(EVTripMetrics.id.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    assert trip is not None
+    assert float(trip.range_regenerated) == pytest.approx(2.1, abs=0.01)
+    assert float(trip.driving_score) == pytest.approx(85.0)
+
+
+async def test_metrics_backfill_does_not_overwrite_elveh_regen(db_session):
+    """An elveh-sourced regen value survives a later metrics event."""
+    from web.services.sources.ha_fordpass import handlers as fp_handlers
+    from web.services.sources.ha_fordpass.handlers import handle_battery_status
+
+    fp_handlers._last_trip_values.clear()
+
+    payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
+    ha_config = {"unit_system": "metric"}
+
+    await handle_battery_status(
+        "elveh", payload["sensor.fordpass_YOUR_VIN_elveh"], ha_config, "YOUR_VIN", db_session
+    )
+    trip = (
+        await db_session.execute(
+            select(EVTripMetrics).order_by(EVTripMetrics.id.desc()).limit(1)
+        )
+    ).scalar_one()
+    trip.range_regenerated = 9.9  # pretend elveh delivered a distinct value
+    await db_session.flush()
+
+    await process_event(
+        "sensor.fordpass_YOUR_VIN_metrics", payload["sensor.fordpass_YOUR_VIN_metrics"],
+        db_session, ha_config,
+    )
+    await db_session.flush()
+    await db_session.refresh(trip)
+    assert float(trip.range_regenerated) == pytest.approx(9.9)
+
+
 async def test_reporter_260mi_418km_max_range(db_session):
     """Lock: max range 418 km must store as 418 km hv_battery_max_range, NOT ~673 km.
 

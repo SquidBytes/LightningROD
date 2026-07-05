@@ -23,6 +23,9 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Range Regenerated card on Driving Analytics showed "No data available" —
+  regen and driving score now also ingest from the always-enabled metrics
+  sensor instead of relying solely on elveh trip attributes
 - CSV import duplicate detection crashed on SQLite installs (PostgreSQL-only
   SQL in the dedup query)
 - AC vs DC donut (and chart-metric switches) no longer render off-center

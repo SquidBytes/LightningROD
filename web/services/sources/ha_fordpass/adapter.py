@@ -252,6 +252,19 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_unit="km",
         notes="From metrics tripXevBatteryRangeRegenerated via localize_distance",
     ),
+    # Primary regen source: the metrics entity carries the raw-metric value,
+    # is always enabled, and backfills the newest trip row directly — the
+    # elveh contract above stays as the localized fallback for installs
+    # where metrics lacks the attribute.
+    FieldContract(
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
+        source_attribute="tripXevBatteryRangeRegenerated",
+        source_unit="km",
+        target_db_table="ev_trip_metrics",
+        target_db_column="range_regenerated",
+        target_unit="km",
+        notes="Raw API passthrough (km); backfills the newest trip row",
+    ),
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="maximumBatteryRange",
@@ -924,6 +937,74 @@ async def _handle_metrics_entity(
         hv_range,
         hv_max_range,
     )
+
+    await _backfill_trip_regen(entity_id, attrs, device_id, db, recorded_at, ha_config)
+
+
+async def _backfill_trip_regen(
+    entity_id: str,
+    attrs: dict,
+    device_id: str,
+    db: AsyncSession,
+    recorded_at: datetime,
+    ha_config: dict | None,
+) -> None:
+    """NULL-fill regen + driving score on the newest trip row from metrics attrs.
+
+    tripXevBatteryRangeRegenerated (raw km) and tripXevBatteryChargeRegenerated
+    (a regen-vs-brake driving score %) live on the metrics entity, which is
+    always enabled — unlike the elveh fallback, whose trip attributes many
+    installs never emit. Metrics refreshes every poll cycle, so a trip row
+    created by the events handler gets its regen/score within one cycle.
+    Only NULL fields are filled; elveh-sourced values are never overwritten.
+    """
+    raw_regen = attrs.get("tripXevBatteryRangeRegenerated")
+    raw_score = _safe_float(attrs.get("tripXevBatteryChargeRegenerated"))
+    # ha-fordpass emits 0 for missing telemetry; treat as unmeasured.
+    if raw_score == 0:
+        raw_score = None
+    regen = None
+    if raw_regen is not None:
+        regen_contract = lookup_contract(
+            _entity_pattern(entity_id), "tripXevBatteryRangeRegenerated"
+        )
+        if regen_contract is not None:
+            regen = convert(regen_contract, raw_regen, None, ha_config)
+    if regen == 0:
+        regen = None
+    if regen is None and raw_score is None:
+        return
+
+    from datetime import timedelta
+
+    from sqlalchemy import select as _select
+
+    from db.models.trip_metrics import EVTripMetrics
+
+    trip = (await db.execute(
+        _select(EVTripMetrics)
+        .where(EVTripMetrics.device_id == device_id)
+        .where(EVTripMetrics.end_time >= recorded_at - timedelta(hours=24))
+        .order_by(EVTripMetrics.end_time.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+    if trip is None:
+        return
+
+    changed = False
+    if regen is not None and trip.range_regenerated is None:
+        trip.range_regenerated = regen
+        changed = True
+    if raw_score is not None and trip.driving_score is None:
+        trip.driving_score = raw_score
+        changed = True
+    if changed:
+        logger.debug(
+            "ha_fordpass: backfilled trip %s regen=%s score=%s from metrics",
+            trip.id,
+            regen,
+            raw_score,
+        )
 
 
 async def _handle_events_entity(

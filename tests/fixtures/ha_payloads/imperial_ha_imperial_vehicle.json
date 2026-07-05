@@ -68,7 +68,9 @@
       "xevBatteryActualStateOfCharge": 77,
       "xevBatteryVoltage": 390.0,
       "xevBatteryAmperage": 5.0,
-      "xevBatteryPower": 1950
+      "xevBatteryPower": 1950,
+      "tripXevBatteryRangeRegenerated": 2.1,
+      "tripXevBatteryChargeRegenerated": 85
     },
     "last_changed": "2026-04-19T12:00:00+00:00",
     "last_updated": "2026-04-19T12:00:00+00:00"

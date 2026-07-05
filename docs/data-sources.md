@@ -31,6 +31,7 @@ commit time and serves as the observable unit contract.
 | `sensor.fordpass_{vin}_metrics` | `brakeTorque` | `Nm` | `ev_vehicle_status` | `brake_torque` | `Nm` | Brake torque. SI passthrough; no localization in ha-fordpass. |
 | `sensor.fordpass_{vin}_metrics` | `odometer` | `km` | `ev_vehicle_status` | `odometer` | `km` | Cumulative odometer; ha-fordpass localizes per HA unit_system (imperial -> mi, metric -> km). |
 | `sensor.fordpass_{vin}_metrics` | `speed` | `kmh` | `ev_vehicle_status` | `speed` | `kmh` | Instantaneous vehicle speed; ha-fordpass localizes per unit_system. Zero when parked. |
+| `sensor.fordpass_{vin}_metrics` | `tripXevBatteryRangeRegenerated` | `km` | `ev_trip_metrics` | `range_regenerated` | `km` | Raw API passthrough (km); backfills the newest trip row |
 | `sensor.fordpass_{vin}_metrics` | `xevBatteryMaximumRange` | `km` | `ev_battery_status` | `hv_battery_max_range` | `km` | Canonical metric source; replaces elveh.maximumBatteryRange |
 | `sensor.fordpass_{vin}_metrics` | `xevBatteryRange` | `km` | `ev_battery_status` | `hv_battery_range` | `km` | Canonical metric source; replaces elveh state reading |
 | `sensor.fordpass_{vin}_metrics` | `yawRate` | `deg/s` | `ev_vehicle_status` | `yaw_rate` | `deg/s` | Yaw rate. Passthrough; no localization. |
