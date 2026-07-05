@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.dependencies import get_db
-from web.queries.comparisons import query_gas_comparison
+from web.queries.comparisons import query_distance_gas_comparison, query_gas_comparison
 from web.queries.cost_explorer import (
     build_cost_explorer_monthly_chart,
     get_charge_type_network_groupings,
@@ -151,6 +151,7 @@ async def costs(
     show_comparisons = toggles.get("comparison_section_visible", "true") != "false"
 
     gas_comparison = None
+    distance_comparison = None
 
     if show_comparisons and toggles.get("comparison_gas_enabled", "true") != "false":
         default_ice = await get_default_ice_vehicle(db)
@@ -163,12 +164,22 @@ async def costs(
             date_from=date_from,
             date_to=date_to,
         )
+        distance_comparison = await query_distance_gas_comparison(
+            db,
+            device_id=active_device_id,
+            ice_vehicle=default_ice,
+            time_range=range or "all",
+            date_from=date_from,
+            date_to=date_to,
+        )
 
     all_vehicles = await get_all_vehicles(db)
     distance_factor = MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
 
     if gas_comparison is not None and gas_comparison.get("total_distance") is not None:
         gas_comparison["total_distance"] = gas_comparison["total_distance"] * distance_factor
+    if distance_comparison is not None and distance_comparison.get("total_distance") is not None:
+        distance_comparison["total_distance"] = distance_comparison["total_distance"] * distance_factor
 
     # HA sensor friendly names — fall back to the raw entity_id when blank.
     if gas_comparison is not None:
@@ -218,6 +229,7 @@ async def costs(
         "page_title": "Costs",
         "show_comparisons": show_comparisons,
         "gas_comparison": gas_comparison,
+        "distance_comparison": distance_comparison,
         "networks": all_networks,
         "selected_networks_csv": networks or "",
         "selected_network_items": selected_network_items,

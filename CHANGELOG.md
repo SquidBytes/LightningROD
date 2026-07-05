@@ -12,6 +12,9 @@ For feature documentation, see the docs site at
 - Export CSV button on the Charging Sessions page — downloads the sessions
   matching the current filters (dates, charge type, network, sort)
 - Delete Trip button in the trip detail drawer
+- Mile-for-mile gas comparison in Savings Scenarios — fuels the distance you
+  actually drove at the ICE comparison vehicle's real MPG with monthly fuel
+  price history, alongside the existing energy-equivalent comparison
 
 ### Changed
 
