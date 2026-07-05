@@ -146,3 +146,41 @@ async def test_create_session_inherits_network_from_location(client, db_session)
     created = result.scalar_one()
     await db_session.refresh(created)
     assert created.network_id == net.id
+
+
+@pytest.mark.db
+async def test_sessions_export_csv(client, db_session):
+    """GET /charging/sessions/export.csv streams the filtered sessions."""
+    vehicle = await VehicleFactory.create(db_session)
+    await ChargingSessionFactory.create(
+        db_session,
+        device_id=vehicle.device_id,
+        charge_type="DC",
+        energy_kwh=33.3,
+        location_name="Export Test Stop",
+    )
+    response = await client.get("/charging/sessions/export.csv")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "attachment" in response.headers["content-disposition"]
+    body = response.text
+    assert body.splitlines()[0].startswith("start (")
+    assert "Export Test Stop" in body
+    assert "33.30" in body
+
+
+@pytest.mark.db
+async def test_sessions_export_csv_honors_charge_type_filter(client, db_session):
+    vehicle = await VehicleFactory.create(db_session)
+    await ChargingSessionFactory.create(
+        db_session, device_id=vehicle.device_id, charge_type="AC",
+        location_name="AC Only Stop",
+    )
+    await ChargingSessionFactory.create(
+        db_session, device_id=vehicle.device_id, charge_type="DC",
+        location_name="DC Only Stop",
+    )
+    response = await client.get("/charging/sessions/export.csv?charge_type=DC")
+    assert response.status_code == 200
+    assert "DC Only Stop" in response.text
+    assert "AC Only Stop" not in response.text

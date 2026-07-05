@@ -9,6 +9,17 @@
         <div class="flex items-center gap-2">
             <button
                 type="button"
+                onclick="exportSessionsCsv()"
+                class="btn btn-outline btn-sm gap-2"
+                title="Download the sessions matching the current filters as CSV"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                Export CSV
+            </button>
+            <button
+                type="button"
                 id="group-edit-toggle"
                 onclick="toggleGroupEdit()"
                 class="btn btn-outline btn-sm gap-2"
@@ -306,6 +317,15 @@ document.body.addEventListener('session-created', function(evt) {
         }, 200);
     }
 });
+
+// --- CSV export: reuse the live filter form so the download matches the view ---
+function exportSessionsCsv() {
+    var form = document.getElementById('filter-form');
+    var params = form ? new URLSearchParams(new FormData(form)) : new URLSearchParams();
+    params.delete('page');
+    params.delete('per_page');
+    window.location = '/charging/sessions/export.csv?' + params.toString();
+}
 
 // --- Group Edit ---
 var _groupEditActive = false;
