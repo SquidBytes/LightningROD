@@ -69,6 +69,10 @@ A data source badge in the top-right corner shows where the session came from: M
 
 Open a session's edit modal and click **Delete**. A confirmation dialog helps prevent accidental deletion.
 
+## Exporting Sessions
+
+Click **Export CSV** above the table to download the sessions matching the current filters (date range, charge type, network, and sort order). Distances export in your configured display unit, times in your configured timezone; energy, power, SOC, and cost columns use their stored units (kWh, kW, V, A, %).
+
 ## Session Detail Drawer
 
 Click any table row to open the slide-out drawer with full session details:

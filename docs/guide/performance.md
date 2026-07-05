@@ -11,7 +11,7 @@ The charging performance page (`/charging/performance`) shows how you charge: en
 
 ## Date Range Filter
 
-A filter bar at the top lets you scope everything on the page to `7d`, `30d`, `90d`, `YTD`, or `All`. The selected range is passed in the URL as `?range=…` and shared with other analytics pages.
+A filter bar at the top lets you scope everything on the page to `7d`, `30d`, `90d`, `YTD`, `1y`, or `All`, or a custom **From**/**To** date pair. The selection is passed in the URL (`?range=…` or `?date_from=…&date_to=…`) and shared with other analytics pages.
 
 ## Summary Row
 

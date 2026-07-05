@@ -23,6 +23,7 @@ Click any row to open a slide-out detail drawer with:
 - **Environment chart** — temperature and altitude over the trip
 - **Drive graphs** — SOC, speed, and range on a shared time axis (interpolated segments shown as dotted lines at 40% opacity)
 - **Expand** — a full-screen modal with Battery, Environment, and Driving chart sections
+- **Delete Trip** — removes the trip after a confirmation prompt
 
 Summary cards above the table - Total Trips, Avg Efficiency, Total Distance, Total Energy - respect the date range filter.
 
@@ -61,4 +62,4 @@ Hover any bar for trip date, regen kWh, regen %, and distance.
 
 ## Date Range Filter
 
-Both pages use the same `?range=` filter (`7d` / `30d` / `90d` / `YTD` / `All`) as the other analytics pages.
+Both pages use the same filter bar as the other analytics pages: `?range=` presets (`7d` / `30d` / `90d` / `YTD` / `1y` / `All`) or a custom **From**/**To** date pair.

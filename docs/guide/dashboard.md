@@ -20,13 +20,13 @@ Three cards at the top:
 
 ## Charging Efficiency
 
-When sessions have EVSE data, an efficiency card shows aggregate metrics:
+The efficiency card shows aggregate metrics, each fed by different session data:
 
-- **Avg Loss** -- Average percentage of energy lost between charger delivery and vehicle receipt
-- **Total Loss** -- Cumulative kWh lost across sessions with EVSE data
-- **Avg Utilization** -- Average percentage of charger rated capacity actually used
+- **Avg Loss** -- Average percentage of energy lost between charger delivery and vehicle receipt. Needs wall-metered EVSE energy on the session.
+- **Total Loss** -- Cumulative kWh lost across sessions with metered EVSE energy
+- **Avg Utilization** -- Average percentage of charger rated capacity actually used. Needs only a rated charger power (e.g. from an EVSE stall mapping).
 
-The card shows how many sessions contributed EVSE data. Sessions without EVSE data are excluded.
+Loss and utilization are independent: mapping a session to an EVSE stall enables utilization right away, while loss stays `N/A` until sessions carry wall-metered energy. The caption under the card says how many sessions feed each metric.
 
 ## Charts
 
@@ -34,6 +34,8 @@ Two charts in a side-by-side grid:
 
 - **Monthly Energy by Network** -- Stacked monthly energy totals grouped by charging network
 - **Energy by Network** -- Donut breakdown of total delivered energy by charging network
+
+Both network charts show your top 7 networks individually; anything beyond that folds into a gray **Other** bucket to keep the charts readable.
 
 Charts are interactive with hover details and zoom controls.
 
