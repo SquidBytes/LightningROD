@@ -19,11 +19,13 @@
     <!-- Date presets: DaisyUI join group -->
     <div class="join">
       {% set presets = [("7d", "7d"), ("30d", "30d"), ("90d", "90d"), ("ytd", "YTD"), ("1y", "1y"), ("all", "All")] %}
+      {# 'All' only lights up without a custom date window — otherwise the window is the active filter. #}
+      {% set has_custom_dates = date_from or date_to %}
       <!-- Phase 26: focus-visible outline for keyboard nav is defined in input.css (.filter-preset-btn:focus-visible) -->
       {% for value, label in presets %}
       <button type="button"
         onclick="activatePreset(this, '{{ value }}')"
-        class="filter-preset-btn join-item btn btn-sm {% if active_preset == value or (not active_preset and value == 'all') %}btn-primary{% else %}btn-ghost{% endif %}"
+        class="filter-preset-btn join-item btn btn-sm {% if value == 'all' and not has_custom_dates and (not active_preset or active_preset == 'all') %}btn-primary{% elif value != 'all' and active_preset == value %}btn-primary{% else %}btn-ghost{% endif %}"
       >{{ label }}</button>
       {% endfor %}
     </div>

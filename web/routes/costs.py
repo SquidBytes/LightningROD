@@ -46,6 +46,8 @@ async def costs(
     request: Request,
     db: AsyncSession = Depends(get_db),
     range: str | None = "all",
+    date_from: str | None = None,
+    date_to: str | None = None,
     section: str | None = None,
     networks: str | None = None,
     free_what_if: str | None = None,
@@ -74,7 +76,8 @@ async def costs(
 
     # AC/DC groupings power the network-filter quick-action chips.
     charge_type_groupings = await get_charge_type_network_groupings(
-        db, time_range=range or "all", device_id=active_device_id
+        db, time_range=range or "all", device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
     )
 
     if ref_mode_eff == "custom":
@@ -96,6 +99,8 @@ async def costs(
         db,
         time_range=range or "all",
         device_id=active_device_id,
+        date_from=date_from,
+        date_to=date_to,
         network_ids=selected_network_ids or None,
         free_charging_what_if=free_what_if_bool,
         free_charging_scope=free_what_if_scope or "global",
@@ -116,6 +121,8 @@ async def costs(
             db,
             time_range=range or "all",
             device_id=active_device_id,
+            date_from=date_from,
+            date_to=date_to,
             reference_rate=reference_rate,
         )
     else:
@@ -153,6 +160,8 @@ async def costs(
             vehicle=active_vehicle,
             ice_vehicle=default_ice,
             time_range=range or "all",
+            date_from=date_from,
+            date_to=date_to,
         )
 
     all_vehicles = await get_all_vehicles(db)
@@ -175,7 +184,10 @@ async def costs(
         )
 
     active_range = range or "all"
-    range_label = RANGE_LABELS.get(active_range, "Custom range")
+    if (date_from or date_to) and active_range == "all":
+        range_label = "Custom range"
+    else:
+        range_label = RANGE_LABELS.get(active_range, "Custom range")
 
     if section == "cost_explorer":
         # Body-only partial — the header strip is not re-emitted. The aside's
@@ -185,6 +197,8 @@ async def costs(
             "cost_explorer": cost_explorer,
             "cost_explorer_chart": cost_explorer_chart,
             "active_range": active_range,
+            "date_from": date_from,
+            "date_to": date_to,
             "free_what_if": free_what_if_bool,
             "free_what_if_scope": free_what_if_scope or "global",
             "free_what_if_networks_csv": free_what_if_networks or "",
@@ -197,6 +211,8 @@ async def costs(
         "cost_explorer_strip": cost_explorer_strip,
         "cost_explorer_chart": cost_explorer_chart,
         "active_range": active_range,
+        "date_from": date_from,
+        "date_to": date_to,
         "range_label": range_label,
         "active_page": "costs",
         "page_title": "Costs",

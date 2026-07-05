@@ -94,6 +94,8 @@ async def performance(
     request: Request,
     db: AsyncSession = Depends(get_db),
     range: str | None = "all",
+    date_from: str | None = None,
+    date_to: str | None = None,
     hx_request: Annotated[str | None, Header()] = None,
 ):
     time_range = range or "all"
@@ -111,7 +113,10 @@ async def performance(
     range_factor = MI_PER_KM if distance_unit == "us" else 1.0
 
     # Query energy data (all metric base)
-    summary = await query_energy_summary(db, time_range=time_range, device_id=active_device_id)
+    summary = await query_energy_summary(
+        db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
+    )
 
     # Apply unit conversion to efficiency values (convert ONCE here, not in template)
     if summary["avg_efficiency"] is not None:
@@ -130,10 +135,12 @@ async def performance(
     synthetic_curve_chart = ""
     synthetic_meta = {"dc_session_count": 0, "median_peak_kw": None}
     if not await has_real_charge_curve_data(
-        db, time_range=time_range, device_id=active_device_id
+        db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
     ):
         synthetic_meta = await query_synthetic_curve_inputs(
-            db, time_range=time_range, device_id=active_device_id
+            db, time_range=time_range, device_id=active_device_id,
+            date_from=date_from, date_to=date_to,
         )
         synthetic_curve_chart = build_synthetic_charge_curve_chart(
             max_kw=synthetic_meta["median_peak_kw"] or 0,
@@ -141,7 +148,10 @@ async def performance(
         )
 
     # Build efficiency scatter chart (chart builder applies factors internally)
-    regen_chart_data = await query_regen_for_chart(db, time_range=time_range, device_id=active_device_id)
+    regen_chart_data = await query_regen_for_chart(
+        db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
+    )
     chart_html = build_efficiency_chart(
         sessions=summary["sessions_for_chart"],
         regen_data=regen_chart_data,
@@ -151,15 +161,20 @@ async def performance(
     )
 
     # Build monthly energy stacked area chart
-    monthly_energy_data = await query_monthly_energy(db, time_range=time_range, device_id=active_device_id)
+    monthly_energy_data = await query_monthly_energy(
+        db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
+    )
     monthly_energy_chart = build_monthly_energy_chart(monthly_energy_data)
 
     # Sparklines beneath Total Energy + Efficiency cards
     monthly_series = await monthly_energy_series(
-        db, time_range=time_range, device_id=active_device_id
+        db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
     )
     efficiency_series = await efficiency_over_time_series(
-        db, time_range=time_range, device_id=active_device_id
+        db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
     )
     monthly_energy_sparkline_html = _build_sparkline(
         xs=[m for m, _ in monthly_series],
@@ -177,7 +192,8 @@ async def performance(
     # date-range bar at the top of /charging/performance controls the whole
     # surface (donut + scatter + the four card charts) consistently.
     speed_series = await charging_speed_series(
-        db, time_range=time_range, device_id=active_device_id
+        db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
     )
     left_chart_speed_html = build_charging_speed_chart(speed_series)
     left_chart_energy_html = build_energy_over_time_chart(monthly_series)
@@ -212,6 +228,8 @@ async def performance(
         "synthetic_curve_chart": synthetic_curve_chart,
         "synthetic_meta": synthetic_meta,
         "active_range": time_range,
+        "date_from": date_from,
+        "date_to": date_to,
         "active_page": "performance",
         "page_title": "Performance",
         "unit_label": unit_ctx["units"]["efficiency_label"],

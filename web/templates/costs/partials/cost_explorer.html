@@ -75,6 +75,8 @@
           hx-push-url="true"
           hx-trigger="change">
         <input type="hidden" name="range" value="{{ active_range }}">
+        <input type="hidden" name="date_from" value="{{ date_from or '' }}">
+        <input type="hidden" name="date_to" value="{{ date_to or '' }}">
         <input type="hidden" name="section" value="cost_explorer">
         <div class="flex flex-wrap items-end gap-6 px-6 py-4 bg-base-300/40 border-y border-base-300">
 

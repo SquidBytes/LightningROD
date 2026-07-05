@@ -69,6 +69,8 @@ async def query_gas_comparison(
     vehicle: EVVehicle | None = None,
     ice_vehicle: IceVehicle | None = None,
     time_range: str = "all",
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> dict:
     """Compare actual EV charging cost to the equivalent gasoline cost.
 
@@ -103,7 +105,7 @@ async def query_gas_comparison(
     subs_by_network = await get_all_subscriptions_by_network(db)
 
     stmt = select(EVChargingSession)
-    time_filter = build_time_filter(time_range)
+    time_filter = build_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
     if device_id:

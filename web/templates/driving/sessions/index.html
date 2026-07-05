@@ -18,7 +18,7 @@
         </button>
     </div>
 
-    {% with filter_url="/driving/sessions", filter_target="#driving-sessions-content", active_preset=active_range, date_param_name="range" %}
+    {% with filter_url="/driving/sessions", filter_target="#driving-sessions-content", active_preset=active_range, date_param_name="range", date_from=date_from, date_to=date_to %}
       {% include "partials/filter_bar.html" %}
     {% endwith %}
 

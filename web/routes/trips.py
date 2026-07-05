@@ -46,6 +46,8 @@ async def trips(
     request: Request,
     db: AsyncSession = Depends(get_db),
     range: str | None = "30d",
+    date_from: str | None = None,
+    date_to: str | None = None,
     sort_by: str | None = None,
     sort_dir: str | None = None,
     sort: str | None = None,
@@ -53,7 +55,8 @@ async def trips(
     page: int = 1,
     hx_request: Annotated[str | None, Header()] = None,
 ):
-    time_range = range or "30d"
+    # A custom date window suppresses the preset fallback so the window applies.
+    time_range = range or ("all" if (date_from or date_to) else "30d")
     # Accept the new sort_by/sort_dir form fields; fall back to the legacy
     # sort/dir aliases so deep-linked URLs from before the column-header
     # switch keep working.
@@ -77,6 +80,8 @@ async def trips(
         sort_by=sort_by,
         sort_dir=sort_dir,
         device_id=active_device_id,
+        date_from=date_from,
+        date_to=date_to,
     )
 
     # Convert summary totals to display units
@@ -96,6 +101,8 @@ async def trips(
         "total": total,
         "summary": summary,
         "active_range": time_range,
+        "date_from": date_from,
+        "date_to": date_to,
         "sort_by": sort_by,
         "sort_dir": sort_dir,
         "page": page,
