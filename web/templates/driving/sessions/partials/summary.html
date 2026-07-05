@@ -74,10 +74,12 @@
                         {% include "partials/column_dropdown.html" %}
                     {% endwith %}
                     <th>Energy</th>
-                    {% with col_id="efficiency", col_label="Reported Eff.", sort_key="efficiency", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                    {# One efficiency column: LROD computes distance/energy. The old
+                       "Reported Eff." was ha-fordpass computing the same ratio -- no
+                       independent vehicle-reported efficiency exists in the HA data. #}
+                    {% with col_id="efficiency", col_label="Efficiency", sort_key="efficiency", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
                         {% include "partials/column_dropdown.html" %}
                     {% endwith %}
-                    <th>Calc. Eff.</th>
                     {% with col_id="score", col_label="Score", sort_key="score", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
                         {% include "partials/column_dropdown.html" %}
                     {% endwith %}

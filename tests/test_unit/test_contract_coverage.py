@@ -38,6 +38,7 @@ _UNIT_FUL_TOKENS: tuple[str, ...] = (
     "temp",         # ambient_temp, cabin_temp, battery_temp_start, outside_air_temp
     "temperature",  # hv_battery_temperature (redundant superset of 'temp' but documents intent)
     "efficiency",   # trip efficiency
+    "capacity",     # hv_battery_capacity (raw Wh -> kWh)
 )
 
 # Explicit exemption list. Each entry MUST carry a justification comment.

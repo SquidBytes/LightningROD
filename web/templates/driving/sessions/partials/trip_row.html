@@ -29,10 +29,11 @@
         {% endif %}
     </td>
     <td>{% if trip.energy_consumed is not none %}{{ "%.1f"|format(trip.energy_consumed) }} kWh{% else %}--{% endif %}</td>
-    <td>{% if trip.efficiency is not none %}<span class="text-primary font-medium">{{ "%.1f"|format(trip.efficiency|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}</span>{% else %}--{% endif %}</td>
     <td>
         {% if trip.distance is not none and trip.energy_consumed is not none and trip.energy_consumed > 0 %}
-            {{ "%.1f"|format((trip.distance / trip.energy_consumed)|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}
+            <span class="text-primary font-medium">{{ "%.1f"|format((trip.distance / trip.energy_consumed)|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}</span>
+        {% elif trip.efficiency is not none %}
+            <span class="text-primary font-medium">{{ "%.1f"|format(trip.efficiency|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}</span>
         {% else %}
             --
         {% endif %}

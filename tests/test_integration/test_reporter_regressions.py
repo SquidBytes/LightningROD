@@ -189,6 +189,30 @@ async def test_elveh_trip_distance_canonical_km_across_unit_matrix(
     assert float(trip.duration) == pytest.approx(1800.0, abs=1.0)
 
 
+async def test_battery_capacity_stored_as_kwh(db_session):
+    """Lock: raw-Wh xevBatteryCapacity (131000) stores as 131.0 kWh.
+
+    Unconverted Wh made /battery health read ~91,000% against the rated-kWh
+    vehicle setting ('user-set gross capacity not being used').
+    """
+    payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
+    await process_event(
+        "sensor.fordpass_YOUR_VIN_metrics", payload["sensor.fordpass_YOUR_VIN_metrics"],
+        db_session, {"unit_system": "metric"},
+    )
+    await db_session.flush()
+
+    battery = (
+        await db_session.execute(
+            select(EVBatteryStatus).order_by(EVBatteryStatus.id.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    assert battery is not None
+    assert float(battery.hv_battery_capacity) == pytest.approx(131.0), (
+        f"got {battery.hv_battery_capacity} — raw Wh leaked into the kWh column"
+    )
+
+
 async def test_metrics_backfills_trip_regen_and_score(db_session):
     """Lock: metrics entity NULL-fills regen + driving score on the newest trip.
 
