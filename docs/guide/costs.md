@@ -40,7 +40,10 @@ Every control writes back to the URL, so any view of the Cost Explorer is bookma
 
 ## Savings Scenarios
 
-The Savings Scenarios card compares your all-in EV cost (energy + subscription fees) against gas, using your configured favorite station and regional average price sensors. The energy-only EV figure is shown beneath the all-in number so you can see both.
+The Savings Scenarios card compares your all-in EV cost (energy + subscription fees) against gas two ways, using your configured favorite station and regional average price sensors. The energy-only EV figure is shown beneath the all-in number so you can see both.
+
+- **Charge-for-charge (energy equivalent)** -- prices the energy you charged as gasoline, via the range added per session (or the charged fraction of the pack scaled to the ICE tank as a fallback). Answers "what would this much refueling have cost?"
+- **Mile-for-mile** -- fuels the distance you *actually drove* at the comparison vehicle's real-world efficiency (its MPG / L/100km from Settings -> Fuel), priced with each month's fuel price history. Distance comes from your odometer progression, falling back to trip-log sums when no odometer data exists. Answers "what would driving these miles have cost in that car?"
 
 Gas sensors and the ICE comparison vehicle are configured in [Settings](settings.md).
 

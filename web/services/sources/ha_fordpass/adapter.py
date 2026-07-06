@@ -24,15 +24,19 @@ uses it as the declared source_unit for THAT SINGLE EVENT. Never a
 process-global flag. Unknown/missing UoM short-circuits the field with a
 warning log. The adapter never silently assumes metric.
 
-### Elveh attributes are not read for unit-bearing trip data
-Trip fields (distance, energy_consumed, ambient/cabin/outside_air temps, etc)
-come from `sensor.fordpass_{vin}_events.customEvents`, not from
-`sensor.fordpass_{vin}_elveh` attributes. The elveh attribute UoM
-semantics are unreliable for unit-bearing trip fields. Battery-related
-attributes (voltage/amperage/kW/capacity) ARE read from elveh because they are
-SI-already (V, A, kW) and need no conversion — they carry no FIELD_CONTRACTS
-entry for that reason (see `tests/test_unit/test_contract_coverage.py`
-`_EXEMPTIONS`).
+### Elveh trip attributes are HA-unit-system localized
+The events entity (`customEvents`) is the canonical raw-metric trip source.
+The elveh trip attributes (`tripDistanceTraveled`, `tripEfficiency`,
+`tripRangeRegenerated`, `maximumBatteryRange`, temps) are built by ha-fordpass
+via `localize_distance` / `localize_temperature` — i.e. converted from raw
+metric into **HA's configured unit system** (metric HA -> km/°C, imperial HA
+-> mi/°F). Their contracts carry `ha_unit_system_converted=True`. The elveh
+STATE's `unit_of_measurement` tracks the vehicle's display system, NOT the HA
+unit system, so it must never be used to resolve trip-attribute units (doing
+so double-converted distances for imperial-display vehicles on metric HA).
+Battery-related attributes (voltage/amperage/kW/capacity) are SI-already
+(V, A, kW) and need no conversion — they carry no FIELD_CONTRACTS entry for
+that reason (see `tests/test_unit/test_contract_coverage.py` `_EXEMPTIONS`).
 
 ### elvehcharging and outsidetemp used for thermal caching
 `sensor.fordpass_{vin}_elvehcharging.batteryTemperature` is cached per-device
@@ -144,6 +148,27 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_unit="km",
         notes="Canonical metric source; replaces elveh.maximumBatteryRange",
     ),
+    # Pack capacity: the raw API reports Wh (131 kWh pack -> 131000), same
+    # SI-raw convention as xevBatteryPower (W). Storing it unconverted made
+    # battery health read ~91,000% against the user's rated-kWh setting.
+    FieldContract(
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
+        source_attribute="xevBatteryCapacity",
+        source_unit="Wh",
+        target_db_table="ev_battery_status",
+        target_db_column="hv_battery_capacity",
+        target_unit="kWh",
+        notes="Raw Wh -> kWh; health/degradation compare against rated kWh",
+    ),
+    FieldContract(
+        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
+        source_attribute="maximumBatteryCapacity",
+        source_unit="Wh",
+        target_db_table="ev_battery_status",
+        target_db_column="hv_battery_capacity",
+        target_unit="kWh",
+        notes="Elveh mirror of xevBatteryCapacity; raw Wh passthrough in ha-fordpass",
+    ),
 
     # --- ev_battery_status: hv_battery_temperature --------------------------
     # Source is sensor.fordpass_{vin}_elvehcharging.batteryTemperature.
@@ -208,34 +233,68 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_unit="degC",
         notes="Canonical metric source; Ford API key is outside_air_ambient_temperature (raw °C)",
     ),
-    # efficiency and range_regenerated are not currently exposed on the events
-    # entity (absent from every 29-00 fixture). They remain sourced from elveh
-    # state-level attributes for now; the adapter reads them with the
-    # elveh state's read-time unit_of_measurement, NOT from the attribute UoM.
+    # Elveh trip distance/efficiency/regen attributes: ha-fordpass builds them
+    # via localize_distance (fordpass_handler.py), i.e. raw metric converted to
+    # HA's configured unit system. ha_unit_system_converted=True resolves the
+    # per-event source unit from ha_config.unit_system. The elveh STATE uom
+    # tracks the vehicle display system and MUST NOT be used for these — that
+    # was the duplicate-trip double-conversion bug (imperial vehicle+metric HA).
+    FieldContract(
+        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
+        source_attribute="tripDistanceTraveled",
+        source_unit="km",
+        ha_unit_system_converted=True,
+        target_db_table="ev_trip_metrics",
+        target_db_column="distance",
+        target_unit="km",
+        notes="Legacy-fallback trip distance; ha-fordpass localizes per HA unit_system",
+    ),
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="tripEfficiency",
-        source_unit="km",  # placeholder: actual source_unit resolved read-time from state uom
+        source_unit="km",
+        ha_unit_system_converted=True,
         target_db_table="ev_trip_metrics",
         target_db_column="efficiency",
         target_unit="km",
         notes=(
-            "Read-time fallback — elveh attribute in HA-preferred distance "
-            "unit (km/kWh or mi/kWh). Adapter derives the per-event source_unit "
-            "from new_state.attributes.unit_of_measurement at read-time. NOT from "
-            "a process-global flag. This contract's declared source_unit is the "
-            "DEFAULT when the event carries no uom; concrete conversion routes "
-            "through adapter._resolve_source_unit()."
+            "tripDistanceTraveled / tripEnergyConsumed as computed by "
+            "ha-fordpass, so km/kWh on metric HA and mi/kWh on imperial HA; "
+            "the km<->mi factor converts it to canonical km/kWh."
         ),
     ),
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="tripRangeRegenerated",
         source_unit="km",
+        ha_unit_system_converted=True,
         target_db_table="ev_trip_metrics",
         target_db_column="range_regenerated",
         target_unit="km",
-        notes="Read-time fallback — elveh attribute; see tripEfficiency contract",
+        notes="From metrics tripXevBatteryRangeRegenerated via localize_distance",
+    ),
+    # Primary regen source: the metrics entity carries the raw-metric value,
+    # is always enabled, and backfills the newest trip row directly — the
+    # elveh contract above stays as the localized fallback for installs
+    # where metrics lacks the attribute.
+    FieldContract(
+        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
+        source_attribute="tripXevBatteryRangeRegenerated",
+        source_unit="km",
+        target_db_table="ev_trip_metrics",
+        target_db_column="range_regenerated",
+        target_unit="km",
+        notes="Raw API passthrough (km); backfills the newest trip row",
+    ),
+    FieldContract(
+        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
+        source_attribute="maximumBatteryRange",
+        source_unit="km",
+        ha_unit_system_converted=True,
+        target_db_table="ev_battery_status",
+        target_db_column="hv_battery_max_range",
+        target_unit="km",
+        notes="Elveh fallback for metrics xevBatteryMaximumRange; localize_distance",
     ),
     # Temperature attributes on elveh are localized by ha-fordpass to the HA
     # unit system (°F for imperial, °C for metric). ha_unit_system_converted=True
@@ -442,10 +501,10 @@ def _record_last_seen(
 ) -> None:
     """Record the last-seen raw value for diagnostic display.
 
-    `effective_unit` overrides `contract.source_unit` when a read-time UoM
-    fallback was used. `method` captures how the unit was resolved
-    (declared / ha_unit_system_converted / read_time_uom / declared_fallback)
-    so the data-sources page can show the reason per field.
+    `effective_unit` overrides `contract.source_unit` when the HA-unit-system
+    path resolved a different unit. `method` captures how the unit was
+    resolved (declared / ha_unit_system_converted / declared_fallback) so the
+    data-sources page can show the reason per field.
     """
     key = f"{contract.source_locator.pattern}|{contract.source_attribute}"
     _last_seen_raw[key] = {
@@ -578,14 +637,17 @@ def _resolve_source_unit(
     Returns (unit, method). `method` is one of:
       - "declared"                    — contract.source_unit used verbatim
       - "ha_unit_system_converted"    — derived from ha_config.unit_system
-      - "read_time_uom"               — elveh-state attribute UoM
       - "declared_fallback"           — signal requested but not available;
                                         fell back to contract.source_unit
 
     The HA-unit-system path (method="ha_unit_system_converted") fires when
     `contract.ha_unit_system_converted=True` — i.e. ha-fordpass calls
-    `localize_distance` / `localize_temperature` on this field. The elveh
-    read-time path stays for legacy elveh-state contracts.
+    `localize_distance` / `localize_temperature` on this field.
+
+    Contracts NEVER resolve from an entity state's read-time
+    unit_of_measurement: the elveh state uom tracks the vehicle display
+    system, not the unit of nested attributes, and using it double-converted
+    trip distances (imperial-display vehicle + metric HA).
 
     This function never raises; on any problem it returns the contract's
     declared source_unit with method="declared_fallback" so the caller can
@@ -610,16 +672,7 @@ def _resolve_source_unit(
         )
         return contract.source_unit, "declared_fallback"
 
-    # --- 2. Elveh-state read-time UoM path (legacy behavior preserved) ---
-    if contract.source_locator.pattern.endswith("_elveh") and new_state is not None:
-        attrs = new_state.get("attributes") or {}
-        raw_uom = attrs.get("unit_of_measurement")
-        if raw_uom:
-            normalized = _normalize_uom_string(raw_uom)
-            if normalized:
-                return normalized, "read_time_uom"
-
-    # --- 3. Declared (contract literal) ---
+    # --- 2. Declared (contract literal) ---
     return contract.source_unit, "declared"
 
 
@@ -664,8 +717,7 @@ def convert(
 
     Resolution order (inside `_resolve_source_unit`):
       1. `ha_unit_system_converted=True` -> ha_config.unit_system
-      2. elveh-state read-time UoM
-      3. contract.source_unit (declared)
+      2. contract.source_unit (declared)
 
     Logs and returns None on UnknownSourceUnit so the adapter boundary absorbs
     unit failures rather than propagating them to the caller. Records the
@@ -875,7 +927,12 @@ async def _handle_metrics_entity(
     # SI-already scalar attributes pass through without conversion
     hv_soc = _safe_float(attrs.get("xevBatteryStateOfCharge"))
     hv_actual_soc = _safe_float(attrs.get("xevBatteryActualStateOfCharge"))
-    hv_capacity = _safe_float(attrs.get("xevBatteryCapacity"))
+    cap_contract = lookup_contract(pattern, "xevBatteryCapacity")
+    hv_capacity = (
+        convert(cap_contract, attrs.get("xevBatteryCapacity"), new_state, ha_config)
+        if cap_contract
+        else None
+    )
     hv_voltage = _safe_float(attrs.get("xevBatteryVoltage"))
     hv_amperage = _safe_float(attrs.get("xevBatteryAmperage"))
     # xevBatteryPower is reported in W by the integration; convert to kW for the hv_battery_kw column
@@ -906,6 +963,74 @@ async def _handle_metrics_entity(
         hv_range,
         hv_max_range,
     )
+
+    await _backfill_trip_regen(entity_id, attrs, device_id, db, recorded_at, ha_config)
+
+
+async def _backfill_trip_regen(
+    entity_id: str,
+    attrs: dict,
+    device_id: str,
+    db: AsyncSession,
+    recorded_at: datetime,
+    ha_config: dict | None,
+) -> None:
+    """NULL-fill regen + driving score on the newest trip row from metrics attrs.
+
+    tripXevBatteryRangeRegenerated (raw km) and tripXevBatteryChargeRegenerated
+    (a regen-vs-brake driving score %) live on the metrics entity, which is
+    always enabled — unlike the elveh fallback, whose trip attributes many
+    installs never emit. Metrics refreshes every poll cycle, so a trip row
+    created by the events handler gets its regen/score within one cycle.
+    Only NULL fields are filled; elveh-sourced values are never overwritten.
+    """
+    raw_regen = attrs.get("tripXevBatteryRangeRegenerated")
+    raw_score = _safe_float(attrs.get("tripXevBatteryChargeRegenerated"))
+    # ha-fordpass emits 0 for missing telemetry; treat as unmeasured.
+    if raw_score == 0:
+        raw_score = None
+    regen = None
+    if raw_regen is not None:
+        regen_contract = lookup_contract(
+            _entity_pattern(entity_id), "tripXevBatteryRangeRegenerated"
+        )
+        if regen_contract is not None:
+            regen = convert(regen_contract, raw_regen, None, ha_config)
+    if regen == 0:
+        regen = None
+    if regen is None and raw_score is None:
+        return
+
+    from datetime import timedelta
+
+    from sqlalchemy import select as _select
+
+    from db.models.trip_metrics import EVTripMetrics
+
+    trip = (await db.execute(
+        _select(EVTripMetrics)
+        .where(EVTripMetrics.device_id == device_id)
+        .where(EVTripMetrics.end_time >= recorded_at - timedelta(hours=24))
+        .order_by(EVTripMetrics.end_time.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+    if trip is None:
+        return
+
+    changed = False
+    if regen is not None and trip.range_regenerated is None:
+        trip.range_regenerated = regen
+        changed = True
+    if raw_score is not None and trip.driving_score is None:
+        trip.driving_score = raw_score
+        changed = True
+    if changed:
+        logger.debug(
+            "ha_fordpass: backfilled trip %s regen=%s score=%s from metrics",
+            trip.id,
+            regen,
+            raw_score,
+        )
 
 
 async def _handle_events_entity(
@@ -1030,6 +1155,7 @@ async def _handle_events_entity(
                 existing.cabin_temp = cabin
             if outside_air is not None:
                 existing.outside_air_temp = outside_air
+            _fill_trip_duration(existing, duration)
             if existing.odometer_end is None and existing.end_time is not None:
                 existing.odometer_end = await _closest_odometer(db, device_id, existing.end_time)
             if existing.odometer_start is None and existing.start_time is not None:
@@ -1045,7 +1171,7 @@ async def _handle_events_entity(
     # didn't carry tripUpdateTime (no deterministic id available).
     from web.services.sources.ha_fordpass.handlers import _find_matching_trip
 
-    existing = await _find_matching_trip(db, device_id, distance, energy)
+    existing = await _find_matching_trip(db, device_id, distance, energy, around=recorded_at)
     if existing is not None:
         # events values are canonical °C — always overwrite temps.
         if ambient is not None:
@@ -1054,6 +1180,7 @@ async def _handle_events_entity(
             existing.cabin_temp = cabin
         if outside_air is not None:
             existing.outside_air_temp = outside_air
+        _fill_trip_duration(existing, duration)
         logger.info(
             "ha_fordpass: enriched existing trip row %s for %s with events temps",
             existing.id,
@@ -1063,6 +1190,14 @@ async def _handle_events_entity(
 
     odometer_end = await _closest_odometer(db, device_id, recorded_at)
 
+    start_time = None
+    odometer_start = None
+    if duration:
+        from datetime import timedelta
+
+        start_time = recorded_at - timedelta(seconds=duration)
+        odometer_start = await _closest_odometer(db, device_id, start_time)
+
     record = EVTripMetrics(
         # Deterministic uuid5 when tripUpdateTime is available; uuid4 fallback
         # otherwise. The fallback rows can't be matched across sources but the
@@ -1070,7 +1205,7 @@ async def _handle_events_entity(
         # inserts of the same payload.
         trip_id=deterministic_id or uuid.uuid4(),
         device_id=device_id,
-        start_time=None,
+        start_time=start_time,
         end_time=recorded_at,
         recorded_at=recorded_at,
         distance=distance,
@@ -1079,6 +1214,7 @@ async def _handle_events_entity(
         ambient_temp=ambient,
         cabin_temp=cabin,
         outside_air_temp=outside_air,
+        odometer_start=odometer_start,
         odometer_end=odometer_end,
         is_complete=True,
         source_system="ha_fordpass",
@@ -1271,6 +1407,22 @@ async def _handle_energy_transfer_entity(
 # ---------------------------------------------------------------------------
 # Tiny helpers shared across handlers (no cross-module deps)
 # ---------------------------------------------------------------------------
+
+def _fill_trip_duration(existing: Any, duration: float | None) -> None:
+    """NULL-fill duration (and a derivable start_time) on an enriched trip row.
+
+    The events payload carries the canonical trip_duration in seconds; rows
+    created first by the elveh fallback may lack it (older ha-fordpass emits
+    tripDuration as an H:MM:SS string some installs failed to parse).
+    """
+    if duration is None or existing.duration is not None:
+        return
+    existing.duration = duration
+    if existing.start_time is None and existing.end_time is not None:
+        from datetime import timedelta
+
+        existing.start_time = existing.end_time - timedelta(seconds=duration)
+
 
 def _parse_event_ts(new_state: dict) -> datetime | None:
     for key in ("last_changed", "last_updated"):

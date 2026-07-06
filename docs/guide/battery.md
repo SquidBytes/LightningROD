@@ -6,7 +6,7 @@ The battery analytics page (`/battery`) tracks long-term battery health, state o
 
 ## Date Range Filter
 
-Pick `7d`, `30d`, `90d`, `YTD`, or `All` from the filter bar. The selected range is stored in the URL as `?range=…`.
+Pick `7d`, `30d`, `90d`, `YTD`, `1y`, or `All` from the filter bar, or set a custom **From**/**To** date pair. The selection is stored in the URL (`?range=…` or `?date_from=…&date_to=…`).
 
 ## Health Summary Cards
 

@@ -65,6 +65,47 @@ async def test_trip_sorting(trip_scenario):
     assert distances == sorted(distances, reverse=True)
 
 
+async def test_trip_custom_date_window(trip_scenario):
+    """date_from/date_to select only trips inside the inclusive day window.
+
+    trip_scenario end_times fall on 2025-06-01/03/05/07/09/11/13/15 at 12:00 UTC.
+    """
+    db = trip_scenario["db"]
+
+    trips, total, summary = await query_trips(
+        db, page=1, per_page=25, date_preset="all",
+        date_from="2025-06-05", date_to="2025-06-09",
+    )
+
+    assert total == 3
+    # distances of the 06-05 / 06-07 / 06-09 trips: 10 + 80 + 35
+    assert summary["total_distance"] == pytest.approx(125.0, abs=0.01)
+    # date_to is inclusive end-of-day: the 06-09 12:00 trip is in the window
+    assert max(t.end_time.date().isoformat() for t in trips) == "2025-06-09"
+
+
+async def test_trip_custom_window_upper_bound_only(trip_scenario):
+    """A lone date_to caps the window; earlier trips remain."""
+    db = trip_scenario["db"]
+
+    trips, total, _ = await query_trips(
+        db, page=1, per_page=25, date_preset="all", date_to="2025-06-07",
+    )
+
+    assert total == 4  # 06-01, 06-03, 06-05, 06-07
+
+
+async def test_trip_efficiency_trend_custom_window(trip_scenario):
+    """query_efficiency_trend honors the same custom window."""
+    db = trip_scenario["db"]
+
+    data = await query_efficiency_trend(
+        db, time_range="all", date_from="2025-06-05", date_to="2025-06-09",
+    )
+
+    assert len(data) == 3
+
+
 async def test_trips_empty(db_session):
     """No trips -> returns empty list and zero totals."""
     trips, total, summary = await query_trips(

@@ -73,6 +73,35 @@ async def test_monthly_energy_aggregation(energy_scenario):
     assert total == pytest.approx(energy_scenario["expected"]["total_kwh"], abs=0.01)
 
 
+async def test_energy_summary_custom_date_window(energy_scenario):
+    """date_from/date_to bound the summary to the inclusive day window.
+
+    energy_scenario DC sessions fall on 2025-05-31 through 2025-06-04 at 12:00 UTC.
+    """
+    db = energy_scenario["db"]
+
+    result = await query_energy_summary(
+        db, time_range="all", date_from="2025-05-31", date_to="2025-06-02",
+    )
+
+    # DC sessions on 05-31, 06-01, 06-02: 45 + 55 + 40 kWh
+    assert result["total_sessions"] == 3
+    assert result["total_kwh"] == pytest.approx(140.0, abs=0.01)
+
+
+async def test_energy_summary_preset_wins_over_custom_dates(energy_scenario):
+    """A non-'all' preset takes precedence over date_from/date_to."""
+    db = energy_scenario["db"]
+
+    # 7d window from "now" (2026) excludes all 2025 fixture sessions even
+    # though the custom dates would match them.
+    result = await query_energy_summary(
+        db, time_range="7d", date_from="2025-05-31", date_to="2025-06-02",
+    )
+
+    assert result["total_sessions"] == 0
+
+
 async def test_energy_summary_empty(db_session):
     """No sessions -> returns zeros/None gracefully."""
     result = await query_energy_summary(db_session, time_range="all")

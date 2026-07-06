@@ -5,7 +5,7 @@ data with 7-day rolling average chart, and driving score radar chart.
 """
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -21,6 +21,7 @@ from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle_status import EVVehicleStatus
 from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
 from web.queries.locations import _find_geo_match
+from web.queries.time_window import resolve_time_window, window_clause
 
 logger = logging.getLogger("lightningrod.queries.trips")
 
@@ -43,30 +44,19 @@ SORTABLE_COLUMNS = {
 # ---------------------------------------------------------------------------
 
 
-def build_trip_time_filter(time_range: str) -> datetime | None:
-    """Return a cutoff datetime for trip queries.
+def build_trip_time_filter(
+    time_range: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+):
+    """Return a SQLAlchemy where clause for EVTripMetrics.end_time.
 
-    Maps preset strings to a UTC cutoff datetime.
-    Returns None for 'all' (no filter).
-    Accepts: '7d', '30d', '90d', 'ytd', '1y', 'all'
+    Accepts presets '7d', '30d', '90d', 'ytd', '1y', 'all' plus an optional
+    custom yyyy-mm-dd window (applied when no preset is active).
+    Returns None when unbounded.
     """
-    if not time_range or time_range == "all":
-        return None
-
-    now = datetime.now(UTC)
-
-    if time_range == "7d":
-        return now - timedelta(days=7)
-    elif time_range == "30d":
-        return now - timedelta(days=30)
-    elif time_range == "90d":
-        return now - timedelta(days=90)
-    elif time_range == "ytd":
-        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    elif time_range == "1y":
-        return now - timedelta(days=365)
-
-    return None
+    start, end = resolve_time_window(time_range, date_from, date_to)
+    return window_clause(EVTripMetrics.end_time, start, end)
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +72,8 @@ async def query_trips(
     sort_by: str = "date",
     sort_dir: str = "desc",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> tuple[list, int, dict]:
     """Query trip metrics with optional filters, sorting, and pagination.
 
@@ -104,10 +96,10 @@ async def query_trips(
     if device_id:
         filters.append(EVTripMetrics.device_id == device_id)
 
-    # Date preset filter
-    cutoff = build_trip_time_filter(date_preset)
-    if cutoff is not None:
-        filters.append(EVTripMetrics.end_time >= cutoff)
+    # Date preset / custom window filter
+    time_filter = build_trip_time_filter(date_preset, date_from, date_to)
+    if time_filter is not None:
+        filters.append(time_filter)
 
     for f in filters:
         stmt = stmt.where(f)
@@ -149,6 +141,8 @@ async def query_efficiency_trend(
     db: AsyncSession,
     time_range: str = "30d",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[dict]:
     """Query trip efficiency data for the trend chart.
 
@@ -165,9 +159,9 @@ async def query_efficiency_trend(
         .order_by(EVTripMetrics.end_time)
     )
 
-    cutoff = build_trip_time_filter(time_range)
-    if cutoff is not None:
-        stmt = stmt.where(EVTripMetrics.end_time >= cutoff)
+    time_filter = build_trip_time_filter(time_range, date_from, date_to)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
     if device_id:
         stmt = stmt.where(EVTripMetrics.device_id == device_id)
 
@@ -297,12 +291,30 @@ def build_driving_score_radar(trip) -> str:
         "Overall": getattr(trip, "driving_score", None),
     }
 
-    # Convert to floats, default to 0
-    values = {k: float(v) if v is not None else 0 for k, v in scores.items()}
-
-    # Return empty if all are 0 or None
-    if all(v == 0 for v in values.values()):
+    # Missing sub-scores drop out entirely (0 is ha-fordpass's "unmeasured"
+    # sentinel) instead of rendering as real 0-score radar spokes.
+    values = {
+        k: float(v) for k, v in scores.items() if v is not None and float(v) != 0
+    }
+    if not values:
         return ""
+
+    # A radar needs at least 3 axes to read as a shape. With fewer (e.g. only
+    # the Overall score backfilled from the metrics sensor), render a compact
+    # radial stat instead of a degenerate spike.
+    if len(values) < 3:
+        label, score = (
+            ("Overall", values["Overall"]) if "Overall" in values
+            else next(iter(values.items()))
+        )
+        return (
+            '<div class="flex items-center gap-4 py-2">'
+            f'<div class="radial-progress text-primary" role="progressbar" '
+            f'style="--value:{score:.0f}; --size:4.5rem; --thickness:4px;">'
+            f'<span class="text-lg font-bold">{score:.0f}</span></div>'
+            f'<span class="text-sm text-base-content/60">{label} driving score</span>'
+            "</div>"
+        )
 
     pio.templates.default = "plotly_dark"
 

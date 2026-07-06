@@ -221,3 +221,113 @@ async def test_gas_comparison_empty(db_session):
     assert result["ev_total"] == 0.0
     assert result["gas_total_low"] == 0.0
     assert result["session_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# query_distance_gas_comparison — mile-for-mile model
+# ---------------------------------------------------------------------------
+
+from web.queries.comparisons import query_distance_gas_comparison  # noqa: E402
+from web.unit_system import LITER_PER_GAL, MI_PER_KM  # noqa: E402
+
+
+async def _setup_distance_data(db):
+    """ICE at 25 MPG + month-specific gas prices ($3/gal Jan, $4/gal Feb 2026)."""
+    await db.execute(delete(IceVehicle))
+    await db.flush()
+    ice = IceVehicle(
+        label="25 MPG Wagon",
+        fuel_efficiency_l_per_100km=9.4086,  # 25 MPG
+        tank_capacity_l=56.78115,
+        is_default=True,
+    )
+    db.add(ice)
+    for month, price in ((1, 3.00), (2, 4.00)):
+        db.add(GasPriceHistory(
+            year=2026, month=month,
+            station_price=price / LITER_PER_GAL,
+            average_price=price / LITER_PER_GAL,
+            source="manual",
+        ))
+    await db.flush()
+    return ice
+
+
+async def test_distance_comparison_prices_each_month_from_odometer(db_session):
+    """100 km driven in Jan @ $3/gal + 100 km in Feb @ $4/gal, 25 MPG."""
+    from tests.factories.vehicle_status import VehicleStatusFactory
+
+    ice = await _setup_distance_data(db_session)
+    device = "DISTVIN"
+    for day, odo in ((datetime(2026, 1, 5, tzinfo=UTC), 1000.0),
+                     (datetime(2026, 1, 25, tzinfo=UTC), 1100.0),
+                     (datetime(2026, 2, 20, tzinfo=UTC), 1200.0)):
+        await VehicleStatusFactory.create(
+            db_session, device_id=device, recorded_at=day, odometer=odo,
+        )
+
+    result = await query_distance_gas_comparison(
+        db_session, device_id=device, ice_vehicle=ice, time_range="all",
+    )
+
+    assert result["has_data"] is True
+    assert result["distance_source"] == "odometer"
+    assert result["total_distance"] == pytest.approx(200.0)
+    gallons_per_100km = 100 * MI_PER_KM / 25.0
+    expected = gallons_per_100km * 3.00 + gallons_per_100km * 4.00
+    assert result["gas_total_station"] == pytest.approx(expected, rel=1e-3)
+
+
+async def test_distance_comparison_skips_odometer_resets(db_session):
+    from tests.factories.vehicle_status import VehicleStatusFactory
+
+    ice = await _setup_distance_data(db_session)
+    device = "RESETVIN"
+    for day, odo in ((datetime(2026, 1, 5, tzinfo=UTC), 1000.0),
+                     (datetime(2026, 1, 15, tzinfo=UTC), 1100.0),
+                     (datetime(2026, 1, 20, tzinfo=UTC), 50.0),   # reset
+                     (datetime(2026, 1, 25, tzinfo=UTC), 100.0)):
+        await VehicleStatusFactory.create(
+            db_session, device_id=device, recorded_at=day, odometer=odo,
+        )
+
+    result = await query_distance_gas_comparison(
+        db_session, device_id=device, ice_vehicle=ice, time_range="all",
+    )
+    # 100 (pre-reset) + 50 (post-reset); the negative jump is ignored.
+    assert result["total_distance"] == pytest.approx(150.0)
+
+
+async def test_distance_comparison_falls_back_to_trips(db_session):
+    from tests.factories.trips import TripFactory
+    from tests.factories.vehicles import VehicleFactory
+
+    ice = await _setup_distance_data(db_session)
+    vehicle = await VehicleFactory.create(db_session, device_id="TRIPVIN")
+    await TripFactory.create(
+        db_session, device_id=vehicle.device_id,
+        end_time=datetime(2026, 1, 10, tzinfo=UTC), distance=80.0,
+    )
+
+    result = await query_distance_gas_comparison(
+        db_session, device_id=vehicle.device_id, ice_vehicle=ice, time_range="all",
+    )
+    assert result["has_data"] is True
+    assert result["distance_source"] == "trips"
+    assert result["total_distance"] == pytest.approx(80.0)
+
+
+async def test_distance_comparison_empty_without_distance_data(db_session):
+    ice = await _setup_distance_data(db_session)
+    result = await query_distance_gas_comparison(
+        db_session, device_id="NODATAVIN", ice_vehicle=ice, time_range="all",
+    )
+    assert result["has_data"] is False
+    assert result["distance_source"] is None
+
+
+async def test_distance_comparison_empty_without_ice_vehicle(db_session):
+    result = await query_distance_gas_comparison(
+        db_session, device_id="X", ice_vehicle=None, time_range="all",
+    )
+    assert result["has_data"] is False

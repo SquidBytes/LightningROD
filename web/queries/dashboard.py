@@ -110,6 +110,11 @@ async def query_charging_efficiency(db: AsyncSession, device_id: str | None = No
     - total_loss_kwh: float (sum of evse_energy_kwh - energy_kwh)
     - avg_loss_pct: float | None (average loss percentage)
     - avg_utilization_pct: float | None (average max_power/charger_rated_kw)
+    - sessions_with_util: int (count of sessions with a computable utilization)
+
+    Loss and utilization have independent inputs: loss needs wall-metered
+    energy (evse_energy_kwh), utilization only a rated power + observed max —
+    a stall-mapped session typically has the latter but not the former.
     """
     # Loss metrics: sessions with both evse_energy_kwh and energy_kwh
     loss_filters = [
@@ -181,7 +186,22 @@ async def query_charging_efficiency(db: AsyncSession, device_id: str | None = No
         "total_loss_kwh": total_loss_kwh,
         "avg_loss_pct": avg_loss_pct,
         "avg_utilization_pct": avg_utilization_pct,
+        "sessions_with_util": util_count,
     }
+
+
+# Networks beyond this count collapse into a gray "Other" slice/segment so
+# charts stay readable for users with many CPOs.
+_MAX_CHART_NETWORKS = 7
+_OTHER_COLOR = "#6B7280"
+
+
+def _bucket_minor_networks(totals: dict[str, float]) -> tuple[list[str], float]:
+    """Split network->kwh totals into (top network names, Other-bucket kwh)."""
+    ranked = sorted(totals, key=lambda n: totals[n], reverse=True)
+    top = ranked[:_MAX_CHART_NETWORKS]
+    other_kwh = sum(totals[n] for n in ranked[_MAX_CHART_NETWORKS:])
+    return top, other_kwh
 
 
 def build_energy_by_network_chart(
@@ -209,8 +229,10 @@ def build_energy_by_network_chart(
 
     pio.templates.default = "plotly_dark"
 
-    labels = [row["network"] for row in filtered]
-    values = [row["total_kwh"] for row in filtered]
+    totals = {row["network"]: float(row["total_kwh"]) for row in filtered}
+    top, other_kwh = _bucket_minor_networks(totals)
+    labels = top + (["Other"] if other_kwh > 0 else [])
+    values = [totals[n] for n in top] + ([other_kwh] if other_kwh > 0 else [])
 
     marker_kwargs: dict = {}
     if network_colors:
@@ -218,7 +240,7 @@ def build_energy_by_network_chart(
         # Only set colors if we have at least one resolved color
         if any(c for c in colors):
             # Replace None with a default gray
-            colors = [c if c else "#6B7280" for c in colors]
+            colors = [c if c else _OTHER_COLOR for c in colors]
             marker_kwargs["marker"] = dict(colors=colors)
 
     fig = go.Figure(
@@ -283,11 +305,19 @@ def build_monthly_energy_by_network_chart(
 
     df = pd.DataFrame(data_points)
     df = df.groupby(["month", "network"], as_index=False)["kwh"].sum()
+
+    # Collapse minor networks into "Other" so months with many CPOs don't
+    # explode into unreadable slivers + an overflowing legend.
+    totals = df.groupby("network")["kwh"].sum().to_dict()
+    top, other_kwh = _bucket_minor_networks(totals)
+    if other_kwh > 0:
+        df.loc[~df["network"].isin(top), "network"] = "Other"
+        df = df.groupby(["month", "network"], as_index=False)["kwh"].sum()
     df = df.sort_values("month")
 
     kwargs: dict[str, Any] = dict(x="month", y="kwh", color="network", barmode="stack")
     if network_colors:
-        kwargs["color_discrete_map"] = network_colors
+        kwargs["color_discrete_map"] = {**network_colors, "Other": _OTHER_COLOR}
     fig = px.bar(df, **kwargs)
     fig.update_traces(hovertemplate="<b>%{data.name}</b><br>%{x}: %{y:.1f} kWh<extra></extra>")
     fig.update_layout(

@@ -247,33 +247,35 @@ def test_cross_reference_fires_from_prior_detection():
     """A prior cross_reference entry for this source should resolve the unit
     even when the current event carries no signals of its own."""
     device_id = "VINXREF"
-    # Seed a cross-reference detection for elveh.tripDistanceTraveled.
+    # Seed a cross-reference detection for soc.batteryRange (a paired source
+    # with no declared FIELD_CONTRACTS entry, so resolution can reach the
+    # cross-reference stage).
     detection.record_unknown(
-        "sensor.fordpass_{vin}_elveh",
-        "tripDistanceTraveled",
+        "sensor.fordpass_{vin}_soc",
+        "batteryRange",
         11.8,
         reason="no_uom|no_device_class",
         device_id=device_id,
     )
     detection.try_cross_reference(
         device_id,
-        "sensor.fordpass_{vin}_events",
-        "xev-key-off-trip-segment-data.distance_traveled",
+        "sensor.fordpass_{vin}_metrics",
+        "xevBatteryRange",
         19.0,
         "km",
     )
 
-    # Now a NEW elveh event arrives with no signals at all.
-    state = _state({"tripDistanceTraveled": 10.0})
+    # Now a NEW soc event arrives with no signals at all.
+    state = _state({"batteryRange": 10.0})
     unit, method, _ = detection.resolve_source_unit(
-        entity_id="sensor.fordpass_ABC_elveh",
-        attribute="tripDistanceTraveled",
+        entity_id="sensor.fordpass_ABC_soc",
+        attribute="batteryRange",
         new_state=state,
         ha_config={},
         field_type="distance",
         record=False,
     )
-    # Note: entity_id VIN ABC -> pattern sensor.fordpass_{vin}_elveh, matches
+    # Note: entity_id VIN ABC -> pattern sensor.fordpass_{vin}_soc, matches
     # the seeded record.
     assert unit == "mi"
     assert method == "cross_reference"

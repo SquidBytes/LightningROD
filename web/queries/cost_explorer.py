@@ -29,6 +29,8 @@ async def get_charge_type_network_groupings(
     *,
     time_range: str = "all",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> dict[str, list[int]]:
     """Return network IDs grouped by session-history AC/DC mix.
 
@@ -43,7 +45,7 @@ async def get_charge_type_network_groupings(
         .where(EVChargingSession.charge_type.is_not(None))
         .distinct()
     )
-    time_filter = build_time_filter(time_range)
+    time_filter = build_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
     if device_id:
@@ -154,6 +156,8 @@ async def query_cost_explorer(
     *,
     time_range: str = "all",
     device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     network_ids: list[int] | None = None,
     free_charging_what_if: bool = False,
     free_charging_scope: str = "global",
@@ -191,7 +195,7 @@ async def query_cost_explorer(
         )
     ).where(EVChargingSession.energy_kwh > 0)
 
-    time_filter = build_time_filter(time_range)
+    time_filter = build_time_filter(time_range, date_from, date_to)
     if time_filter is not None:
         stmt = stmt.where(time_filter)
     if device_id:

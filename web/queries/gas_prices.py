@@ -217,11 +217,13 @@ async def build_fuel_price_trend_chart(
         x=x, y=station, name="Station", mode="lines+markers",
         line=dict(color="#47A8E5", width=2),
         connectgaps=False,
+        hovertemplate="%{y:.3f}<extra>Station</extra>",
     ))
     fig.add_trace(go.Scatter(
         x=x, y=average, name="Average", mode="lines+markers",
         line=dict(color="#888", width=2, dash="dash"),
         connectgaps=False,
+        hovertemplate="%{y:.3f}<extra>Average</extra>",
     ))
     fuel_volume_label = get_units(distance_unit=distance_unit)["fuel_volume_label"]
     fig.update_layout(

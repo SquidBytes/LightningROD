@@ -95,6 +95,187 @@ async def test_reporter_64mi_103km_charge_added(db_session):
     )
 
 
+async def test_reporter_no_duplicate_trip_from_elveh_and_events(db_session):
+    """Lock: elveh fallback + events adapter must produce ONE trip row, in km.
+
+    2026-06 reporter scenario (imperial FordPass display + metric HA): every
+    trip appeared twice — 122 km (correct, events) and 196.34 km (elveh
+    tripDistanceTraveled, already km, re-converted mi->km via the elveh state
+    uom). With the ha_unit_system_converted contract both paths agree and the
+    predicate match dedups them into a single enriched row.
+    """
+    from web.services.sources.ha_fordpass import handlers as fp_handlers
+    from web.services.sources.ha_fordpass.handlers import handle_battery_status
+
+    fp_handlers._last_trip_values.clear()
+
+    payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
+    ha_config = {"unit_system": "metric"}
+
+    # elveh fires first (creates the trip row via the legacy fallback) ...
+    elveh_entity = "sensor.fordpass_YOUR_VIN_elveh"
+    await handle_battery_status(
+        "elveh", payload[elveh_entity], ha_config, "YOUR_VIN", db_session
+    )
+    # ... then the events entity fires for the same physical trip.
+    events_entity = "sensor.fordpass_YOUR_VIN_events"
+    await process_event(events_entity, payload[events_entity], db_session, ha_config)
+    await db_session.flush()
+
+    trips = (
+        await db_session.execute(select(EVTripMetrics))
+    ).scalars().all()
+    assert len(trips) == 1, (
+        REGRESSION_MESSAGE
+        + f"  expected 1 deduped trip row, got {len(trips)}: "
+        + str([(t.distance, t.source_system) for t in trips])
+    )
+    trip = trips[0]
+    assert trip.distance == pytest.approx(19.0, abs=0.5), (
+        REGRESSION_MESSAGE + f"  got {trip.distance} km (expected 19.0, NOT 30.6)"
+    )
+    # Duration arrives as "0:30:00" on elveh and 1800 s on events — either
+    # way the stored canonical value is seconds.
+    assert trip.duration == pytest.approx(1800.0, abs=1.0), (
+        f"duration not canonicalized: {trip.duration!r}"
+    )
+    assert trip.start_time is not None
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "unit_system"),
+    [
+        ("metric_ha_metric_vehicle.json", "metric"),
+        ("metric_ha_imperial_vehicle.json", "metric"),
+        ("imperial_ha_metric_vehicle.json", "us_customary"),
+        ("imperial_ha_imperial_vehicle.json", "us_customary"),
+    ],
+)
+async def test_elveh_trip_distance_canonical_km_across_unit_matrix(
+    db_session, fixture_name, unit_system
+):
+    """Lock: elveh-only trip ingestion stores ~19 km on every HA/vehicle combo.
+
+    ha-fordpass localizes elveh trip attrs to the HA unit system (metric HA
+    -> 19 km, imperial HA -> 11.81 mi); the ha_unit_system_converted contract
+    must convert every combo back to canonical km. The elveh STATE uom (which
+    tracks the vehicle display system) must play no part.
+    """
+    from web.services.sources.ha_fordpass import handlers as fp_handlers
+    from web.services.sources.ha_fordpass.handlers import handle_battery_status
+
+    fp_handlers._last_trip_values.clear()
+
+    payload = json.loads((FIXTURES_DIR / fixture_name).read_text())
+    ha_config = {"unit_system": unit_system}
+
+    elveh_entity = "sensor.fordpass_YOUR_VIN_elveh"
+    await handle_battery_status(
+        "elveh", payload[elveh_entity], ha_config, "YOUR_VIN", db_session
+    )
+    await db_session.flush()
+
+    trip = (
+        await db_session.execute(
+            select(EVTripMetrics).order_by(EVTripMetrics.id.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    assert trip is not None, f"elveh fallback wrote no trip row for {fixture_name}"
+    assert float(trip.distance) == pytest.approx(19.0, abs=0.1), (
+        REGRESSION_MESSAGE
+        + f"  {fixture_name}: got {trip.distance} km (expected ~19.0)"
+    )
+    # "0:30:00" tripDuration string parses to canonical seconds.
+    assert float(trip.duration) == pytest.approx(1800.0, abs=1.0)
+
+
+async def test_battery_capacity_stored_as_kwh(db_session):
+    """Lock: raw-Wh xevBatteryCapacity (131000) stores as 131.0 kWh.
+
+    Unconverted Wh made /battery health read ~91,000% against the rated-kWh
+    vehicle setting ('user-set gross capacity not being used').
+    """
+    payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
+    await process_event(
+        "sensor.fordpass_YOUR_VIN_metrics", payload["sensor.fordpass_YOUR_VIN_metrics"],
+        db_session, {"unit_system": "metric"},
+    )
+    await db_session.flush()
+
+    battery = (
+        await db_session.execute(
+            select(EVBatteryStatus).order_by(EVBatteryStatus.id.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    assert battery is not None
+    assert float(battery.hv_battery_capacity) == pytest.approx(131.0), (
+        f"got {battery.hv_battery_capacity} — raw Wh leaked into the kWh column"
+    )
+
+
+async def test_metrics_backfills_trip_regen_and_score(db_session):
+    """Lock: metrics entity NULL-fills regen + driving score on the newest trip.
+
+    Regen previously only ingested via the elveh fallback, which many installs
+    never emit — leaving the Range Regenerated card at 'No data available'.
+    tripXevBatteryRangeRegenerated (raw km) and tripXevBatteryChargeRegenerated
+    (driving score %) live on the always-enabled metrics entity.
+    """
+    payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
+    ha_config = {"unit_system": "metric"}
+
+    # Events entity creates the trip row (no regen fields on that payload)...
+    await process_event(
+        "sensor.fordpass_YOUR_VIN_events", payload["sensor.fordpass_YOUR_VIN_events"],
+        db_session, ha_config,
+    )
+    # ...then the metrics entity fires on the same poll cycle.
+    await process_event(
+        "sensor.fordpass_YOUR_VIN_metrics", payload["sensor.fordpass_YOUR_VIN_metrics"],
+        db_session, ha_config,
+    )
+    await db_session.flush()
+
+    trip = (
+        await db_session.execute(
+            select(EVTripMetrics).order_by(EVTripMetrics.id.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    assert trip is not None
+    assert float(trip.range_regenerated) == pytest.approx(2.1, abs=0.01)
+    assert float(trip.driving_score) == pytest.approx(85.0)
+
+
+async def test_metrics_backfill_does_not_overwrite_elveh_regen(db_session):
+    """An elveh-sourced regen value survives a later metrics event."""
+    from web.services.sources.ha_fordpass import handlers as fp_handlers
+    from web.services.sources.ha_fordpass.handlers import handle_battery_status
+
+    fp_handlers._last_trip_values.clear()
+
+    payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
+    ha_config = {"unit_system": "metric"}
+
+    await handle_battery_status(
+        "elveh", payload["sensor.fordpass_YOUR_VIN_elveh"], ha_config, "YOUR_VIN", db_session
+    )
+    trip = (
+        await db_session.execute(
+            select(EVTripMetrics).order_by(EVTripMetrics.id.desc()).limit(1)
+        )
+    ).scalar_one()
+    trip.range_regenerated = 9.9  # pretend elveh delivered a distinct value
+    await db_session.flush()
+
+    await process_event(
+        "sensor.fordpass_YOUR_VIN_metrics", payload["sensor.fordpass_YOUR_VIN_metrics"],
+        db_session, ha_config,
+    )
+    await db_session.flush()
+    await db_session.refresh(trip)
+    assert float(trip.range_regenerated) == pytest.approx(9.9)
+
+
 async def test_reporter_260mi_418km_max_range(db_session):
     """Lock: max range 418 km must store as 418 km hv_battery_max_range, NOT ~673 km.
 

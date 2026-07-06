@@ -23,8 +23,7 @@
             <div><span class="text-base-content/40">Distance</span><p class="font-medium">{% if trip.distance is not none %}{{ "%.1f"|format(trip.distance|cvt_dist(distance_unit)) }} {{ units.distance_label }}{% else %}--{% endif %}</p></div>
             <div><span class="text-base-content/40">Duration</span><p class="font-medium">{% if trip.duration is not none %}{{ (trip.duration|int) // 3600 }}h {{ ((trip.duration|int) // 60) % 60 }}m{% else %}--{% endif %}</p></div>
             <div><span class="text-base-content/40">Energy</span><p class="font-medium">{% if trip.energy_consumed is not none %}{{ "%.1f"|format(trip.energy_consumed) }} kWh{% else %}--{% endif %}</p></div>
-            <div><span class="text-base-content/40">Reported Eff.</span><p class="font-medium">{% if trip.efficiency is not none %}{{ "%.1f"|format(trip.efficiency|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}{% else %}--{% endif %}</p></div>
-            <div><span class="text-base-content/40">Calculated Eff.</span><p class="font-medium">{% if trip.distance is not none and trip.energy_consumed is not none and trip.energy_consumed > 0 %}{{ "%.1f"|format((trip.distance / trip.energy_consumed)|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}{% else %}--{% endif %}</p></div>
+            <div><span class="text-base-content/40">Efficiency</span><p class="font-medium">{% if trip.distance is not none and trip.energy_consumed is not none and trip.energy_consumed > 0 %}{{ "%.1f"|format((trip.distance / trip.energy_consumed)|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}{% elif trip.efficiency is not none %}{{ "%.1f"|format(trip.efficiency|cvt_eff(distance_unit)) }} {{ units.efficiency_label }}{% else %}--{% endif %}</p></div>
             <div><span class="text-base-content/40">Regen</span><p class="font-medium">{% if trip.range_regenerated is not none %}{{ "%.1f"|format(trip.range_regenerated|cvt_dist(distance_unit)) }} {{ units.range_label }}{% else %}--{% endif %}</p></div>
             <div><span class="text-base-content/40">Cabin Temp</span><p class="font-medium">{% if trip.cabin_temp is not none %}{{ "%.0f"|format(trip.cabin_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}{% else %}--{% endif %}</p></div>
             <div><span class="text-base-content/40">Ambient Temp</span><p class="font-medium">{% if trip.ambient_temp is not none %}{{ "%.0f"|format(trip.ambient_temp|cvt_temp(temp_unit)) }}{{ units.temp_label }}{% else %}--{% endif %}</p></div>
@@ -96,4 +95,16 @@
         <p class="text-sm text-base-content/60">{{ trip.tire_pressure_snapshot }}</p>
     </div>
     {% endif %}
+
+    <!-- Danger zone -->
+    <div class="pt-2 border-t border-base-300">
+        <button type="button"
+                hx-delete="/driving/sessions/{{ trip.id }}"
+                hx-confirm="Delete this trip? This cannot be undone."
+                hx-swap="none"
+                class="btn btn-outline btn-error btn-sm btn-block gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            Delete Trip
+        </button>
+    </div>
 </div>

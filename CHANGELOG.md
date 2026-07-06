@@ -15,6 +15,62 @@ For feature documentation, see the docs site at
 
 ### Removed
 
+## [0.5.1] - 2026-07-05
+
+### Added
+
+- Export CSV button on the Charging Sessions page — downloads the sessions
+  matching the current filters (dates, charge type, network, sort)
+- Delete Trip button in the trip detail drawer
+- Mile-for-mile gas comparison in Savings Scenarios — fuels the distance you
+  actually drove at the ICE comparison vehicle's real MPG with monthly fuel
+  price history, alongside the existing energy-equivalent comparison
+- Data Repair settings tab — census, dry-run preview, and one-click repair for
+  historical trip data (duplicate trips, unit-corrupted distances,
+  recorder-history re-enrichment), with restorable snapshots
+- One-click database backup download on the Data Repair tab for SQLite
+  installs (PostgreSQL installs get pg_dump instructions in the guide)
+
+### Changed
+
+- Trip tables and detail views show a single calculated Efficiency — the old
+  "Reported" figure was the HA integration computing the identical ratio, not
+  a value from the vehicle
+- Dashboard network charts group networks beyond the top 7 into an "Other"
+  bucket so many-network installs stay readable
+
+### Fixed
+
+- Battery health and degradation compared Wh-scale capacity readings against
+  the rated kWh capacity (health showed absurd percentages and ignored the
+  user-set gross capacity); existing rows are repaired on upgrade
+- Trip driving-score radar renders a compact overall-score stat instead of a
+  degenerate spike when per-category scores are unavailable
+- Range Regenerated card on Driving Analytics showed "No data available" —
+  regen and driving score now also ingest from the always-enabled metrics
+  sensor instead of relying solely on elveh trip attributes
+- CSV import duplicate detection crashed on SQLite installs (PostgreSQL-only
+  SQL in the dedup query)
+- AC vs DC donut (and chart-metric switches) no longer render off-center
+  after switching kWh/Sessions/Cost until the window was resized
+- Custom From/To date filters now work on the Costs, Battery, Charging
+  Performance, Trip Sessions, and Driving Analytics pages (previously they
+  silently reset the view to All-time; only Charging Sessions honored them)
+- Chart tooltips no longer show full-precision floats (battery temperature,
+  efficiency moving average, range recovered, gas price trends)
+- Edit forms no longer show floating-point noise (15+ decimal places) in
+  power, SOC, voltage, cost, and capacity fields
+- Group-edit bar: choosing a Network now reliably refreshes the Location
+  dropdown (a previously opened drawer could send its stale network along)
+- Dashboard Charging Efficiency card now shows utilization for EVSE-mapped
+  sessions even when no wall-metered energy exists (loss reads N/A with a
+  hint instead of hiding the whole card)
+- Duplicate trip entries with incorrect distances for vehicles set to imperial
+  display units on a metric Home Assistant install
+- Trip duration not populating on trip lists and detail views
+- Manual trip entry stored its duration 60× too short
+- Trip start time now recorded for trips ingested from Home Assistant
+
 ## [0.4.0] - 2026-05-25
 
 ### Added

@@ -18,7 +18,7 @@ router = APIRouter()
 @router.get("/locations/by-network", response_class=HTMLResponse)
 async def locations_by_network(
     request: Request,
-    network_id: int | None = None,
+    network_id: str | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
     """Return an `<option>` fragment of verified locations for a given network.
@@ -26,13 +26,20 @@ async def locations_by_network(
     Used by the Sessions group-edit bar to populate `#bulk-location-id` when
     a network is chosen. Returns a placeholder option when `network_id` is
     missing so callers can safely swap the result directly into a `<select>`.
+    Declared str: the combobox's cleared/partial-typed state sends
+    `network_id=`, which must reset the options rather than 422 and leave
+    stale ones in place.
     """
-    if not network_id:
+    try:
+        network_id_int = int(network_id) if network_id else None
+    except (TypeError, ValueError):
+        network_id_int = None
+    if not network_id_int:
         return HTMLResponse('<option value="">Location (select network first)</option>')
 
     stmt = (
         select(EVLocationLookup)
-        .where(EVLocationLookup.network_id == network_id)
+        .where(EVLocationLookup.network_id == network_id_int)
         .where(EVLocationLookup.is_verified == True)  # noqa: E712
         .order_by(EVLocationLookup.location_name)
     )

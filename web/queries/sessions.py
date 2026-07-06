@@ -1,11 +1,10 @@
 """Charging-session list, detail, and mutation queries."""
 
-from datetime import UTC, datetime, timedelta
-
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
+from web.queries.time_window import resolve_time_window, window_clause
 
 PAGE_SIZE = 25
 VALID_PER_PAGE = {25, 50, 100}
@@ -61,8 +60,6 @@ async def query_sessions(
     Returns a tuple of (sessions, total_count, summary_dict).
     summary_dict contains: count, total_kwh
     """
-    now = datetime.now(UTC)
-
     # Determine sort column and direction
     sort_col = SORTABLE_COLUMNS.get(sort_by) if sort_by else None
     if sort_col is not None:
@@ -84,40 +81,13 @@ async def query_sessions(
     if device_id:
         filters.append(EVChargingSession.device_id == device_id)
 
-    # Date preset filter
-    if date_preset and date_preset != "all":
-        if date_preset == "7d":
-            cutoff = now - timedelta(days=7)
-            filters.append(EVChargingSession.session_start_utc >= cutoff)
-        elif date_preset == "30d":
-            cutoff = now - timedelta(days=30)
-            filters.append(EVChargingSession.session_start_utc >= cutoff)
-        elif date_preset == "90d":
-            cutoff = now - timedelta(days=90)
-            filters.append(EVChargingSession.session_start_utc >= cutoff)
-        elif date_preset == "ytd":
-            cutoff = datetime(now.year, 1, 1, tzinfo=UTC)
-            filters.append(EVChargingSession.session_start_utc >= cutoff)
-        elif date_preset == "1y":
-            cutoff = now - timedelta(days=365)
-            filters.append(EVChargingSession.session_start_utc >= cutoff)
-
-    # Custom date range (only if no preset is active)
-    if not date_preset or date_preset == "all":
-        if date_from:
-            try:
-                dt_from = datetime.fromisoformat(date_from).replace(tzinfo=UTC)
-                filters.append(EVChargingSession.session_start_utc >= dt_from)
-            except ValueError:
-                pass
-        if date_to:
-            try:
-                dt_to = datetime.fromisoformat(date_to).replace(
-                    hour=23, minute=59, second=59, tzinfo=UTC
-                )
-                filters.append(EVChargingSession.session_start_utc <= dt_to)
-            except ValueError:
-                pass
+    # Date preset / custom window filter (preset wins when both are present)
+    time_filter = window_clause(
+        EVChargingSession.session_start_utc,
+        *resolve_time_window(date_preset, date_from, date_to),
+    )
+    if time_filter is not None:
+        filters.append(time_filter)
 
     # Charge type filter — supports comma-separated multi-select (e.g. "AC,DC")
     if charge_type:

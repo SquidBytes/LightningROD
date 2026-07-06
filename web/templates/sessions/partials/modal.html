@@ -249,7 +249,7 @@
                             type="number"
                             name="max_power"
                             step="0.1"
-                            value="{% if modal_mode == 'edit' and session and session.max_power is not none %}{{ session.max_power }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.max_power is not none %}{{ "%.1f"|format(session.max_power) }}{% endif %}"
                             placeholder="e.g., 150.0"
                             class="input input-bordered w-full"
                         >
@@ -260,7 +260,7 @@
                             type="number"
                             name="min_power"
                             step="0.1"
-                            value="{% if modal_mode == 'edit' and session and session.min_power is not none %}{{ session.min_power }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.min_power is not none %}{{ "%.1f"|format(session.min_power) }}{% endif %}"
                             placeholder="e.g., 10.0"
                             class="input input-bordered w-full"
                         >
@@ -273,7 +273,7 @@
                             type="number"
                             name="charging_kw"
                             step="0.1"
-                            value="{% if modal_mode == 'edit' and session and session.charging_kw is not none %}{{ session.charging_kw }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.charging_kw is not none %}{{ "%.1f"|format(session.charging_kw) }}{% endif %}"
                             placeholder="e.g., 75.0"
                             class="input input-bordered w-full"
                         >
@@ -284,7 +284,7 @@
                             type="number"
                             name="charging_voltage"
                             step="1"
-                            value="{% if modal_mode == 'edit' and session and session.charging_voltage is not none %}{{ session.charging_voltage }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.charging_voltage is not none %}{{ "%.0f"|format(session.charging_voltage) }}{% endif %}"
                             placeholder="e.g., 400"
                             class="input input-bordered w-full"
                         >
@@ -295,7 +295,7 @@
                             type="number"
                             name="charging_amperage"
                             step="1"
-                            value="{% if modal_mode == 'edit' and session and session.charging_amperage is not none %}{{ session.charging_amperage }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.charging_amperage is not none %}{{ "%.0f"|format(session.charging_amperage) }}{% endif %}"
                             placeholder="e.g., 375"
                             class="input input-bordered w-full"
                         >
@@ -310,7 +310,7 @@
                             step="1"
                             min="0"
                             max="100"
-                            value="{% if modal_mode == 'edit' and session and session.start_soc is not none %}{{ session.start_soc }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.start_soc is not none %}{{ "%.0f"|format(session.start_soc) }}{% endif %}"
                             placeholder="e.g., 20"
                             class="input input-bordered w-full"
                         >
@@ -323,7 +323,7 @@
                             step="1"
                             min="0"
                             max="100"
-                            value="{% if modal_mode == 'edit' and session and session.end_soc is not none %}{{ session.end_soc }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.end_soc is not none %}{{ "%.0f"|format(session.end_soc) }}{% endif %}"
                             placeholder="e.g., 80"
                             class="input input-bordered w-full"
                         >
@@ -367,12 +367,12 @@
                         {% if stalls is defined and stalls %}
                             {% for stall in stalls %}
                                 <option value="{{ stall.id }}"
-                                    data-rated-kw="{{ stall.rated_kw or '' }}"
+                                    data-rated-kw="{% if stall.rated_kw is not none %}{{ "%.1f"|format(stall.rated_kw) }}{% endif %}"
                                     data-voltage="{{ stall.voltage or '' }}"
                                     data-amperage="{{ stall.amperage or '' }}"
                                     data-connector="{{ stall.connector_type or '' }}"
                                     {% if modal_mode == 'edit' and session and session.stall_id == stall.id %}selected{% endif %}
-                                >{{ stall.stall_label }}{% if stall.rated_kw %} ({{ stall.rated_kw }}kW){% endif %}{% if stall.connector_type %} - {{ stall.connector_type }}{% endif %}</option>
+                                >{{ stall.stall_label }}{% if stall.rated_kw %} ({{ "%.1f"|format(stall.rated_kw) }}kW){% endif %}{% if stall.connector_type %} - {{ stall.connector_type }}{% endif %}</option>
                             {% endfor %}
                         {% else %}
                             <option disabled>No stalls configured</option>
@@ -391,7 +391,7 @@
                             name="evse_voltage"
                             id="modal-evse-voltage"
                             step="0.1"
-                            value="{% if modal_mode == 'edit' and session and session.evse_voltage is not none %}{{ session.evse_voltage }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.evse_voltage is not none %}{{ "%.0f"|format(session.evse_voltage) }}{% endif %}"
                             placeholder="Voltage (V)"
                             class="input input-sm input-bordered w-full"
                         >
@@ -403,7 +403,7 @@
                             name="evse_amperage"
                             id="modal-evse-amperage"
                             step="0.1"
-                            value="{% if modal_mode == 'edit' and session and session.evse_amperage is not none %}{{ session.evse_amperage }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.evse_amperage is not none %}{{ "%.0f"|format(session.evse_amperage) }}{% endif %}"
                             placeholder="Amperage (A)"
                             class="input input-sm input-bordered w-full"
                         >
@@ -415,7 +415,7 @@
                             name="evse_kw"
                             id="modal-evse-kw"
                             step="0.1"
-                            value="{% if modal_mode == 'edit' and session and session.evse_kw is not none %}{{ session.evse_kw }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.evse_kw is not none %}{{ "%.1f"|format(session.evse_kw) }}{% endif %}"
                             placeholder="Power (kW)"
                             class="input input-sm input-bordered w-full"
                         >
@@ -428,7 +428,7 @@
                                 name="evse_energy_kwh"
                                 id="modal-evse-energy"
                                 step="0.01"
-                                value="{% if modal_mode == 'edit' and session and session.evse_energy_kwh is not none %}{{ session.evse_energy_kwh }}{% endif %}"
+                                value="{% if modal_mode == 'edit' and session and session.evse_energy_kwh is not none %}{{ "%.2f"|format(session.evse_energy_kwh) }}{% endif %}"
                                 placeholder="EVSE Energy"
                                 class="input input-sm input-bordered w-full"
                             >
@@ -442,7 +442,7 @@
                             name="evse_max_power_kw"
                             id="modal-evse-max-power"
                             step="0.1"
-                            value="{% if modal_mode == 'edit' and session and session.evse_max_power_kw is not none %}{{ session.evse_max_power_kw }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.evse_max_power_kw is not none %}{{ "%.1f"|format(session.evse_max_power_kw) }}{% endif %}"
                             placeholder="Max Power (kW)"
                             class="input input-sm input-bordered w-full"
                         >
@@ -454,7 +454,7 @@
                             name="charger_rated_kw"
                             id="modal-charger-rated-kw"
                             step="0.1"
-                            value="{% if modal_mode == 'edit' and session and session.charger_rated_kw is not none %}{{ session.charger_rated_kw }}{% endif %}"
+                            value="{% if modal_mode == 'edit' and session and session.charger_rated_kw is not none %}{{ "%.1f"|format(session.charger_rated_kw) }}{% endif %}"
                             placeholder="Rated Capacity (kW)"
                             class="input input-sm input-bordered w-full"
                         >

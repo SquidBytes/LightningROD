@@ -1,0 +1,43 @@
+{% if diffs %}
+<div class="text-sm text-base-content/70 mb-1">{{ census }} rows affected &mdash; showing first {{ diffs|length }}</div>
+<div class="overflow-x-auto">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Row</th>
+                <th>Action</th>
+                <th>Changes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for diff in diffs %}
+            <tr>
+                <td>{{ diff.row_id if diff.row_id is not none else 'new' }}</td>
+                <td>
+                    {% if diff.action == 'update' %}
+                        <span class="badge badge-sm badge-info">update</span>
+                    {% elif diff.action == 'delete' %}
+                        <span class="badge badge-sm badge-error">delete</span>
+                    {% else %}
+                        <span class="badge badge-sm badge-success">insert</span>
+                    {% endif %}
+                </td>
+                <td class="font-mono text-xs">
+                    {% if diff.action == 'update' %}
+                        {% for field in diff.after %}
+                        <div>{{ field }}: {{ diff.before.get(field) }} &rarr; {{ diff.after[field] }}</div>
+                        {% endfor %}
+                    {% elif diff.action == 'delete' %}
+                        <span class="text-base-content/50">row removed (merged into its surviving twin)</span>
+                    {% else %}
+                        <span class="text-base-content/50">new row recovered from recorder history</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="text-sm text-base-content/50">Nothing to repair.</p>
+{% endif %}

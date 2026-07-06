@@ -39,9 +39,12 @@ async def driving_performance(
     request: Request,
     db: AsyncSession = Depends(get_db),
     range: str | None = "30d",
+    date_from: str | None = None,
+    date_to: str | None = None,
     hx_request: Annotated[str | None, Header()] = None,
 ):
-    time_range = range or "30d"
+    # A custom date window suppresses the preset fallback so the window applies.
+    time_range = range or ("all" if (date_from or date_to) else "30d")
 
     # Vehicle scoping
     active_device_id = await get_active_device_id(db)
@@ -57,6 +60,7 @@ async def driving_performance(
 
     summary = await query_driving_performance_summary(
         db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
     )
 
     # Convert metric base -> display units
@@ -84,7 +88,8 @@ async def driving_performance(
 
     # Temperature vs efficiency — scatter (main) + regression line (mini).
     temp_data = await query_temperature_correlation(
-        db, time_range=time_range, device_id=active_device_id
+        db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
     )
     temp_min_points = _min_points_for_range(time_range)
     temperature_scatter_chart = build_temperature_correlation_chart(
@@ -99,7 +104,8 @@ async def driving_performance(
     # Regen recovery — kWh bars only. The mini "Regen %" card was retired
     # because the project displays regen as range or kWh, never as a percent.
     regen_trips = await query_regen_per_trip(
-        db, time_range=time_range, device_id=active_device_id
+        db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
     )
     regen_kwh_chart = build_regen_recovery_chart(regen_trips, mode="kwh")
 
@@ -119,6 +125,8 @@ async def driving_performance(
         "temperature_trend_chart": temperature_trend_chart,
         "regen_kwh_chart": regen_kwh_chart,
         "active_range": time_range,
+        "date_from": date_from,
+        "date_to": date_to,
         "active_page": "driving_performance",
         "page_title": "Driving Analytics",
         "unit_label": unit_ctx["units"]["efficiency_label"],

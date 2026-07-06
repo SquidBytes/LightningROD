@@ -83,7 +83,7 @@
             <div class="label"><span class="label-text text-xs">Usable Capacity (kWh)</span></div>
             <input type="number" name="battery_capacity_kwh" id="vehicle-battery-kwh"
                    step="0.1" min="0"
-                   value="{{ vehicle.battery_capacity_kwh or '' }}"
+                   value="{% if vehicle.battery_capacity_kwh %}{{ "%.1f"|format(vehicle.battery_capacity_kwh) }}{% endif %}"
                    placeholder="e.g. 98"
                    class="input input-sm input-bordered w-full">
             <div class="label"><span class="label-text-alt text-xs text-base-content/40">Driver-facing capacity used for efficiency math.</span></div>
@@ -94,7 +94,7 @@
             <div class="label"><span class="label-text text-xs">Gross Pack Capacity (kWh)</span></div>
             <input type="number" name="battery_gross_capacity_kwh" id="vehicle-battery-gross-kwh"
                    step="0.1" min="0"
-                   value="{{ vehicle.battery_gross_capacity_kwh or '' }}"
+                   value="{% if vehicle.battery_gross_capacity_kwh %}{{ "%.1f"|format(vehicle.battery_gross_capacity_kwh) }}{% endif %}"
                    placeholder="e.g. 108"
                    class="input input-sm input-bordered w-full">
             <div class="label"><span class="label-text-alt text-xs text-base-content/40">Total pack kWh. Matches FordPass <code>maximumBatteryCapacity</code>; used for battery health math.</span></div>

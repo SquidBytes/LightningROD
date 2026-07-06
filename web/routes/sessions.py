@@ -201,6 +201,119 @@ async def sessions(
     return templates.TemplateResponse(request, "sessions/index.html", context)
 
 
+@router.get("/sessions/export.csv")
+async def export_sessions_csv(
+    db: AsyncSession = Depends(get_db),
+    date_preset: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    charge_type: str | None = None,
+    location_type: str | None = None,
+    network_id: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+):
+    """Download the charging-session list as CSV, honoring the active filters.
+
+    Distances export in the configured display unit; times in the user's
+    timezone; everything else in its stored canonical unit (kWh, kW, V, A, %).
+    """
+    import csv
+    import io
+    from zoneinfo import ZoneInfo
+
+    from web.unit_system import convert_distance
+
+    active_device_id = await get_active_device_id(db)
+    network_ids: list[int] | None = None
+    if network_id:
+        try:
+            network_ids = [int(v.strip()) for v in network_id.split(",") if v.strip()]
+        except ValueError:
+            network_ids = None
+
+    session_list, _total, _summary = await query_sessions(
+        db=db,
+        page=1,
+        per_page=1_000_000,
+        date_preset=date_preset,
+        date_from=date_from,
+        date_to=date_to,
+        charge_type=charge_type,
+        location_type=location_type,
+        network_ids=network_ids,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        device_id=active_device_id,
+    )
+
+    network_names = {n.id: n.network_name for n in await get_all_networks(db)}
+    unit_ctx = await get_unit_context(db)
+    distance_unit = unit_ctx["distance_unit"]
+    distance_label = unit_ctx["units"]["distance_label"]
+    user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
+    try:
+        tz = ZoneInfo(user_tz)
+    except Exception:
+        tz = ZoneInfo("UTC")
+
+    def _local(dt) -> str:
+        if dt is None:
+            return ""
+        if dt.tzinfo is None:
+            from datetime import UTC as _utc
+            dt = dt.replace(tzinfo=_utc)
+        return dt.astimezone(tz).isoformat(sep=" ", timespec="minutes")
+
+    def _num(v, dp: int) -> str:
+        return "" if v is None else f"{float(v):.{dp}f}"
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        f"start ({user_tz})", f"end ({user_tz})", "charge_type", "network",
+        "location_name", "location_type", "address", "energy_kwh",
+        "evse_energy_kwh", "cost", "cost_source", "estimated_cost", "is_free",
+        "start_soc_pct", "end_soc_pct", "charge_duration_min",
+        "plugged_in_duration_min", "max_power_kw", "min_power_kw",
+        "avg_power_kw", "charging_voltage", "charging_amperage",
+        f"distance_added_{distance_label}",
+    ])
+    for s in session_list:
+        writer.writerow([
+            _local(s.session_start_utc),
+            _local(s.session_end_utc),
+            s.charge_type or "",
+            network_names.get(s.network_id, "") if s.network_id else "",
+            s.location_name or "",
+            s.location_type or "",
+            s.address or "",
+            _num(s.energy_kwh, 2),
+            _num(s.evse_energy_kwh, 2),
+            _num(s.cost, 2),
+            s.cost_source or "",
+            _num(s.estimated_cost, 2),
+            "" if s.is_free is None else str(bool(s.is_free)).lower(),
+            _num(s.start_soc, 0),
+            _num(s.end_soc, 0),
+            _num(float(s.charge_duration_seconds) / 60 if s.charge_duration_seconds is not None else None, 0),
+            _num(float(s.plugged_in_duration_seconds) / 60 if s.plugged_in_duration_seconds is not None else None, 0),
+            _num(s.max_power, 1),
+            _num(s.min_power, 1),
+            _num(s.charging_kw, 1),
+            _num(s.charging_voltage, 0),
+            _num(s.charging_amperage, 0),
+            _num(convert_distance(s.distance_added, distance_unit) if s.distance_added is not None else None, 1),
+        ])
+
+    filename = f"charging-sessions-{date.today().isoformat()}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.put("/sessions/bulk", response_class=HTMLResponse)
 async def bulk_update_sessions(
     request: Request,

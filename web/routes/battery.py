@@ -44,11 +44,14 @@ async def battery(
     request: Request,
     db: AsyncSession = Depends(get_db),
     range: str | None = "7d",
+    date_from: str | None = None,
+    date_to: str | None = None,
     session: int | None = None,
     section: str | None = None,
     hx_request: Annotated[str | None, Header()] = None,
 ):
-    time_range = range or "7d"
+    # A custom date window suppresses the preset fallback so the window applies.
+    time_range = range or ("all" if (date_from or date_to) else "7d")
 
     # Vehicle scoping
     active_device_id = await get_active_device_id(db)
@@ -71,7 +74,10 @@ async def battery(
 
     # Section-specific partial rendering for lazy loading
     if section == "degradation":
-        degradation_data = await query_degradation_by_mileage(db, time_range=time_range, device_id=active_device_id)
+        degradation_data = await query_degradation_by_mileage(
+            db, time_range=time_range, device_id=active_device_id,
+            date_from=date_from, date_to=date_to,
+        )
         chart = build_degradation_chart(
             degradation_data,
             rated_capacity,
@@ -104,9 +110,11 @@ async def battery(
     if section == "battery_temp":
         temp_data = await query_battery_temp_timeline(
             db, time_range=time_range, device_id=active_device_id,
+            date_from=date_from, date_to=date_to,
         )
         outside_data = await query_outside_temp_timeline(
             db, time_range=time_range, device_id=active_device_id,
+            date_from=date_from, date_to=date_to,
         )
         # Reuse the SOC charging regions for the overlay. detect_charging_regions
         # returns (start_idx, end_idx) tuples against soc_data_for_regions; the
@@ -114,6 +122,7 @@ async def battery(
         # series (independent cadences).
         soc_data_for_regions = await query_soc_timeline(
             db, time_range=time_range, device_id=active_device_id,
+            date_from=date_from, date_to=date_to,
         )
         charging_regions_idx = detect_charging_regions(soc_data_for_regions)
         n = len(soc_data_for_regions)
@@ -146,7 +155,10 @@ async def battery(
     ref_curve_data = load_reference_charge_curve(active_vehicle)
 
     # 1. SOC timeline
-    soc_data = await query_soc_timeline(db, time_range=time_range, device_id=active_device_id)
+    soc_data = await query_soc_timeline(
+        db, time_range=time_range, device_id=active_device_id,
+        date_from=date_from, date_to=date_to,
+    )
     charging_regions = detect_charging_regions(soc_data)
     soc_chart = build_soc_timeline_chart(
         soc_data,
@@ -329,6 +341,8 @@ async def battery(
         "sessions_list": recent_sessions,
         "session_time_windows": session_time_windows,
         "active_range": time_range,
+        "date_from": date_from,
+        "date_to": date_to,
         "active_session": active_session,
         "active_page": "battery",
         "page_title": "Battery Analytics",

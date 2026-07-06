@@ -69,12 +69,16 @@
                 b.classList.toggle('btn-ghost', m !== metric);
             }
         });
-        // Re-measure now that the target container is visible
-        var active = document.getElementById('donut-' + metric);
-        if (active) {
-            var plotDiv = active.querySelector('.js-plotly-plot');
-            if (plotDiv) Plotly.Plots.resize(plotDiv);
-        }
+        revealPlot('donut-' + metric);
+    }
+    // Re-measure after the browser has painted the newly unhidden container —
+    // a same-frame resize can leave the pie centered for the hidden width
+    // until the next window resize.
+    function revealPlot(containerId) {
+        var active = document.getElementById(containerId);
+        if (!active) return;
+        var plotDiv = active.querySelector('.js-plotly-plot');
+        if (plotDiv) requestAnimationFrame(function() { Plotly.Plots.resize(plotDiv); });
     }
     function setLeftCardMetric(metric, btn) {
         ['speed', 'energy'].forEach(function(m) {
@@ -86,11 +90,7 @@
                 b.classList.toggle('btn-ghost', m !== metric);
             }
         });
-        var active = document.getElementById('card-left-' + metric);
-        if (active) {
-            var plotDiv = active.querySelector('.js-plotly-plot');
-            if (plotDiv) Plotly.Plots.resize(plotDiv);
-        }
+        revealPlot('card-left-' + metric);
     }
     function setRightCardMetric(metric, btn) {
         ['efficiency', 'rangeregen'].forEach(function(m) {
@@ -102,11 +102,7 @@
                 b.classList.toggle('btn-ghost', m !== metric);
             }
         });
-        var active = document.getElementById('card-right-' + metric);
-        if (active) {
-            var plotDiv = active.querySelector('.js-plotly-plot');
-            if (plotDiv) Plotly.Plots.resize(plotDiv);
-        }
+        revealPlot('card-right-' + metric);
     }
     </script>
 

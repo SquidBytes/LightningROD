@@ -1,0 +1,54 @@
+<div class="space-y-4">
+    <p class="text-base-content/60 text-sm max-w-2xl">
+        Repair historical trip data damaged by earlier ingestion bugs. Each operation
+        shows how many rows it would change, previews the exact edits, and takes a
+        restorable snapshot before applying. Manual and CSV-imported rows are never modified.
+    </p>
+
+    <div class="card bg-base-200 max-w-2xl">
+        <div class="card-body">
+            <h2 class="card-title text-base font-semibold">Back up first</h2>
+            {% if backup_dialect == "sqlite" %}
+            <p class="text-base-content/60 text-sm -mt-1">
+                Download a consistent copy of the whole database before applying repairs.
+                Per-repair snapshots cover only the rows each operation touches.
+            </p>
+            <a href="/settings/data-repair/backup" class="btn btn-outline btn-sm w-fit" download>
+                Download database backup
+            </a>
+            {% else %}
+            <p class="text-base-content/60 text-sm -mt-1">
+                One-click backup applies to SQLite installs. On PostgreSQL (the default
+                Docker setup), take a dump from the host before applying repairs:
+            </p>
+            <code class="text-xs bg-base-300 rounded p-2 block overflow-x-auto">docker compose exec db pg_dump -U $POSTGRES_USER -d $POSTGRES_DB &gt; lightningrod-backup.sql</code>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if window %}
+    <div class="alert alert-info max-w-2xl text-sm">
+        <span>Replay window: since {{ window|localtime(user_tz|default('UTC'), "%b %-d, %Y %-I:%M %p") }} (~{{ window_days }} days)</span>
+    </div>
+    {% else %}
+    <div class="alert alert-warning max-w-2xl text-sm">
+        <span>Home Assistant not connected &mdash; recorder replay unavailable</span>
+    </div>
+    {% endif %}
+
+    {% for card in cards %}
+        {% set op = card.op %}
+        {% set census = card.census %}
+        {% set is_replay = card.is_replay %}
+        {% set window = card.window %}
+        {% include "settings/partials/repair_op_card.html" %}
+    {% endfor %}
+
+    <div class="card bg-base-200 max-w-2xl">
+        <div class="card-body">
+            <h2 class="card-title text-base font-semibold">Snapshots</h2>
+            <p class="text-base-content/60 text-sm -mt-1">Backups taken automatically before each repair.</p>
+            {% include "settings/partials/repair_snapshots.html" %}
+        </div>
+    </div>
+</div>

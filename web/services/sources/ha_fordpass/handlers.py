@@ -92,14 +92,32 @@ def _score_or_null(val: Any) -> float | None:
     return raw
 
 
-def _duration_to_seconds_from_minutes(val: Any) -> float | None:
-    """Convert an elveh-shaped tripDuration (minutes) to canonical seconds.
+def _duration_to_seconds(val: Any) -> float | None:
+    """Convert an elveh-shaped tripDuration to canonical seconds.
 
-    Events-entity payloads emit trip_duration in seconds directly (handled
-    upstream); elveh attributes emit minutes. Storing both as seconds keeps
-    the drawer's `(duration // 3600)` / `(duration // 60) % 60` rendering
-    correct regardless of which source wrote the row.
+    Current ha-fordpass emits tripDuration as `str(timedelta)` — e.g.
+    "0:41:18" or "1 day, 2:03:04" — while older builds emitted a bare number
+    of minutes. Events-entity payloads emit trip_duration in seconds directly
+    (handled upstream). Storing everything as seconds keeps the drawer's
+    `(duration // 3600)` / `(duration // 60) % 60` rendering correct
+    regardless of which source wrote the row.
     """
+    if isinstance(val, str) and ":" in val:
+        days = 0.0
+        clock = val.strip()
+        if "," in clock:  # "N day(s), H:MM:SS"
+            day_part, clock = (p.strip() for p in clock.split(",", 1))
+            day_num = _safe_float(day_part.split(" ", 1)[0])
+            if day_num is None:
+                return None
+            days = day_num
+        parts = [_safe_float(p) for p in clock.split(":")]
+        if len(parts) != 3:
+            return None
+        h, m, sec = parts
+        if h is None or m is None or sec is None:
+            return None
+        return days * 86400.0 + h * 3600.0 + m * 60.0 + sec
     raw = _safe_float(val)
     return raw * 60.0 if raw is not None else None
 
@@ -258,17 +276,20 @@ async def _find_matching_trip(
     device_id: str,
     distance: float | None,
     energy_consumed: float | None,
+    around: datetime | None = None,
 ):
     """Query for an existing EVTripMetrics row matching this trip.
 
     Match key: device_id + distance within ±0.01 km + energy_consumed within
-    ±0.01 kWh + end_time within the last 24 hours.  Returns the first matching
-    row or None.
+    ±0.01 kWh + end_time within ±24 hours of `around` (the incoming event's
+    timestamp; defaults to now). Returns the first matching row or None.
 
     Both the _elveh handler (handle_battery_status) and the _events handler
     (adapter._handle_events_entity) call this before inserting so that when
     both fire for the same physical trip only one row is written — the second
-    handler enriches the existing row instead of duplicating it.
+    handler enriches the existing row instead of duplicating it. Centering the
+    window on the event timestamp (not wall-clock now) keeps dedup working
+    when historical payloads are replayed.
     """
     if distance is None or energy_consumed is None:
         return None
@@ -279,7 +300,7 @@ async def _find_matching_trip(
 
     from db.models.trip_metrics import EVTripMetrics
 
-    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    center = around or datetime.now(UTC)
     result = await db.execute(
         select(EVTripMetrics)
         .where(
@@ -289,7 +310,8 @@ async def _find_matching_trip(
                 EVTripMetrics.energy_consumed.between(
                     energy_consumed - 0.01, energy_consumed + 0.01
                 ),
-                EVTripMetrics.end_time >= cutoff,
+                EVTripMetrics.end_time >= center - timedelta(hours=24),
+                EVTripMetrics.end_time <= center + timedelta(hours=24),
             )
         )
         .order_by(EVTripMetrics.end_time.desc())
@@ -586,10 +608,19 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         hv_voltage = _safe_float(attrs.get("batteryVoltage"))
         hv_amperage = _safe_float(attrs.get("batteryAmperage"))
         hv_kw = _safe_float(attrs.get("batterykW"))
-        # FordPass `maximumBatteryCapacity` is the GROSS pack capacity
-        # (total installed cell kWh). Battery health math on /battery
-        # compares against ev_vehicles.battery_gross_capacity_kwh.
-        hv_capacity = _safe_float(attrs.get("maximumBatteryCapacity"))
+        # `maximumBatteryCapacity` mirrors the raw-Wh xevBatteryCapacity;
+        # the contract converts to kWh so /battery health math compares
+        # against the vehicle's rated-kWh setting.
+        _cap_contract = ha_fordpass.lookup_contract(
+            "sensor.fordpass_{vin}_elveh", "maximumBatteryCapacity"
+        )
+        hv_capacity = (
+            ha_fordpass.convert(
+                _cap_contract, attrs.get("maximumBatteryCapacity"), new_state, ha_config
+            )
+            if _cap_contract
+            else None
+        )
         hv_actual_soc = _safe_float(attrs.get("batteryActualCharge"))
         motor_voltage = _safe_float(attrs.get("motorVoltage"))
         motor_amperage = _safe_float(attrs.get("motorAmperage"))
@@ -675,8 +706,8 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
 
         trip_attr_map: dict[str, tuple[str, Callable[..., Any]]] = {
             "tripDistanceTraveled": ("distance", _d),
-            # Canonical storage is seconds; elveh emits minutes -> *60.
-            "tripDuration": ("duration", _duration_to_seconds_from_minutes),
+            # Canonical storage is seconds; elveh emits "H:MM:SS" (or legacy minutes).
+            "tripDuration": ("duration", _duration_to_seconds),
             "tripEnergyConsumed": ("energy_consumed", _safe_float),
             "tripEfficiency": ("efficiency", _efficiency_conv),
             # Score fields use the 0-as-sentinel converter so empty trips
@@ -719,8 +750,8 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 start_time = None
                 if trip_fields.get("duration") and end_time:
                     from datetime import timedelta
-                    # duration is canonical seconds (elveh minutes already
-                    # converted via _duration_to_seconds_from_minutes).
+                    # duration is canonical seconds (elveh string/minutes
+                    # already converted via _duration_to_seconds).
                     start_time = end_time - timedelta(seconds=float(trip_fields["duration"]))
 
                 # Deterministic-id lookup: if elveh carries tripUpdateTime
@@ -748,6 +779,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         device_id,
                         trip_fields.get("distance"),
                         trip_fields.get("energy_consumed"),
+                        around=end_time,
                     )
 
                 if existing is not None:
@@ -770,6 +802,8 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         existing.efficiency = trip_fields["efficiency"]
                     if existing.duration is None and trip_fields.get("duration") is not None:
                         existing.duration = trip_fields["duration"]
+                    if existing.start_time is None and start_time is not None:
+                        existing.start_time = start_time
                     if existing.odometer_end is None and existing.end_time is not None:
                         existing.odometer_end = await ha_fordpass._closest_odometer(
                             db, device_id, existing.end_time,
