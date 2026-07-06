@@ -41,7 +41,9 @@ class TripDistanceDoubleConversion(RepairOperation):
         rows = (await db.execute(stmt)).scalars().all()
         out: list[EVTripMetrics] = []
         for row in rows:
-            odo_delta = float(row.odometer_end - row.odometer_start)
+            if row.odometer_end is None or row.odometer_start is None or row.distance is None:
+                continue
+            odo_delta = float(row.odometer_end) - float(row.odometer_start)
             if odo_delta < MIN_ODO_DELTA_KM:
                 continue
             ratio = float(row.distance) / odo_delta
@@ -51,6 +53,8 @@ class TripDistanceDoubleConversion(RepairOperation):
 
     @staticmethod
     def _fixed_values(row: EVTripMetrics) -> dict:
+        if row.distance is None:  # candidates are pre-filtered; keeps mypy honest
+            return {}
         new_distance = float(row.distance) / KM_PER_MILE
         fixed = {"distance": new_distance}
         if row.energy_consumed is not None and float(row.energy_consumed) > 0:

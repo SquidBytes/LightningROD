@@ -853,8 +853,8 @@ async def detect_duplicates(rows: list[dict], db_session: AsyncSession) -> list[
     for row in rows:
         if row.get("_status") == "error":
             continue
-        sid = str(row.get("session_id", ""))
-        if sid in matched_ids:
+        sid_str = str(row.get("session_id", ""))
+        if sid_str in matched_ids:
             row["_status"] = "duplicate"
 
     # Layer 2: fuzzy matching for remaining 'new' rows that have a start time

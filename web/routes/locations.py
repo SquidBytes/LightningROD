@@ -31,15 +31,15 @@ async def locations_by_network(
     stale ones in place.
     """
     try:
-        network_id = int(network_id) if network_id else None
+        network_id_int = int(network_id) if network_id else None
     except (TypeError, ValueError):
-        network_id = None
-    if not network_id:
+        network_id_int = None
+    if not network_id_int:
         return HTMLResponse('<option value="">Location (select network first)</option>')
 
     stmt = (
         select(EVLocationLookup)
-        .where(EVLocationLookup.network_id == network_id)
+        .where(EVLocationLookup.network_id == network_id_int)
         .where(EVLocationLookup.is_verified == True)  # noqa: E712
         .order_by(EVLocationLookup.location_name)
     )

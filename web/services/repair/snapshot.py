@@ -14,7 +14,7 @@ from db.models.repair_backup import RepairBackup
 from db.models.trip_metrics import EVTripMetrics
 
 # v1 restore scope: only these tables can be restored from snapshots.
-RESTORABLE_MODELS: dict[str, type] = {"ev_trip_metrics": EVTripMetrics}
+RESTORABLE_MODELS: dict[str, type[EVTripMetrics]] = {"ev_trip_metrics": EVTripMetrics}
 
 
 def serialize_row(obj: Any) -> dict[str, Any]:
@@ -34,7 +34,7 @@ def serialize_row(obj: Any) -> dict[str, Any]:
 
 def deserialize_row(model: type, data: dict[str, Any]) -> dict[str, Any]:
     """Coerce a serialized row dict back to the model's column Python types."""
-    columns = inspect(model).columns
+    columns: Any = inspect(model).columns
     out: dict[str, Any] = {}
     for key, val in data.items():
         if key not in columns or val is None:
@@ -123,4 +123,4 @@ async def purge_run(db: AsyncSession, run_id: uuid.UUID) -> int:
     result = await db.execute(
         delete(RepairBackup).where(RepairBackup.run_id == run_id)
     )
-    return result.rowcount
+    return int(getattr(result, "rowcount", 0) or 0)

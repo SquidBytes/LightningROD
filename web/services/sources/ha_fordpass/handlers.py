@@ -112,10 +112,12 @@ def _duration_to_seconds(val: Any) -> float | None:
                 return None
             days = day_num
         parts = [_safe_float(p) for p in clock.split(":")]
-        if len(parts) != 3 or any(p is None for p in parts):
+        if len(parts) != 3:
             return None
-        h, m, s = parts
-        return days * 86400.0 + h * 3600.0 + m * 60.0 + s
+        h, m, sec = parts
+        if h is None or m is None or sec is None:
+            return None
+        return days * 86400.0 + h * 3600.0 + m * 60.0 + sec
     raw = _safe_float(val)
     return raw * 60.0 if raw is not None else None
 
