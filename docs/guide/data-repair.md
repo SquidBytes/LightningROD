@@ -5,6 +5,28 @@ The Data Repair tab on the [settings page](settings.md) fixes historical trip da
 !!! info "What repairs will never touch"
     Repairs only modify rows ingested from Home Assistant. Trips you entered manually or imported from CSV are never changed, no matter what an operation finds.
 
+## Back Up First
+
+Per-repair snapshots cover only the rows each operation touches. Before your first repair session, take a full database backup:
+
+- **SQLite** — click **Download database backup** at the top of the tab. It streams a consistent copy of the live database (safe while the app is running) named `lightningrod-backup-<date>.db`. To roll back completely, stop the app and put the file back in place of your database file.
+- **PostgreSQL** (the default Docker setup) — dump from the host:
+
+    ```bash
+    docker compose exec db pg_dump -U $POSTGRES_USER -d $POSTGRES_DB > lightningrod-backup.sql
+    ```
+
+    Restore with `docker compose exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB < lightningrod-backup.sql` against a fresh database.
+
+## Running a Repair
+
+1. Open **Settings → Data Repair**. Each card's badge shows how many rows the operation would change right now — a gray "clean" badge means nothing to do.
+2. Click **Preview** on a card with a count. The dry run lists the exact rows and per-field changes (`before → after`) without writing anything.
+3. Click **Apply** and confirm. The operation snapshots the affected rows, applies the fix, and reports what changed.
+4. Check your data (Trip Sessions, Driving Analytics). If something looks wrong, **Restore** the snapshot from the Snapshots section; if all is well, **Purge** it.
+
+Run the cards top to bottom — duplicate consolidation should run before distance double-conversion, which is the order they appear in.
+
 ## Operations
 
 ### Trip duplicate consolidation

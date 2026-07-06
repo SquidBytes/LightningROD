@@ -120,3 +120,27 @@ async def test_settings_tab_query_param_checks_radio(client):
     response = await client.get("/settings", params={"tab": "data_repair"})
     assert response.status_code == 200
     assert 'aria-label="Data Repair" checked' in response.text
+
+
+async def test_backup_download_or_pg_instructions(client, db_session):
+    """SQLite installs stream a valid DB copy; PostgreSQL installs get 409 + pg_dump hint."""
+    dialect = db_session.get_bind().dialect.name
+    response = await client.get("/settings/data-repair/backup")
+    if dialect == "sqlite":
+        assert response.status_code == 200
+        assert response.headers["content-disposition"].startswith("attachment")
+        assert response.content.startswith(b"SQLite format 3\x00")
+    else:
+        assert response.status_code == 409
+        assert "pg_dump" in response.text
+
+
+async def test_tab_shows_backup_section(client, db_session):
+    dialect = db_session.get_bind().dialect.name
+    response = await client.get("/settings/data-repair")
+    assert response.status_code == 200
+    assert "Back up first" in response.text
+    if dialect == "sqlite":
+        assert "Download database backup" in response.text
+    else:
+        assert "pg_dump" in response.text

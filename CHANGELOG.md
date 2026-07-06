@@ -18,6 +18,8 @@ For feature documentation, see the docs site at
 - Data Repair settings tab — census, dry-run preview, and one-click repair for
   historical trip data (duplicate trips, unit-corrupted distances,
   recorder-history re-enrichment), with restorable snapshots
+- One-click database backup download on the Data Repair tab for SQLite
+  installs (PostgreSQL installs get pg_dump instructions in the guide)
 
 ### Changed
 

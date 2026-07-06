@@ -2124,7 +2124,61 @@ async def data_repair_tab(
             "window_days": window_days,
             "runs": await list_runs(db),
             "user_tz": user_tz,
+            "backup_dialect": db.get_bind().dialect.name,
         },
+    )
+
+
+@router.get("/settings/data-repair/backup")
+async def download_database_backup(db: AsyncSession = Depends(get_db)):
+    """Stream a consistent copy of the SQLite database as a download.
+
+    Uses VACUUM INTO on a separate connection — safe while the app runs (WAL).
+    PostgreSQL installs get a 409 pointing at pg_dump instead; the one-click
+    path only makes sense where the database is a single local file.
+    """
+    import asyncio
+    import os
+    import sqlite3
+    import tempfile
+    from pathlib import Path
+
+    from fastapi.responses import FileResponse
+    from starlette.background import BackgroundTask
+
+    bind = db.get_bind()
+    if bind.dialect.name != "sqlite":
+        return HTMLResponse(
+            status_code=409,
+            content=(
+                '<div class="alert alert-warning text-sm">One-click backup is '
+                "available on SQLite installs only. For PostgreSQL use pg_dump "
+                "— see the Data Repair guide.</div>"
+            ),
+        )
+
+    src = bind.engine.url.database
+    if not src or not Path(src).exists():
+        return HTMLResponse(status_code=404, content="Database file not found.")
+
+    fd, dest = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    os.remove(dest)  # VACUUM INTO requires a non-existent target
+
+    def _vacuum() -> None:
+        con = sqlite3.connect(src)
+        try:
+            con.execute("VACUUM INTO ?", (dest,))
+        finally:
+            con.close()
+
+    await asyncio.to_thread(_vacuum)
+    filename = f"lightningrod-backup-{datetime.now(UTC).date().isoformat()}.db"
+    return FileResponse(
+        dest,
+        filename=filename,
+        media_type="application/octet-stream",
+        background=BackgroundTask(os.remove, dest),
     )
 
 
