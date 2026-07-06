@@ -1,0 +1,52 @@
+<div id="repair-snapshots">
+    {% if runs %}
+    <div class="overflow-x-auto">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Operation</th>
+                    <th>Created</th>
+                    <th>Rows</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in runs %}
+                <tr>
+                    <td>{{ run.operation }}</td>
+                    <td>{{ run.created_at|localtime(user_tz|default('UTC'), "%b %-d, %Y %-I:%M %p") }}</td>
+                    <td>{{ run.row_count }}</td>
+                    <td class="text-right whitespace-nowrap">
+                        <button class="btn btn-ghost btn-xs"
+                                hx-post="/settings/data-repair/snapshots/{{ run.run_id }}/restore"
+                                hx-target="#repair-snapshots"
+                                hx-swap="outerHTML"
+                                hx-confirm="Restore {{ run.row_count }} rows from this snapshot?">
+                            Restore
+                        </button>
+                        <button class="btn btn-ghost btn-xs text-error"
+                                hx-post="/settings/data-repair/snapshots/{{ run.run_id }}/purge"
+                                hx-target="#repair-snapshots"
+                                hx-swap="outerHTML"
+                                hx-confirm="Delete this snapshot? This cannot be undone.">
+                            Purge
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-base-content/50">No snapshots yet.</p>
+    {% endif %}
+    <p class="text-xs text-base-content/50 mt-2">Restore puts the snapshotted rows back; rows created afterwards are not removed.</p>
+
+    {% if snapshot_result %}
+    <div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+      <div class="alert alert-success">
+        <span>{{ snapshot_result }}</span>
+      </div>
+    </div>
+    {% endif %}
+</div>

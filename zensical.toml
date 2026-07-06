@@ -25,6 +25,7 @@ nav = [
     "guide/home-assistant.md",
     "guide/review-queue.md",
     "guide/settings.md",
+    "guide/data-repair.md",
   ]},
   {"Development" = [
     "development/setup.md",

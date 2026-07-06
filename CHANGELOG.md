@@ -15,6 +15,11 @@ For feature documentation, see the docs site at
 - Mile-for-mile gas comparison in Savings Scenarios — fuels the distance you
   actually drove at the ICE comparison vehicle's real MPG with monthly fuel
   price history, alongside the existing energy-equivalent comparison
+- Data Repair settings tab — census, dry-run preview, and one-click repair for
+  historical trip data (duplicate trips, unit-corrupted distances,
+  recorder-history re-enrichment), with restorable snapshots
+- One-click database backup download on the Data Repair tab for SQLite
+  installs (PostgreSQL installs get pg_dump instructions in the guide)
 
 ### Changed
 
