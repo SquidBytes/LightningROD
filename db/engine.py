@@ -32,6 +32,11 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
     """Enable SQLite safety/performance PRAGMAs on each DBAPI connection."""
     if not _DIALECT_IS_SQLITE:
         return
+    # Disable pysqlite's legacy implicit-transaction handling so SQLAlchemy
+    # fully owns BEGIN/COMMIT. Required for SAVEPOINT semantics — the Data
+    # Repair dry-run (rollback_session) relies on internal commits staying
+    # inside the outer transaction. Same recipe as tests/conftest.py.
+    dbapi_connection.isolation_level = None
     cursor = dbapi_connection.cursor()
     try:
         cursor.execute("PRAGMA foreign_keys = ON")
@@ -40,6 +45,12 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
         cursor.execute("PRAGMA busy_timeout = 5000")
     finally:
         cursor.close()
+
+
+@event.listens_for(engine.sync_engine, "begin")
+def _do_begin(conn):
+    if _DIALECT_IS_SQLITE:
+        conn.exec_driver_sql("BEGIN")
 
 
 AsyncSessionLocal = async_sessionmaker(
