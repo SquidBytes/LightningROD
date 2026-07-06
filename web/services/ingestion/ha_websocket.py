@@ -506,12 +506,15 @@ class HAWebSocketRuntime:
         self,
         entity_id: str,
         start_time_iso: str | None = None,
+        end_time_iso: str | None = None,
     ) -> list[dict]:
         """Fetch HA history for a single entity_id.
 
         When start_time_iso is None, queries from 10 years ago (effectively
         "everything HA will return"). HA's recorder retention is typically
         10 days by default but users with long-term storage can have years.
+        When end_time_iso is set it is forwarded as the `end_time` query
+        param, bounding the window (used by paginated replay fetches).
 
         Returns the list of state dicts, or [] on failure / empty history.
         """
@@ -528,11 +531,15 @@ class HAWebSocketRuntime:
                 datetime.now(UTC) - timedelta(days=365 * 10)
             ).isoformat()
 
+        params = {"filter_entity_id": entity_id, "minimal_response": "false"}
+        if end_time_iso is not None:
+            params["end_time"] = end_time_iso
+
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.get(
                     f"{ha_url}/api/history/period/{start_time_iso}",
-                    params={"filter_entity_id": entity_id, "minimal_response": "false"},
+                    params=params,
                     headers=headers,
                 )
                 resp.raise_for_status()
