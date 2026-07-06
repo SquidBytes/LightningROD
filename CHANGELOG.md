@@ -9,6 +9,16 @@ For feature documentation, see the docs site at
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.5.1] - 2026-07-05
+
+### Added
+
 - Export CSV button on the Charging Sessions page — downloads the sessions
   matching the current filters (dates, charge type, network, sort)
 - Delete Trip button in the trip detail drawer
@@ -60,8 +70,6 @@ For feature documentation, see the docs site at
 - Trip duration not populating on trip lists and detail views
 - Manual trip entry stored its duration 60× too short
 - Trip start time now recorded for trips ingested from Home Assistant
-
-### Removed
 
 ## [0.4.0] - 2026-05-25
 
