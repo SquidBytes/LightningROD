@@ -1,8 +1,9 @@
 """Settings routes for app options, vehicles, networks, and data sources."""
 
 import json
+import uuid
 from dataclasses import asdict
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
@@ -64,6 +65,8 @@ from web.queries.vehicles import (
 )
 from web.services.csv_parser import get_db_field_options
 from web.services.ingestion import supervisor
+from web.services.repair.registry import REPAIR_REGISTRY, get_operation
+from web.services.repair.snapshot import list_runs, purge_run, restore_run
 from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
 from web.services.sources.registry import REGISTRY as SOURCE_REGISTRY
@@ -170,6 +173,8 @@ async def settings_index(
         active_tab = "networks"
     elif tab == "data_sources":
         active_tab = "data_sources"
+    elif tab == "data_repair":
+        active_tab = "data_repair"
     elif tab == "fuel":
         active_tab = "fuel"
     else:
@@ -2079,3 +2084,135 @@ async def update_developer_mode(
     # Toggling developer mode adds/removes nav items — force full refresh.
     response.headers["HX-Refresh"] = "true"
     return response
+
+
+# ---------------------------------------------------------------------------
+# Data Repair tab
+# ---------------------------------------------------------------------------
+
+REPLAY_SLUG = "recorder-replay"
+
+
+async def _repair_card_ctx(op, db: AsyncSession) -> dict:
+    """Per-card context: op, census, and (for the replay op) recorder window."""
+    is_replay = op.slug == REPLAY_SLUG
+    window = await op.recorder_window() if is_replay else None
+    return {
+        "op": op,
+        "census": await op.census(db),
+        "is_replay": is_replay,
+        "window": window,
+    }
+
+
+@router.get("/settings/data-repair", response_class=HTMLResponse)
+async def data_repair_tab(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Render the Data Repair tab: op cards, recorder banner, snapshot runs."""
+    cards = [await _repair_card_ctx(op, db) for op in REPAIR_REGISTRY]
+    window = next((c["window"] for c in cards if c["is_replay"]), None)
+    window_days = (datetime.now(UTC) - window).days if window else None
+    user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/data_repair_tab.html",
+        {
+            "cards": cards,
+            "window": window,
+            "window_days": window_days,
+            "runs": await list_runs(db),
+            "user_tz": user_tz,
+        },
+    )
+
+
+@router.post("/settings/data-repair/{slug}/preview", response_class=HTMLResponse)
+async def data_repair_preview(
+    slug: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Dry-run a repair operation and render the diff table."""
+    op = get_operation(slug)
+    if op is None:
+        raise HTTPException(status_code=404, detail=f"Unknown repair: {slug}")
+    diffs = await op.preview(db)
+    census = await op.census(db)
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/repair_preview.html",
+        {"diffs": diffs, "census": census},
+    )
+
+
+@router.post("/settings/data-repair/{slug}/apply", response_class=HTMLResponse)
+async def data_repair_apply(
+    slug: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Snapshot + apply a repair, then re-render its card with a toast."""
+    op = get_operation(slug)
+    if op is None:
+        raise HTTPException(status_code=404, detail=f"Unknown repair: {slug}")
+    result = await op.apply(db)
+    await db.commit()
+    ctx = await _repair_card_ctx(op, db)
+    ctx["result"] = result
+    return templates.TemplateResponse(
+        request, "settings/partials/repair_op_card.html", ctx
+    )
+
+
+async def _render_snapshots(
+    request: Request, db: AsyncSession, message: str | None = None
+):
+    user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/repair_snapshots.html",
+        {"runs": await list_runs(db), "user_tz": user_tz, "snapshot_result": message},
+    )
+
+
+def _parse_run_id(run_id: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(run_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid run id") from None
+
+
+@router.post(
+    "/settings/data-repair/snapshots/{run_id}/restore", response_class=HTMLResponse
+)
+async def data_repair_restore(
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Write a snapshot run's rows back and re-render the snapshot list."""
+    rid = _parse_run_id(run_id)
+    restored = await restore_run(db, rid)
+    if restored == 0:
+        raise HTTPException(status_code=404, detail="Unknown snapshot run")
+    await db.commit()
+    return await _render_snapshots(request, db, f"Restored {restored} rows.")
+
+
+@router.post(
+    "/settings/data-repair/snapshots/{run_id}/purge", response_class=HTMLResponse
+)
+async def data_repair_purge(
+    run_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a snapshot run and re-render the snapshot list."""
+    rid = _parse_run_id(run_id)
+    purged = await purge_run(db, rid)
+    if purged == 0:
+        raise HTTPException(status_code=404, detail="Unknown snapshot run")
+    await db.commit()
+    return await _render_snapshots(request, db, "Snapshot deleted.")

@@ -112,6 +112,16 @@
             <span class="loading loading-spinner loading-md"></span>
         </div>
     </div>
+
+    <input type="radio" name="settings-tabs" role="tab" class="tab" aria-label="Data Repair" {{ 'checked' if active_tab == 'data_repair' }} />
+    <div role="tabpanel" class="tab-content pt-6">
+        <div id="data-repair-tab-content"
+             hx-get="/settings/data-repair"
+             hx-trigger="intersect once"
+             hx-swap="innerHTML">
+            <span class="loading loading-spinner loading-md"></span>
+        </div>
+    </div>
 </div>
 
 {# Vehicle add/edit modal using DaisyUI dialog #}

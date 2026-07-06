@@ -16,6 +16,7 @@ The General tab is the default on load.
 | Fuel | ICE vehicle fleet, gas price history, fuel price trend chart |
 | Import | CSV template download and bulk session import flow |
 | Data Sources | Home Assistant FordPass and gas-price source adapters (URL, token, sensor IDs, enable/disable) |
+| Data Repair | Repairs for historical trip data, with previews and restorable snapshots — see [Data Repair](data-repair.md) |
 
 ## Vehicles Tab
 

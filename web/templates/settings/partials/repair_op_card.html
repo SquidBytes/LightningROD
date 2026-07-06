@@ -1,0 +1,65 @@
+{% set replay_disabled = is_replay and window is none %}
+<div class="card bg-base-200 max-w-2xl">
+    <div class="card-body">
+        <div class="flex items-baseline justify-between gap-4">
+            <h2 class="card-title text-base font-semibold">{{ op.display_name }}</h2>
+            {% if census > 0 %}
+                <span class="badge badge-warning">{{ census }} rows</span>
+            {% else %}
+                <span class="badge badge-ghost">clean</span>
+            {% endif %}
+        </div>
+        <p class="text-base-content/60 text-sm -mt-1">{{ op.description }}</p>
+
+        {% if replay_disabled %}
+        <p class="text-sm text-base-content/50 mt-1">Connect to Home Assistant first.</p>
+        {% endif %}
+
+        <div class="flex flex-wrap items-center gap-2 mt-2">
+            <button class="btn btn-sm"
+                    hx-post="/settings/data-repair/{{ op.slug }}/preview"
+                    hx-target="#repair-preview-{{ op.slug }}"
+                    hx-swap="innerHTML"
+                    hx-indicator="#repair-spinner-{{ op.slug }}"
+                    {% if replay_disabled %}disabled{% endif %}>
+                Preview
+            </button>
+            <button class="btn btn-warning btn-sm"
+                    hx-post="/settings/data-repair/{{ op.slug }}/apply"
+                    hx-target="closest .card"
+                    hx-swap="outerHTML"
+                    hx-indicator="#repair-spinner-{{ op.slug }}"
+                    {% if is_replay and census == 0 %}
+                    hx-confirm="Replay recorder history? Recovered trips are new rows (no snapshot needed)."
+                    {% else %}
+                    hx-confirm="Snapshot and repair {{ census }} rows? A restorable backup will be created."
+                    {% endif %}
+                    {% if replay_disabled or (not is_replay and census == 0) %}disabled{% endif %}>
+                Apply
+            </button>
+            <span id="repair-spinner-{{ op.slug }}" class="loading loading-spinner loading-sm htmx-indicator"></span>
+        </div>
+
+        <div id="repair-preview-{{ op.slug }}" class="mt-2"></div>
+
+        {% if result %}
+        <div class="text-xs text-base-content/60 mt-2 space-y-0.5">
+            <div>Repaired {{ result.affected }} rows{% if result.snapshot_rows %} &mdash; {{ result.snapshot_rows }} rows snapshotted{% endif %}.</div>
+            {% for key, val in result.details.items() if key != 'filled' and val %}
+            <div>{{ key.replace('_', ' ') }}: {{ val }}</div>
+            {% endfor %}
+            {% if result.details.get('filled') %}
+            <div>filled: {% for f, n in result.details['filled'].items() %}{{ f }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if result %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Repair applied &mdash; {{ result.affected }} rows changed.</span>
+  </div>
+</div>
+{% endif %}

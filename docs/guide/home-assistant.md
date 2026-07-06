@@ -106,5 +106,7 @@ Click **Backfill History** to fetch historical states from Home Assistant's REST
 
 Duplicate detection also applies during backfill, so existing sessions and gas readings are skipped automatically.
 
+Backfill covers charging and gas history; to fix or recover historical *trip* data, use the [Data Repair](data-repair.md) tab instead.
+
 !!! tip "First-time setup"
     After you set up the connection for the first time, run the backfill to import your historical charging and gas price data. After that, new sessions and readings come in automatically.
