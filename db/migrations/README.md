@@ -23,7 +23,6 @@ upgrading. Use `--purge` if `alembic upgrade` errors with
 the deleted current rev otherwise):
 
 ```bash
-cd app-public
 uv run alembic stamp p30_squashed_initial --purge
 uv run alembic upgrade head
 ```
