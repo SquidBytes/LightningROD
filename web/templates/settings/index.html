@@ -241,8 +241,14 @@ function closeIceVehicleModal() {
 
 document.body.addEventListener('closeIceVehicleModal', closeIceVehicleModal);
 
-// Stall edit modal close helper — fixes the stall-edit-bug
-// (RESEARCH §Pitfall 3: dialog .close() alone doesn't clear stale innerHTML).
+// Stall edit modal open helper — mirrors openNetworkModal
+function openStallEditModal(stallId, locationId) {
+    htmx.ajax('GET', '/settings/stalls/' + stallId + '/edit?location_id=' + locationId,
+        {target: '#stall-edit-modal-content', swap: 'innerHTML'});
+    document.getElementById('stall-edit-modal').showModal();
+}
+
+// Stall edit modal close helper — dialog .close() alone doesn't clear stale innerHTML.
 function closeStallEditModal() {
     document.getElementById('stall-edit-modal').close();
     document.getElementById('stall-edit-modal-content').innerHTML = '';

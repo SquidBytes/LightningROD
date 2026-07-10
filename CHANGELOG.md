@@ -15,7 +15,7 @@ For feature documentation, see the docs site at
 
 ### Removed
 
-## [0.5.1] - 2026-07-05
+## [0.5.2] - 2026-07-10
 
 ### Added
 
@@ -41,6 +41,9 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Edit button on charging stalls did nothing — the edit dialog never opened
+  because its open handler was bound to an HTMX event that fires on the swap
+  target rather than the button; editing stalls now works
 - Battery health and degradation compared Wh-scale capacity readings against
   the rated kWh capacity (health showed absurd percentages and ignored the
   user-set gross capacity); existing rows are repaired on upgrade
