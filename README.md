@@ -1,4 +1,3 @@
-# LightningROD
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="website/logo-lockup-dark.svg">
   <img src="website/logo-lockup-light.svg" alt="LightningROD" width="196">
@@ -32,7 +31,7 @@ If you find LightningROD useful, and would like to, you can [buy me a coffee](ht
 ## Features
 
 - **Charging analytics** — session CRUD, network/location/stall management, and a Cost Explorer for spend by network with free-charging what-ifs, subscription savings, and custom-rate comparisons.
-- **Battery & trip analytics** — SOC timeline, charge curves with reference overlay, estimated degradation (based on reported capacity and milage), HV pack telemetry, trip-by-trip efficiency and regen.
+- **Battery & trip analytics** — SOC timeline, charge curves with reference overlay, estimated degradation (based on reported capacity and mileage), HV pack telemetry, trip-by-trip efficiency and regen.
 - **Home Assistant ingestion** — real-time WebSocket capture, auto-detected charging sessions and history backfill
 - **CSV import and manual entry** — for data outside Home Assistant (work in progress, not recommended currently)
 
@@ -50,13 +49,13 @@ Full documentation is available at the [documentation site](https://docs.lightni
 - [Configuration](https://docs.lightningrod.dev/getting-started/configuration/) -- Environment variables and in-app settings
 - [Data Import](https://docs.lightningrod.dev/getting-started/data-import/) -- CSV format, seed script, classification rules
 - [Home Assistant](https://docs.lightningrod.dev/guide/home-assistant/) -- Real-time FordPass data ingestion via WebSocket
-- [Development](https://docs.lightningrod.dev/development/setup/) -- Running outside of the Docker enviornment with reloading and database access
+- [Development](https://docs.lightningrod.dev/development/setup/) -- Running outside of the Docker environment with reloading and database access
 - [Architecture](https://docs.lightningrod.dev/development/architecture/) -- Project structure and patterns
 - [Database](https://docs.lightningrod.dev/development/database/) -- Schema, models, migrations
 
 ## Acknowledgments
 
-- [ha-fordpass](https://github.com/marq24/ha_fordpass) by marq24 -- Home Assistant integration for Ford vehicles
+- [ha-fordpass](https://github.com/marq24/ha-fordpass) by marq24 -- Home Assistant integration for Ford vehicles
 - [fordpass-ha](https://github.com/itchannel/fordpass-ha) by itchannel -- Home Assistant integration that started this journey
 - [TeslaMate](https://github.com/teslamate-org/teslamate) -- Inspiration for the project concept
 
@@ -110,3 +109,7 @@ docker run -d \
 
 
 Full install options like Unraid, external databases, etc can be found in the [Installation guide](https://docs.lightningrod.dev/getting-started/installation/).
+
+## License
+
+[AGPL-3.0](LICENSE)

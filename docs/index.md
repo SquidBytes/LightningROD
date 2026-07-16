@@ -4,7 +4,7 @@ Self-hosted charging and vehicle analytics.
 
 Track charging sessions, analyze costs, and monitor energy consumption with a web-based dashboard. 
 
-Ford EVs are supported today — developed on an F-150 Lightning — using data from [ha-fordpass](https://github.com/marq24/ha_fordpass) or CSV imports, and the data layer is built to grow beyond them.
+Ford EVs are supported today — built for the Ford F-150 Lightning — using data from [ha-fordpass](https://github.com/marq24/ha-fordpass) or CSV imports, and the data layer is built to grow beyond them.
 
 ![overview](assets/images/lr_overview.gif)
 
@@ -48,7 +48,7 @@ In short: more fields means better calculations, safer backfills, and fewer assu
 
 **CSV Import** -- Template download plus auto-detection fallback, timezone-aware parsing, inline row correction for errors/duplicates, and support for full session/EVSE field mapping.
 
-**Home Assistant Integration** -- Real-time WebSocket connection for automatic charging session detection from [ha-fordpass](https://github.com/marq24/ha_fordpass). Vehicle telemetry ingestion, VIN auto-detection, home-zone location auto-populate, unit normalization, and full-history backfill (no 30-day cap).
+**Home Assistant Integration** -- Real-time WebSocket connection for automatic charging session detection from [ha-fordpass](https://github.com/marq24/ha-fordpass). Vehicle telemetry ingestion, VIN auto-detection, home-zone location auto-populate, unit normalization, and full-history backfill (no 30-day cap).
 
 **Settings** -- Vehicle profiles with cascading Make/Model/Trim presets, a dedicated **Fuel** tab for multiple ICE vehicles and gas price history, a **Data Sources** tab for Home Assistant adapter configuration, split distance/temperature unit preferences, timezone selection, and comparison display toggles.
 
