@@ -11,7 +11,7 @@ commit time and serves as the observable unit contract.
 | Source Entity | Source Attribute | Source Unit | DB Table | DB Column | Target Unit | Notes |
 |---|---|---|---|---|---|---|
 | `sensor.fordpass_{vin}_cabintemperature` | `cabinTemperature` | `degC` | `ev_vehicle_status` | `cabin_temperature` | `degC` | Time-series cabin temp from per-sensor cabintemperature entity; ha-fordpass localizes per HA unit_system. |
-| `sensor.fordpass_{vin}_elveh` | `maximumBatteryCapacity` | `Wh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` | Elveh mirror of xevBatteryCapacity; raw Wh passthrough in ha-fordpass |
+| `sensor.fordpass_{vin}_elveh` | `maximumBatteryCapacity` | `Wh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` | Elveh mirror of xevBatteryCapacity; same mixed Wh/kWh autoscale |
 | `sensor.fordpass_{vin}_elveh` | `maximumBatteryRange` | `km` | `ev_battery_status` | `hv_battery_max_range` | `km` | Elveh fallback for metrics xevBatteryMaximumRange; localize_distance |
 | `sensor.fordpass_{vin}_elveh` | `tripAmbientTemp` | `degC` | `ev_trip_metrics` | `ambient_temp` | `degC` | elveh temp attr: HA localizes per unit_system |
 | `sensor.fordpass_{vin}_elveh` | `tripCabinTemp` | `degC` | `ev_trip_metrics` | `cabin_temp` | `degC` | elveh temp attr: HA localizes per unit_system (imperial->degF, metric->degC) |
@@ -33,7 +33,7 @@ commit time and serves as the observable unit contract.
 | `sensor.fordpass_{vin}_metrics` | `odometer` | `km` | `ev_vehicle_status` | `odometer` | `km` | Cumulative odometer; ha-fordpass localizes per HA unit_system (imperial -> mi, metric -> km). |
 | `sensor.fordpass_{vin}_metrics` | `speed` | `kmh` | `ev_vehicle_status` | `speed` | `kmh` | Instantaneous vehicle speed; ha-fordpass localizes per unit_system. Zero when parked. |
 | `sensor.fordpass_{vin}_metrics` | `tripXevBatteryRangeRegenerated` | `km` | `ev_trip_metrics` | `range_regenerated` | `km` | Raw API passthrough (km); backfills the newest trip row |
-| `sensor.fordpass_{vin}_metrics` | `xevBatteryCapacity` | `Wh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` | Raw Wh -> kWh; health/degradation compare against rated kWh |
+| `sensor.fordpass_{vin}_metrics` | `xevBatteryCapacity` | `Wh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` | Mixed Wh/kWh across ha-fordpass versions; magnitude-autoscaled to kWh |
 | `sensor.fordpass_{vin}_metrics` | `xevBatteryMaximumRange` | `km` | `ev_battery_status` | `hv_battery_max_range` | `km` | Canonical metric source; replaces elveh.maximumBatteryRange |
 | `sensor.fordpass_{vin}_metrics` | `xevBatteryRange` | `km` | `ev_battery_status` | `hv_battery_range` | `km` | Canonical metric source; replaces elveh state reading |
 | `sensor.fordpass_{vin}_metrics` | `yawRate` | `deg/s` | `ev_vehicle_status` | `yaw_rate` | `deg/s` | Yaw rate. Passthrough; no localization. |

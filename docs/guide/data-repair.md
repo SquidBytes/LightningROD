@@ -41,7 +41,7 @@ Some trips were stored with a distance converted to kilometers twice without lea
 
 ### Recorder history replay
 
-Replays trip sensor history from Home Assistant's recorder back through the ingestion pipeline. This fills trip fields that were missed the first time — duration, start time, odometer readings, regenerated range, driving scores, and temperatures — and recovers trips that were never ingested at all. Replay requires an active Home Assistant connection; the card is disabled until one is up.
+Replays trip sensor history from Home Assistant's recorder back through the ingestion pipeline. This fills trip fields that were missed the first time — duration, start time, odometer readings, regenerated range, driving scores, and temperatures — and recovers trips that were never ingested at all. Replay needs an active Home Assistant connection *and* recorder history for the trip events sensor; the card stays disabled (with a banner explaining which is missing) until both are available. If Home Assistant is connected but no history is found, check your recorder retention — the window is re-probed every few minutes.
 
 ## Snapshots and Restore
 
