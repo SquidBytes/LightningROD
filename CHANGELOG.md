@@ -9,6 +9,10 @@ For feature documentation, see the docs site at
 
 ### Added
 
+- Data Repair operation that fills missing trip start times, durations,
+  odometer readings, efficiency, and temperatures from telemetry already in
+  the database — no Home Assistant connection needed
+
 ### Changed
 
 - Savings totals in the Cost Explorer comparison card now highlight the dollar

@@ -48,6 +48,7 @@ async def test_tab_renders_all_ops_and_snapshot_section(client):
     body = response.text
     assert "Trip duplicate consolidation" in body
     assert "Trip distance double conversion" in body
+    assert "Derive trip fields from telemetry" in body
     assert "Recorder history replay" in body
     assert "repair-snapshots" in body
     # No runtime in tests -> replay card disabled with the disconnected note.
@@ -109,6 +110,27 @@ async def test_census_badge_for_seeded_pair(client, db_session):
     assert response.status_code == 200
     assert "badge badge-warning" in response.text
     assert "1 rows" in response.text
+
+
+async def test_telemetry_derive_card_shows_census_badge(client, db_session):
+    await TripFactory.create(
+        db_session,
+        device_id="TEST_VIN_002",
+        source_system="ha_fordpass",
+        distance=30.0,
+        energy_consumed=6.0,
+        efficiency=None,
+        end_time=T0,
+    )
+    await db_session.commit()
+    response = await client.get("/settings/data-repair")
+    assert response.status_code == 200
+    body = response.text
+    assert "Derive trip fields from telemetry" in body
+    # The derivable trip lights the census badge on the telemetry card.
+    assert 'hx-post="/settings/data-repair/telemetry-derive/preview"' in body
+    assert "badge badge-warning" in body
+    assert "1 rows" in body
 
 
 async def test_preview_returns_diff_table(client, db_session):

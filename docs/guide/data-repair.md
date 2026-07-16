@@ -39,6 +39,10 @@ An earlier unit-conversion bug could record the same trip twice: one row with th
 
 Some trips were stored with a distance converted to kilometers twice without leaving a duplicate behind. These are detected by contradiction: the stored distance is about 1.609 times the difference between the trip's start and end odometer readings. The fix divides the distance by 1.609344 and recomputes efficiency.
 
+### Derive trip fields from telemetry
+
+Some trips are stored with their headline numbers but no start time, duration, or odometer readings. This operation fills those gaps from vehicle telemetry already in the database — no Home Assistant connection needed. It anchors each trip to the odometer timeline around its end to reconstruct the missing odometer readings, start time, and duration (anything implying an implausible duration or average speed is left alone), recomputes missing efficiency from distance and energy, and averages stored temperature readings over the trip window. It only fills empty fields — existing values are never changed. Driving scores and regenerated range cannot be derived locally; those still need recorder history replay.
+
 ### Recorder history replay
 
 Replays trip sensor history from Home Assistant's recorder back through the ingestion pipeline. This fills trip fields that were missed the first time — duration, start time, odometer readings, regenerated range, driving scores, and temperatures — and recovers trips that were never ingested at all. Replay needs an active Home Assistant connection *and* recorder history for the trip events sensor; the card stays disabled (with a banner explaining which is missing) until both are available. If Home Assistant is connected but no history is found, check your recorder retention — the window is re-probed every few minutes.
