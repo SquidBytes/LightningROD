@@ -608,9 +608,9 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         hv_voltage = _safe_float(attrs.get("batteryVoltage"))
         hv_amperage = _safe_float(attrs.get("batteryAmperage"))
         hv_kw = _safe_float(attrs.get("batterykW"))
-        # `maximumBatteryCapacity` mirrors the raw-Wh xevBatteryCapacity;
-        # the contract converts to kWh so /battery health math compares
-        # against the vehicle's rated-kWh setting.
+        # `maximumBatteryCapacity` mirrors xevBatteryCapacity (mixed Wh/kWh
+        # across ha-fordpass versions); the wh_autoscale contract lands it in
+        # kWh so /battery health math compares against the rated-kWh setting.
         _cap_contract = ha_fordpass.lookup_contract(
             "sensor.fordpass_{vin}_elveh", "maximumBatteryCapacity"
         )

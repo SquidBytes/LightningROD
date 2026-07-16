@@ -43,3 +43,6 @@ class FieldContract:
     target_unit: str
     notes: str | None = None
     ha_unit_system_converted: bool = False
+    # ha-fordpass versions disagree on capacity scale (raw Wh vs already-kWh);
+    # when True and source_unit is Wh, |value| < 1000 is treated as kWh.
+    wh_autoscale: bool = False

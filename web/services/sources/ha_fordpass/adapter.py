@@ -34,9 +34,10 @@ metric into **HA's configured unit system** (metric HA -> km/°C, imperial HA
 STATE's `unit_of_measurement` tracks the vehicle's display system, NOT the HA
 unit system, so it must never be used to resolve trip-attribute units (doing
 so double-converted distances for imperial-display vehicles on metric HA).
-Battery-related attributes (voltage/amperage/kW/capacity) are SI-already
-(V, A, kW) and need no conversion — they carry no FIELD_CONTRACTS entry for
-that reason (see `tests/test_unit/test_contract_coverage.py` `_EXEMPTIONS`).
+Battery-related attributes (voltage/amperage/kW) are SI-already (V, A, kW)
+and carry no FIELD_CONTRACTS entry (see `tests/test_unit/test_contract_coverage.py`
+`_EXEMPTIONS`); capacity is mixed Wh/kWh across installs and carries a
+`wh_autoscale` contract.
 
 ### elvehcharging and outsidetemp used for thermal caching
 `sensor.fordpass_{vin}_elvehcharging.batteryTemperature` is cached per-device
@@ -148,26 +149,30 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_unit="km",
         notes="Canonical metric source; replaces elveh.maximumBatteryRange",
     ),
-    # Pack capacity: the raw API reports Wh (131 kWh pack -> 131000), same
-    # SI-raw convention as xevBatteryPower (W). Storing it unconverted made
-    # battery health read ~91,000% against the user's rated-kWh setting.
+    # Pack capacity: ha-fordpass installs disagree on scale — some report raw
+    # Wh (131 kWh pack -> 131000), others already-kWh (141.2). wh_autoscale
+    # disambiguates by magnitude: real packs are ~10-300 kWh, so |value| < 1000
+    # means kWh; >= 1000 means Wh. A blind Wh/1000 corrupted kWh-reporting
+    # installs (141.2 -> 0.1412).
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="xevBatteryCapacity",
         source_unit="Wh",
+        wh_autoscale=True,
         target_db_table="ev_battery_status",
         target_db_column="hv_battery_capacity",
         target_unit="kWh",
-        notes="Raw Wh -> kWh; health/degradation compare against rated kWh",
+        notes="Mixed Wh/kWh across ha-fordpass versions; magnitude-autoscaled to kWh",
     ),
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="maximumBatteryCapacity",
         source_unit="Wh",
+        wh_autoscale=True,
         target_db_table="ev_battery_status",
         target_db_column="hv_battery_capacity",
         target_unit="kWh",
-        notes="Elveh mirror of xevBatteryCapacity; raw Wh passthrough in ha-fordpass",
+        notes="Elveh mirror of xevBatteryCapacity; same mixed Wh/kWh autoscale",
     ),
 
     # --- ev_battery_status: hv_battery_temperature --------------------------
@@ -503,8 +508,8 @@ def _record_last_seen(
 
     `effective_unit` overrides `contract.source_unit` when the HA-unit-system
     path resolved a different unit. `method` captures how the unit was
-    resolved (declared / ha_unit_system_converted / declared_fallback) so the
-    data-sources page can show the reason per field.
+    resolved (declared / ha_unit_system_converted / declared_fallback /
+    wh_autoscale) so the data-sources page can show the reason per field.
     """
     key = f"{contract.source_locator.pattern}|{contract.source_attribute}"
     _last_seen_raw[key] = {
@@ -731,6 +736,12 @@ def convert(
     if raw_value is None:
         return None
     source_unit, method = _resolve_source_unit(contract, new_state, ha_config)
+    if contract.wh_autoscale and source_unit == "Wh":
+        # Mixed-scale sources: packs are ~10-300 kWh, so |value| < 1000 can
+        # only be already-kWh; >= 1000 is Wh.
+        numeric = _safe_float(raw_value)
+        if numeric is not None and abs(numeric) < 1000:
+            source_unit, method = "kWh", "wh_autoscale"
     try:
         converted = to_metric(raw_value, source_unit)
     except UnknownSourceUnit as exc:

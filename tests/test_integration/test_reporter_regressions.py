@@ -213,6 +213,59 @@ async def test_battery_capacity_stored_as_kwh(db_session):
     )
 
 
+async def test_battery_capacity_already_kwh_not_divided(db_session):
+    """Lock: already-kWh xevBatteryCapacity (141.2) stores as 141.2 kWh.
+
+    ha-fordpass installs disagree on capacity scale; a 2023 F-150 Lightning ER
+    reported 141.2 (kWh) and the blind Wh/1000 stored 0.1412, making Battery
+    Analytics degradation show 0.1 kWh against a 143 kWh factory pack.
+    """
+    payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
+    metrics = payload["sensor.fordpass_YOUR_VIN_metrics"]
+    metrics["attributes"]["xevBatteryCapacity"] = 141.2
+    await process_event(
+        "sensor.fordpass_YOUR_VIN_metrics", metrics, db_session, {"unit_system": "metric"},
+    )
+    await db_session.flush()
+
+    battery = (
+        await db_session.execute(
+            select(EVBatteryStatus).order_by(EVBatteryStatus.id.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    assert battery is not None
+    assert float(battery.hv_battery_capacity) == pytest.approx(141.2), (
+        f"got {battery.hv_battery_capacity} — already-kWh capacity was divided by 1000"
+    )
+
+
+async def test_elveh_capacity_already_kwh_not_divided(db_session):
+    """Lock: elveh maximumBatteryCapacity (131.0, already kWh) stores as 131.0."""
+    from web.services.sources.ha_fordpass.handlers import (
+        _flush_battery_status,
+        handle_battery_status,
+    )
+
+    payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
+    await handle_battery_status(
+        "elveh", payload["sensor.fordpass_YOUR_VIN_elveh"], {"unit_system": "metric"},
+        "YOUR_VIN", db_session,
+    )
+    # elveh events accumulate in a pending batch; flush to write the row.
+    await _flush_battery_status("YOUR_VIN", db_session)
+    await db_session.flush()
+
+    battery = (
+        await db_session.execute(
+            select(EVBatteryStatus).order_by(EVBatteryStatus.id.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    assert battery is not None
+    assert float(battery.hv_battery_capacity) == pytest.approx(131.0), (
+        f"got {battery.hv_battery_capacity} — already-kWh capacity was divided by 1000"
+    )
+
+
 async def test_metrics_backfills_trip_regen_and_score(db_session):
     """Lock: metrics entity NULL-fills regen + driving score on the newest trip.
 
