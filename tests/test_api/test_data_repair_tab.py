@@ -191,4 +191,6 @@ async def test_tab_shows_backup_section(client, db_session):
     if dialect == "sqlite":
         assert "Download database backup" in response.text
     else:
-        assert "pg_dump" in response.text
+        # The command must expand POSTGRES_* inside the container; the bare
+        # host-shell form fails with `role "-d" does not exist`.
+        assert "sh -c &#39;pg_dump" in response.text or "sh -c 'pg_dump" in response.text

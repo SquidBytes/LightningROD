@@ -61,3 +61,13 @@ def test_render_markdown_escapes_pipe_in_notes():
     out = render_markdown(g)
     # Raw pipes would break the markdown table; they must be escaped.
     assert "pipes\\|and\\|more" in out
+
+
+def test_committed_doc_in_sync_with_registry():
+    """docs/data-sources.md must match what the live registries generate."""
+    from scripts.gen_data_sources_doc import _OUTPUT_PATH, discover_adapters
+
+    assert _OUTPUT_PATH.read_text() == render_markdown(discover_adapters()), (
+        "docs/data-sources.md is stale — run "
+        "`uv run python scripts/gen_data_sources_doc.py` and commit the result"
+    )
