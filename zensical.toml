@@ -1,8 +1,8 @@
 [project]
 site_name = "LightningROD"
-site_description = "Self-hosted charging analytics for Ford electric vehicles"
+site_description = "Self-hosted charging and vehicle analytics"
 site_author = "SquidBytes"
-site_url = "https://SquidBytes.github.io/LightningROD/"
+site_url = "https://docs.lightningrod.dev/"
 repo_url = "https://github.com/SquidBytes/LightningROD"
 extra_css = ["stylesheets/extra.css"]
 
