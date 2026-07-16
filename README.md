@@ -1,8 +1,12 @@
 # LightningROD
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="website/logo-lockup-dark.svg">
+  <img src="website/logo-lockup-light.svg" alt="LightningROD" width="196">
+</picture>
 
-Self-hosted charge logs, and vehicle analytics. Track charging sessions, trips, costs, and battery metrics from a web dashboard.
+Self-hosted charging and vehicle analytics. Turns vehicle data into charging, battery, and trip insights from a web dashboard.
 
-Built for the Ford F-150 Lightning, but should work with other Ford EVs.  
+Ford EVs are supported today — developed on an F-150 Lightning — and the data layer is built to grow beyond them.  
 If you'd like support for a vehicle that isn't covered, open an issue and let me know.
 
 Designed to support automatic data ingestion from Home Assistant via [ha-fordpass](https://github.com/marq24/ha-fordpass).
@@ -12,11 +16,11 @@ Designed to support automatic data ingestion from Home Assistant via [ha-fordpas
 
 An interactive read-only demo is available. Data values are random and meant to showcase various features - their values may be incorrect.
 
-**Site**: https://lightningrod.onrender.com  
+**Site**: https://lightningrod.dev/demo  
 *Note: The service may need time to wake up.*
 
 > [!NOTE]
-> **Personal project, built with AI help.** I work on this when I have free time and use AI (primarily Claude) as a tool and to learn new things. For more information read my [AI Usage Disclaimer](https://squidbytes.github.io/LightningROD/ai-disclaimer/).
+> **Personal project, built with AI help.** I work on this when I have free time and use AI (primarily Claude) as a tool and to learn new things. For more information read my [AI Usage Disclaimer](https://docs.lightningrod.dev/ai-disclaimer/).
 
 If you find LightningROD useful, and would like to, you can [buy me a coffee](https://www.buymeacoffee.com/SquidBytes):
 
@@ -32,7 +36,7 @@ If you find LightningROD useful, and would like to, you can [buy me a coffee](ht
 - **Home Assistant ingestion** — real-time WebSocket capture, auto-detected charging sessions and history backfill
 - **CSV import and manual entry** — for data outside Home Assistant (work in progress, not recommended currently)
 
-Full feature list and screenshots in the [documentation site](https://squidbytes.github.io/LightningROD/).
+Full feature list and screenshots in the [documentation site](https://docs.lightningrod.dev/).
 
 ## What's Next
 
@@ -40,15 +44,15 @@ The short version: more ways to get data in, like EVSE-direct (Ford Charge Stati
 
 ## Documentation
 
-Full documentation is available at the [documentation site](https://SquidBytes.github.io/LightningROD/).
+Full documentation is available at the [documentation site](https://docs.lightningrod.dev/).
 
-- [Installation](https://squidbytes.github.io/LightningROD/getting-started/installation/) -- Docker Compose setup and startup
-- [Configuration](https://squidbytes.github.io/LightningROD/getting-started/configuration/) -- Environment variables and in-app settings
-- [Data Import](https://squidbytes.github.io/LightningROD/getting-started/data-import/) -- CSV format, seed script, classification rules
-- [Home Assistant](https://squidbytes.github.io/LightningROD/guide/home-assistant/) -- Real-time FordPass data ingestion via WebSocket
-- [Development](https://squidbytes.github.io/LightningROD/development/setup/) -- Running outside of the Docker enviornment with reloading and database access
-- [Architecture](https://squidbytes.github.io/LightningROD/development/architecture/) -- Project structure and patterns
-- [Database](https://squidbytes.github.io/LightningROD/development/database/) -- Schema, models, migrations
+- [Installation](https://docs.lightningrod.dev/getting-started/installation/) -- Docker Compose setup and startup
+- [Configuration](https://docs.lightningrod.dev/getting-started/configuration/) -- Environment variables and in-app settings
+- [Data Import](https://docs.lightningrod.dev/getting-started/data-import/) -- CSV format, seed script, classification rules
+- [Home Assistant](https://docs.lightningrod.dev/guide/home-assistant/) -- Real-time FordPass data ingestion via WebSocket
+- [Development](https://docs.lightningrod.dev/development/setup/) -- Running outside of the Docker enviornment with reloading and database access
+- [Architecture](https://docs.lightningrod.dev/development/architecture/) -- Project structure and patterns
+- [Database](https://docs.lightningrod.dev/development/database/) -- Schema, models, migrations
 
 ## Acknowledgments
 
@@ -105,4 +109,4 @@ docker run -d \
 ```
 
 
-Full install options like Unraid, external databases, etc can be found in the [Installation guide](https://squidbytes.github.io/LightningROD/getting-started/installation/).
+Full install options like Unraid, external databases, etc can be found in the [Installation guide](https://docs.lightningrod.dev/getting-started/installation/).

@@ -1,10 +1,10 @@
 # LightningROD
 
-Self-hosted charging analytics for Ford electric vehicles.
+Self-hosted charging and vehicle analytics.
 
 Track charging sessions, analyze costs, and monitor energy consumption with a web-based dashboard. 
 
-Built for the Ford F-150 Lightning, designed to work with other Ford EV's using data from [ha-fordpass](https://github.com/marq24/ha_fordpass) or CSV imports.
+Ford EVs are supported today — developed on an F-150 Lightning — using data from [ha-fordpass](https://github.com/marq24/ha_fordpass) or CSV imports, and the data layer is built to grow beyond them.
 
 ![overview](assets/images/lr_overview.gif)
 
