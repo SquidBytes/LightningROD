@@ -12,7 +12,7 @@
         <p class="text-base-content/60 text-sm -mt-1">{{ op.description }}</p>
 
         {% if replay_disabled %}
-        <p class="text-sm text-base-content/50 mt-1">Connect to Home Assistant first.</p>
+        <p class="text-sm text-base-content/50 mt-1">{% if ha_connected %}No recorder history available.{% else %}Connect to Home Assistant first.{% endif %}</p>
         {% endif %}
 
         <div class="flex flex-wrap items-center gap-2 mt-2">

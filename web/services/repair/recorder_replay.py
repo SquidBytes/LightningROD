@@ -118,6 +118,11 @@ class RecorderReplay(RepairOperation):
     # Recorder window
     # ------------------------------------------------------------------
 
+    def ha_connected(self) -> bool:
+        """True when the HA runtime exists and reports connected."""
+        runtime = self._get_runtime()
+        return runtime is not None and bool(runtime.health.get("connected"))
+
     async def recorder_window(self) -> datetime | None:
         """Earliest events-entity timestamp in the recorder; cached ~5 min."""
         runtime = self._get_runtime()
@@ -129,9 +134,16 @@ class RecorderReplay(RepairOperation):
             and now - self._window_probed_at < _WINDOW_CACHE_TTL
         ):
             return self._window
-        states = await runtime._fetch_entity_history(self._entity_id(runtime, "events"))
+        entity_id = self._entity_id(runtime, "events")
+        states = await runtime._fetch_entity_history(entity_id)
         timestamps = [ts for ts in map(_state_ts, states) if ts is not None]
         self._window = min(timestamps) if timestamps else None
+        if self._window is None:
+            logger.info(
+                "recorder window probe found no history for %s — "
+                "check HA recorder retention and that the entity exists",
+                entity_id,
+            )
         self._window_probed_at = now
         return self._window
 

@@ -30,9 +30,13 @@
     <div class="alert alert-info max-w-2xl text-sm">
         <span>Replay window: since {{ window|localtime(user_tz|default('UTC'), "%b %-d, %Y %-I:%M %p") }} (~{{ window_days }} days)</span>
     </div>
-    {% else %}
+    {% elif not ha_connected %}
     <div class="alert alert-warning max-w-2xl text-sm">
         <span>Home Assistant not connected &mdash; recorder replay unavailable</span>
+    </div>
+    {% else %}
+    <div class="alert alert-warning max-w-2xl text-sm">
+        <span>Home Assistant is connected, but its recorder returned no history for the trip events sensor &mdash; recorder replay unavailable. Checked again every few minutes.</span>
     </div>
     {% endif %}
 

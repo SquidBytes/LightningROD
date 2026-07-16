@@ -55,6 +55,54 @@ async def test_tab_renders_all_ops_and_snapshot_section(client):
     assert "recorder replay unavailable" in body
 
 
+class _FakeRuntime:
+    """Minimal connected-runtime stand-in serving canned events history."""
+
+    def __init__(self, states):
+        self.detected_vin = "TESTVIN001"
+        self.health = {"connected": True}
+        self._states = states
+
+    async def _fetch_entity_history(
+        self, entity_id, start_time_iso=None, end_time_iso=None
+    ):
+        return self._states
+
+
+@pytest.fixture
+def replay_op():
+    """Registry replay op with runtime seam + window cache reset around the test."""
+    from web.services.repair.registry import get_operation
+
+    op = get_operation("recorder-replay")
+    saved = (op._runtime, op._window, op._window_probed_at)
+    op._window = None
+    op._window_probed_at = None
+    yield op
+    op._runtime, op._window, op._window_probed_at = saved
+
+
+async def test_tab_connected_but_no_recorder_history(client, replay_op):
+    replay_op._runtime = _FakeRuntime([])
+    response = await client.get("/settings/data-repair")
+    assert response.status_code == 200
+    body = response.text
+    assert "recorder returned no history" in body
+    assert "not connected" not in body
+    assert "No recorder history available." in body
+    assert "Connect to Home Assistant first." not in body
+
+
+async def test_tab_connected_with_recorder_history(client, replay_op):
+    window_ts = datetime.now(UTC) - timedelta(days=3)
+    replay_op._runtime = _FakeRuntime([{"last_updated": window_ts.isoformat()}])
+    response = await client.get("/settings/data-repair")
+    assert response.status_code == 200
+    body = response.text
+    assert "Replay window: since" in body
+    assert "recorder replay unavailable" not in body
+
+
 async def test_census_badge_for_seeded_pair(client, db_session):
     await _seed_corrupt_pair(db_session)
     response = await client.get("/settings/data-repair")

@@ -2102,6 +2102,7 @@ async def _repair_card_ctx(op, db: AsyncSession) -> dict:
         "census": await op.census(db),
         "is_replay": is_replay,
         "window": window,
+        "ha_connected": op.ha_connected() if is_replay else False,
     }
 
 
@@ -2113,6 +2114,7 @@ async def data_repair_tab(
     """Render the Data Repair tab: op cards, recorder banner, snapshot runs."""
     cards = [await _repair_card_ctx(op, db) for op in REPAIR_REGISTRY]
     window = next((c["window"] for c in cards if c["is_replay"]), None)
+    ha_connected = next((c["ha_connected"] for c in cards if c["is_replay"]), False)
     window_days = (datetime.now(UTC) - window).days if window else None
     user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
     return templates.TemplateResponse(
@@ -2121,6 +2123,7 @@ async def data_repair_tab(
         {
             "cards": cards,
             "window": window,
+            "ha_connected": ha_connected,
             "window_days": window_days,
             "runs": await list_runs(db),
             "user_tz": user_tz,
