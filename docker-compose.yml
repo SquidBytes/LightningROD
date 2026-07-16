@@ -25,7 +25,6 @@ services:
     env_file: .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
-      - LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION:-latest}
     depends_on:
       db:
         condition: service_healthy

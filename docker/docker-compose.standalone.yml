@@ -14,7 +14,6 @@ services:
     # DATABASE_URL here overrides whatever is in .env so the standalone
     # variant always runs against the embedded SQLite file.
     environment:
-      - LIGHTNINGROD_VERSION=${LIGHTNINGROD_VERSION:-latest}
       - DATABASE_URL=sqlite+aiosqlite:////data/lightningrod.db
     volumes:
       - lightningrod-data:/data
