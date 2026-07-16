@@ -21,7 +21,7 @@
                 One-click backup applies to SQLite installs. On PostgreSQL (the default
                 Docker setup), take a dump from the host before applying repairs:
             </p>
-            <code class="text-xs bg-base-300 rounded p-2 block overflow-x-auto">docker compose exec db pg_dump -U $POSTGRES_USER -d $POSTGRES_DB &gt; lightningrod-backup.sql</code>
+            <code class="text-xs bg-base-300 rounded p-2 block overflow-x-auto">docker compose exec db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' &gt; lightningrod-backup.sql</code>
             {% endif %}
         </div>
     </div>

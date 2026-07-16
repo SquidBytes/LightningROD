@@ -13,10 +13,12 @@ Per-repair snapshots cover only the rows each operation touches. Before your fir
 - **PostgreSQL** (the default Docker setup) — dump from the host:
 
     ```bash
-    docker compose exec db pg_dump -U $POSTGRES_USER -d $POSTGRES_DB > lightningrod-backup.sql
+    docker compose exec db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > lightningrod-backup.sql
     ```
 
-    Restore with `docker compose exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB < lightningrod-backup.sql` against a fresh database.
+    The single quotes matter: `POSTGRES_USER`/`POSTGRES_DB` are set inside the `db` container, not in your host shell.
+
+    Restore with `docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < lightningrod-backup.sql` against a fresh database.
 
 ## Running a Repair
 
