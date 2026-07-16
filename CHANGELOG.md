@@ -11,6 +11,9 @@ For feature documentation, see the docs site at
 
 ### Changed
 
+- Savings totals in the Cost Explorer comparison card now highlight the dollar
+  amounts, with the comparison labels in smaller muted text
+
 ### Fixed
 
 ### Removed

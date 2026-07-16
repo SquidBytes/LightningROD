@@ -308,6 +308,15 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
   font-weight: 600;
   color: var(--color-success);
   font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.ledger-footer .footer-qualifier {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+}
+.ledger-footer .footer-pair {
+  display: inline-block;
 }
 
 .ledger + .caption {

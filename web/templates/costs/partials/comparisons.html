@@ -171,13 +171,13 @@
                     {% if has_energy %}
                         {% set e_low = gas_comparison.gas_total_low - ev.ev_total %}
                         {% set e_high = gas_comparison.gas_total_high - ev.ev_total %}
-                        {% if gas_comparison.has_range %}${{ "%.2f"|format(e_low) }} – ${{ "%.2f"|format(e_high) }}{% else %}${{ "%.2f"|format(e_low) }}{% endif %} charge-for-charge
+                        <span class="footer-pair">{% if gas_comparison.has_range %}${{ "%.2f"|format(e_low) }} – ${{ "%.2f"|format(e_high) }}{% else %}${{ "%.2f"|format(e_low) }}{% endif %} <span class="footer-qualifier">charge-for-charge</span></span>
                     {% endif %}
-                    {% if has_energy and has_distance %} · {% endif %}
+                    {% if has_energy and has_distance %}<span class="footer-qualifier"> · </span>{% endif %}
                     {% if has_distance %}
                         {% set d_low = distance_comparison.gas_total_low - ev.ev_total %}
                         {% set d_high = distance_comparison.gas_total_high - ev.ev_total %}
-                        {% if distance_comparison.has_range %}${{ "%.2f"|format(d_low) }} – ${{ "%.2f"|format(d_high) }}{% else %}${{ "%.2f"|format(d_low) }}{% endif %} mile-for-mile
+                        <span class="footer-pair">{% if distance_comparison.has_range %}${{ "%.2f"|format(d_low) }} – ${{ "%.2f"|format(d_high) }}{% else %}${{ "%.2f"|format(d_low) }}{% endif %} <span class="footer-qualifier">mile-for-mile</span></span>
                     {% endif %}
                 </span>
             </div>
