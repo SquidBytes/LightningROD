@@ -3,13 +3,24 @@
 All notable changes to LightningROD are documented here.
 
 For feature documentation, see the docs site at
-<https://squidbytes.github.io/LightningROD/>.
+<https://docs.lightningrod.dev/>.
 
 ## [Unreleased]
 
 ### Added
 
 ### Changed
+
+### Fixed
+
+### Removed
+
+## [0.5.3] - 2026-07-16
+
+### Added
+
+- Project website at [lightningrod.dev](https://lightningrod.dev) — landing page,
+  docs at docs.lightningrod.dev, demo at lightningrod.dev/demo
 
 ### Fixed
 
@@ -20,8 +31,6 @@ For feature documentation, see the docs site at
   recorder simply has no trip history yet
 - Corrected the PostgreSQL backup and restore commands shown in the docs and
   the Data Repair tab
-
-### Removed
 
 ## [0.5.2] - 2026-07-10
 
