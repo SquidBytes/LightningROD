@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="LightningROD — self-hosted charging and vehicle analytics for your EV">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#081534"/>
+      <stop offset="1" stop-color="#0a1a40"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="78%" cy="12%" r="60%">
+      <stop offset="0" stop-color="#47A8E5" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#47A8E5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rod" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#47A8E5" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#47A8E5" stop-opacity="0.1"/>
+    </linearGradient>
+    <pattern id="grid" width="46" height="46" patternUnits="userSpaceOnUse">
+      <path d="M46 0H0V46" fill="none" stroke="#47A8E5" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- lightning rod + bolt art, right side -->
+  <g transform="translate(930,315)">
+    <line x1="0" y1="-250" x2="0" y2="250" stroke="url(#rod)" stroke-width="3"/>
+    <circle cx="0" cy="-250" r="7" fill="#47A8E5"/>
+    <circle cx="0" cy="-250" r="15" fill="none" stroke="#47A8E5" stroke-opacity="0.5" stroke-width="2"/>
+    <polyline points="-240,120 -170,96 -100,104 -30,60 40,80 110,10 180,30 240,-40"
+      fill="none" stroke="#47A8E5" stroke-opacity="0.25" stroke-width="2"/>
+    <path d="M0 -230 L-70 -80 L-14 -80 L-95 130 L40 -90 L-24 -90 L40 -230 Z"
+      fill="none" stroke="#47A8E5" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"
+      filter="drop-shadow(0 0 22px rgba(71,168,229,0.55))"/>
+  </g>
+
+  <!-- text block -->
+  <g transform="translate(90,232)" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <text x="0" y="0" font-size="22" letter-spacing="6" fill="#7cc4f2" font-family="ui-monospace, 'SF Mono', Menlo, monospace">SELF-HOSTED · LOCAL-FIRST · AGPL-3.0</text>
+    <text x="0" y="66" font-size="64" font-weight="700" fill="#eef4ff" letter-spacing="-1.5">Lightning<tspan fill="#7cc4f2" letter-spacing="2">ROD</tspan></text>
+    <text x="0" y="140" font-size="40" font-weight="600" fill="#eef4ff" letter-spacing="-1">Charging &amp; vehicle analytics</text>
+    <text x="0" y="192" font-size="40" font-weight="600" fill="#c3d2ea" letter-spacing="-1">for your EV.</text>
+  </g>
+</svg>

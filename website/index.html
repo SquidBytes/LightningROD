@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#081534">
+  <title>LightningROD — self-hosted charging &amp; vehicle analytics</title>
+  <meta name="description" content="Self-hosted charging and vehicle analytics. Turns vehicle data from Home Assistant into charging, battery, and trip insights.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="LightningROD — self-hosted charging and vehicle analytics">
+  <meta property="og:description" content="Self-hosted charging and vehicle analytics. Local-first, Docker-ready, and open source.">
+  <meta property="og:url" content="https://lightningrod.dev/">
+  <meta property="og:image" content="https://lightningrod.dev/og-image.png">
+  <meta property="og:image:alt" content="LightningROD — self-hosted charging and vehicle analytics.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="LightningROD — self-hosted charging and vehicle analytics">
+  <meta name="twitter:description" content="Self-hosted charging and vehicle analytics. Local-first, Docker-ready, and open source.">
+  <meta name="twitter:image" content="https://lightningrod.dev/og-image.png">
+  <link rel="canonical" href="https://lightningrod.dev/">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23081534'/%3E%3Cpath fill='%2347A8E5' d='M36 6 17 35h13l-3 23 20-32H34z'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: dark;
+      --night: #081534;
+      --panel: #0c2049;
+      --panel-2: #102b60;
+      --text: #f4f8fd;
+      --muted: #c6c6c6;
+      --faint: rgba(198, 198, 198, .68);
+      --line: rgba(71, 168, 229, .2);
+      --line-strong: rgba(71, 168, 229, .48);
+      --accent: #47a8e5;
+      --accent-deep: #2a6bac;
+      --button-text: #081534;
+      --shadow: rgba(0, 0, 0, .28);
+      --max: 1180px;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --night: #f4f8fc;
+        --panel: #ffffff;
+        --panel-2: #e7f1fa;
+        --text: #081534;
+        --muted: #274870;
+        --faint: rgba(19, 58, 124, .72);
+        --line: rgba(19, 58, 124, .16);
+        --line-strong: rgba(42, 107, 172, .48);
+        --accent: #17679f;
+        --accent-deep: #133a7c;
+        --button-text: #ffffff;
+        --shadow: rgba(8, 21, 52, .1);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { min-width: 320px; scroll-behavior: smooth; }
+    body { margin: 0; min-height: 100vh; overflow-x: hidden; background: var(--night); color: var(--text); font-family: var(--sans); line-height: 1.5; }
+    a { color: inherit; }
+    svg { display: block; }
+    .shell { width: min(100% - 2rem, var(--max)); margin-inline: auto; }
+    .skip { position: fixed; z-index: 20; top: .75rem; left: .75rem; padding: .7rem 1rem; border-radius: .4rem; background: var(--accent); color: var(--button-text); font-weight: 750; transform: translateY(-180%); }
+    .skip:focus { transform: none; }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+
+    body::before {
+      content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .48;
+      background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: linear-gradient(to bottom, #000, transparent 72%);
+    }
+
+    header, main, footer { position: relative; }
+    header { padding-block: 1.35rem; border-bottom: 1px solid var(--line); }
+    nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .brand { display: inline-flex; align-items: center; gap: .68rem; color: var(--text); text-decoration: none; font-size: 1.05rem; font-weight: 760; letter-spacing: -.025em; }
+    .brand svg { width: 2rem; height: 2rem; }
+    .brand b { color: var(--accent); }
+    .nav-meta { display: flex; align-items: center; gap: .6rem; color: var(--faint); font: 600 .7rem/1 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+    .status-dot { width: .45rem; height: .45rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent); }
+
+    main { padding-block: clamp(3.6rem, 8vw, 7.5rem) 3rem; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(260px, .58fr); align-items: end; gap: clamp(2rem, 7vw, 7.5rem); }
+    .eyebrow { display: flex; align-items: center; gap: .75rem; margin: 0 0 1.35rem; color: var(--accent); font: 650 .73rem/1.2 var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 2.3rem; height: 1px; background: currentColor; }
+    h1 { max-width: 780px; margin: 0; font-size: clamp(2.65rem, 7.3vw, 6.35rem); line-height: .94; letter-spacing: -.067em; font-weight: 760; text-wrap: balance; }
+    h1 span { color: var(--accent); }
+    .lede { max-width: 680px; margin: 1.7rem 0 0; color: var(--muted); font-size: clamp(1rem, 1.8vw, 1.25rem); line-height: 1.65; }
+    .lede strong { color: var(--text); font-weight: 650; }
+
+    .telemetry { position: relative; min-height: 190px; padding: 1.25rem; border: 1px solid var(--line); border-radius: .8rem; background: linear-gradient(145deg, color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--panel-2) 72%, transparent)); box-shadow: 0 24px 70px var(--shadow); }
+    .telemetry::before, .telemetry::after { content: ""; position: absolute; width: 1.15rem; height: 1.15rem; border-color: var(--accent); opacity: .75; }
+    .telemetry::before { top: -.35rem; left: -.35rem; border-top: 2px solid; border-left: 2px solid; }
+    .telemetry::after { right: -.35rem; bottom: -.35rem; border-right: 2px solid; border-bottom: 2px solid; }
+    .telemetry-head { display: flex; justify-content: space-between; color: var(--faint); font: 600 .65rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .trace { width: 100%; height: 78px; margin-block: 1rem .7rem; color: var(--accent); overflow: visible; }
+    .trace path { vector-effect: non-scaling-stroke; }
+    .telemetry-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+    .telemetry-foot strong { font: 720 1.5rem/1 var(--mono); }
+    .telemetry-foot span { color: var(--faint); font: 500 .66rem/1 var(--mono); text-transform: uppercase; }
+
+    .routes { margin-top: clamp(3.5rem, 8vw, 6rem); }
+    .section-label { margin: 0 0 1rem; color: var(--faint); font: 600 .68rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .route-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: .85rem; }
+    .route { position: relative; min-height: 190px; padding: 1.35rem; display: flex; flex-direction: column; justify-content: space-between; gap: 2rem; overflow: hidden; border: 1px solid var(--line); border-radius: .75rem; background: var(--panel); text-decoration: none; box-shadow: 0 14px 36px transparent; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+    .route:hover { transform: translateY(-4px); border-color: var(--line-strong); box-shadow: 0 18px 44px var(--shadow); }
+    .route.primary { border-color: var(--accent); background: linear-gradient(135deg, #2a6bac, #102b60); }
+    .route.primary::after { content: ""; position: absolute; width: 12rem; height: 12rem; right: -5rem; top: -7rem; border: 1px solid rgba(255,255,255,.17); border-radius: 50%; box-shadow: 0 0 0 2.5rem rgba(255,255,255,.035), 0 0 0 5rem rgba(255,255,255,.025); }
+    .route-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .route-tag { color: var(--faint); font: 600 .67rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .primary .route-tag { color: #d7ebf9; }
+    .route-icon { width: 2.5rem; height: 2.5rem; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--accent); }
+    .primary .route-icon { border-color: rgba(255,255,255,.32); color: #fff; }
+    .route-icon svg { width: 1.05rem; height: 1.05rem; }
+    .route h2 { margin: 0; font-size: clamp(1.25rem, 2.2vw, 1.65rem); letter-spacing: -.035em; }
+    .route p { margin: .35rem 0 0; color: var(--faint); font-size: .9rem; }
+    .primary h2, .primary p { color: #fff; }
+    .primary p { color: #d7ebf9; }
+
+    .capabilities { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 1rem; border-block: 1px solid var(--line); }
+    .capability { padding: 1.1rem 1rem; color: var(--muted); font: 560 .76rem/1.35 var(--mono); text-align: center; }
+    .capability + .capability { border-left: 1px solid var(--line); }
+    .capability::before { content: "+"; margin-right: .55rem; color: var(--accent); }
+
+    footer { margin-top: clamp(2.5rem, 6vw, 4.5rem); padding-block: 1.5rem 2rem; border-top: 1px solid var(--line); color: var(--faint); font-size: .76rem; }
+    .footer-inner { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+    .footer-links { display: flex; gap: 1rem; }
+    footer a { text-underline-offset: 3px; }
+    footer a:hover { color: var(--accent); }
+
+    @media (max-width: 800px) {
+      main { padding-top: 3.5rem; }
+      .hero { grid-template-columns: 1fr; }
+      .telemetry { display: none; }
+      .route-grid { grid-template-columns: 1fr 1fr; }
+      .route.primary { grid-column: 1 / -1; }
+      .capabilities { grid-template-columns: 1fr 1fr; }
+      .capability:nth-child(3) { border-left: 0; }
+      .capability:nth-child(n+3) { border-top: 1px solid var(--line); }
+    }
+
+    @media (max-width: 520px) {
+      .shell { width: min(100% - 1.25rem, var(--max)); }
+      .nav-meta { font-size: 0; }
+      h1 { font-size: clamp(2.7rem, 15vw, 4.25rem); }
+      .lede { margin-top: 1.25rem; }
+      .routes { margin-top: 3rem; }
+      .route-grid { grid-template-columns: 1fr; }
+      .route.primary { grid-column: auto; }
+      .route { min-height: 165px; }
+      .capabilities { grid-template-columns: 1fr; }
+      .capability + .capability { border-left: 0; border-top: 1px solid var(--line); }
+      .footer-inner { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#destinations">Skip to destinations</a>
+  <header>
+    <nav class="shell" aria-label="Primary navigation">
+      <a class="brand" href="/" aria-label="LightningROD home">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><rect x=".75" y=".75" width="38.5" height="38.5" rx="10" fill="none" stroke="currentColor" stroke-opacity=".22"/><path d="M23 6 11.5 23.5h8L17.5 35 29 16h-7.5z" fill="currentColor"/></svg>
+        <span>Lightning<b>ROD</b></span>
+      </a>
+      <span class="nav-meta"><span class="status-dot" aria-hidden="true"></span>Local-first · AGPL-3.0</span>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero shell" aria-labelledby="hero-title">
+      <div>
+        <p class="eyebrow">Your EV · your analytics</p>
+        <h1 id="hero-title">Charging &amp; vehicle analytics for your <span>EV</span>.</h1>
+        <p class="lede"><strong>Self-hosted and local-first.</strong> LightningROD turns vehicle data from Home Assistant into charging, battery, and trip insights. Ford EVs are supported today, and the data layer is built to grow beyond them.</p>
+      </div>
+      <aside class="telemetry" aria-label="Illustrative charging telemetry">
+        <div class="telemetry-head"><span>Charge profile</span><span>Session 042</span></div>
+        <svg class="trace" viewBox="0 0 320 90" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 74H320M0 46H320M0 18H320" fill="none" stroke="currentColor" stroke-opacity=".11" stroke-width="1"/>
+          <path d="M0 70 22 69 32 62 46 64 59 39 71 52 88 51 99 26 112 29 126 18 140 22 153 20 168 38 183 31 198 43 213 41 225 55 242 52 256 63 271 60 285 70 304 67 320 73" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="telemetry-foot"><strong>48.2 kWh</strong><span>Stored locally</span></div>
+      </aside>
+    </section>
+
+    <section class="routes shell" id="destinations" aria-labelledby="destinations-title">
+      <h2 class="section-label" id="destinations-title">Choose a destination</h2>
+      <div class="route-grid">
+        <a class="route primary" href="/demo" target="_blank" rel="noopener">
+          <span class="route-top"><span class="route-tag">01 · Live instance</span><span class="route-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6M5 12h10"/><path d="M15 5h4v14h-4"/></svg></span></span>
+          <span><h2>Try the demo</h2><p>Explore a fully seeded instance — no install required.</p></span>
+        </a>
+        <a class="route" href="/docs/">
+          <span class="route-top"><span class="route-tag">02 · Documentation</span><span class="route-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11a1 1 0 0 1 1 1v17a3 3 0 0 0-3-3H4z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13a1 1 0 0 0-1 1v17a3 3 0 0 1 3-3h5z"/></svg></span></span>
+          <span><h2>Read the docs</h2><p>Setup guides, feature details, and self-hosting notes.</p></span>
+        </a>
+        <a class="route" href="https://github.com/SquidBytes/LightningROD" target="_blank" rel="noopener">
+          <span class="route-top"><span class="route-tag">03 · Source code</span><span class="route-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m8 9-3 3 3 3m8-6 3 3-3 3m-2-9-4 12"/></svg></span></span>
+          <span><h2>View the source</h2><p>AGPL-3.0 on GitHub — inspect it, fork it, run it.</p></span>
+        </a>
+      </div>
+      <div class="capabilities" aria-label="Key capabilities">
+        <div class="capability">Cost explorer</div>
+        <div class="capability">Battery health</div>
+        <div class="capability">Trip analytics</div>
+        <div class="capability">Docker</div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell footer-inner">
+      <span>Developed on an F-150 Lightning · AGPL-3.0</span>
+      <span class="footer-links"><a href="/docs/">Docs</a><a href="https://github.com/SquidBytes/LightningROD" target="_blank" rel="noopener">GitHub</a></span>
+    </div>
+  </footer>
+</body>
+</html>

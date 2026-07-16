@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="196" height="40" viewBox="0 0 196 40" role="img" aria-label="LightningROD">
+  <rect x=".75" y=".75" width="38.5" height="38.5" rx="10" fill="none" stroke="#47a8e5" stroke-opacity=".35"/>
+  <path d="M23 6 11.5 23.5h8L17.5 35 29 16h-7.5z" fill="#47a8e5"/>
+  <text x="52" y="20.5" dominant-baseline="central"
+        font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="21" font-weight="750" letter-spacing="-.5"
+        fill="#f4f8fd">Lightning<tspan fill="#47a8e5">ROD</tspan></text>
+</svg>
