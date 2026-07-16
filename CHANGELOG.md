@@ -13,6 +13,14 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Settings now shows the actual release version instead of "latest"
+- Battery capacity no longer divided by 1000 on installs where Home Assistant
+  reports it in kWh; previously downscaled values are repaired automatically
+- Data Repair tab no longer claims Home Assistant is disconnected when the
+  recorder simply has no trip history yet
+- Corrected the PostgreSQL backup and restore commands shown in the docs and
+  the Data Repair tab
+
 ### Removed
 
 ## [0.5.2] - 2026-07-10
