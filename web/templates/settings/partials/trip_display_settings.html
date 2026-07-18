@@ -1,0 +1,37 @@
+<form hx-post="/settings/trip-display" hx-target="#trip-display-settings" hx-swap="innerHTML"
+      class="space-y-4">
+    <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" name="trip_hide_enabled"
+               {% if trip_hide_enabled %}checked{% endif %}
+               class="checkbox checkbox-sm checkbox-primary">
+        <span class="label-text text-sm">Hide short trips</span>
+    </label>
+    <p class="text-xs text-base-content/50 -mt-2">Trips under both thresholds are hidden from trip lists and driving analytics. The data stays in the database.</p>
+    <div class="flex gap-4">
+        <label class="form-control w-36">
+            <span class="label-text text-xs mb-1">Min duration (min)</span>
+            <input type="number" name="trip_hide_min_duration" min="0" step="1"
+                   value="{{ trip_hide_min_duration_min }}"
+                   class="input input-bordered input-sm">
+        </label>
+        <label class="form-control w-36">
+            <span class="label-text text-xs mb-1">Min distance ({{ units.distance_label }})</span>
+            <input type="number" name="trip_hide_min_distance" min="0" step="0.1"
+                   value="{{ '%.1f'|format(trip_hide_min_distance_display) }}"
+                   class="input input-bordered input-sm">
+        </label>
+    </div>
+    <div class="pt-1">
+        <button type="submit" class="btn btn-primary btn-sm">
+            Save
+        </button>
+    </div>
+</form>
+
+{% if saved %}
+<div class="toast toast-bottom toast-end z-50" data-auto-dismiss="3000">
+  <div class="alert alert-success">
+    <span>Trip display settings saved.</span>
+  </div>
+</div>
+{% endif %}

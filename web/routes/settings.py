@@ -54,6 +54,7 @@ from web.queries.settings import (
     update_stall,
     update_subscription,
 )
+from web.queries.trips import get_trip_hide_settings
 from web.queries.vehicles import (
     create_vehicle,
     delete_vehicle,
@@ -72,9 +73,11 @@ from web.services.sources.ha_fordpass.config import HAFordpassConfig
 from web.services.sources.registry import REGISTRY as SOURCE_REGISTRY
 from web.services.vehicles.registry import VehicleRegistry
 from web.unit_system import (
+    convert_distance,
     convert_fuel_efficiency,
     convert_fuel_volume,
     convert_price_per_volume,
+    to_metric_distance,
     to_metric_fuel_efficiency,
     to_metric_fuel_volume,
     to_metric_price_per_volume,
@@ -152,7 +155,24 @@ SETTINGS_KEYS = [
     "user_timezone",
     "gas_sensor_station_entity_id",
     "gas_sensor_average_entity_id",
+    "trip_hide_enabled",
+    "trip_hide_min_duration_s",
+    "trip_hide_min_distance_km",
 ]
+
+
+async def _trip_display_ctx(db: AsyncSession) -> dict:
+    """Trip-display settings converted to display units (minutes, mi/km)."""
+    hide = await get_trip_hide_settings(db)
+    unit_ctx = await get_unit_context(db)
+    return {
+        **unit_ctx,
+        "trip_hide_enabled": hide["enabled"],
+        "trip_hide_min_duration_min": round(hide["min_duration_s"] / 60),
+        "trip_hide_min_distance_display": convert_distance(
+            hide["min_distance_km"], unit_ctx["distance_unit"]
+        ),
+    }
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -188,6 +208,7 @@ async def settings_index(
 
     all_vehicles = await get_all_vehicles(db)
     unit_ctx = await get_unit_context(db)
+    trip_display_ctx = await _trip_display_ctx(db)
 
     return templates.TemplateResponse(
         request,
@@ -198,6 +219,7 @@ async def settings_index(
             **veh_ctx,
             **ice_ctx,
             **import_ctx,
+            **trip_display_ctx,
             "settings": settings,
             "active_page": "settings",
             "page_title": "Settings",
@@ -2063,6 +2085,37 @@ async def update_toggles(
         request,
         "settings/partials/gas_settings.html",
         {"settings": settings, "saved": True},
+    )
+
+
+@router.post("/settings/trip-display", response_class=HTMLResponse)
+async def update_trip_display_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    trip_hide_enabled: str | None = Form(None),
+    trip_hide_min_duration: float | None = Form(None),
+    trip_hide_min_distance: float | None = Form(None),
+):
+    """Save hide-short-trips settings. Inputs arrive in display units."""
+    unit_ctx = await get_unit_context(db)
+    await set_app_setting(
+        db, "trip_hide_enabled", "true" if trip_hide_enabled is not None else "false"
+    )
+    if trip_hide_min_duration is not None:
+        await set_app_setting(
+            db, "trip_hide_min_duration_s", str(max(trip_hide_min_duration, 0) * 60)
+        )
+    if trip_hide_min_distance is not None:
+        metric_km = to_metric_distance(
+            max(trip_hide_min_distance, 0), unit_ctx["distance_unit"]
+        )
+        await set_app_setting(db, "trip_hide_min_distance_km", str(metric_km))
+    ctx = await _trip_display_ctx(db)
+    ctx["saved"] = True
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/trip_display_settings.html",
+        ctx,
     )
 
 

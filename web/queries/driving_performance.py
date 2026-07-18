@@ -40,6 +40,7 @@ async def query_driving_performance_summary(
     device_id: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    hide_filter=None,
 ) -> dict:
     """Aggregate driving-side metrics for /driving/performance page.
 
@@ -60,7 +61,7 @@ async def query_driving_performance_summary(
     # 1. Regen summary (can return None when no regen data exists)
     regen = await query_regen_summary(
         db, time_range=time_range, device_id=device_id,
-        date_from=date_from, date_to=date_to,
+        date_from=date_from, date_to=date_to, hide_filter=hide_filter,
     )
 
     # 2. Distance + energy + trip count from EVTripMetrics
@@ -75,6 +76,8 @@ async def query_driving_performance_summary(
         stmt = stmt.where(time_filter)
     if device_id:
         stmt = stmt.where(EVTripMetrics.device_id == device_id)
+    if hide_filter is not None:
+        stmt = stmt.where(hide_filter)
 
     result = await db.execute(stmt)
     row = result.one()
@@ -91,7 +94,7 @@ async def query_driving_performance_summary(
     # 4. Efficiency trend passthrough (used by Driving Efficiency chart)
     trend_data = await query_efficiency_trend(
         db, time_range=time_range, device_id=device_id,
-        date_from=date_from, date_to=date_to,
+        date_from=date_from, date_to=date_to, hide_filter=hide_filter,
     )
 
     return {
@@ -113,6 +116,7 @@ async def query_temperature_correlation(
     device_id: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    hide_filter=None,
 ) -> list[dict]:
     """Trips with populated ambient_temp + distance + energy_consumed in range window.
 
@@ -141,6 +145,8 @@ async def query_temperature_correlation(
         stmt = stmt.where(time_filter)
     if device_id is not None:
         stmt = stmt.where(EVTripMetrics.device_id == device_id)
+    if hide_filter is not None:
+        stmt = stmt.where(hide_filter)
 
     rows = (await db.execute(stmt)).all()
     return [
@@ -279,6 +285,7 @@ async def query_regen_per_trip(
     device_id: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    hide_filter=None,
 ) -> list[dict]:
     """Per-trip regen with derived regen_kwh and regen_pct.
 
@@ -315,6 +322,8 @@ async def query_regen_per_trip(
         stmt = stmt.where(time_filter)
     if device_id is not None:
         stmt = stmt.where(EVTripMetrics.device_id == device_id)
+    if hide_filter is not None:
+        stmt = stmt.where(hide_filter)
 
     rows = (await db.execute(stmt)).all()
     results: list[dict] = []

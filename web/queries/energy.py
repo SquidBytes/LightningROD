@@ -301,6 +301,7 @@ async def query_regen_summary(
     device_id: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    hide_filter=None,
 ) -> dict | None:
     """Compute regen braking summary from EVTripMetrics.
     Returns None when ev_trip_metrics has no rows with range_regenerated data
@@ -324,6 +325,8 @@ async def query_regen_summary(
         count_stmt = count_stmt.where(trip_filter)
     if device_id:
         count_stmt = count_stmt.where(EVTripMetrics.device_id == device_id)
+    if hide_filter is not None:
+        count_stmt = count_stmt.where(hide_filter)
 
     count_result = await db.execute(count_stmt)
     row_count = count_result.scalar_one()
@@ -340,6 +343,8 @@ async def query_regen_summary(
         sum_stmt = sum_stmt.where(trip_filter)
     if device_id:
         sum_stmt = sum_stmt.where(EVTripMetrics.device_id == device_id)
+    if hide_filter is not None:
+        sum_stmt = sum_stmt.where(hide_filter)
 
     sum_result = await db.execute(sum_stmt)
     row = sum_result.one()

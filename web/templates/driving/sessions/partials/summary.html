@@ -51,6 +51,12 @@
 </div>
 
 <!-- Trip List -->
+{% if hidden_count %}
+<p class="text-sm text-base-content/40 mb-2">
+    {{ hidden_count }} short trip{{ 's' if hidden_count != 1 }} hidden &mdash;
+    <a href="/settings" class="link link-hover">Settings &rarr; General</a>
+</p>
+{% endif %}
 {% if trips %}
 
     <!-- Desktop table (hidden on mobile) -->

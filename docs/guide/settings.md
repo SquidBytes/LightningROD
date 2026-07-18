@@ -126,6 +126,12 @@ Toggle which comparison sections appear on the Costs page:
 - Gasoline comparison
 - Network rate comparison
 
+### Trip Display
+
+Vehicles sometimes log a key-on event as a "trip" with little or no distance and duration. Turn on **Hide short trips** to keep those rows out of the Trip Sessions list and the Driving Analytics charts.
+
+A trip is hidden only when it falls under *both* thresholds — minimum duration (minutes) and minimum distance (in your configured distance unit). A trip clearing either threshold stays visible. Hidden trips remain in the database untouched; the sessions list shows a muted note with the hidden count.
+
 ### Unit Preferences
 
 LightningROD stores distances, temperatures, efficiency, and volume in metric in the database, then converts them for display. Distance and temperature are controlled separately, so you can mix them if you want:

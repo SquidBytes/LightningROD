@@ -22,7 +22,11 @@ from web.queries.driving_performance import (
     query_temperature_correlation,
 )
 from web.queries.settings import get_unit_context
-from web.queries.trips import build_efficiency_trend_chart
+from web.queries.trips import (
+    build_efficiency_trend_chart,
+    build_short_trip_filter,
+    get_trip_hide_settings,
+)
 from web.queries.vehicles import (
     get_active_device_id,
     get_active_vehicle,
@@ -58,9 +62,11 @@ async def driving_performance(
     efficiency_factor = distance_factor
     range_factor = distance_factor
 
+    hide_filter = build_short_trip_filter(await get_trip_hide_settings(db))
+
     summary = await query_driving_performance_summary(
         db, time_range=time_range, device_id=active_device_id,
-        date_from=date_from, date_to=date_to,
+        date_from=date_from, date_to=date_to, hide_filter=hide_filter,
     )
 
     # Convert metric base -> display units
@@ -89,7 +95,7 @@ async def driving_performance(
     # Temperature vs efficiency — scatter (main) + regression line (mini).
     temp_data = await query_temperature_correlation(
         db, time_range=time_range, device_id=active_device_id,
-        date_from=date_from, date_to=date_to,
+        date_from=date_from, date_to=date_to, hide_filter=hide_filter,
     )
     temp_min_points = _min_points_for_range(time_range)
     temperature_scatter_chart = build_temperature_correlation_chart(
@@ -105,7 +111,7 @@ async def driving_performance(
     # because the project displays regen as range or kWh, never as a percent.
     regen_trips = await query_regen_per_trip(
         db, time_range=time_range, device_id=active_device_id,
-        date_from=date_from, date_to=date_to,
+        date_from=date_from, date_to=date_to, hide_filter=hide_filter,
     )
     regen_kwh_chart = build_regen_recovery_chart(regen_trips, mode="kwh")
 

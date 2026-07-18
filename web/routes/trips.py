@@ -22,7 +22,10 @@ from web.queries.trips import (
     build_expanded_battery_chart,
     build_expanded_driving_chart,
     build_expanded_environment_chart,
+    build_short_trip_filter,
     detect_trip_locations,
+    get_trip_hide_settings,
+    query_hidden_trip_count,
     query_trip_battery_series,
     query_trip_vehicle_series,
     query_trips,
@@ -72,6 +75,8 @@ async def trips(
     distance_factor = MI_PER_KM if unit_ctx["distance_unit"] == "us" else 1.0
 
     # Query trips and efficiency trend (metric base)
+    hide = await get_trip_hide_settings(db)
+    hide_filter = build_short_trip_filter(hide)
     trip_list, total, summary = await query_trips(
         db=db,
         page=page,
@@ -82,7 +87,15 @@ async def trips(
         device_id=active_device_id,
         date_from=date_from,
         date_to=date_to,
+        hide_filter=hide_filter,
     )
+
+    hidden_count = 0
+    if hide_filter is not None:
+        hidden_count = await query_hidden_trip_count(
+            db, hide, date_preset=time_range, device_id=active_device_id,
+            date_from=date_from, date_to=date_to,
+        )
 
     # Convert summary totals to display units
     if summary.get("total_distance") is not None:
@@ -100,6 +113,7 @@ async def trips(
         "trips": trip_list,
         "total": total,
         "summary": summary,
+        "hidden_count": hidden_count,
         "active_range": time_range,
         "date_from": date_from,
         "date_to": date_to,

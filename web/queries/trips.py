@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import asc, desc, func, select
+from sqlalchemy import and_, asc, desc, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.battery_status import EVBatteryStatus
@@ -21,6 +21,7 @@ from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle_status import EVVehicleStatus
 from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
 from web.queries.locations import _find_geo_match
+from web.queries.settings import get_app_settings_dict
 from web.queries.time_window import resolve_time_window, window_clause
 
 logger = logging.getLogger("lightningrod.queries.trips")
@@ -60,6 +61,78 @@ def build_trip_time_filter(
 
 
 # ---------------------------------------------------------------------------
+# Hide-short-trips filter helper
+# ---------------------------------------------------------------------------
+
+# Canonical defaults: 5 minutes / 4.8 km (~3 mi)
+TRIP_HIDE_DEFAULT_DURATION_S = 300.0
+TRIP_HIDE_DEFAULT_DISTANCE_KM = 4.8
+
+
+async def get_trip_hide_settings(db: AsyncSession) -> dict:
+    """Load hide-short-trips settings (canonical seconds / km) from app_settings."""
+    raw = await get_app_settings_dict(
+        db,
+        ["trip_hide_enabled", "trip_hide_min_duration_s", "trip_hide_min_distance_km"],
+    )
+
+    def _num(value: str, default: float) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "enabled": raw["trip_hide_enabled"] == "true",
+        "min_duration_s": _num(raw["trip_hide_min_duration_s"], TRIP_HIDE_DEFAULT_DURATION_S),
+        "min_distance_km": _num(raw["trip_hide_min_distance_km"], TRIP_HIDE_DEFAULT_DISTANCE_KM),
+    }
+
+
+def build_short_trip_filter(hide: dict, hidden: bool = False):
+    """Where clause selecting visible trips (or, with hidden=True, the hidden ones).
+
+    A trip is hidden when duration AND distance are each NULL or under their
+    threshold — NULL counts as "under" so key-on rows with no data are hidden.
+    Clearing either threshold keeps a trip visible. Returns None when disabled.
+    """
+    if not hide.get("enabled"):
+        return None
+    hidden_clause = and_(
+        or_(
+            EVTripMetrics.duration.is_(None),
+            EVTripMetrics.duration < hide["min_duration_s"],
+        ),
+        or_(
+            EVTripMetrics.distance.is_(None),
+            EVTripMetrics.distance < hide["min_distance_km"],
+        ),
+    )
+    return hidden_clause if hidden else not_(hidden_clause)
+
+
+async def query_hidden_trip_count(
+    db: AsyncSession,
+    hide: dict,
+    date_preset: str = "30d",
+    device_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> int:
+    """Count trips the hide-short-trips filter removes from the current view."""
+    hidden_clause = build_short_trip_filter(hide, hidden=True)
+    if hidden_clause is None:
+        return 0
+    stmt = select(func.count()).select_from(EVTripMetrics).where(hidden_clause)
+    time_filter = build_trip_time_filter(date_preset, date_from, date_to)
+    if time_filter is not None:
+        stmt = stmt.where(time_filter)
+    if device_id:
+        stmt = stmt.where(EVTripMetrics.device_id == device_id)
+    return (await db.execute(stmt)).scalar_one()
+
+
+# ---------------------------------------------------------------------------
 # Query functions
 # ---------------------------------------------------------------------------
 
@@ -74,6 +147,7 @@ async def query_trips(
     device_id: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    hide_filter=None,
 ) -> tuple[list, int, dict]:
     """Query trip metrics with optional filters, sorting, and pagination.
 
@@ -100,6 +174,9 @@ async def query_trips(
     time_filter = build_trip_time_filter(date_preset, date_from, date_to)
     if time_filter is not None:
         filters.append(time_filter)
+
+    if hide_filter is not None:
+        filters.append(hide_filter)
 
     for f in filters:
         stmt = stmt.where(f)
@@ -143,6 +220,7 @@ async def query_efficiency_trend(
     device_id: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    hide_filter=None,
 ) -> list[dict]:
     """Query trip efficiency data for the trend chart.
 
@@ -164,6 +242,8 @@ async def query_efficiency_trend(
         stmt = stmt.where(time_filter)
     if device_id:
         stmt = stmt.where(EVTripMetrics.device_id == device_id)
+    if hide_filter is not None:
+        stmt = stmt.where(hide_filter)
 
     result = await db.execute(stmt)
     chart_data = [

@@ -12,6 +12,8 @@ For feature documentation, see the docs site at
 - Data Repair operation that fills missing trip start times, durations,
   odometer readings, efficiency, and temperatures from telemetry already in
   the database — no Home Assistant connection needed
+- Settings option to hide short key-on trips from the trip list and driving
+  analytics
 
 ### Changed
 
