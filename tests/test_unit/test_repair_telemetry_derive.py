@@ -31,6 +31,38 @@ async def _seed_timeline(db, device: str, end_odo: float, distance: float):
         )
 
 
+async def _seed_ignition_timeline(db, device: str, end_odo: float, rows):
+    """Sparse variant: ignition rows plus a lone end odometer anchor at T0-2min.
+
+    rows: iterable of (recorded_at, ignition_status, odometer|None).
+    """
+    for recorded_at, ignition, odometer in rows:
+        await VehicleStatusFactory.create(
+            db,
+            device_id=device,
+            recorded_at=recorded_at,
+            ignition_status=ignition,
+            odometer=odometer,
+        )
+    await VehicleStatusFactory.create(
+        db, device_id=device, recorded_at=T0 - timedelta(minutes=2), odometer=end_odo
+    )
+
+
+async def _ignition_trip(db, device: str, distance: float = 30.0):
+    return await TripFactory.create(
+        db,
+        device_id=device,
+        source_system="ha_fordpass",
+        distance=distance,
+        duration=None,
+        start_time=None,
+        odometer_start=None,
+        odometer_end=None,
+        end_time=T0,
+    )
+
+
 async def test_derives_timing_odometers_and_temps_from_timeline(db_session):
     device = "DERIVE_VIN"
     await VehicleFactory.create(db_session, device_id=device)
@@ -256,3 +288,191 @@ async def test_preview_has_no_side_effects_and_apply_snapshots(db_session):
     assert result.snapshot_rows > 0
     assert result.run_id is not None
     assert float(trip.duration) == pytest.approx(1800.0)
+
+
+async def test_ignition_fallback_fills_start_when_odometer_sparse(db_session):
+    """No pre-end odometer readings -> latest OFF->ON transition pins start."""
+    device = "DERIVE_IGN_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await _ignition_trip(db_session, device, distance=30.0)
+    await _seed_ignition_timeline(
+        db_session,
+        device,
+        end_odo=1030.0,
+        rows=[
+            (T0 - timedelta(hours=3), "OFF", None),
+            (T0 - timedelta(minutes=25), "ON", None),
+        ],
+    )
+
+    op = TelemetryDerive()
+    result = await op.apply(db_session)
+    assert result.affected == 1
+    assert trip.start_time == T0 - timedelta(minutes=25)
+    assert float(trip.duration) == pytest.approx(1500.0)
+    assert result.details["filled"]["start_time"] == 1
+    assert result.details["filled"]["start_time_ignition"] == 1
+    assert await op.census(db_session) == 0  # idempotent
+
+
+async def test_ignition_fallback_uses_latest_transition(db_session):
+    device = "DERIVE_IGN_LATEST_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await _ignition_trip(db_session, device, distance=25.0)
+    await _seed_ignition_timeline(
+        db_session,
+        device,
+        end_odo=2025.0,
+        rows=[
+            (T0 - timedelta(hours=5), "OFF", None),
+            (T0 - timedelta(hours=4), "ON", None),
+            (T0 - timedelta(hours=1), "OFF", None),
+            (T0 - timedelta(minutes=30), "ON", None),
+        ],
+    )
+
+    op = TelemetryDerive()
+    await op.apply(db_session)
+    assert trip.start_time == T0 - timedelta(minutes=30)
+
+
+async def test_ignition_fallback_respects_plausibility_gate(db_session):
+    # 30 km in 9 min -> 200 km/h implied; timing must stay NULL. The ON row
+    # sits > IGNITION_ODO_WINDOW from the anchor so no cross-check interferes.
+    device = "DERIVE_IGN_FAST_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await _ignition_trip(db_session, device, distance=30.0)
+    await _seed_ignition_timeline(
+        db_session,
+        device,
+        end_odo=3030.0,
+        rows=[
+            (T0 - timedelta(hours=3), "OFF", None),
+            (T0 - timedelta(minutes=9), "ON", None),
+        ],
+    )
+
+    op = TelemetryDerive()
+    result = await op.apply(db_session)
+    assert trip.start_time is None
+    assert trip.duration is None
+    assert "start_time_ignition" not in result.details["filled"]
+    # Odometer anchors still filled.
+    assert float(trip.odometer_end) == pytest.approx(3030.0)
+    assert float(trip.odometer_start) == pytest.approx(3000.0)
+
+
+async def test_ignition_fallback_rejected_by_odometer_cross_check(db_session):
+    """ON row odometer far above odo_start -> the transition is not this trip."""
+    device = "DERIVE_IGN_XCHK_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await _ignition_trip(db_session, device, distance=30.0)
+    # odo_start = 4030 - 30 = 4000; ON row reads 4020 (> 4000 + 0.5 tolerance).
+    await _seed_ignition_timeline(
+        db_session,
+        device,
+        end_odo=4030.0,
+        rows=[
+            (T0 - timedelta(hours=3), "OFF", None),
+            (T0 - timedelta(minutes=25), "ON", 4020.0),
+        ],
+    )
+
+    op = TelemetryDerive()
+    result = await op.apply(db_session)
+    assert trip.start_time is None
+    assert trip.duration is None
+    assert "start_time_ignition" not in result.details["filled"]
+
+
+async def test_ignition_scans_back_past_destination_key_cycle(db_session):
+    """Newest ON is a key-cycle at the destination; the odometer-matching
+    earlier transition is the real trip start. The plateau path must lose:
+    its only candidate reading is days old (gate-fails), and the true start
+    ON reads just above the plateau tolerance but within the ignition match."""
+    device = "DERIVE_IGN_SCAN_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await _ignition_trip(db_session, device, distance=30.0)
+    # odo_start = 6030 - 30 = 6000.
+    # Plateau candidate: 5990 two days ago -> 0.6 km/h, gate-rejected.
+    await VehicleStatusFactory.create(
+        db_session,
+        device_id=device,
+        recorded_at=T0 - timedelta(hours=47),
+        odometer=5990.0,
+    )
+    await _seed_ignition_timeline(
+        db_session,
+        device,
+        end_odo=6030.0,
+        rows=[
+            (T0 - timedelta(minutes=50), "OFF", None),
+            # 6000.7: above plateau's odo_start+0.5 but within the ignition
+            # two-sided match (1.0 km).
+            (T0 - timedelta(minutes=35), "ON", 6000.7),
+            (T0 - timedelta(minutes=8), "OFF", 6030.0),
+            (T0 - timedelta(minutes=7), "ON", 6030.0),
+        ],
+    )
+
+    op = TelemetryDerive()
+    result = await op.apply(db_session)
+    assert trip.start_time == T0 - timedelta(minutes=35)
+    assert float(trip.duration) == pytest.approx(2100.0)
+    assert result.details["filled"]["start_time_ignition"] == 1
+
+
+async def test_ignition_rejects_transition_far_below_start_odometer(db_session):
+    """An old journey's ON (odometer well below odo_start) must not pin start,
+    even when the implied speed would pass the plausibility gate. The one-sided
+    check accepted this; the two-sided match must not."""
+    device = "DERIVE_IGN_OLD_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await _ignition_trip(db_session, device, distance=100.0)
+    # odo_start = 7100 - 100 = 7000. The plateau path sees only a reading
+    # from 40h ago (2.5 km/h, gate-rejected); the lone ON at -10h reads 6800
+    # (an older journey), implying a plausible 10 km/h -> only the two-sided
+    # odometer match can reject it.
+    await VehicleStatusFactory.create(
+        db_session,
+        device_id=device,
+        recorded_at=T0 - timedelta(hours=40),
+        odometer=6800.0,
+    )
+    await _seed_ignition_timeline(
+        db_session,
+        device,
+        end_odo=7100.0,
+        rows=[
+            (T0 - timedelta(hours=11), "OFF", None),
+            (T0 - timedelta(hours=10), "ON", 6800.0),
+        ],
+    )
+
+    op = TelemetryDerive()
+    result = await op.apply(db_session)
+    assert trip.start_time is None
+    assert trip.duration is None
+    assert "start_time_ignition" not in result.details["filled"]
+
+
+async def test_ignition_unsupported_rows_do_not_break_pairing(db_session):
+    device = "DERIVE_IGN_UNSUP_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await _ignition_trip(db_session, device, distance=30.0)
+    await _seed_ignition_timeline(
+        db_session,
+        device,
+        end_odo=5030.0,
+        rows=[
+            (T0 - timedelta(hours=3), "Off", None),
+            (T0 - timedelta(hours=2), "Unsupported", None),
+            (T0 - timedelta(hours=1), "Unsupported", None),
+            (T0 - timedelta(minutes=25), "On", None),
+        ],
+    )
+
+    op = TelemetryDerive()
+    await op.apply(db_session)
+    assert trip.start_time == T0 - timedelta(minutes=25)
+    assert float(trip.duration) == pytest.approx(1500.0)
