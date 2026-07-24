@@ -180,6 +180,20 @@ async def test_sessions_export_csv(client, db_session):
 
 
 @pytest.mark.db
+async def test_sessions_export_csv_exports_more_than_one_page(client, db_session):
+    """Regression #82: export must return every row, not the 25-row page cap."""
+    vehicle = await VehicleFactory.create(db_session)
+    for i in range(30):
+        await ChargingSessionFactory.create(
+            db_session, device_id=vehicle.device_id, location_name=f"Stop {i:02d}",
+        )
+    response = await client.get("/charging/sessions/export.csv")
+    assert response.status_code == 200
+    data_rows = response.text.splitlines()[1:]  # drop header
+    assert len(data_rows) == 30
+
+
+@pytest.mark.db
 async def test_sessions_export_csv_honors_charge_type_filter(client, db_session):
     vehicle = await VehicleFactory.create(db_session)
     await ChargingSessionFactory.create(

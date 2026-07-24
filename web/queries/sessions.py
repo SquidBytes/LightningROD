@@ -45,6 +45,7 @@ async def query_sessions(
     db: AsyncSession,
     page: int = 1,
     per_page: int = 25,
+    fetch_all: bool = False,
     date_preset: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -131,11 +132,14 @@ async def query_sessions(
         "total_kwh": float(summary_row.total_kwh) if summary_row.total_kwh else 0.0,
     }
 
-    # Data query with pagination
-    # Clamp per_page to allowed values, defaulting to PAGE_SIZE
-    effective_per_page = per_page if per_page in VALID_PER_PAGE else PAGE_SIZE
-    offset = (page - 1) * effective_per_page
-    data_stmt = stmt.limit(effective_per_page).offset(offset)
+    # Data query. fetch_all (export) returns every matching row; otherwise
+    # clamp per_page to the allowed page sizes and paginate.
+    if fetch_all:
+        data_stmt = stmt
+    else:
+        effective_per_page = per_page if per_page in VALID_PER_PAGE else PAGE_SIZE
+        offset = (page - 1) * effective_per_page
+        data_stmt = stmt.limit(effective_per_page).offset(offset)
     data_result = await db.execute(data_stmt)
     sessions = list(data_result.scalars().all())
 

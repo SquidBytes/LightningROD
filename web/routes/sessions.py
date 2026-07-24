@@ -234,8 +234,7 @@ async def export_sessions_csv(
 
     session_list, _total, _summary = await query_sessions(
         db=db,
-        page=1,
-        per_page=1_000_000,
+        fetch_all=True,
         date_preset=date_preset,
         date_from=date_from,
         date_to=date_to,
