@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle_status import EVVehicleStatus
+from web.queries.trips import detect_trip_location_ids
 from web.services.repair.base import RepairDiff, RepairOperation, RepairResult
 
 # Legacy pre-abstraction ingestion wrote source_system='homeassistant'; this
@@ -44,9 +45,9 @@ class TelemetryDerive(RepairOperation):
     slug = "telemetry-derive"
     display_name = "Derive trip fields from telemetry"
     description = (
-        "Fills missing trip timing, odometer, and efficiency fields from "
-        "vehicle telemetry already stored in the database — no Home "
-        "Assistant connection needed."
+        "Fills missing trip timing, odometer, efficiency, and start/end "
+        "location fields from vehicle telemetry and GPS history already "
+        "stored in the database — no Home Assistant connection needed."
     )
     model = EVTripMetrics
 
@@ -68,6 +69,8 @@ class TelemetryDerive(RepairOperation):
                     EVTripMetrics.duration.is_(None),
                     EVTripMetrics.odometer_start.is_(None),
                     EVTripMetrics.odometer_end.is_(None),
+                    EVTripMetrics.start_location_id.is_(None),
+                    EVTripMetrics.end_location_id.is_(None),
                     and_(
                         EVTripMetrics.efficiency.is_(None),
                         EVTripMetrics.distance > 0,
@@ -306,6 +309,20 @@ class TelemetryDerive(RepairOperation):
                 changes["outside_air_temp"] = outside
             if trip.cabin_temp is None and cabin is not None:
                 changes["cabin_temp"] = cabin
+
+        # Resolve endpoint FKs from GPS history. Uses the effective start
+        # (possibly just derived above) so timing and location land together;
+        # only known-location matches yield an id — unknown places stay NULL.
+        need_start_loc = trip.start_location_id is None and start_effective is not None
+        need_end_loc = trip.end_location_id is None
+        if need_start_loc or need_end_loc:
+            start_id, end_id = await detect_trip_location_ids(
+                db, trip.device_id, start_effective or end_time, end_time
+            )
+            if need_start_loc and start_id is not None:
+                changes["start_location_id"] = start_id
+            if need_end_loc and end_id is not None:
+                changes["end_location_id"] = end_id
 
         return changes
 

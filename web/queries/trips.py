@@ -5,7 +5,7 @@ data with 7-day rolling average chart, and driving score radar chart.
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -588,6 +588,40 @@ def _interpolate_series(
 # ---------------------------------------------------------------------------
 
 
+GPS_MATCH_TOLERANCE_SECONDS = 30 * 60  # nearest GPS snapshot must be within 30 min
+
+
+async def _nearest_gps(
+    db: AsyncSession, device_id: str, target_time: datetime
+) -> tuple[float, float] | None:
+    """Closest GPS snapshot to target_time within the tolerance window, or None.
+
+    Dialect-portable: SQL filters the window, Python picks the nearest (no
+    PG-only epoch math, no SQLite-only julianday).
+    """
+    window = timedelta(seconds=GPS_MATCH_TOLERANCE_SECONDS)
+    stmt = select(
+        EVLocation.recorded_at, EVLocation.latitude, EVLocation.longitude
+    ).where(
+        EVLocation.device_id == device_id,
+        EVLocation.latitude.isnot(None),
+        EVLocation.longitude.isnot(None),
+        EVLocation.recorded_at >= target_time - window,
+        EVLocation.recorded_at <= target_time + window,
+    )
+    rows = (await db.execute(stmt)).all()
+    if not rows:
+        return None
+
+    # SQLite returns naive datetimes; coerce both sides to UTC-aware to subtract.
+    def _aware(ts: datetime) -> datetime:
+        return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
+
+    target = _aware(target_time)
+    nearest = min(rows, key=lambda r: abs((_aware(r.recorded_at) - target).total_seconds()))
+    return (float(nearest.latitude), float(nearest.longitude))
+
+
 async def detect_trip_locations(
     db: AsyncSession,
     device_id: str,
@@ -601,26 +635,6 @@ async def detect_trip_locations(
 
     Returns (start_location_name, end_location_name).
     """
-    tolerance_seconds = 30 * 60  # 30 minutes
-
-    async def _find_nearest_gps(target_time: datetime) -> tuple[float, float] | None:
-        stmt = (
-            select(EVLocation.latitude, EVLocation.longitude)
-            .where(
-                EVLocation.device_id == device_id,
-                EVLocation.latitude.isnot(None),
-                EVLocation.longitude.isnot(None),
-                func.abs(func.extract("epoch", EVLocation.recorded_at - target_time)) <= tolerance_seconds,
-            )
-            .order_by(func.abs(func.extract("epoch", EVLocation.recorded_at - target_time)))
-            .limit(1)
-        )
-        result = await db.execute(stmt)
-        row = result.one_or_none()
-        if row:
-            return (float(row.latitude), float(row.longitude))
-        return None
-
     # Load all known locations for geo matching
     loc_result = await db.execute(select(EVLocationLookup))
     all_locations = list(loc_result.scalars().all())
@@ -634,8 +648,8 @@ async def detect_trip_locations(
             return match.location_name
         return f"{lat:.2f}, {lon:.2f}"
 
-    start_coords = await _find_nearest_gps(start_time)
-    end_coords = await _find_nearest_gps(end_time)
+    start_coords = await _nearest_gps(db, device_id, start_time)
+    end_coords = await _nearest_gps(db, device_id, end_time)
 
     start_name = _resolve_name(start_coords)
     end_name = _resolve_name(end_coords)
@@ -644,10 +658,70 @@ async def detect_trip_locations(
         logger.warning(
             "detect_trip_locations: no GPS within %ds for device %s "
             "between %s and %s; both endpoints render as em-dash",
-            tolerance_seconds, device_id, start_time, end_time,
+            GPS_MATCH_TOLERANCE_SECONDS, device_id, start_time, end_time,
         )
 
     return (start_name, end_name)
+
+
+async def detect_trip_location_ids(
+    db: AsyncSession,
+    device_id: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> tuple[int | None, int | None]:
+    """Resolve start/end EVLocationLookup ids for a trip from GPS history.
+
+    Same nearest-GPS logic as detect_trip_locations, but returns lookup ids
+    only for endpoints that match a known location — the raw-coordinate
+    fallback yields None so no FK is invented for an unknown place.
+    """
+    loc_result = await db.execute(select(EVLocationLookup))
+    all_locations = list(loc_result.scalars().all())
+
+    def _resolve_id(coords: tuple[float, float] | None) -> int | None:
+        if coords is None:
+            return None
+        match = _find_geo_match(all_locations, coords[0], coords[1])
+        return match.id if match else None
+
+    start_coords = await _nearest_gps(db, device_id, start_time)
+    end_coords = await _nearest_gps(db, device_id, end_time)
+    return (_resolve_id(start_coords), _resolve_id(end_coords))
+
+
+async def _location_name_by_id(
+    db: AsyncSession, location_id: int | None
+) -> str | None:
+    """location_name for a stored EVLocationLookup id, or None when unset/missing."""
+    if not location_id:
+        return None
+    result = await db.execute(
+        select(EVLocationLookup.location_name).where(EVLocationLookup.id == location_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def resolve_trip_location_names(
+    db: AsyncSession, trip: EVTripMetrics
+) -> tuple[str | None, str | None]:
+    """Display names for a trip's endpoints, preferring stored FK over GPS detection.
+
+    A repaired trip carries start_location_id/end_location_id pointing at an
+    EVLocationLookup; render those names. Endpoints without a stored FK fall
+    back to dynamic detect_trip_locations (only when the trip is timed).
+    """
+    start_name = await _location_name_by_id(db, trip.start_location_id)
+    end_name = await _location_name_by_id(db, trip.end_location_id)
+    if start_name is not None and end_name is not None:
+        return (start_name, end_name)
+
+    det_start, det_end = None, None
+    if trip.start_time and trip.end_time:
+        det_start, det_end = await detect_trip_locations(
+            db, trip.device_id, trip.start_time, trip.end_time
+        )
+    return (start_name or det_start, end_name or det_end)
 
 
 # ---------------------------------------------------------------------------

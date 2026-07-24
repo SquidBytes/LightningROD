@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from tests.factories.locations import LocationFactory, LocationLookupFactory
 from tests.factories.trips import TripFactory
 from tests.factories.vehicle_status import VehicleStatusFactory
 from tests.factories.vehicles import VehicleFactory
@@ -14,6 +15,27 @@ from web.services.repair.ops.telemetry_derive import TelemetryDerive
 pytestmark = [pytest.mark.unit, pytest.mark.db]
 
 T0 = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+
+# Endpoints ~1 km apart so a start snapshot never geo-matches the end lookup.
+START_COORDS = (45.5000, -122.6000)
+END_COORDS = (45.5100, -122.6500)
+FAR_COORDS = (46.0000, -123.0000)
+
+
+async def _seed_gps(db, device: str, coords, recorded_at) -> None:
+    """A single GPS snapshot at coords."""
+    await LocationFactory.create(
+        db, device_id=device, latitude=coords[0], longitude=coords[1], recorded_at=recorded_at
+    )
+
+
+async def _seed_known_place(db, device: str, coords, recorded_at):
+    """A GPS snapshot plus the known lookup it geo-matches; returns the lookup."""
+    lookup = await LocationLookupFactory.create(
+        db, latitude=coords[0], longitude=coords[1]
+    )
+    await _seed_gps(db, device, coords, recorded_at)
+    return lookup
 
 
 async def _seed_timeline(db, device: str, end_odo: float, distance: float):
@@ -454,6 +476,173 @@ async def test_ignition_rejects_transition_far_below_start_odometer(db_session):
     assert trip.start_time is None
     assert trip.duration is None
     assert "start_time_ignition" not in result.details["filled"]
+
+
+async def test_backfills_location_ids_from_gps_history(db_session):
+    """GPS near start & end that geo-match known places -> both FK ids persisted."""
+    device = "DERIVE_LOC_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await TripFactory.create(
+        db_session,
+        device_id=device,
+        source_system="ha_fordpass",
+        distance=30.0,
+        energy_consumed=6.0,
+        efficiency=5.0,
+        start_time=T0 - timedelta(minutes=30),
+        duration=1800.0,
+        odometer_start=1000.0,
+        odometer_end=1030.0,
+        outside_air_temp=12.0,
+        cabin_temp=21.0,
+        start_location_id=None,
+        end_location_id=None,
+        end_time=T0,
+    )
+    start_lookup = await _seed_known_place(
+        db_session, device, START_COORDS, T0 - timedelta(minutes=30)
+    )
+    end_lookup = await _seed_known_place(
+        db_session, device, END_COORDS, T0 - timedelta(minutes=1)
+    )
+
+    op = TelemetryDerive()
+    assert await op.census(db_session) == 1
+
+    result = await op.apply(db_session)
+    assert result.affected == 1
+    assert trip.start_location_id == start_lookup.id
+    assert trip.end_location_id == end_lookup.id
+    assert result.details["filled"]["start_location_id"] == 1
+    assert result.details["filled"]["end_location_id"] == 1
+    assert await op.census(db_session) == 0  # idempotent
+
+
+async def test_location_raw_coord_fallback_never_fabricates_fk(db_session):
+    """GPS near end but far from any known place -> FK stays NULL."""
+    device = "DERIVE_LOC_RAW_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await TripFactory.create(
+        db_session,
+        device_id=device,
+        source_system="ha_fordpass",
+        distance=30.0,
+        efficiency=5.0,
+        start_time=T0 - timedelta(minutes=30),
+        duration=1800.0,
+        odometer_start=1000.0,
+        odometer_end=1030.0,
+        outside_air_temp=12.0,
+        cabin_temp=21.0,
+        end_time=T0,
+    )
+    # A known place exists but sits far from the trip's GPS snapshot.
+    await LocationLookupFactory.create(
+        db_session, latitude=FAR_COORDS[0], longitude=FAR_COORDS[1]
+    )
+    await _seed_gps(db_session, device, END_COORDS, T0 - timedelta(minutes=1))
+
+    op = TelemetryDerive()
+    result = await op.apply(db_session)
+    assert result.affected == 0  # nothing else to fill; no fabricated FK
+    assert trip.start_location_id is None
+    assert trip.end_location_id is None
+
+
+async def test_location_not_filled_without_gps_in_tolerance(db_session):
+    """No GPS within 30 min of either endpoint -> FKs NULL."""
+    device = "DERIVE_LOC_NOGPS_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await TripFactory.create(
+        db_session,
+        device_id=device,
+        source_system="ha_fordpass",
+        distance=30.0,
+        efficiency=5.0,
+        start_time=T0 - timedelta(minutes=30),
+        duration=1800.0,
+        odometer_start=1000.0,
+        odometer_end=1030.0,
+        outside_air_temp=12.0,
+        cabin_temp=21.0,
+        end_time=T0,
+    )
+    # GPS at a known place, but recorded two hours before trip end (out of window).
+    await _seed_known_place(db_session, device, END_COORDS, T0 - timedelta(hours=2))
+
+    op = TelemetryDerive()
+    result = await op.apply(db_session)
+    assert result.affected == 0
+    assert trip.start_location_id is None
+    assert trip.end_location_id is None
+
+
+async def test_location_fk_never_overwritten(db_session):
+    """A set start_location_id survives; only the NULL end FK is filled."""
+    device = "DERIVE_LOC_KEEP_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await TripFactory.create(
+        db_session,
+        device_id=device,
+        source_system="ha_fordpass",
+        distance=30.0,
+        efficiency=5.0,
+        start_time=T0 - timedelta(minutes=30),
+        duration=1800.0,
+        odometer_start=1000.0,
+        odometer_end=1030.0,
+        outside_air_temp=12.0,
+        cabin_temp=21.0,
+        start_location_id=999,
+        end_location_id=None,
+        end_time=T0,
+    )
+    await _seed_known_place(db_session, device, START_COORDS, T0 - timedelta(minutes=30))
+    end_lookup = await _seed_known_place(
+        db_session, device, END_COORDS, T0 - timedelta(minutes=1)
+    )
+
+    op = TelemetryDerive()
+    result = await op.apply(db_session)
+    assert result.affected == 1
+    assert trip.start_location_id == 999  # never overwritten
+    assert trip.end_location_id == end_lookup.id
+
+
+async def test_location_backfill_uses_freshly_derived_start(db_session):
+    """Timing and location land in one apply: GPS keyed to the derived start."""
+    device = "DERIVE_LOC_DERIVED_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trip = await TripFactory.create(
+        db_session,
+        device_id=device,
+        source_system="ha_fordpass",
+        distance=30.0,
+        energy_consumed=6.0,
+        efficiency=5.0,
+        start_time=None,
+        duration=None,
+        odometer_start=None,
+        odometer_end=None,
+        outside_air_temp=12.0,
+        cabin_temp=21.0,
+        end_time=T0,
+    )
+    await _seed_timeline(db_session, device, end_odo=1030.0, distance=30.0)
+    # GPS at the odometer-derived start (T0-30min) and at trip end.
+    start_lookup = await _seed_known_place(
+        db_session, device, START_COORDS, T0 - timedelta(minutes=30)
+    )
+    end_lookup = await _seed_known_place(
+        db_session, device, END_COORDS, T0 - timedelta(minutes=1)
+    )
+
+    op = TelemetryDerive()
+    result = await op.apply(db_session)
+    assert result.affected == 1
+    assert trip.start_time == T0 - timedelta(minutes=30)
+    assert trip.start_location_id == start_lookup.id
+    assert trip.end_location_id == end_lookup.id
 
 
 async def test_ignition_unsupported_rows_do_not_break_pairing(db_session):

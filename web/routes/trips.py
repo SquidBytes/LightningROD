@@ -23,12 +23,12 @@ from web.queries.trips import (
     build_expanded_driving_chart,
     build_expanded_environment_chart,
     build_short_trip_filter,
-    detect_trip_locations,
     get_trip_hide_settings,
     query_hidden_trip_count,
     query_trip_battery_series,
     query_trip_vehicle_series,
     query_trips,
+    resolve_trip_location_names,
 )
 from web.queries.vehicles import (
     get_active_device_id,
@@ -185,11 +185,7 @@ async def trip_drawer(
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
     unit_ctx = await get_unit_context(db)
 
-    start_location, end_location = None, None
-    if trip.start_time and trip.end_time:
-        start_location, end_location = await detect_trip_locations(
-            db, trip.device_id, trip.start_time, trip.end_time
-        )
+    start_location, end_location = await resolve_trip_location_names(db, trip)
 
     context = {
         **unit_ctx,

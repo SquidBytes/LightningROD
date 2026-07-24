@@ -5,7 +5,13 @@ Tests trip listing, pagination, efficiency trends, and summary aggregation.
 
 import pytest
 
-from web.queries.trips import query_efficiency_trend, query_trips
+from tests.factories.locations import LocationLookupFactory
+from tests.factories.trips import TripFactory
+from web.queries.trips import (
+    query_efficiency_trend,
+    query_trips,
+    resolve_trip_location_names,
+)
 
 pytestmark = [pytest.mark.query, pytest.mark.db]
 
@@ -116,3 +122,26 @@ async def test_trips_empty(db_session):
     assert len(trips) == 0
     assert summary["count"] == 0
     assert summary["total_distance"] == 0.0
+
+
+async def test_resolve_trip_location_names_prefers_stored_fk(db_session):
+    """A repaired trip renders its stored lookup names, not dynamic detection."""
+    start_lookup = await LocationLookupFactory.create(
+        db_session, location_name="Start Depot"
+    )
+    end_lookup = await LocationLookupFactory.create(
+        db_session, location_name="End Depot"
+    )
+    trip = await TripFactory.create(
+        db_session,
+        device_id="LOC_FK_VIN",
+        start_time=None,
+        end_time=None,
+        start_location_id=start_lookup.id,
+        end_location_id=end_lookup.id,
+    )
+
+    assert await resolve_trip_location_names(db_session, trip) == (
+        "Start Depot",
+        "End Depot",
+    )
