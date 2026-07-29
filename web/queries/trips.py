@@ -141,6 +141,7 @@ async def query_trips(
     db: AsyncSession,
     page: int = 1,
     per_page: int = 25,
+    fetch_all: bool = False,
     date_preset: str = "30d",
     sort_by: str = "date",
     sort_dir: str = "desc",
@@ -204,10 +205,14 @@ async def query_trips(
         "avg_efficiency": float(summary_row.avg_efficiency) if summary_row.avg_efficiency else None,
     }
 
-    # Data query with pagination
-    effective_per_page = per_page if per_page in VALID_PER_PAGE else PAGE_SIZE
-    offset = (page - 1) * effective_per_page
-    data_stmt = stmt.limit(effective_per_page).offset(offset)
+    # Data query. fetch_all (export) returns every matching row; otherwise
+    # clamp per_page to the allowed page sizes and paginate.
+    if fetch_all:
+        data_stmt = stmt
+    else:
+        effective_per_page = per_page if per_page in VALID_PER_PAGE else PAGE_SIZE
+        offset = (page - 1) * effective_per_page
+        data_stmt = stmt.limit(effective_per_page).offset(offset)
     data_result = await db.execute(data_stmt)
     trips = list(data_result.scalars().all())
 

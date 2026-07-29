@@ -6,16 +6,29 @@
             <h1 class="text-3xl font-bold text-base-content mb-2">Trip History</h1>
             <p class="text-base-content/60">Track driving efficiency, energy consumption, and trip metrics over time.</p>
         </div>
-        <button
-            type="button"
-            onclick="document.getElementById('trip-modal').showModal(); htmx.ajax('GET', '/driving/sessions/new', {target: '#trip-modal-content', swap: 'innerHTML'})"
-            class="btn btn-primary btn-sm gap-2"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            Add Trip
-        </button>
+        <div class="flex items-center gap-2">
+            <button
+                type="button"
+                onclick="exportTripsCsv()"
+                class="btn btn-outline btn-sm gap-2"
+                title="Download the trips matching the current filters as CSV"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                Export CSV
+            </button>
+            <button
+                type="button"
+                onclick="document.getElementById('trip-modal').showModal(); htmx.ajax('GET', '/driving/sessions/new', {target: '#trip-modal-content', swap: 'innerHTML'})"
+                class="btn btn-primary btn-sm gap-2"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Trip
+            </button>
+        </div>
     </div>
 
     {% with filter_url="/driving/sessions", filter_target="#driving-sessions-content", active_preset=active_range, date_param_name="range", date_from=date_from, date_to=date_to %}
@@ -136,5 +149,14 @@ document.body.addEventListener('trip-created', function() {
     showToast('Trip added', 'success');
     document.getElementById('trip-modal').close();
 });
+
+// --- CSV export: reuse the live filter form so the download matches the view ---
+function exportTripsCsv() {
+    var form = document.getElementById('filter-form');
+    var params = form ? new URLSearchParams(new FormData(form)) : new URLSearchParams();
+    params.delete('page');
+    params.delete('per_page');
+    window.location = '/driving/sessions/export.csv?' + params.toString();
+}
 </script>
 {% endblock %}

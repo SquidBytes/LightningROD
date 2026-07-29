@@ -136,6 +136,121 @@ async def trips(
     return templates.TemplateResponse(request, "driving/sessions/index.html", context)
 
 
+@router.get("/sessions/export.csv")
+async def export_trips_csv(
+    db: AsyncSession = Depends(get_db),
+    range: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+    sort: str | None = None,
+    dir: str | None = None,
+):
+    """Download the trip list as CSV, honoring the active filters.
+
+    Distances export in the configured display unit; temperatures in the
+    configured temp unit; times in the user's timezone; energy in kWh.
+    """
+    import csv
+    import io
+    from zoneinfo import ZoneInfo
+
+    from web.unit_system import convert_distance, convert_efficiency, convert_temp
+
+    # Resolve filters identically to the list route.
+    time_range = range or ("all" if (date_from or date_to) else "30d")
+    sort_by = sort_by or sort or "date"
+    sort_dir = sort_dir or dir or "desc"
+
+    active_device_id = await get_active_device_id(db)
+    hide = await get_trip_hide_settings(db)
+    hide_filter = build_short_trip_filter(hide)
+
+    trip_list, _total, _summary = await query_trips(
+        db=db,
+        fetch_all=True,
+        date_preset=time_range,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        device_id=active_device_id,
+        date_from=date_from,
+        date_to=date_to,
+        hide_filter=hide_filter,
+    )
+
+    unit_ctx = await get_unit_context(db)
+    distance_unit = unit_ctx["distance_unit"]
+    temp_unit = unit_ctx["temp_unit"]
+    distance_label = unit_ctx["units"]["distance_label"]
+    eff_label = unit_ctx["units"]["efficiency_label"]
+    temp_label = unit_ctx["units"]["temp_label"]
+    user_tz = await get_app_setting(db, "user_timezone", "UTC") or "UTC"
+    try:
+        tz = ZoneInfo(user_tz)
+    except Exception:
+        tz = ZoneInfo("UTC")
+
+    def _local(dt) -> str:
+        if dt is None:
+            return ""
+        if dt.tzinfo is None:
+            from datetime import UTC as _utc
+            dt = dt.replace(tzinfo=_utc)
+        return dt.astimezone(tz).isoformat(sep=" ", timespec="minutes")
+
+    def _num(v, dp: int) -> str:
+        return "" if v is None else f"{float(v):.{dp}f}"
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        f"start ({user_tz})", f"end ({user_tz})", "start_location", "end_location",
+        f"distance_{distance_label}", "duration_min", "energy_consumed_kwh",
+        f"efficiency_{eff_label}", f"odometer_start_{distance_label}",
+        f"odometer_end_{distance_label}", f"ambient_temp_{temp_label}",
+        f"cabin_temp_{temp_label}", f"outside_air_temp_{temp_label}",
+        "driving_score", "speed_score", "acceleration_score", "deceleration_score",
+        f"range_regenerated_{distance_label}", "source_system",
+    ])
+    for t in trip_list:
+        start_location, end_location = await resolve_trip_location_names(db, t)
+        # Prefer the per-trip distance/energy efficiency shown in the row, with
+        # the stored efficiency as fallback — then convert to the display unit.
+        if t.distance is not None and t.energy_consumed and t.energy_consumed > 0:
+            eff = float(t.distance) / float(t.energy_consumed)
+        else:
+            eff = t.efficiency
+        writer.writerow([
+            _local(t.start_time),
+            _local(t.end_time),
+            start_location or "",
+            end_location or "",
+            _num(convert_distance(t.distance, distance_unit), 1),
+            _num(float(t.duration) / 60 if t.duration is not None else None, 0),
+            _num(t.energy_consumed, 2),
+            _num(convert_efficiency(eff, distance_unit), 1),
+            _num(convert_distance(t.odometer_start, distance_unit), 1),
+            _num(convert_distance(t.odometer_end, distance_unit), 1),
+            _num(convert_temp(t.ambient_temp, temp_unit), 1),
+            _num(convert_temp(t.cabin_temp, temp_unit), 1),
+            _num(convert_temp(t.outside_air_temp, temp_unit), 1),
+            _num(t.driving_score, 0),
+            _num(t.speed_score, 0),
+            _num(t.acceleration_score, 0),
+            _num(t.deceleration_score, 0),
+            _num(convert_distance(t.range_regenerated, distance_unit), 1),
+            t.source_system or "",
+        ])
+
+    filename = f"trip-sessions-{date.today().isoformat()}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/sessions/{trip_id}/detail", response_class=HTMLResponse)
 async def trip_detail(
     request: Request,

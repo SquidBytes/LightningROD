@@ -120,3 +120,36 @@ async def test_trip_sessions_accepts_custom_date_window(client, db_session):
     # Summary card renders the trip count as a bare integer paragraph --
     # only the March trip is in the window.
     assert '<p class="text-3xl font-bold">1</p>' in response.text
+
+
+async def test_trips_export_csv(client, db_session):
+    """GET /driving/sessions/export.csv streams the filtered trips."""
+    from tests.factories.trips import TripFactory
+    from tests.factories.vehicles import VehicleFactory
+
+    vehicle = await VehicleFactory.create(db_session)
+    await TripFactory.create(
+        db_session, device_id=vehicle.device_id,
+        distance=42.0, energy_consumed=12.5, source_system="export_test",
+    )
+    response = await client.get("/driving/sessions/export.csv?range=all")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "attachment" in response.headers["content-disposition"]
+    body = response.text
+    assert body.splitlines()[0].startswith("start (")
+    assert "export_test" in body
+
+
+async def test_trips_export_csv_exports_more_than_one_page(client, db_session):
+    """Export must return every matching trip, not just the 25-row page cap."""
+    from tests.factories.trips import TripFactory
+    from tests.factories.vehicles import VehicleFactory
+
+    vehicle = await VehicleFactory.create(db_session)
+    for _ in range(30):
+        await TripFactory.create(db_session, device_id=vehicle.device_id)
+    response = await client.get("/driving/sessions/export.csv?range=all")
+    assert response.status_code == 200
+    data_rows = response.text.splitlines()[1:]  # drop header
+    assert len(data_rows) == 30

@@ -9,6 +9,8 @@ For feature documentation, see the docs site at
 
 ### Added
 
+- Export CSV button on the Trip History page that downloads the trips matching
+  the current filters
 - Data Repair operation that fills missing trip start times, durations,
   odometer readings, efficiency, temperatures, and start/end locations from
   telemetry and GPS history already in the database — no Home Assistant
