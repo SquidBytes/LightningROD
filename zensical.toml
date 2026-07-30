@@ -27,6 +27,9 @@ nav = [
     "guide/settings.md",
     "guide/data-repair.md",
   ]},
+  {"Reference" = [
+    "reference/data-capture.md",
+  ]},
   {"Development" = [
     "development/setup.md",
     "development/architecture.md",
