@@ -25,6 +25,9 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Charging session CSV export only contained the first 25 sessions instead of
+  every session matching the filters
+
 ### Removed
 
 ## [0.5.3] - 2026-07-16

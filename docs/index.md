@@ -50,7 +50,11 @@ In short: more fields means better calculations, safer backfills, and fewer assu
 
 **Home Assistant Integration** -- Real-time WebSocket connection for automatic charging session detection from [ha-fordpass](https://github.com/marq24/ha-fordpass). Vehicle telemetry ingestion, VIN auto-detection, home-zone location auto-populate, unit normalization, and full-history backfill (no 30-day cap).
 
-**Settings** -- Vehicle profiles with cascading Make/Model/Trim presets, a dedicated **Fuel** tab for multiple ICE vehicles and gas price history, a **Data Sources** tab for Home Assistant adapter configuration, split distance/temperature unit preferences, timezone selection, and comparison display toggles.
+**Settings** -- Vehicle profiles with cascading Make/Model/Trim presets, a dedicated **Fuel** tab for multiple ICE vehicles and gas price history, a **Data Sources** tab for Home Assistant adapter configuration, split distance/temperature unit preferences, timezone selection, trip display filters, and comparison display toggles.
+
+**Data Repair** -- Census and dry-run preview before any change, with one-click operations to remove duplicate trips, fix unit-corrupted distances, derive missing trip fields from stored telemetry and GPS history, and replay Home Assistant recorder history. Every run takes a restorable snapshot, and SQLite installs can download a database backup first.
+
+**CSV Export** -- Download the charging sessions or trips matching your current filters, in your configured units and timezone.
 
 ---
 

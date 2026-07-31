@@ -32,6 +32,12 @@ Summary cards above the table - Total Trips, Avg Efficiency, Total Distance, Tot
 
 If **Hide short trips** is enabled in [Settings → General](settings.md#trip-display), short key-on trips are left out of the list and summary cards, and a muted note above the table shows how many were hidden.
 
+### Exporting Trips
+
+Click **Export CSV** above the table to download the trips matching the current filters (date range and sort order). Hidden short trips stay out of the export too.
+
+One row per trip, with start/end times, start and end location, distance, duration, energy, efficiency, odometer readings, ambient/cabin/outside temperatures, driving scores, regenerated range, and the source system. Distances, efficiency, and temperatures export in your configured display units; times in your configured timezone; energy in kWh.
+
 ## Driving Performance (`/driving/performance`)
 
 ![driving performance](../assets/images/lr_driving_performance.gif)
