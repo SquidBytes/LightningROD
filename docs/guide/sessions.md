@@ -2,7 +2,8 @@
 
 The charging sessions page (`/charging/sessions`) is where you view and manage your charging history.
 
-![sessions](../assets/images/lr_sessions.gif)
+!!! tip "See it live"
+    Explore this page in the [interactive demo](https://lightningrod.dev/demo).
 
 ## Session Table
 

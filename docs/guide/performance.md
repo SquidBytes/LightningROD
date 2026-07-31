@@ -2,9 +2,8 @@
 
 The charging performance page (`/charging/performance`) shows how you charge: energy totals, efficiency trends, AC vs DC split, and estimated fast-charging curves for the active vehicle.
 
-![charging performance](../assets/images/lr_performance.gif)
-
-![charging performance](../assets/images/lr_performance.gif)
+!!! tip "See it live"
+    Explore this page in the [interactive demo](https://lightningrod.dev/demo).
 
 !!! note "Renamed from Energy"
     This page was `/charging/energy` in earlier releases. The route and sidebar label changed in v0.3 to better match what the page shows and to keep it separate from **Driving Performance**.

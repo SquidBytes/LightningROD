@@ -2,7 +2,8 @@
 
 The Review Queue (`/review`) is where you check the networks and locations LightningROD has collected. These may come from Home Assistant, a CSV import, or manual entry. It lives under **System** in the sidebar, next to Settings.
 
-![review-queue](../assets/images/lr_review_queue.gif)
+!!! tip "See it live"
+    Explore this page in the [interactive demo](https://lightningrod.dev/demo).
 
 ## Why a Review Queue?
 

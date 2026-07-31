@@ -62,24 +62,9 @@ Full documentation is available at the [documentation site](https://docs.lightni
 
 ## Gallery
 
-Selected views from the current release.
-
-### Overview
-
-![overview](docs/assets/images/lr_overview.gif)
-
-### Session List and drawer
-
-![sessionList](docs/assets/images/lr_sessions.gif)
-
-### Cost Page
-
-![cost page](docs/assets/images/lr_costs.gif)
-
-### Settings Page
-
-![main settings page](docs/assets/images/lr_settings.gif)
-
+Rather than screenshots that go stale, click through the running app yourself at
+[lightningrod.dev/demo](https://lightningrod.dev/demo) — the dashboard, session
+list and drawer, Cost Explorer, and settings are all live there.
 
 ## Quick Start
 

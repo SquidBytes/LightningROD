@@ -2,7 +2,8 @@
 
 The battery analytics page (`/battery`) tracks long-term battery health, state of charge, charging behavior, and the 12V low-voltage system for the active vehicle.
 
-![battery analytics](../assets/images/lr_battery.gif)
+!!! tip "See it live"
+    Explore this page in the [interactive demo](https://lightningrod.dev/demo).
 
 ## Date Range Filter
 

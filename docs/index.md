@@ -6,7 +6,8 @@ Track charging sessions, analyze costs, and monitor energy consumption with a we
 
 Ford EVs are supported today — built for the Ford F-150 Lightning — using data from [ha-fordpass](https://github.com/marq24/ha-fordpass) or CSV imports, and the data layer is built to grow beyond them.
 
-![overview](assets/images/lr_overview.gif)
+!!! tip "Try the demo"
+    A read-only interactive demo runs at [lightningrod.dev/demo](https://lightningrod.dev/demo) — every page in this guide is live there. The data is randomly generated to show off features, so the values themselves may not add up. The service may need a moment to wake up.
 
 !!! info "AI Disclaimer"
     AI (primarily Claude) was used.

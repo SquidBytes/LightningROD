@@ -12,7 +12,8 @@ It has two pages under the sidebar's `DRIVING` group:
 
 ## Trip Sessions (`/driving/sessions`)
 
-![trip sessions](../assets/images/lr_trips.gif)
+!!! tip "See it live"
+    Explore this page in the [interactive demo](https://lightningrod.dev/demo).
 
 A paginated table of trips with nine columns: number, date, distance, duration, temperature, energy used, efficiency, driving score, and regeneration.
 
@@ -39,8 +40,6 @@ Click **Export CSV** above the table to download the trips matching the current 
 One row per trip, with start/end times, start and end location, distance, duration, energy, efficiency, odometer readings, ambient/cabin/outside temperatures, driving scores, regenerated range, and the source system. Distances, efficiency, and temperatures export in your configured display units; times in your configured timezone; energy in kWh.
 
 ## Driving Performance (`/driving/performance`)
-
-![driving performance](../assets/images/lr_driving_performance.gif)
 
 A driving-side analytics page introduced in v0.3.
 

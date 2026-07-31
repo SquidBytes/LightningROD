@@ -10,8 +10,5 @@
   "devDependencies": {
     "@tailwindcss/cli": "^4",
     "daisyui": "^5"
-  },
-  "dependencies": {
-    "@playwright/test": "^1.61.1"
   }
 }

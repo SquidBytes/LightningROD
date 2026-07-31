@@ -2,7 +2,8 @@
 
 The dashboard (`/`) gives you a quick overview across all vehicles.
 
-![overview](../assets/images/lr_overview.gif)
+!!! tip "See it live"
+    Explore this page in the [interactive demo](https://lightningrod.dev/demo).
 
 ## Vehicle Cards
 

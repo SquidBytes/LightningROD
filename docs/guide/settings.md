@@ -2,7 +2,8 @@
 
 The settings page (`/settings`) is organized into focused tabs. Most updates apply immediately after saving.
 
-![settings](../assets/images/lr_settings.gif)
+!!! tip "See it live"
+    Explore this page in the [interactive demo](https://lightningrod.dev/demo).
 
 ## Tab Overview
 

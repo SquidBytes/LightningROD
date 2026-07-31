@@ -2,7 +2,8 @@
 
 The costs page (`/charging/costs`) breaks down your charging expenses and shows how they compare with gas or other charging networks.
 
-![costs](../assets/images/lr_costs.gif)
+!!! tip "See it live"
+    Explore this page in the [interactive demo](https://lightningrod.dev/demo).
 
 ## Time Range Filter
 
