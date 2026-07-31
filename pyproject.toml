@@ -39,6 +39,7 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 markers = [
+    "api: route-level integration tests driving the HTTP layer",
     "db: tests requiring a real database connection",
     "ha_sim: tests using the Home Assistant WebSocket simulator",
     "query: query layer validation tests",
