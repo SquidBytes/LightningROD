@@ -9,6 +9,16 @@ For feature documentation, see the docs site at
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.5.4] - 2026-07-30
+
+### Added
+
 - Export CSV button on the Trip History page that downloads the trips matching
   the current filters
 - Data Repair operation that fills missing trip start times, durations,

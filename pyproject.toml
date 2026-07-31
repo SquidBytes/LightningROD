@@ -1,6 +1,6 @@
 [project]
 name = "lightningrod"
-version = "0.5.3"
+version = "0.5.4"
 description = "Self-hosted charging and vehicle analytics"
 readme = "README.md"
 requires-python = ">=3.11"
