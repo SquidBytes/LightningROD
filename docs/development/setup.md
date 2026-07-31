@@ -103,10 +103,12 @@ The active ruff ruleset covers `E4/E7/E9/F` (pycodestyle + pyflakes), `I` (isort
 ## Type Checking
 
 ```bash title="" 
-uv run mypy .
+uv run mypy
 ```
 
 mypy is configured in `pyproject.toml` with the `pydantic.mypy` plugin. `ignore_missing_imports = true` is set so third-party stubs gaps don't block the check. Generated migration files and `.venv` are excluded.
+
+Run it without arguments. `files` in `pyproject.toml` scopes the check to `web/`, `config.py`, and `db/` — the same scope CI gates on. Passing a path (`mypy .`) overrides that and drags in `tests/`, which is unannotated by design and will report failures CI does not care about.
 
 ## Connecting to the Database
 

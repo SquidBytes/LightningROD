@@ -71,10 +71,20 @@ ignore = ["B008"]
 python_version = "3.11"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
+# Application code only — tests are unannotated by design and typing them
+# adds narrowing noise without catching real bugs. Bare `mypy` therefore
+# matches what CI gates on; don't pass paths on the command line.
+files = ["web", "config.py", "db"]
 exclude = [
     "alembic/versions",
     "\\.venv",
 ]
+# "bodies of untyped functions are not checked" — that's the intent, not news.
+disable_error_code = ["annotation-unchecked"]
+
+[tool.ty.src]
+# Same scope as mypy above: ty is being trialled alongside it, not on tests.
+include = ["web", "config.py", "db"]
 
 [tool.ruff.lint.per-file-ignores]
 # web/main.py resolves APP_VERSION before importing routers. Structural, not a bug.

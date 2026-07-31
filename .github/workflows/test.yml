@@ -52,7 +52,9 @@ jobs:
         run: uv run ruff check .
 
       - name: Mypy type check
-        run: uv run mypy web/ config.py db/ --no-error-summary
+        # Scope lives in pyproject.toml's `files`, so local runs match CI.
+        # Passing paths here would override it.
+        run: uv run mypy
 
       - name: Run pytest
         env:

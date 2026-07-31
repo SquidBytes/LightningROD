@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, overload
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,14 @@ IGNITION_ODO_MATCH_KM = 1.0
 ODO_START_TOLERANCE_KM = 0.5
 DURATION_BAND_SECONDS = (60.0, 86400.0)
 SPEED_BAND_KMH = (2.0, 180.0)
+
+
+@overload
+def _aware(ts: datetime) -> datetime: ...
+
+
+@overload
+def _aware(ts: None) -> None: ...
 
 
 def _aware(ts: datetime | None) -> datetime | None:
@@ -231,6 +239,10 @@ class TelemetryDerive(RepairOperation):
         """Fill values derivable for this trip; only NULL fields, never overwrites."""
         changes: dict[str, Any] = {}
         end_time = _aware(trip.end_time)
+        if end_time is None:
+            # _candidates() filters these out; without an end anchor every
+            # derivation below is unanchored.
+            return changes
         distance = float(trip.distance) if trip.distance is not None else None
         start_effective = _aware(trip.start_time)
 
