@@ -407,3 +407,160 @@ async def test_charging_ingestion_skips_auto_learn_on_manual_location(db_session
     assert refreshed.network_id is None, (
         "Manual location must not auto-learn a network from a payload"
     )
+
+
+# ---------------------------------------------------------------------------
+# Approved-location tagging. A location renamed in the vehicle must not retag
+# the location the user reviewed and approved in LightningROD.
+# ---------------------------------------------------------------------------
+
+
+async def _seed_approved_location(db, *, latitude=38.9072, longitude=-77.0369):
+    """A verified location with a curated network, plus a GPS alias for it."""
+    from db.models.reference import (
+        EVChargingNetwork,
+        EVLocationGPSAlias,
+        EVLocationLookup,
+    )
+
+    net = EVChargingNetwork(network_name="Work", is_verified=True)
+    db.add(net)
+    await db.flush()
+    loc = EVLocationLookup(
+        location_name="Riverview Office",
+        location_type="work",
+        latitude=latitude,
+        longitude=longitude,
+        network_id=net.id,
+        is_verified=True,
+        source_system="manual",
+    )
+    db.add(loc)
+    await db.flush()
+    db.add(
+        EVLocationGPSAlias(
+            location_id=loc.id,
+            latitude=latitude,
+            longitude=longitude,
+            source="merge",
+        )
+    )
+    await db.flush()
+    return loc, net
+
+
+@pytest.mark.asyncio
+async def test_charging_ingestion_keeps_approved_location_after_vehicle_rename(
+    db_session,
+):
+    """Vehicle renamed the location; the approved name, type and network win."""
+    from db.models.charging_session import EVChargingSession
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    loc, net = await _seed_approved_location(db_session)
+
+    entity_id, new_state = make_charging_session_event(
+        device_id=_TEST_DEVICE_ID,
+        energy_kwh=12.0,
+        charge_type="AC",
+        network_name="Work network",
+        location_name="Work north",
+    )
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    session = (
+        await db_session.execute(
+            select(EVChargingSession).where(
+                EVChargingSession.device_id == _TEST_DEVICE_ID
+            )
+        )
+    ).scalar_one()
+
+    assert session.location_id == loc.id
+    assert session.location_name == "Riverview Office"
+    assert session.location_type == "work"
+    assert session.network_id == net.id
+    assert session.charge_type == "AC"
+
+
+@pytest.mark.asyncio
+async def test_charging_ingestion_fills_evse_from_default_stall(db_session):
+    """The approved location's default stall supplies voltage and amperage."""
+    from db.models.charging_session import EVChargingSession
+    from db.models.reference import EVChargerStall
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    loc, _ = await _seed_approved_location(db_session)
+    stall = EVChargerStall(
+        location_id=loc.id,
+        stall_label="A1",
+        charger_type="L2",
+        rated_kw=11.5,
+        voltage=240,
+        amperage=48,
+        is_default=True,
+    )
+    db_session.add(stall)
+    await db_session.flush()
+
+    entity_id, new_state = make_charging_session_event(
+        device_id=_TEST_DEVICE_ID,
+        energy_kwh=9.0,
+        charge_type="AC",
+        network_name="Work",
+    )
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    session = (
+        await db_session.execute(
+            select(EVChargingSession).where(
+                EVChargingSession.device_id == _TEST_DEVICE_ID
+            )
+        )
+    ).scalar_one()
+
+    assert session.stall_id == stall.id
+    assert float(session.evse_voltage) == 240
+    assert float(session.evse_amperage) == 48
+    assert float(session.charger_rated_kw) == 11.5
+    assert session.evse_source == "stall_default"
+
+
+@pytest.mark.asyncio
+async def test_charging_ingestion_falls_back_to_stall_charge_type(db_session):
+    """Payload without chargerType borrows AC/DC from the stall spec."""
+    from db.models.charging_session import EVChargingSession
+    from db.models.reference import EVChargerStall
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    loc, _ = await _seed_approved_location(db_session)
+    db_session.add(
+        EVChargerStall(
+            location_id=loc.id,
+            stall_label="A1",
+            charger_type="DCFC",
+            is_default=True,
+        )
+    )
+    await db_session.flush()
+
+    entity_id, new_state = make_charging_session_event(
+        device_id=_TEST_DEVICE_ID,
+        energy_kwh=30.0,
+        charge_type="",
+        network_name="Work",
+    )
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    session = (
+        await db_session.execute(
+            select(EVChargingSession).where(
+                EVChargingSession.device_id == _TEST_DEVICE_ID
+            )
+        )
+    ).scalar_one()
+
+    assert session.charge_type == "DC"

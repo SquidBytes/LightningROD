@@ -6,6 +6,7 @@ Tests location resolution, geo-matching, and address normalization.
 import pytest
 
 from web.queries.locations import (
+    get_location_defaults,
     get_location_network_id,
     inherit_network_from_location,
     resolve_location,
@@ -316,3 +317,119 @@ async def test_resolve_location_auto_learn_skips_manual_location(db_session):
         await db.execute(select(EVLocationLookup).where(EVLocationLookup.id == loc.id))
     ).scalar_one()
     assert refreshed.network_id is None
+
+
+# ---------------------------------------------------------------------------
+# get_location_defaults
+# ---------------------------------------------------------------------------
+
+
+async def _seed_location(db, **overrides):
+    from db.models.reference import EVChargingNetwork, EVLocationLookup
+
+    net = EVChargingNetwork(network_name="Defaults Net", is_verified=True)
+    db.add(net)
+    await db.flush()
+    loc = EVLocationLookup(
+        location_name=overrides.pop("location_name", "Riverview Office"),
+        location_type=overrides.pop("location_type", "work"),
+        latitude=28.0,
+        longitude=-80.6,
+        network_id=net.id,
+        is_verified=True,
+        source_system="manual",
+        **overrides,
+    )
+    db.add(loc)
+    await db.flush()
+    return loc, net
+
+
+async def _seed_stall(db, location_id, **overrides):
+    from db.models.reference import EVChargerStall
+
+    stall = EVChargerStall(
+        location_id=location_id,
+        stall_label=overrides.pop("stall_label", "A1"),
+        charger_type=overrides.pop("charger_type", "L2"),
+        rated_kw=overrides.pop("rated_kw", 11.5),
+        voltage=overrides.pop("voltage", 240),
+        amperage=overrides.pop("amperage", 48),
+        is_default=overrides.pop("is_default", False),
+        **overrides,
+    )
+    db.add(stall)
+    await db.flush()
+    return stall
+
+
+async def test_location_defaults_returns_curated_fields(db_session):
+    """The approved location supplies name, type and network."""
+    loc, net = await _seed_location(db_session)
+
+    defaults = await get_location_defaults(db_session, loc.id)
+
+    assert defaults.location_name == "Riverview Office"
+    assert defaults.location_type == "work"
+    assert defaults.network_id == net.id
+
+
+async def test_location_defaults_empty_without_location(db_session):
+    """No location id, or one that no longer exists, yields empty defaults."""
+    assert (await get_location_defaults(db_session, None)).location_name is None
+    assert (await get_location_defaults(db_session, 999_999)).network_id is None
+
+
+async def test_location_defaults_uses_flagged_default_stall(db_session):
+    """With several stalls, the one marked default supplies the EVSE specs."""
+    loc, _ = await _seed_location(db_session)
+    await _seed_stall(db_session, loc.id, stall_label="A1", voltage=208, amperage=32)
+    chosen = await _seed_stall(
+        db_session, loc.id, stall_label="B2", voltage=240, amperage=48, is_default=True
+    )
+
+    defaults = await get_location_defaults(db_session, loc.id)
+
+    assert defaults.stall_id == chosen.id
+    assert defaults.evse_voltage == 240
+    assert defaults.evse_amperage == 48
+    assert defaults.charger_rated_kw == 11.5
+
+
+async def test_location_defaults_uses_sole_stall(db_session):
+    """A single stall is unambiguous even when nothing is flagged default."""
+    loc, _ = await _seed_location(db_session)
+    only = await _seed_stall(db_session, loc.id)
+
+    defaults = await get_location_defaults(db_session, loc.id)
+
+    assert defaults.stall_id == only.id
+    assert defaults.evse_voltage == 240
+
+
+async def test_location_defaults_skips_ambiguous_stalls(db_session):
+    """Several stalls and no default flag: guessing would be worse than nothing."""
+    loc, _ = await _seed_location(db_session)
+    await _seed_stall(db_session, loc.id, stall_label="A1")
+    await _seed_stall(db_session, loc.id, stall_label="B2")
+
+    defaults = await get_location_defaults(db_session, loc.id)
+
+    assert defaults.stall_id is None
+    assert defaults.evse_voltage is None
+
+
+@pytest.mark.parametrize(
+    "charger_type,expected",
+    [("L1", "AC"), ("L2", "AC"), ("DCFC", "DC"), (None, None), ("weird", None)],
+)
+async def test_location_defaults_maps_stall_charge_type(
+    db_session, charger_type, expected
+):
+    """Stall charger_type collapses to the AC/DC vocabulary sessions store."""
+    loc, _ = await _seed_location(db_session)
+    await _seed_stall(db_session, loc.id, charger_type=charger_type, is_default=True)
+
+    defaults = await get_location_defaults(db_session, loc.id)
+
+    assert defaults.charge_type == expected

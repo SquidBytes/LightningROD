@@ -312,6 +312,7 @@ def make_charging_session_event(
     max_power_w: float = 150000.0,
     battery_temp_c: float | None = None,
     outside_temp_c: float | None = None,
+    location_name: str | None = None,
 ) -> tuple[str, dict]:
     """Generate an energytransferlogentry event.
     Returns (entity_id, new_state) tuple matching what hass_processor expects.
@@ -319,6 +320,9 @@ def make_charging_session_event(
     context fields (°C — matches real ha-fordpass payload semantics per
     audit) at the top of the attrs dict. Omit them to test
     the "payload without temp keys" path.
+
+    ``location_name`` defaults to ``network_name``; set it to reproduce
+    payloads where the vehicle reports a location name of its own.
     """
     entity_id = f"sensor.fordpass_{device_id}_energytransferlogentry"
     now = _now_iso()
@@ -344,7 +348,7 @@ def make_charging_session_event(
             "weightedAverage": max_power_w * 0.7,
         },
         "location": {
-            "name": network_name,
+            "name": location_name if location_name is not None else network_name,
             "network": network_name,
             "latitude": latitude,
             "longitude": longitude,
