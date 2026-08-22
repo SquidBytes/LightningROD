@@ -96,6 +96,10 @@ Each location can have multiple stalls with different hardware details:
 
 When you edit a session, picking a stall can fill in the EVSE fields for you.
 
+Ingested sessions do this on their own: when a session matches a location that
+has exactly one stall, or one marked **Default**, its voltage, amperage and
+rated kW are copied onto the session automatically.
+
 For supported networks, use **Pre-fill from [Network]** to load known stall templates.
 
 ### Subscription Periods

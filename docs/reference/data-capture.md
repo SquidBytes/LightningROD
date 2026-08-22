@@ -142,7 +142,7 @@ payload. Thermal context is pulled from per-device caches populated by the
 
 | Column | Source (entity.attribute) | Unit | Captured | Notes |
 |--------|---------------------------|------|----------|-------|
-| `charge_type` | `energytransferlogentry.chargerType` | AC/DC | Yes | Normalized to AC/DC. |
+| `charge_type` | `energytransferlogentry.chargerType` | AC/DC | Yes | Normalized to AC/DC. Falls back to the matched location's default stall. |
 | `energy_kwh` | `…energyConsumed` | kWh | Yes | |
 | `start_soc` / `end_soc` | `…stateOfCharge.firstSOC` / `.lastSOC` | % | Yes | |
 | `session_start_utc` / `session_end_utc` | `…energyTransferDuration.begin` / `.end` | — | Yes | |
@@ -152,14 +152,16 @@ payload. Thermal context is pulled from per-device caches populated by the
 | `max_power` / `min_power` | `…power.max` / `.min` (W→kW) | kW | Yes | |
 | `distance_added` | `…plugDetails.totalDistanceAdded` | km | Yes | HA-unit-localized; converted back. |
 | `address` / `latitude` / `longitude` | `…location.*` | ° / text | Yes | |
-| `location_name` | `…location.name` / address city | text | Yes | |
-| `network_id` | resolved from `…location.network` | — | Yes | Via network resolver. |
+| `location_name` | matched location, else `…location.name` / address city | text | Yes | A verified location's name wins over the vehicle-reported one. |
+| `location_type` | matched location | text | Yes (derived) | Copied from the location record. |
+| `network_id` | matched location, else `…location.network` | — | Yes | The location's network wins over the payload's. |
 | `battery_temp_start` / `battery_temp_end` | cached `elvehcharging.batteryTemperature` | °C | Intermittent | Single snapshot mirrored to start/end. |
 | `ambient_temp_start` / `ambient_temp_end` | cached `outsidetemp.ambientTemp` | °C | Yes | Single snapshot mirrored to start/end. |
 | `plug_status` / `charging_status` / `station_status` | (logged only) | text | No | Live plug/charge state is logged, not stored. |
 | `charging_voltage` / `charging_amperage` | — | V / A | No | Only session-average kW is captured. |
 | `cost`, `estimated_cost` | cost engine | currency | No (derived) | Calculated, not captured from HA. |
-| `evse_*`, `charger_rated_kw`, `stall_id` | EVSE / stall association | — | No (derived) | Filled by charger association, not HA. |
+| `evse_voltage` / `evse_amperage` / `charger_rated_kw` / `stall_id` | matched location's default stall | V / A / kW | Yes (derived) | Not sent by HA. Auto-filled when the location has one stall, or one marked default; `evse_source` is set to `stall_default`. |
+| `evse_kw`, `evse_energy_kwh`, `evse_max_power_kw` | — | kW / kWh | No | Manual entry or CSV import only. |
 
 ## Captured but not surfaced
 

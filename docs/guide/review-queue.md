@@ -55,6 +55,10 @@ Locations are the more common pending case, since each new charger position can 
 | **Merge** | Combines the location with another one after showing the impact. |
 | **Delete** | Removes the location. |
 
+Once a location is verified, its name, type and network are what new charging
+sessions record — not the name your vehicle reports. Renaming a location in the
+vehicle will not retag sessions that match a location you have already approved.
+
 ### Verify vs. Associate vs. Promote
 
 These three actions overlap, and the right choice depends on what you are modeling:

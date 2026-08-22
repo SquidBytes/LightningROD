@@ -9,9 +9,19 @@ For feature documentation, see the docs site at
 
 ### Added
 
+- Charging sessions fill in EVSE voltage, amperage and rated power from the
+  charging location's default stall, instead of leaving them blank until you
+  edit the session
+
 ### Changed
 
 ### Fixed
+
+- Charging sessions now show the location name, type and network you approved
+  in the review queue. Renaming a location in the vehicle no longer retags new
+  sessions with the vehicle's name
+- Charging sessions from Home Assistant now record a location type, so the
+  location-type filter and the CSV export column work for them
 
 ### Removed
 
