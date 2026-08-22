@@ -7,16 +7,26 @@ CSV import, and manual session creation.
 
 import math
 import re
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.reference import AppSettings, EVLocationGPSAlias, EVLocationLookup
+from db.models.reference import (
+    AppSettings,
+    EVChargerStall,
+    EVLocationGPSAlias,
+    EVLocationLookup,
+)
 from web.queries.settings import resolve_network
 
 # Maximum distance (meters) for geo-proximity matching
 LOCATION_MATCH_RADIUS_M = 100
+
+# Stall charger_type vocabulary is fixed by the settings UI, unlike the free-form
+# strings arriving from Home Assistant that _normalize_charge_type handles.
+_STALL_CHARGE_TYPE = {"L1": "AC", "L2": "AC", "DCFC": "DC"}
 
 # Earth radius in meters for Haversine
 _EARTH_RADIUS_M = 6_371_000
@@ -359,6 +369,71 @@ async def inherit_network_from_location(
     if network_id is not None or not location_id:
         return network_id
     return await get_location_network_id(db, location_id)
+
+
+@dataclass(frozen=True)
+class LocationDefaults:
+    """The curated values a resolved location contributes to a session."""
+
+    location_name: str | None = None
+    location_type: str | None = None
+    network_id: int | None = None
+    stall_id: int | None = None
+    evse_voltage: float | None = None
+    evse_amperage: float | None = None
+    charger_rated_kw: float | None = None
+    charge_type: str | None = None
+
+
+async def _default_stall(
+    db: AsyncSession, location_id: int
+) -> EVChargerStall | None:
+    """The stall flagged default, or the only stall when a location has one."""
+    result = await db.execute(
+        select(EVChargerStall)
+        .where(EVChargerStall.location_id == location_id)
+        .order_by(EVChargerStall.stall_label)
+    )
+    stalls = list(result.scalars().all())
+    for stall in stalls:
+        if stall.is_default:
+            return stall
+    return stalls[0] if len(stalls) == 1 else None
+
+
+def _as_float(value) -> float | None:
+    return float(value) if value is not None else None
+
+
+async def get_location_defaults(
+    db: AsyncSession, location_id: int | None
+) -> LocationDefaults:
+    """Return what a resolved location contributes to a charging session.
+
+    Sessions record the location the user approved, not the name the vehicle
+    reported, so renaming a location in the vehicle cannot retag records.
+    """
+    if not location_id:
+        return LocationDefaults()
+
+    result = await db.execute(
+        select(EVLocationLookup).where(EVLocationLookup.id == location_id)
+    )
+    loc = result.scalar_one_or_none()
+    if loc is None:
+        return LocationDefaults()
+
+    stall = await _default_stall(db, location_id)
+    return LocationDefaults(
+        location_name=loc.location_name,
+        location_type=loc.location_type,
+        network_id=loc.network_id,
+        stall_id=stall.id if stall else None,
+        evse_voltage=_as_float(stall.voltage) if stall else None,
+        evse_amperage=_as_float(stall.amperage) if stall else None,
+        charger_rated_kw=_as_float(stall.rated_kw) if stall else None,
+        charge_type=_STALL_CHARGE_TYPE.get(stall.charger_type) if stall else None,
+    )
 
 
 async def _get_setting(db: AsyncSession, key: str) -> str | None:

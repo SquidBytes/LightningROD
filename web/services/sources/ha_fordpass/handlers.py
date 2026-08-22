@@ -1185,9 +1185,18 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         _network_name_raw=network_name,
     )
 
-    # Inherit the location's network when none was resolved from the payload.
-    from web.queries.locations import inherit_network_from_location
-    network_id = await inherit_network_from_location(db, network_id, location_id)
+    # -----------------------------------------------------------------------
+    # Apply the resolved location's curated values
+    # -----------------------------------------------------------------------
+    # The approved location wins over the raw payload for name and network, so
+    # renaming a location in the vehicle cannot retag it. charge_type keeps
+    # payload priority -- the vehicle knows how it actually charged.
+    from web.queries.locations import get_location_defaults
+
+    defaults = await get_location_defaults(db, location_id)
+    location_name = defaults.location_name or location_name
+    network_id = defaults.network_id or network_id
+    charge_type = charge_type or defaults.charge_type
 
     # -----------------------------------------------------------------------
     # Create session record
@@ -1198,6 +1207,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         charge_type=charge_type,
         location_name=location_name,
         location_id=location_id,
+        location_type=defaults.location_type,
         network_id=network_id,
         session_start_utc=session_start_utc,
         session_end_utc=session_end_utc,
@@ -1213,6 +1223,11 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         latitude=latitude,
         longitude=longitude,
         distance_added=distance_added,
+        stall_id=defaults.stall_id,
+        evse_voltage=defaults.evse_voltage,
+        evse_amperage=defaults.evse_amperage,
+        charger_rated_kw=defaults.charger_rated_kw,
+        evse_source="stall_default" if defaults.stall_id else None,
         battery_temp_start=battery_temp_start,
         battery_temp_end=battery_temp_end,
         ambient_temp_start=ambient_temp_start,
