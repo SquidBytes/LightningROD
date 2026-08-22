@@ -1309,109 +1309,13 @@ async def _handle_energy_transfer_entity(
 ) -> None:
     """sensor.fordpass_{vin}_energytransferlogentry -> ev_charging_session row.
 
-    plugDetails.totalDistanceAdded is HA-converted (per ha-fordpass source
-    `fordpass_handler.get_energy_transfer_log_attrs` -> `localize_distance`);
-    the adapter resolves its effective unit per-event from `ha_config`.
-    Battery + ambient temps (batteryTemperature, outsidetemp) pass through
-    raw in °C on this payload.
+    Delegates to the slug handler so duplicate detection, location resolution
+    and EVSE defaults have exactly one implementation.
     """
-    from db.models.charging_session import EVChargingSession
+    from web.services.sources.ha_fordpass.handlers import handle_energy_transfer
 
-    attrs = new_state.get("attributes") or {}
-    if not attrs:
-        return
-
-    pattern = _entity_pattern(entity_id)
-
-    # Core energy + charger metadata (already in canonical units)
-    energy_kwh = _safe_float(attrs.get("energyConsumed"))
-    charge_type_raw = attrs.get("chargerType")
-
-    # Duration
-    duration_data = attrs.get("energyTransferDuration") or {}
-    session_start_utc = _parse_iso(duration_data.get("begin"))
-    session_end_utc = _parse_iso(duration_data.get("end"))
-    charge_duration_seconds = _safe_float(duration_data.get("totalTime"))
-
-    # Plug details + distance_added via FIELD_CONTRACTS.
-    plug_data = attrs.get("plugDetails") or {}
-    plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
-    dist_contract = lookup_contract(pattern, "plugDetails.totalDistanceAdded")
-    distance_added = (
-        convert(dist_contract, plug_data.get("totalDistanceAdded"), new_state, ha_config)
-        if dist_contract
-        else None
-    )
-
-    # SOC
-    soc_data = attrs.get("stateOfCharge") or {}
-    start_soc = _safe_float(soc_data.get("firstSOC"))
-    end_soc = _safe_float(soc_data.get("lastSOC"))
-
-    # Power (W -> kW)
-    power_data = attrs.get("power") or {}
-    max_power = _safe_float(power_data.get("max"))
-    min_power = _safe_float(power_data.get("min"))
-    weighted = _safe_float(power_data.get("weightedAverage"))
-    if max_power is not None:
-        max_power = max_power / 1000.0
-    if min_power is not None:
-        min_power = min_power / 1000.0
-    charging_kw = weighted / 1000.0 if weighted is not None else None
-
-    # Location
-    location_data = attrs.get("location") or {}
-    addr_dict = location_data.get("address") or {}
-    address = _format_address(addr_dict)
-    latitude = _safe_float(location_data.get("latitude"))
-    longitude = _safe_float(location_data.get("longitude"))
-    location_name = location_data.get("name") or (
-        addr_dict.get("city") if addr_dict else None
-    )
-
-    # Thermal: sourced from per-device caches populated by elvehcharging and outsidetemp
-    # events before the session record is written. FIELD_CONTRACTS for these fields
-    # are on the elvehcharging/outsidetemp patterns, so lookup against energytransferlogentry
-    # returns None by design.
-    battery_temp = _last_charging_battery_temp.get(device_id)
-    ambient_temp = _last_outsidetemp.get(device_id)
-
-    original_timestamp = _parse_iso(attrs.get("timeStamp"))
-
-    session = EVChargingSession(
-        device_id=device_id,
-        source_system="ha_fordpass",
-        charge_type=_normalize_charger_type(charge_type_raw),
-        location_name=location_name,
-        session_start_utc=session_start_utc,
-        session_end_utc=session_end_utc,
-        charge_duration_seconds=charge_duration_seconds,
-        plugged_in_duration_seconds=plugged_in_duration_seconds,
-        start_soc=start_soc,
-        end_soc=end_soc,
-        energy_kwh=energy_kwh,
-        max_power=max_power,
-        min_power=min_power,
-        charging_kw=charging_kw,
-        address=address,
-        latitude=latitude,
-        longitude=longitude,
-        distance_added=distance_added,
-        battery_temp_start=battery_temp,
-        battery_temp_end=battery_temp,
-        ambient_temp_start=ambient_temp,
-        ambient_temp_end=ambient_temp,
-        original_timestamp=original_timestamp,
-        is_complete=True,
-        recorded_at=datetime.now(UTC),
-        ingest_schema_version=INGEST_SCHEMA_VERSION,
-    )
-    db.add(session)
-    logger.debug(
-        "ha_fordpass: wrote ev_charging_session for %s distance_added=%s energy=%s",
-        device_id,
-        distance_added,
-        energy_kwh,
+    await handle_energy_transfer(
+        "energytransferlogentry", new_state, ha_config or {}, device_id, db
     )
 
 
@@ -1506,37 +1410,3 @@ async def _closest_odometer(
 
     closest = min(rows, key=_delta)
     return float(closest.odometer) if closest.odometer is not None else None
-
-
-def _format_address(addr: dict | None) -> str | None:
-    if not addr or not isinstance(addr, dict):
-        return None
-    parts = []
-    if addr.get("address1"):
-        parts.append(addr["address1"])
-    if addr.get("city"):
-        parts.append(addr["city"])
-    if addr.get("state"):
-        parts.append(addr["state"])
-    return ", ".join(parts) if parts else None
-
-
-# Mirrors the ha_fordpass.handlers _CHARGER_TYPE_MAP so the adapter's
-# charging-session path is drop-in compatible. Kept local to avoid a
-# back-import.
-_CHARGER_TYPE_MAP = {
-    "AC": "AC", "AC_BASIC": "AC", "AC_LEVEL_1": "AC", "AC_LEVEL_2": "AC",
-    "AC LEVEL 1": "AC", "AC LEVEL 2": "AC", "LEVEL_1": "AC", "LEVEL_2": "AC",
-    "LEVEL 1": "AC", "LEVEL 2": "AC", "L1": "AC", "L2": "AC",
-    "DC": "DC", "DC_FAST": "DC", "DC_DCFAST": "DC", "DC_COMBO": "DC",
-    "DC FAST": "DC", "DCFC": "DC", "L3": "DC", "LEVEL 3": "DC",
-}
-
-
-def _normalize_charger_type(raw: Any) -> str | None:
-    if not raw or not isinstance(raw, str):
-        return None
-    key = raw.strip().upper()
-    if not key:
-        return None
-    return _CHARGER_TYPE_MAP.get(key, key)
