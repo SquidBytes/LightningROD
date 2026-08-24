@@ -168,3 +168,25 @@ def reset_factories():
 
     BaseFactory.reset_seed()
     yield
+
+
+class FixedSessionFactory:
+    """Stand-in for ``AsyncSessionLocal`` that always yields the test session.
+
+    Services that open their own session (the raw-event archive, archive
+    replay) would otherwise write outside the fixture's transaction and
+    escape its rollback. Mirrors the sessionmaker's ``async with`` shape but
+    hands back the long-lived test session and never closes it.
+    """
+
+    def __init__(self, session):
+        self._session = session
+
+    def __call__(self):
+        return self
+
+    async def __aenter__(self):
+        return self._session
+
+    async def __aexit__(self, *_):
+        return False

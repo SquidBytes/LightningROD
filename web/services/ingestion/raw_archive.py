@@ -37,7 +37,12 @@ PRUNE_BATCH = 5000
 
 
 def _utc(ts: datetime | None) -> datetime | None:
-    """UTC-normalized copy. SQLite drops tzinfo on bind, so offsets must resolve first."""
+    """UTC-normalized copy, re-basing an offset-aware value.
+
+    Unlike the repair layer's `_aware`, this resolves offsets rather than
+    just stamping naive values: SQLite drops tzinfo on bind, so a +02:00
+    timestamp would otherwise be stored as UTC wall time.
+    """
     if ts is None:
         return None
     return ts.astimezone(UTC) if ts.tzinfo else ts.replace(tzinfo=UTC)

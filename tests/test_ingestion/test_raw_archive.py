@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import func, select
 
 from db.models.raw_event import HARawEvent
+from tests.conftest import FixedSessionFactory
 from tests.factories.raw_events import RawEventFactory
 from web.queries.settings import set_app_setting
 from web.services.ingestion.raw_archive import RawEventArchive
@@ -49,22 +50,6 @@ def _state(suffix: str, ts: datetime = EVENT_TS) -> dict:
     return state
 
 
-class _SessionFactory:
-    """Hands the writer the test session instead of a fresh production one."""
-
-    def __init__(self, session):
-        self._session = session
-
-    def __call__(self):
-        return self
-
-    async def __aenter__(self):
-        return self._session
-
-    async def __aexit__(self, *_):
-        return False
-
-
 @pytest.fixture
 def archive(monkeypatch, db_session):
     """A fresh archive instance writing through the test session.
@@ -74,7 +59,7 @@ def archive(monkeypatch, db_session):
     """
     import web.services.ingestion.raw_archive as module
 
-    monkeypatch.setattr(module, "AsyncSessionLocal", _SessionFactory(db_session))
+    monkeypatch.setattr(module, "AsyncSessionLocal", FixedSessionFactory(db_session))
     instance = RawEventArchive()
     instance._prune_due_at = time.monotonic() + module.PRUNE_INTERVAL
     return instance

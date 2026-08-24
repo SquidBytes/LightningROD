@@ -30,7 +30,11 @@ def _aware(ts: None) -> None: ...
 
 
 def _aware(ts: datetime | None) -> datetime | None:
-    """UTC-aware copy; SQLite returns naive datetimes."""
+    """UTC-aware copy; SQLite returns naive datetimes.
+
+    Stamps UTC on a naive value only — an offset-aware value is returned
+    unchanged, not re-based onto UTC.
+    """
     if ts is None:
         return None
     return ts if ts.tzinfo else ts.replace(tzinfo=UTC)

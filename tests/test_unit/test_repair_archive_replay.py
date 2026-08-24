@@ -13,6 +13,7 @@ from sqlalchemy import delete, func, select
 
 from db.models.raw_event import HARawEvent
 from db.models.trip_metrics import EVTripMetrics
+from tests.conftest import FixedSessionFactory
 from tests.factories.raw_events import (
     IMPERIAL_UNIT_SYSTEM,
     METRIC_UNIT_SYSTEM,
@@ -29,26 +30,10 @@ VIN = "TESTVIN001"
 STATE_TS = datetime(2026, 4, 19, 12, 0, tzinfo=UTC)
 
 
-class _SessionFactory:
-    """Hands the op the test session instead of opening a production one."""
-
-    def __init__(self, session):
-        self._session = session
-
-    def __call__(self):
-        return self
-
-    async def __aenter__(self):
-        return self._session
-
-    async def __aexit__(self, *_):
-        return False
-
-
 @pytest.fixture
 def op(db_session):
     """An ArchiveReplay reading the archive through the test session."""
-    return ArchiveReplay(session_factory=_SessionFactory(db_session))
+    return ArchiveReplay(session_factory=FixedSessionFactory(db_session))
 
 
 @pytest.fixture(autouse=True)
@@ -290,9 +275,11 @@ async def test_apply_never_writes_back_to_the_archive(op, db_session):
 async def test_preview_persists_nothing():
     """The dry-run replays inside a rollback session and leaves no trips.
 
-    Runs on its own engine with committed archive rows: the rollback_session
-    opens a second connection, which would deadlock against the shared
-    transaction the db_session fixture holds open.
+    Runs on its own engine with committed archive rows: rollback_session
+    opens a second connection, which deadlocks against the row locks the
+    db_session fixture's open transaction holds. The committed rows are
+    deleted in the finally block, which assumes a serial test suite — no
+    other test may be reading ha_raw_events concurrently.
     """
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
