@@ -305,15 +305,20 @@ class HAWebSocketRuntime:
         await self._dispatch(entity_id, new_state)
 
     async def _dispatch(self, entity_id: str, new_state: dict) -> None:
-        """Per-event fan-out: try the gas-price adapter first, then ha_fordpass slug.
+        """Per-event fan-out: archive the raw event, gas-price adapter, then slug.
 
-        The two-session-per-event pattern keeps gas-price writes and FordPass
-        slug writes isolated; single-session optimization is deliberately
-        deferred.
+        The session-per-branch pattern keeps the archive, gas-price writes and
+        FordPass slug writes isolated; single-session optimization is
+        deliberately deferred.
         """
         from db.engine import AsyncSessionLocal
+        from web.services.ingestion.raw_archive import raw_archive
         from web.services.sources.ha_fordpass.dispatch import dispatch_slug
         from web.services.sources.ha_gas_price.adapter import try_handle_event
+
+        # Archive first, in its own committed session: the typed branches below
+        # roll their session back on error and the raw event must survive that.
+        await raw_archive.store(entity_id, new_state, config_id=self.config_id)
 
         # Gas-price branch — match by configured entity_id, not slug pattern.
         async with AsyncSessionLocal() as db:

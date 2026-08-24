@@ -495,6 +495,25 @@ async def get_unit_context(db: AsyncSession) -> dict:
     }
 
 
+RAW_ARCHIVE_DEFAULT_RETENTION_DAYS = 90
+
+
+async def get_raw_archive_settings(db: AsyncSession) -> dict:
+    """Load raw-event archive settings. Archiving is on unless switched off."""
+    raw = await get_app_settings_dict(
+        db, ["raw_archive_enabled", "raw_archive_retention_days"]
+    )
+    try:
+        retention = int(raw["raw_archive_retention_days"])
+    except (TypeError, ValueError):
+        retention = RAW_ARCHIVE_DEFAULT_RETENTION_DAYS
+    return {
+        "enabled": raw["raw_archive_enabled"] != "false",
+        # 0 means keep forever.
+        "retention_days": max(retention, 0),
+    }
+
+
 async def set_app_setting(db: AsyncSession, key: str, value: str) -> None:
     """Upsert a single key-value pair in app_settings."""
     stmt = portable_insert(AppSettings, dialect=db.bind.dialect).values(

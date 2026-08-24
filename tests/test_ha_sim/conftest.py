@@ -19,13 +19,16 @@ async def ha_simulator():
 def clear_processor_state():
     """Clear shared in-memory processor state before and after each test.
 
-    This prevents cross-test leakage from pending status buffers and the
-    adapter's ``_last_seen_raw`` cache. Tuple-keyed pending dicts in
-    ha_fordpass.handlers are cleared unconditionally — dict.clear() removes
-    every entry regardless of config_id, preserving per-test reset semantics.
+    This prevents cross-test leakage from pending status buffers, the raw
+    archive's settings/prune caches, and the adapter's ``_last_seen_raw``
+    cache. Tuple-keyed pending dicts in ha_fordpass.handlers are cleared
+    unconditionally — dict.clear() removes every entry regardless of
+    config_id, preserving per-test reset semantics.
     """
+    from web.services.ingestion.raw_archive import raw_archive
     from web.services.sources.ha_fordpass import handlers as fordpass_handlers
 
+    raw_archive.reset()
     fordpass_handlers._last_trip_values.clear()
     fordpass_handlers._pending_vehicle_status.clear()
     fordpass_handlers._pending_vehicle_status_ts.clear()
@@ -40,6 +43,7 @@ def clear_processor_state():
 
     yield
     # Also clear after test for good measure
+    raw_archive.reset()
     fordpass_handlers._last_trip_values.clear()
     fordpass_handlers._pending_vehicle_status.clear()
     fordpass_handlers._pending_vehicle_status_ts.clear()
