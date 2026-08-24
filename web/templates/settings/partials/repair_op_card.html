@@ -29,12 +29,12 @@
                     hx-target="closest .card"
                     hx-swap="outerHTML"
                     hx-indicator="#repair-spinner-{{ op.slug }}"
-                    {% if is_replay and census == 0 %}
-                    hx-confirm="Replay recorder history? Recovered trips are new rows (no snapshot needed)."
+                    {% if op.runs_when_clean and census == 0 %}
+                    hx-confirm="Replay stored history? Recovered trips are new rows (no snapshot needed)."
                     {% else %}
                     hx-confirm="Snapshot and repair {{ census }} rows? A restorable backup will be created."
                     {% endif %}
-                    {% if replay_disabled or (not is_replay and census == 0) %}disabled{% endif %}>
+                    {% if replay_disabled or (not op.runs_when_clean and census == 0) %}disabled{% endif %}>
                 Apply
             </button>
             <span id="repair-spinner-{{ op.slug }}" class="loading loading-spinner loading-sm htmx-indicator"></span>

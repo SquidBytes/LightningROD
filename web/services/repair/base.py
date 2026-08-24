@@ -48,6 +48,9 @@ class RepairOperation(ABC):
     display_name: str
     description: str
     model: type
+    # Set on operations that can recover rows the census cannot see — replays
+    # insert trips that were never ingested — so Apply stays live at census 0.
+    runs_when_clean: bool = False
 
     @abstractmethod
     async def census(self, db: AsyncSession) -> int:

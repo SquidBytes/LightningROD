@@ -75,6 +75,7 @@ class RecorderReplay(RepairOperation):
         "recovering trips that were never ingested."
     )
     model = EVTripMetrics
+    runs_when_clean = True
 
     TRIP_ENTITY_SUFFIXES = ("events", "metrics", "elveh")
     ENRICHABLE_FIELDS = (

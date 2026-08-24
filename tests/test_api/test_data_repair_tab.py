@@ -104,6 +104,19 @@ async def test_tab_connected_with_recorder_history(client, replay_op):
     assert "recorder replay unavailable" not in body
 
 
+async def test_replay_apply_stays_enabled_at_census_zero(client, replay_op):
+    """Replay recovers never-ingested trips, so a clean census must not grey it out."""
+    window_ts = datetime.now(UTC) - timedelta(days=3)
+    replay_op._runtime = _FakeRuntime([{"last_updated": window_ts.isoformat()}])
+    response = await client.get("/settings/data-repair")
+    assert response.status_code == 200
+    body = response.text
+    # Only rendered for an operation that declares it runs with a clean census.
+    assert "Replay stored history?" in body
+    # The other ops are clean too, and theirs stay on the snapshot confirm.
+    assert "Snapshot and repair 0 rows?" in body
+
+
 async def test_census_badge_for_seeded_pair(client, db_session):
     await _seed_corrupt_pair(db_session)
     response = await client.get("/settings/data-repair")
