@@ -33,15 +33,18 @@ async def test_raw_event_payload_roundtrip(db_session):
         "attributes": {"customEvents": {"trip": {"values": [1, 2, 3]}}},
         "last_changed": "2026-04-19T12:00:00+00:00",
     }
+    unit_system = {"length": "mi", "temperature": "\u00b0F"}
     row = HARawEvent(
         entity_id="sensor.fordpass_TESTVIN001_events",
         payload=payload,
+        ha_unit_system=unit_system,
         recorded_at=datetime.now(UTC),
     )
     db_session.add(row)
     await db_session.flush()
     await db_session.refresh(row)
     assert row.payload == payload
+    assert row.ha_unit_system == unit_system
 
 
 @pytest.mark.db

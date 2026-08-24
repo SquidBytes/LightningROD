@@ -13,11 +13,18 @@ from web.services.repair.recorder_replay import _WINDOW_CACHE_TTL, RecorderRepla
 
 
 class _ArchiveSource:
-    """Stands in for the HA runtime — replay only reads `_ha_config` off it."""
+    """Stands in for the HA runtime — replay only reads `_ha_config` off it.
 
-    def __init__(self, ha_config: dict, detected_vin: str | None = None):
-        self._ha_config = ha_config
-        self.detected_vin = detected_vin
+    Resolved late, through the operation, because replay snapshots the config
+    after probing the window, which is where the archived unit system loads.
+    """
+
+    def __init__(self, op: ArchiveReplay):
+        self._op = op
+
+    @property
+    def _ha_config(self) -> dict:
+        return self._op.replay_ha_config()
 
 
 class ArchiveReplay(RecorderReplay):
@@ -43,6 +50,7 @@ class ArchiveReplay(RecorderReplay):
     def __init__(self, runtime=None, session_factory=None):
         super().__init__(runtime)
         self._session_factory = session_factory
+        self._unit_system: dict | str | None = None
 
     def _sessions(self):
         """Session factory for archive reads; overridden in tests."""
@@ -53,16 +61,27 @@ class ArchiveReplay(RecorderReplay):
         return AsyncSessionLocal
 
     def _get_runtime(self):
-        """The live runtime if there is one, else a config-only stand-in."""
+        """The injected runtime if there is one, else a config-only stand-in."""
         if self._runtime is not None:
             return self._runtime
+        return _ArchiveSource(self)
+
+    def replay_ha_config(self) -> dict:
+        """Config the archived payloads must be read under.
+
+        ha-fordpass localizes trip distances and temperatures into Home
+        Assistant's unit system before emitting them, so replaying an
+        imperial payload without that unit system stores miles as kilometres
+        and °F as °C. The archived value wins: it is the system that was in
+        force when the payload was captured. A live connection is only a
+        fallback for rows captured before the unit system was recorded.
+        """
+        if self._unit_system is not None:
+            return {"unit_system": self._unit_system}
         from web.services.ingestion.supervisor import supervisor
 
         live = supervisor.get_runtime("ha_fordpass", "default")
-        return _ArchiveSource(
-            getattr(live, "_ha_config", None) or {},
-            getattr(live, "detected_vin", None),
-        )
+        return dict(getattr(live, "_ha_config", None) or {})
 
     def ha_connected(self) -> bool:
         """Always true — the archive is local data."""
@@ -81,6 +100,14 @@ class ArchiveReplay(RecorderReplay):
                 select(func.min(HARawEvent.recorded_at)).where(
                     HARawEvent.slug == "events"
                 )
+            )
+            # Loaded on the same probe: replay reads the config once, right
+            # after this call, so it has to be in place by the time it does.
+            self._unit_system = await db.scalar(
+                select(HARawEvent.ha_unit_system)
+                .where(HARawEvent.ha_unit_system.isnot(None))
+                .order_by(HARawEvent.recorded_at.desc())
+                .limit(1)
             )
         self._window = _aware(earliest)
         self._window_probed_at = now

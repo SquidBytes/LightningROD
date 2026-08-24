@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("slug", sa.String(), nullable=True),
         sa.Column("state", sa.String(), nullable=True),
         sa.Column("payload", JSONStorage(), nullable=False),
+        sa.Column("ha_unit_system", JSONStorage(), nullable=True),
         sa.Column("recorded_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             "ingested_at",

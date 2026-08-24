@@ -320,7 +320,12 @@ class HAWebSocketRuntime:
         # roll their session back on error and the raw event must survive that.
         # Guarded like them so an archive fault can never cost a typed write.
         try:
-            await raw_archive.store(entity_id, new_state, config_id=self.config_id)
+            await raw_archive.store(
+                entity_id,
+                new_state,
+                config_id=self.config_id,
+                ha_config=self._ha_config,
+            )
         except Exception as e:
             logger.error("Raw archive error for %s: %s", entity_id, e, exc_info=True)
 

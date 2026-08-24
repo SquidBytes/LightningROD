@@ -45,7 +45,7 @@ Some trips are stored with their headline numbers but no start time, duration, o
 
 ### Event archive replay
 
-Replays trip-related events from LightningROD's own [event archive](settings.md#event-archive) back through the ingestion pipeline, filling the same fields recorder replay fills — duration, start time, odometer readings, regenerated range, driving scores, and temperatures — and recovering trips that were never ingested. Because the events are stored locally as they arrive, this works with Home Assistant offline and reaches back as far as your archive retention, not the recorder's. It can only replay events archived since you upgraded to a release with the archive; for anything older, use recorder replay while the history is still there.
+Replays trip-related events from LightningROD's own [event archive](settings.md#event-archive) back through the ingestion pipeline, filling the same fields recorder replay fills — duration, start time, odometer readings, regenerated range, driving scores, and temperatures — and recovering trips that were never ingested. Because the events are stored locally as they arrive, this works with Home Assistant offline and reaches back as far as your archive retention, not the recorder's. Each archived event also records the unit system Home Assistant was using at the time, so an offline replay reads distances and temperatures the same way live ingestion did. It can only replay events archived since you upgraded to a release with the archive; for anything older, use recorder replay while the history is still there.
 
 ### Recorder history replay
 

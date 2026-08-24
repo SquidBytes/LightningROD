@@ -51,7 +51,14 @@ class RawEventArchive:
         self._settings_at: float = 0.0
         self._prune_due_at: float = 0.0
 
-    async def store(self, entity_id: str, new_state: dict, *, config_id: int) -> None:
+    async def store(
+        self,
+        entity_id: str,
+        new_state: dict,
+        *,
+        config_id: int,
+        ha_config: dict | None = None,
+    ) -> None:
         """Archive one raw event.
 
         Everything runs inside the guard: this is called from the ingestion
@@ -66,7 +73,9 @@ class RawEventArchive:
             async with AsyncSessionLocal() as db:
                 settings = await self._settings_for(db)
                 if settings["enabled"]:
-                    await self._insert(db, entity_id, slug, new_state, config_id)
+                    await self._insert(
+                        db, entity_id, slug, new_state, config_id, ha_config
+                    )
                     await db.commit()
             # Retention keeps running with archiving switched off: turning it
             # off to reclaim disk must not freeze what is already stored.
@@ -94,7 +103,13 @@ class RawEventArchive:
         return self._settings
 
     async def _insert(
-        self, db, entity_id: str, slug: str, new_state: dict, config_id: int
+        self,
+        db,
+        entity_id: str,
+        slug: str,
+        new_state: dict,
+        config_id: int,
+        ha_config: dict | None,
     ) -> None:
         state = new_state.get("state")
         stmt = portable_insert(HARawEvent, dialect=db.bind.dialect).values(
@@ -103,6 +118,10 @@ class RawEventArchive:
             slug=slug,
             state=None if state is None else str(state),
             payload=new_state,
+            # Only the unit system, not the whole HA config: the rest of it is
+            # instance metadata (home coordinates, location name) the archive
+            # has no reason to hold.
+            ha_unit_system=(ha_config or {}).get("unit_system"),
             recorded_at=(
                 _utc(_get_event_timestamp(new_state, EVENT_TS_KEYS))
                 or datetime.now(UTC)

@@ -29,6 +29,11 @@ class HARawEvent(Base):
     # The whole new_state dict, replayable straight back into dispatch_slug.
     payload: Mapped[dict[str, Any]] = mapped_column(JSONStorage, nullable=False)
 
+    # Home Assistant's unit_system at capture time. ha-fordpass localizes
+    # several trip attributes into it before emitting them, so the payload
+    # alone does not say what its numbers mean.
+    ha_unit_system: Mapped[dict[str, Any] | None] = mapped_column(JSONStorage)
+
     recorded_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False)
     ingested_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=func.now()

@@ -13,7 +13,11 @@ from sqlalchemy import delete, func, select
 
 from db.models.raw_event import HARawEvent
 from db.models.trip_metrics import EVTripMetrics
-from tests.factories.raw_events import RawEventFactory
+from tests.factories.raw_events import (
+    IMPERIAL_UNIT_SYSTEM,
+    METRIC_UNIT_SYSTEM,
+    RawEventFactory,
+)
 from tests.factories.trips import TripFactory
 from tests.factories.vehicles import VehicleFactory
 from web.services.repair.ops.archive_replay import ArchiveReplay
@@ -69,12 +73,32 @@ def _clear_ingestion_state():
     _clear()
 
 
-async def _seed_trip_entities(db_session, ts: datetime = STATE_TS) -> None:
+async def _seed_trip_entities(
+    db_session,
+    ts: datetime = STATE_TS,
+    *,
+    fixture: str = "metric_ha_metric_vehicle",
+    unit_system: dict | None = METRIC_UNIT_SYSTEM,
+) -> None:
     """One archived state per trip entity, all at the same timestamp."""
     for suffix in ArchiveReplay.TRIP_ENTITY_SUFFIXES:
         await RawEventFactory.create(
-            db_session, suffix=suffix, device_id=VIN, recorded_at=ts
+            db_session,
+            suffix=suffix,
+            device_id=VIN,
+            recorded_at=ts,
+            fixture=fixture,
+            ha_unit_system=unit_system,
         )
+
+
+async def _trips(db_session) -> list[EVTripMetrics]:
+    result = await db_session.execute(
+        select(EVTripMetrics)
+        .where(EVTripMetrics.device_id == VIN)
+        .order_by(EVTripMetrics.id)
+    )
+    return list(result.scalars().all())
 
 
 async def _trip_count(db_session) -> int:
@@ -182,6 +206,32 @@ async def test_replay_fills_duration_and_scores_from_the_archive(op, db_session)
     assert float(trip.driving_score) == pytest.approx(85.0)
     assert float(trip.speed_score) == pytest.approx(60.0)
     assert float(trip.range_regenerated) == pytest.approx(2.1)
+
+
+@pytest.mark.db
+async def test_offline_replay_reads_imperial_payloads_as_imperial(op, db_session):
+    """No live connection, imperial install: values must not be read as metric.
+
+    ha-fordpass localizes the elveh trip attributes into Home Assistant's
+    unit system. Replaying them without it stores miles as kilometres and °F
+    as °C, and the wrong distance stops the row matching the trip the events
+    payload created — so a spurious second trip appears alongside it.
+    """
+    await VehicleFactory.create(db_session, device_id=VIN)
+    await _seed_trip_entities(
+        db_session,
+        fixture="imperial_ha_imperial_vehicle",
+        unit_system=IMPERIAL_UNIT_SYSTEM,
+    )
+
+    await op.execute(db_session)
+
+    trips = await _trips(db_session)
+    assert len(trips) == 1, "elveh was read in the wrong units and duplicated the trip"
+    trip = trips[0]
+    assert float(trip.distance) == pytest.approx(19.0, abs=0.05)
+    assert float(trip.cabin_temp) == pytest.approx(20.0, abs=0.5)
+    assert float(trip.ambient_temp) == pytest.approx(15.0, abs=0.5)
 
 
 @pytest.mark.db
