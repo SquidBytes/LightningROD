@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
-from typing import Any, overload
+from datetime import datetime, timedelta
+from typing import Any
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle_status import EVVehicleStatus
 from web.queries.trips import detect_trip_location_ids
-from web.services.repair.base import RepairDiff, RepairOperation, RepairResult
+from web.services.repair.base import (
+    RepairDiff,
+    RepairOperation,
+    RepairResult,
+    _aware,
+)
 
 # Legacy pre-abstraction ingestion wrote source_system='homeassistant'; this
 # op may enrich those rows, but the global MUTABLE_SOURCE_SYSTEMS stays
@@ -30,21 +35,6 @@ IGNITION_ODO_MATCH_KM = 1.0
 ODO_START_TOLERANCE_KM = 0.5
 DURATION_BAND_SECONDS = (60.0, 86400.0)
 SPEED_BAND_KMH = (2.0, 180.0)
-
-
-@overload
-def _aware(ts: datetime) -> datetime: ...
-
-
-@overload
-def _aware(ts: None) -> None: ...
-
-
-def _aware(ts: datetime | None) -> datetime | None:
-    """UTC-aware copy; SQLite returns naive datetimes."""
-    if ts is None:
-        return None
-    return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
 
 
 class TelemetryDerive(RepairOperation):

@@ -6,7 +6,8 @@ import uuid
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, overload
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +19,21 @@ MUTABLE_SOURCE_SYSTEMS = ("ha_fordpass",)
 def mutable_only(model):
     """Filter clause restricting a query to rows repairs may mutate."""
     return model.source_system.in_(MUTABLE_SOURCE_SYSTEMS)
+
+
+@overload
+def _aware(ts: datetime) -> datetime: ...
+
+
+@overload
+def _aware(ts: None) -> None: ...
+
+
+def _aware(ts: datetime | None) -> datetime | None:
+    """UTC-aware copy; SQLite returns naive datetimes."""
+    if ts is None:
+        return None
+    return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
 
 
 @dataclass
