@@ -45,6 +45,7 @@ from web.queries.settings import (
     get_app_settings_dict,
     get_charger_templates,
     get_locations_for_network,
+    get_raw_archive_settings,
     get_stalls_for_location,
     get_subscriptions_for_network,
     get_unit_context,
@@ -158,7 +159,18 @@ SETTINGS_KEYS = [
     "trip_hide_enabled",
     "trip_hide_min_duration_s",
     "trip_hide_min_distance_km",
+    "raw_archive_enabled",
+    "raw_archive_retention_days",
 ]
+
+
+async def _raw_archive_ctx(db: AsyncSession) -> dict:
+    """Event-archive settings with their defaults resolved for the form."""
+    archive = await get_raw_archive_settings(db)
+    return {
+        "raw_archive_enabled": archive["enabled"],
+        "raw_archive_retention_days": archive["retention_days"],
+    }
 
 
 async def _trip_display_ctx(db: AsyncSession) -> dict:
@@ -209,6 +221,7 @@ async def settings_index(
     all_vehicles = await get_all_vehicles(db)
     unit_ctx = await get_unit_context(db)
     trip_display_ctx = await _trip_display_ctx(db)
+    raw_archive_ctx = await _raw_archive_ctx(db)
 
     return templates.TemplateResponse(
         request,
@@ -220,6 +233,7 @@ async def settings_index(
             **ice_ctx,
             **import_ctx,
             **trip_display_ctx,
+            **raw_archive_ctx,
             "settings": settings,
             "active_page": "settings",
             "page_title": "Settings",
@@ -2115,6 +2129,37 @@ async def update_trip_display_settings(
     return templates.TemplateResponse(
         request,
         "settings/partials/trip_display_settings.html",
+        ctx,
+    )
+
+
+@router.post("/settings/raw-archive", response_class=HTMLResponse)
+async def update_raw_archive_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    raw_archive_enabled: str | None = Form(None),
+    raw_archive_retention_days: int | None = Form(None),
+):
+    """Save event-archive settings; the writer picks them up on the next event."""
+    from web.services.ingestion.raw_archive import raw_archive
+
+    await set_app_setting(
+        db,
+        "raw_archive_enabled",
+        "true" if raw_archive_enabled is not None else "false",
+    )
+    if raw_archive_retention_days is not None:
+        await set_app_setting(
+            db,
+            "raw_archive_retention_days",
+            str(max(raw_archive_retention_days, 0)),
+        )
+    raw_archive.invalidate_settings()
+    ctx = await _raw_archive_ctx(db)
+    ctx["saved"] = True
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/raw_archive_settings.html",
         ctx,
     )
 
