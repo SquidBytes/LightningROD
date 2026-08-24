@@ -12,6 +12,14 @@ For feature documentation, see the docs site at
 - Charging sessions fill in EVSE voltage, amperage and rated power from the
   charging location's default stall, instead of leaving them blank until you
   edit the session
+- LightningROD now keeps a copy of every Home Assistant event it receives, so
+  missing trip data can be repaired from its own records instead of Home
+  Assistant's limited history
+- Data Repair operation that replays the stored event archive to fill missing
+  trip fields and recover trips that were never ingested, with no Home
+  Assistant connection needed
+- Settings options to turn the event archive off and choose how long archived
+  events are kept
 
 ### Changed
 

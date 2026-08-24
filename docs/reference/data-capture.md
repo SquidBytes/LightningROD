@@ -191,6 +191,12 @@ without a registered handler is **silently dropped** by the dispatcher. The
 table below lists notable uncaptured data, flagged by rough value. Attributes
 that cannot be confirmed without a live HA instance are marked *unverified*.
 
+!!! note "Dropped from the typed tables, not from the database"
+    With the [event archive](../guide/settings.md#event-archive) on, the whole
+    payload of every FordPass event is stored as it arrives. Nothing below is
+    mapped to a column, but it stays recoverable from the archive for as long
+    as the retention window keeps it.
+
 | Data | Rough value | Status | Note |
 |------|-------------|--------|------|
 | Door open/ajar + lock state (per door, hood, tailgate) | High | Not captured (*unverified* attribute names) | Would fill `door_lock_status`. |

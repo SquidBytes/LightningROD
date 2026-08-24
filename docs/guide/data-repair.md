@@ -41,7 +41,11 @@ Some trips were stored with a distance converted to kilometers twice without lea
 
 ### Derive trip fields from telemetry
 
-Some trips are stored with their headline numbers but no start time, duration, or odometer readings. This operation fills those gaps from vehicle telemetry already in the database — no Home Assistant connection needed. It anchors each trip to the odometer timeline around its end to reconstruct the missing odometer readings, start time, and duration (anything implying an implausible duration or average speed is left alone), recomputes missing efficiency from distance and energy, and averages stored temperature readings over the trip window. It also fills the start and end location from stored GPS history — matching the trip's endpoints to your known locations (an endpoint with no nearby known place is left blank rather than guessed). It only fills empty fields — existing values are never changed. Driving scores and regenerated range cannot be derived locally; those still need recorder history replay.
+Some trips are stored with their headline numbers but no start time, duration, or odometer readings. This operation fills those gaps from vehicle telemetry already in the database — no Home Assistant connection needed. It anchors each trip to the odometer timeline around its end to reconstruct the missing odometer readings, start time, and duration (anything implying an implausible duration or average speed is left alone), recomputes missing efficiency from distance and energy, and averages stored temperature readings over the trip window. It also fills the start and end location from stored GPS history — matching the trip's endpoints to your known locations (an endpoint with no nearby known place is left blank rather than guessed). It only fills empty fields — existing values are never changed. Driving scores and regenerated range cannot be derived from telemetry; those need one of the two replay operations below.
+
+### Event archive replay
+
+Replays trip-related events from LightningROD's own [event archive](settings.md#event-archive) back through the ingestion pipeline, filling the same fields recorder replay fills — duration, start time, odometer readings, regenerated range, driving scores, and temperatures — and recovering trips that were never ingested. Because the events are stored locally as they arrive, this works with Home Assistant offline and reaches back as far as your archive retention, not the recorder's. It can only replay events archived since you upgraded to a release with the archive; for anything older, use recorder replay while the history is still there.
 
 ### Recorder history replay
 
@@ -55,11 +59,13 @@ Before an operation changes existing rows, it saves them to a snapshot. The Snap
 - **Purge** deletes the snapshot once you are happy with the repair.
 
 !!! warning "Restore scope"
-    Restore puts the snapshotted rows back; rows created after the snapshot are not removed. In particular, trips recovered by recorder replay are new rows and stay after a restore — re-running the replay converges to the same result either way.
+    Restore puts the snapshotted rows back; rows created after the snapshot are not removed. In particular, trips recovered by either replay are new rows and stay after a restore — re-running the replay converges to the same result either way.
 
 ## The Recorder Window
 
 Recorder replay can only reach as far back as Home Assistant retains history — controlled by the recorder's `purge_keep_days` setting, which defaults to about 10 days. The banner at the top of the tab shows the actual replay window your instance can reach. Trips older than the window cannot be re-enriched; if you want more reach, raise `purge_keep_days` in Home Assistant before the history you need is purged.
+
+Event archive replay is not bound by that window — it reads events LightningROD stored itself, kept for as long as the retention setting on the General tab allows.
 
 ## Safe to Re-run
 

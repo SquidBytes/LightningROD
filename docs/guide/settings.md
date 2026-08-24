@@ -11,7 +11,7 @@ The General tab is the default on load.
 
 | Tab | What it manages |
 |-----|-----------------|
-| General | Units, timezone, comparison display toggles, developer tools, About |
+| General | Units, timezone, comparison display toggles, event archive, developer tools, About |
 | Vehicles | EV profiles, battery presets, active vehicle selection |
 | Networks | Networks, locations, charger stalls, subscription periods |
 | Fuel | ICE vehicle fleet, gas price history, fuel price trend chart |
@@ -136,6 +136,15 @@ Toggle which comparison sections appear on the Costs page:
 Vehicles sometimes log a key-on event as a "trip" with little or no distance and duration. Turn on **Hide short trips** to keep those rows out of the Trip Sessions list and the Driving Analytics charts.
 
 A trip is hidden only when it falls under *both* thresholds — minimum duration (minutes) and minimum distance (in your configured distance unit). A trip clearing either threshold stays visible. Hidden trips remain in the database untouched; the sessions list shows a muted note with the hidden count.
+
+### Event Archive
+
+LightningROD maps a fixed set of Home Assistant attributes into its own tables and drops the rest, which is why trips sometimes end up missing a duration, driving scores, or regenerated range. With **Keep a copy of every Home Assistant event** on — the default — the full payload of every FordPass event is stored exactly as it arrived, so [Data Repair](data-repair.md) can rebuild those fields from your own records instead of Home Assistant's short recorder history.
+
+**Keep for (days)** controls how long archived events are kept, 90 days by default. Set it to `0` to keep them forever. Expired events are cleared out in the background as new ones arrive.
+
+!!! note "Archived events are part of your backups"
+    The archive lives in the same database as everything else, so it is included in the SQLite backup download and in `pg_dump` output. It holds complete event payloads — GPS coordinates and your VIN among them.
 
 ### Unit Preferences
 
