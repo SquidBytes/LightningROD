@@ -231,13 +231,17 @@ def _resolve_and_convert(
     )
 
 
-def _get_event_timestamp(new_state: dict) -> datetime | None:
+def _get_event_timestamp(
+    new_state: dict, keys: tuple[str, ...] = ("last_changed", "last_updated")
+) -> datetime | None:
     """Extract event timestamp from HA state object.
 
-    Tries last_changed, then last_updated, parsing ISO format with timezone.
-    Returns None if no valid timestamp found.
+    Tries each key of `keys` in order, parsing ISO format with timezone.
+    Returns None if no valid timestamp found. Callers that must distinguish
+    every update pass ("last_updated", "last_changed") instead: HA freezes
+    last_changed while only attributes change.
     """
-    for key in ("last_changed", "last_updated"):
+    for key in keys:
         val = new_state.get(key) if new_state else None
         if val:
             try:

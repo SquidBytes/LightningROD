@@ -25,6 +25,11 @@ from web.services.sources.ha_fordpass.handlers import extract_slug, get_device_i
 logger = logging.getLogger("lightningrod.ingestion.raw_archive")
 
 SOURCE_SYSTEM = "ha_fordpass"
+# Home Assistant freezes last_changed while only attributes change, so the
+# archive keys off last_updated: it advances on every update, which keeps
+# attribute-only events distinct, and a reconnect snapshot re-emits the same
+# value, which is what the dedup index is for.
+EVENT_TS_KEYS = ("last_updated", "last_changed")
 SETTINGS_TTL = 60.0  # seconds
 PRUNE_INTERVAL = 86400.0  # one retention pass a day is plenty
 PRUNE_BACKLOG_INTERVAL = 60.0  # ...unless a backlog is still draining
@@ -95,13 +100,16 @@ class RawEventArchive:
             slug=slug,
             state=None if state is None else str(state),
             payload=new_state,
-            recorded_at=_utc(_get_event_timestamp(new_state)) or datetime.now(UTC),
+            recorded_at=(
+                _utc(_get_event_timestamp(new_state, EVENT_TS_KEYS))
+                or datetime.now(UTC)
+            ),
             config_id=config_id,
             source_system=SOURCE_SYSTEM,
             ingest_schema_version=INGEST_SCHEMA_VERSION,
         )
-        # A reconnect replays the initial snapshot with its original
-        # timestamps, so the same event arrives more than once.
+        # Suppresses only true re-sends: a reconnect replays the initial
+        # snapshot with the original last_updated of every entity.
         await db.execute(
             stmt.on_conflict_do_nothing(index_elements=["entity_id", "recorded_at"])
         )

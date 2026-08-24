@@ -146,10 +146,23 @@ async def test_every_fixture_entity_is_archived(archive, db_session):
 
 
 @pytest.mark.db
-async def test_recorded_at_prefers_last_changed(archive, db_session):
-    """last_changed wins over last_updated."""
+async def test_recorded_at_prefers_last_updated(archive, db_session):
+    """last_updated wins: it is the only field that moves on every update."""
+    fresher = EVENT_TS + timedelta(hours=5)
     state = _state("soc")
-    state["last_updated"] = (EVENT_TS + timedelta(hours=5)).isoformat()
+    state["last_updated"] = fresher.isoformat()
+
+    await archive.store(_entity("soc"), state, config_id=1)
+
+    rows = await _rows(db_session)
+    assert rows[0].recorded_at.replace(tzinfo=None) == fresher.replace(tzinfo=None)
+
+
+@pytest.mark.db
+async def test_recorded_at_falls_back_to_last_changed(archive, db_session):
+    """A missing last_updated falls through to last_changed."""
+    state = _state("soc")
+    del state["last_updated"]
 
     await archive.store(_entity("soc"), state, config_id=1)
 
@@ -158,26 +171,12 @@ async def test_recorded_at_prefers_last_changed(archive, db_session):
 
 
 @pytest.mark.db
-async def test_recorded_at_falls_back_to_last_updated(archive, db_session):
-    """A missing last_changed falls through to last_updated."""
-    fallback = EVENT_TS + timedelta(hours=2)
-    state = _state("soc")
-    del state["last_changed"]
-    state["last_updated"] = fallback.isoformat()
-
-    await archive.store(_entity("soc"), state, config_id=1)
-
-    rows = await _rows(db_session)
-    assert rows[0].recorded_at.replace(tzinfo=None) == fallback.replace(tzinfo=None)
-
-
-@pytest.mark.db
 async def test_recorded_at_falls_back_to_now(archive, db_session):
     """With no usable timestamp the arrival time is recorded instead."""
     before = datetime.now(UTC)
     state = _state("soc")
-    del state["last_changed"]
     del state["last_updated"]
+    del state["last_changed"]
 
     await archive.store(_entity("soc"), state, config_id=1)
 
@@ -257,6 +256,31 @@ async def test_same_entity_and_timestamp_stores_once(archive, db_session):
     await archive.store(_entity("events"), _state("events"), config_id=1)
 
     assert await _count(db_session) == 1
+
+
+@pytest.mark.db
+async def test_attribute_only_updates_are_all_kept(archive, db_session):
+    """The events entity's state string barely moves while its payload churns.
+
+    Home Assistant leaves last_changed frozen through those updates, so
+    keying the dedup index off it would throw away every event after the
+    first — exactly the payloads this archive exists to keep.
+    """
+    first = _state("events")
+    second = _state("events")
+    second["last_updated"] = (EVENT_TS + timedelta(minutes=29)).isoformat()
+    second["last_changed"] = first["last_changed"]  # state string unchanged
+    second["attributes"]["customEvents"] = {"second-trip": {"trip": 2}}
+
+    await archive.store(_entity("events"), first, config_id=1)
+    await archive.store(_entity("events"), second, config_id=1)
+
+    rows = await _rows(db_session)
+    assert len(rows) == 2
+    assert [row.payload["attributes"]["customEvents"] for row in rows] == [
+        first["attributes"]["customEvents"],
+        second["attributes"]["customEvents"],
+    ]
 
 
 @pytest.mark.db
