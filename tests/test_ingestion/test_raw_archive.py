@@ -371,6 +371,22 @@ async def test_full_batch_shortens_the_next_throttle(archive, db_session, monkey
 
 
 @pytest.mark.db
+async def test_failed_prune_still_re_arms_the_throttle(archive, db_session):
+    """A prune that raises must not retry on every single event afterwards."""
+    archive._prune_due_at = 0.0
+
+    async def _boom(_retention_days):
+        raise OverflowError("date value out of range")
+
+    archive._prune_expired = _boom
+
+    await archive.store(_entity("soc"), _state("soc"), config_id=1)
+
+    assert await _count(db_session) == 1  # the write itself still landed
+    assert archive._prune_due_at > time.monotonic()
+
+
+@pytest.mark.db
 async def test_partial_batch_keeps_the_long_throttle(archive, db_session, monkeypatch):
     """Nothing left to drain means the next pass is a day away."""
     import web.services.ingestion.raw_archive as module

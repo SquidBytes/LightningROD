@@ -4,6 +4,7 @@ import pytest
 
 from web.queries.settings import (
     RAW_ARCHIVE_DEFAULT_RETENTION_DAYS,
+    RAW_ARCHIVE_MAX_RETENTION_DAYS,
     get_raw_archive_settings,
     set_app_setting,
 )
@@ -48,3 +49,12 @@ async def test_raw_archive_negative_retention_clamps_to_forever(db_session):
     await set_app_setting(db_session, "raw_archive_retention_days", "-5")
 
     assert (await get_raw_archive_settings(db_session))["retention_days"] == 0
+
+
+async def test_raw_archive_absurd_retention_clamps_to_the_maximum(db_session):
+    """A window too large to build a cutoff from is bounded, not left to raise."""
+    await set_app_setting(db_session, "raw_archive_retention_days", "999999999")
+
+    settings = await get_raw_archive_settings(db_session)
+
+    assert settings["retention_days"] == RAW_ARCHIVE_MAX_RETENTION_DAYS

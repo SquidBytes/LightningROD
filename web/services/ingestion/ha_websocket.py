@@ -318,7 +318,11 @@ class HAWebSocketRuntime:
 
         # Archive first, in its own committed session: the typed branches below
         # roll their session back on error and the raw event must survive that.
-        await raw_archive.store(entity_id, new_state, config_id=self.config_id)
+        # Guarded like them so an archive fault can never cost a typed write.
+        try:
+            await raw_archive.store(entity_id, new_state, config_id=self.config_id)
+        except Exception as e:
+            logger.error("Raw archive error for %s: %s", entity_id, e, exc_info=True)
 
         # Gas-price branch — match by configured entity_id, not slug pattern.
         async with AsyncSessionLocal() as db:

@@ -32,6 +32,8 @@ from web.queries.ice_vehicles import (
     update_ice_vehicle,
 )
 from web.queries.settings import (
+    RAW_ARCHIVE_MAX_RETENTION_DAYS,
+    clamp_retention_days,
     create_location,
     create_network,
     create_stall,
@@ -170,6 +172,7 @@ async def _raw_archive_ctx(db: AsyncSession) -> dict:
     return {
         "raw_archive_enabled": archive["enabled"],
         "raw_archive_retention_days": archive["retention_days"],
+        "raw_archive_max_retention_days": RAW_ARCHIVE_MAX_RETENTION_DAYS,
     }
 
 
@@ -2152,7 +2155,7 @@ async def update_raw_archive_settings(
         await set_app_setting(
             db,
             "raw_archive_retention_days",
-            str(max(raw_archive_retention_days, 0)),
+            str(clamp_retention_days(raw_archive_retention_days)),
         )
     raw_archive.invalidate_settings()
     ctx = await _raw_archive_ctx(db)

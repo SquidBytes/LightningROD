@@ -52,24 +52,26 @@ class RawEventArchive:
         self._prune_due_at: float = 0.0
 
     async def store(self, entity_id: str, new_state: dict, *, config_id: int) -> None:
-        """Archive one raw event. Swallows every failure — ingestion must not stop."""
-        if not entity_id or not new_state:
-            return
-        slug = extract_slug(entity_id)
-        if slug is None:
-            return
-        settings: dict = {}
+        """Archive one raw event.
+
+        Everything runs inside the guard: this is called from the ingestion
+        fan-out, where an escaping exception would stop typed writes too.
+        """
         try:
+            if not entity_id or not new_state:
+                return
+            slug = extract_slug(entity_id)
+            if slug is None:
+                return
             async with AsyncSessionLocal() as db:
                 settings = await self._settings_for(db)
                 if not settings["enabled"]:
                     return
                 await self._insert(db, entity_id, slug, new_state, config_id)
                 await db.commit()
+            await self._maybe_prune(settings["retention_days"])
         except Exception:
-            logger.exception("raw archive write failed for %s", entity_id)
-            return
-        await self._maybe_prune(settings["retention_days"])
+            logger.exception("raw archive failed for %s", entity_id)
 
     def invalidate_settings(self) -> None:
         """Drop the cached settings so the next event re-reads them."""
@@ -121,30 +123,37 @@ class RawEventArchive:
         now = time.monotonic()
         if now < self._prune_due_at:
             return
-        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
         deleted = 0
         try:
-            async with AsyncSessionLocal() as db:
-                # This runs on the ingestion path, so the delete has to be
-                # bounded. PostgreSQL has no DELETE ... LIMIT and SQLite's is
-                # compile-time optional, hence the id subquery.
-                expired = (
-                    select(HARawEvent.id)
-                    .where(HARawEvent.recorded_at < cutoff)
-                    .order_by(HARawEvent.id)
-                    .limit(PRUNE_BATCH)
-                )
-                result = await db.execute(
-                    delete(HARawEvent).where(HARawEvent.id.in_(expired))
-                )
-                await db.commit()
-                deleted = int(getattr(result, "rowcount", 0) or 0)
+            deleted = await self._prune_expired(retention_days)
         except Exception:
             logger.exception("raw archive prune failed")
-        # A full batch means more is waiting — come back in a minute, not a day.
-        self._prune_due_at = now + (
-            PRUNE_BACKLOG_INTERVAL if deleted >= PRUNE_BATCH else PRUNE_INTERVAL
-        )
+        finally:
+            # Re-arm even after a failure, so one bad retention value cannot
+            # make every subsequent event retry the same broken delete. A full
+            # batch means more is waiting — come back in a minute, not a day.
+            self._prune_due_at = now + (
+                PRUNE_BACKLOG_INTERVAL if deleted >= PRUNE_BATCH else PRUNE_INTERVAL
+            )
+
+    async def _prune_expired(self, retention_days: int) -> int:
+        """Delete up to PRUNE_BATCH rows that fell out of the retention window."""
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        async with AsyncSessionLocal() as db:
+            # This runs on the ingestion path, so the delete has to be
+            # bounded. PostgreSQL has no DELETE ... LIMIT and SQLite's is
+            # compile-time optional, hence the id subquery.
+            expired = (
+                select(HARawEvent.id)
+                .where(HARawEvent.recorded_at < cutoff)
+                .order_by(HARawEvent.id)
+                .limit(PRUNE_BATCH)
+            )
+            result = await db.execute(
+                delete(HARawEvent).where(HARawEvent.id.in_(expired))
+            )
+            await db.commit()
+        return int(getattr(result, "rowcount", 0) or 0)
 
 
 raw_archive = RawEventArchive()

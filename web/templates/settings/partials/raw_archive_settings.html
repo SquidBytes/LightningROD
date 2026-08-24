@@ -10,6 +10,7 @@
     <label class="form-control w-36">
         <span class="label-text text-xs mb-1">Keep for (days)</span>
         <input type="number" name="raw_archive_retention_days" min="0" step="1"
+               max="{{ raw_archive_max_retention_days }}"
                value="{{ raw_archive_retention_days }}"
                class="input input-bordered input-sm">
     </label>

@@ -162,6 +162,32 @@ async def test_dispatch_archives_before_the_gas_branch(archive_store):
 
 
 @pytest.mark.asyncio
+async def test_dispatch_continues_when_the_archive_itself_raises(archive_store):
+    """Belt and braces: even a store that escapes its own guard is contained.
+
+    `_dispatch` runs on the ingestion event loop, so an exception escaping
+    here would halt gas, vehicle, battery and trip writes for every event
+    that follows.
+    """
+    archive_store.side_effect = RuntimeError("archive exploded")
+    rt = HAWebSocketRuntime(config_id=1, ha_url="http://x", ha_token="t")
+
+    with (
+        patch(
+            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            new=AsyncMock(return_value=False),
+        ) as gas_mock,
+        patch(
+            "web.services.sources.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
+        ) as slug_mock,
+    ):
+        await rt._dispatch("sensor.fordpass_VIN_soc", {"state": "85"})
+
+    gas_mock.assert_awaited_once()
+    slug_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_dispatch_continues_when_the_archive_write_fails():
     """A failing archive write is swallowed; gas and slug dispatch still run.
 

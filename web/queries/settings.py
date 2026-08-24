@@ -496,6 +496,14 @@ async def get_unit_context(db: AsyncSession) -> dict:
 
 
 RAW_ARCHIVE_DEFAULT_RETENTION_DAYS = 90
+# Ten years. Anything larger is indistinguishable from "keep forever" and
+# overflows the timedelta the prune cutoff is built from.
+RAW_ARCHIVE_MAX_RETENTION_DAYS = 3650
+
+
+def clamp_retention_days(days: int) -> int:
+    """Bound a retention window to a value the prune cutoff can represent."""
+    return min(max(days, 0), RAW_ARCHIVE_MAX_RETENTION_DAYS)
 
 
 async def get_raw_archive_settings(db: AsyncSession) -> dict:
@@ -510,7 +518,7 @@ async def get_raw_archive_settings(db: AsyncSession) -> dict:
     return {
         "enabled": raw["raw_archive_enabled"] != "false",
         # 0 means keep forever.
-        "retention_days": max(retention, 0),
+        "retention_days": clamp_retention_days(retention),
     }
 
 
