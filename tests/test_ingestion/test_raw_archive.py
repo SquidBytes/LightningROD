@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import json
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -16,6 +17,7 @@ import pytest
 from sqlalchemy import func, select
 
 from db.models.raw_event import HARawEvent
+from tests.factories.raw_events import RawEventFactory
 from web.queries.settings import set_app_setting
 from web.services.ingestion.raw_archive import RawEventArchive
 
@@ -65,11 +67,17 @@ class _SessionFactory:
 
 @pytest.fixture
 def archive(monkeypatch, db_session):
-    """A fresh archive instance writing through the test session."""
+    """A fresh archive instance writing through the test session.
+
+    Retention is parked so the write-path tests aren't perturbed by a prune;
+    the retention tests re-arm it explicitly.
+    """
     import web.services.ingestion.raw_archive as module
 
     monkeypatch.setattr(module, "AsyncSessionLocal", _SessionFactory(db_session))
-    return RawEventArchive()
+    instance = RawEventArchive()
+    instance._prune_due_at = time.monotonic() + module.PRUNE_INTERVAL
+    return instance
 
 
 async def _count(db) -> int:
@@ -264,3 +272,93 @@ async def test_store_swallows_database_errors(archive, db_session, monkeypatch):
     await archive.store(_entity("soc"), _state("soc"), config_id=1)
 
     assert await _count(db_session) == 0
+
+
+# ---------------------------------------------------------------------------
+# Retention prune
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.db
+async def test_prune_drops_expired_rows_and_keeps_recent_ones(archive, db_session):
+    """A store past the throttle deletes what fell out of the retention window."""
+    archive._prune_due_at = 0.0
+    now = datetime.now(UTC)
+    old = await RawEventFactory.create(
+        db_session, suffix="elveh", recorded_at=now - timedelta(days=120)
+    )
+    recent = await RawEventFactory.create(
+        db_session, suffix="metrics", recorded_at=now - timedelta(days=2)
+    )
+
+    await archive.store(_entity("soc"), _state("soc", now), config_id=1)
+
+    remaining = {row.id for row in await _rows(db_session)}
+    assert old.id not in remaining
+    assert recent.id in remaining
+
+
+@pytest.mark.db
+async def test_zero_retention_deletes_nothing(archive, db_session):
+    """0 days means keep forever."""
+    archive._prune_due_at = 0.0
+    await set_app_setting(db_session, "raw_archive_retention_days", "0")
+    old = await RawEventFactory.create(
+        db_session, suffix="elveh", recorded_at=datetime.now(UTC) - timedelta(days=900)
+    )
+
+    await archive.store(_entity("soc"), _state("soc"), config_id=1)
+
+    assert old.id in {row.id for row in await _rows(db_session)}
+
+
+@pytest.mark.db
+async def test_second_store_inside_the_throttle_does_not_prune(archive, db_session):
+    """One retention pass per tick — the next event must not re-run the delete."""
+    archive._prune_due_at = 0.0
+    now = datetime.now(UTC)
+    await archive.store(_entity("soc"), _state("soc", now), config_id=1)
+
+    stale = await RawEventFactory.create(
+        db_session, suffix="elveh", recorded_at=now - timedelta(days=120)
+    )
+    await archive.store(_entity("metrics"), _state("metrics", now), config_id=1)
+
+    assert stale.id in {row.id for row in await _rows(db_session)}
+
+
+@pytest.mark.db
+async def test_full_batch_shortens_the_next_throttle(archive, db_session, monkeypatch):
+    """A backlog drains over minutes instead of waiting a full day."""
+    import web.services.ingestion.raw_archive as module
+
+    monkeypatch.setattr(module, "PRUNE_BATCH", 2)
+    archive._prune_due_at = 0.0
+    now = datetime.now(UTC)
+    for suffix in ("elveh", "metrics", "soc"):
+        await RawEventFactory.create(
+            db_session, suffix=suffix, recorded_at=now - timedelta(days=120)
+        )
+
+    await archive.store(_entity("events"), _state("events", now), config_id=1)
+
+    assert len(await _rows(db_session)) == 2  # one archived, one leftover expired
+    assert archive._prune_due_at - time.monotonic() <= module.PRUNE_BACKLOG_INTERVAL
+
+
+@pytest.mark.db
+async def test_partial_batch_keeps_the_long_throttle(archive, db_session, monkeypatch):
+    """Nothing left to drain means the next pass is a day away."""
+    import web.services.ingestion.raw_archive as module
+
+    monkeypatch.setattr(module, "PRUNE_BATCH", 10)
+    archive._prune_due_at = 0.0
+    await RawEventFactory.create(
+        db_session, suffix="elveh", recorded_at=datetime.now(UTC) - timedelta(days=120)
+    )
+
+    await archive.store(_entity("soc"), _state("soc"), config_id=1)
+
+    assert (
+        archive._prune_due_at - time.monotonic() > module.PRUNE_BACKLOG_INTERVAL
+    )

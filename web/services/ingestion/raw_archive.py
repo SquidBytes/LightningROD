@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import delete, select
 
 from db.engine import AsyncSessionLocal
 from db.models.raw_event import HARawEvent
@@ -24,6 +26,9 @@ logger = logging.getLogger("lightningrod.ingestion.raw_archive")
 
 SOURCE_SYSTEM = "ha_fordpass"
 SETTINGS_TTL = 60.0  # seconds
+PRUNE_INTERVAL = 86400.0  # one retention pass a day is plenty
+PRUNE_BACKLOG_INTERVAL = 60.0  # ...unless a backlog is still draining
+PRUNE_BATCH = 5000
 
 
 def _utc(ts: datetime | None) -> datetime | None:
@@ -39,6 +44,7 @@ class RawEventArchive:
     def __init__(self) -> None:
         self._settings: dict | None = None
         self._settings_at: float = 0.0
+        self._prune_due_at: float = 0.0
 
     async def store(self, entity_id: str, new_state: dict, *, config_id: int) -> None:
         """Archive one raw event. Swallows every failure — ingestion must not stop."""
@@ -47,6 +53,7 @@ class RawEventArchive:
         slug = extract_slug(entity_id)
         if slug is None:
             return
+        settings: dict = {}
         try:
             async with AsyncSessionLocal() as db:
                 settings = await self._settings_for(db)
@@ -56,6 +63,8 @@ class RawEventArchive:
                 await db.commit()
         except Exception:
             logger.exception("raw archive write failed for %s", entity_id)
+            return
+        await self._maybe_prune(settings["retention_days"])
 
     def invalidate_settings(self) -> None:
         """Drop the cached settings so the next event re-reads them."""
@@ -65,6 +74,7 @@ class RawEventArchive:
         """Clear all instance state — test fixtures call this between tests."""
         self._settings = None
         self._settings_at = 0.0
+        self._prune_due_at = 0.0
 
     async def _settings_for(self, db) -> dict:
         """Archive settings, cached for SETTINGS_TTL so events don't each read them."""
@@ -94,6 +104,38 @@ class RawEventArchive:
         # timestamps, so the same event arrives more than once.
         await db.execute(
             stmt.on_conflict_do_nothing(index_elements=["entity_id", "recorded_at"])
+        )
+
+    async def _maybe_prune(self, retention_days: int) -> None:
+        """Drop one bounded batch of expired rows, at most once per throttle tick."""
+        if retention_days <= 0:  # keep forever
+            return
+        now = time.monotonic()
+        if now < self._prune_due_at:
+            return
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        deleted = 0
+        try:
+            async with AsyncSessionLocal() as db:
+                # This runs on the ingestion path, so the delete has to be
+                # bounded. PostgreSQL has no DELETE ... LIMIT and SQLite's is
+                # compile-time optional, hence the id subquery.
+                expired = (
+                    select(HARawEvent.id)
+                    .where(HARawEvent.recorded_at < cutoff)
+                    .order_by(HARawEvent.id)
+                    .limit(PRUNE_BATCH)
+                )
+                result = await db.execute(
+                    delete(HARawEvent).where(HARawEvent.id.in_(expired))
+                )
+                await db.commit()
+                deleted = int(getattr(result, "rowcount", 0) or 0)
+        except Exception:
+            logger.exception("raw archive prune failed")
+        # A full batch means more is waiting — come back in a minute, not a day.
+        self._prune_due_at = now + (
+            PRUNE_BACKLOG_INTERVAL if deleted >= PRUNE_BATCH else PRUNE_INTERVAL
         )
 
 
