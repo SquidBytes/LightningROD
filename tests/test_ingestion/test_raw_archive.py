@@ -371,6 +371,21 @@ async def test_full_batch_shortens_the_next_throttle(archive, db_session, monkey
 
 
 @pytest.mark.db
+async def test_retention_still_runs_while_the_archive_is_disabled(archive, db_session):
+    """Switching the archive off must still let the stored rows age out."""
+    await set_app_setting(db_session, "raw_archive_enabled", "false")
+    archive._prune_due_at = 0.0
+    old = await RawEventFactory.create(
+        db_session, suffix="elveh", recorded_at=datetime.now(UTC) - timedelta(days=120)
+    )
+
+    await archive.store(_entity("soc"), _state("soc"), config_id=1)
+
+    assert await _count(db_session) == 0  # nothing new archived, old row pruned
+    assert old.id not in {row.id for row in await _rows(db_session)}
+
+
+@pytest.mark.db
 async def test_failed_prune_still_re_arms_the_throttle(archive, db_session):
     """A prune that raises must not retry on every single event afterwards."""
     archive._prune_due_at = 0.0

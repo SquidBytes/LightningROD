@@ -65,10 +65,11 @@ class RawEventArchive:
                 return
             async with AsyncSessionLocal() as db:
                 settings = await self._settings_for(db)
-                if not settings["enabled"]:
-                    return
-                await self._insert(db, entity_id, slug, new_state, config_id)
-                await db.commit()
+                if settings["enabled"]:
+                    await self._insert(db, entity_id, slug, new_state, config_id)
+                    await db.commit()
+            # Retention keeps running with archiving switched off: turning it
+            # off to reclaim disk must not freeze what is already stored.
             await self._maybe_prune(settings["retention_days"])
         except Exception:
             logger.exception("raw archive failed for %s", entity_id)
