@@ -24,6 +24,7 @@ async def test_all_tables_created(db_session):
         "ev_charging_networks",
         "ev_vehicles",
         "app_settings",
+        "ha_raw_events",
         "alembic_version",
     }
     missing = expected - set(tables)

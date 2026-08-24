@@ -9,6 +9,7 @@ from db.models.charging_session import EVChargingSession
 from db.models.data_source_config import DataSourceConfig
 from db.models.ice_vehicle import IceVehicle
 from db.models.location import EVLocation
+from db.models.raw_event import HARawEvent
 from db.models.reference import (
     AppSettings,
     EVChargerStall,
@@ -40,5 +41,6 @@ __all__ = [
     "AppSettings",
     "GasPriceHistory",
     "GasPriceReading",
+    "HARawEvent",
     "RepairBackup",
 ]

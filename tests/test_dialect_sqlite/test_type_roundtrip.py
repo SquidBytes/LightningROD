@@ -23,6 +23,28 @@ async def test_json_storage_roundtrip(db_session):
 
 
 @pytest.mark.db
+async def test_raw_event_payload_roundtrip(db_session):
+    """HARawEvent.payload keeps nested dicts and lists intact on SQLite."""
+    from db.models.raw_event import HARawEvent
+
+    payload = {
+        "entity_id": "sensor.fordpass_TESTVIN001_events",
+        "state": "ok",
+        "attributes": {"customEvents": {"trip": {"values": [1, 2, 3]}}},
+        "last_changed": "2026-04-19T12:00:00+00:00",
+    }
+    row = HARawEvent(
+        entity_id="sensor.fordpass_TESTVIN001_events",
+        payload=payload,
+        recorded_at=datetime.now(UTC),
+    )
+    db_session.add(row)
+    await db_session.flush()
+    await db_session.refresh(row)
+    assert row.payload == payload
+
+
+@pytest.mark.db
 async def test_uuid_roundtrip(db_session):
     """sa.Uuid round-trips Python uuid.UUID on SQLite (hex-without-dashes form)."""
     from db.models.charging_session import EVChargingSession
