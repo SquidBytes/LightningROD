@@ -1,8 +1,7 @@
 # HA Payload Fixtures
 
-PII-scrubbed Home Assistant state payloads that lock the **unit-ingestion matrix**
-for Phase 29 (`.planning/phases/29-unit-ingestion-overhaul/`). Each fixture mirrors
-the shape returned by HA's `get_states` websocket API: a JSON object of the form
+PII-scrubbed Home Assistant state payloads that lock the **unit-ingestion matrix**.
+Each fixture mirrors the shape returned by HA's `get_states` websocket API: a JSON object of the form
 `{entity_id: state_dict, ...}` where each `state_dict` has `entity_id`, `state`,
 `attributes`, `last_changed`, and `last_updated` keys.
 
@@ -35,9 +34,23 @@ Filenames follow `{ha_unit_system}_ha_{vehicle_display}_vehicle.json`:
 
 ### Invariants applied across every fixture (D-B1 / D-B4)
 
-- `sensor.fordpass_YOUR_VIN_metrics` — **always metric**. `xevBatteryRange` and
-  `xevBatteryMaximumRange` are km regardless of HA or vehicle config (raw API
-  passthrough — ha-fordpass does not HA-convert metrics-entity attributes).
+- `sensor.fordpass_YOUR_VIN_metrics` — **always metric**, and **every attribute
+  is value-wrapped**. ha-fordpass hands Ford's raw metrics dict to HA verbatim,
+  so each attribute is `{"updateTime": ..., "value": <scalar>}` (some also carry
+  `oemCorrelationId`) and the entity **state is `len(metrics)`**, an integer.
+  `xevBatteryRange` and `xevBatteryMaximumRange` are km regardless of HA or
+  vehicle config (raw API passthrough — ha-fordpass does not HA-convert
+  metrics-entity attributes). Pack current is `xevBatteryIoCurrent`; there is no
+  `xevBatteryAmperage` and no pack-power metric at all — ha-fordpass derives
+  `batterykW` itself from voltage x current.
+- `sensor.fordpass_YOUR_VIN_events` — the state is `len(events)`, an integer.
+- `sensor.fordpass_YOUR_VIN_outsidetemp` — the **state** is the outside
+  temperature, in HA's display unit, with that unit stamped on the event. The
+  `ambientTemp` attribute mirrors a Ford metric that goes stale (observed frozen
+  for weeks on a live vehicle) and is deliberately fixed here at a value the
+  state never takes, so anything reading it fails loudly.
+- `sensor.fordpass_YOUR_VIN_cabintemperature` — state only. The entity carries
+  **no** `cabinTemperature` attribute.
 - `sensor.fordpass_YOUR_VIN_events` — **always metric**. `xev-key-off-trip-segment-data`
   exposes `distance_traveled` (km), `energy_consumed` (Wh), `trip_duration` (s),
   `ambient_temp` / `cabin_temp` / `outside_air_temp` (°C). Raw API passthrough.
@@ -75,11 +88,14 @@ The 2026-04-19 reporter scenario is encoded in
 - 260 mi / ~418 km max range — `metrics.xevBatteryMaximumRange = 418`
 
 Failure to store each of these as its documented metric value is what the
-Phase 29 regression tests lock against (commit `abd736b`).
+reporter regression tests lock against.
 
 ## How to Add a New Fixture
 
-1. Capture a real HA `get_states` payload from your install.
+1. Capture a real HA `get_states` payload from your install. The `metrics`,
+   `events`, `states` and `vehicles` entities ship disabled
+   (`entity_registry_enabled_default=False`); enable the ones you need in the
+   HA entity registry before capturing.
 2. **Scrub PII**: replace the 17-char VIN with `YOUR_VIN` in every entity id
    and friendly name. Zero GPS (`0.0`/`0.0`). Generic address.
 3. Place the new file under `tests/fixtures/ha_payloads/`.
@@ -87,12 +103,3 @@ Phase 29 regression tests lock against (commit `abd736b`).
 5. Run `grep -rE '[0-9][A-HJ-NPR-Z0-9]{16}' tests/fixtures/` — must
    return zero matches before committing.
 6. Update any matrix-tests that enumerate fixtures (`test_unit_ingestion_matrix.py`).
-
-## Phase 29 Plan References
-
-- Plan 29-00 — this scaffolding (locks API + oracles, all tests fail by design)
-- Plan 29-01 — `web.services.units.to_metric` + property tests turn green
-- Plan 29-02 — `web.services.sources.ha_fordpass.adapter` + matrix & reporter
-  regression tests turn green
-- Plan 29-03 — auto-generated docs + `/admin/data-sources` endpoint
-- Plan 29-04 — contract-coverage invariant + full integration verification

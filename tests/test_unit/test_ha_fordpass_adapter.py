@@ -14,6 +14,7 @@ from web.services.sources.ha_fordpass.adapter import (  # noqa: F401
     FIELD_CONTRACTS,
     LIGHTNINGROD_TRIP_NAMESPACE,
     _last_seen_raw,
+    _metric_value,
     compute_trip_id,
     process_event,
 )
@@ -27,23 +28,38 @@ def _load(name: str) -> dict:
     return json.loads((FIXTURES_DIR / name).read_text())
 
 
-# Metrics entity values are already metric.
+# Metrics entity values are already metric, and each one is value-wrapped.
 
 def test_metrics_entity_battery_range_passthrough():
     """xevBatteryRange from metrics is already kilometers."""
     payload = _load("metric_ha_imperial_vehicle.json")
     metrics_state = payload["sensor.fordpass_YOUR_VIN_metrics"]
     raw = metrics_state["attributes"]["xevBatteryRange"]
-    assert raw == 418  # fixture oracle
+    assert _metric_value(metrics_state["attributes"], "xevBatteryRange") == 418
+    assert "updateTime" in raw, "metrics attributes arrive value-wrapped"
     # Adapter must emit this value unchanged to hv_battery_range column
 
 
 def test_metrics_entity_max_range_passthrough():
     """xevBatteryMaximumRange from metrics is already kilometers."""
     payload = _load("metric_ha_imperial_vehicle.json")
-    raw = payload["sensor.fordpass_YOUR_VIN_metrics"]["attributes"]["xevBatteryMaximumRange"]
-    assert raw == 418
+    attrs = payload["sensor.fordpass_YOUR_VIN_metrics"]["attributes"]
+    assert _metric_value(attrs, "xevBatteryMaximumRange") == 418
     # Adapter must emit unchanged to hv_battery_max_range
+
+
+def test_every_metrics_attribute_is_value_wrapped():
+    """ha-fordpass passes Ford's metrics dict through verbatim, so every
+    attribute on that entity is a {"value": ...} wrapper. A bare scalar here
+    would let the adapter's unwrap regress unnoticed."""
+    for fixture in sorted(p.name for p in FIXTURES_DIR.glob("*.json")):
+        attrs = _load(fixture)["sensor.fordpass_YOUR_VIN_metrics"]["attributes"]
+        for key, value in attrs.items():
+            if key in ("friendly_name", "icon"):
+                continue  # injected by Home Assistant, not part of the metrics dict
+            assert isinstance(value, dict) and "value" in value, (
+                f"{fixture}: metrics attribute {key!r} is not value-wrapped"
+            )
 
 
 # elveh state reads use per-event unit_of_measurement.
