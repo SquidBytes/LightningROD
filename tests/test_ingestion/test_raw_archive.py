@@ -371,6 +371,42 @@ async def test_retention_still_runs_while_the_archive_is_disabled(archive, db_se
 
 
 @pytest.mark.db
+async def test_retention_still_runs_when_the_write_fails(archive, db_session):
+    """A full disk breaks the INSERT — that is when the DELETE matters most."""
+    archive._prune_due_at = 0.0
+    old = await RawEventFactory.create(
+        db_session, suffix="elveh", recorded_at=datetime.now(UTC) - timedelta(days=120)
+    )
+
+    async def _boom(*_args, **_kwargs):
+        raise RuntimeError("could not extend file: no space left on device")
+
+    archive._insert = _boom
+
+    await archive.store(_entity("soc"), _state("soc"), config_id=1)
+
+    assert archive.health["failures"] == 1
+    assert old.id not in {row.id for row in await _rows(db_session)}
+
+
+@pytest.mark.db
+async def test_repeat_failures_are_counted_but_not_all_logged(archive, db_session):
+    """One stack trace per event would be 10k+ a day; count them instead."""
+
+    async def _boom(*_args, **_kwargs):
+        raise RuntimeError("still broken")
+
+    archive._insert = _boom
+
+    for _ in range(5):
+        await archive.store(_entity("soc"), _state("soc"), config_id=1)
+
+    assert archive.health["failures"] == 5
+    assert archive.health["last_error"].startswith("RuntimeError:")
+    assert archive.health["last_error_at"] is not None
+
+
+@pytest.mark.db
 async def test_failed_prune_still_re_arms_the_throttle(archive, db_session):
     """A prune that raises must not retry on every single event afterwards."""
     archive._prune_due_at = 0.0

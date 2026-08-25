@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import delete, select
 
@@ -34,6 +35,9 @@ SETTINGS_TTL = 60.0  # seconds
 PRUNE_INTERVAL = 86400.0  # one retention pass a day is plenty
 PRUNE_BACKLOG_INTERVAL = 60.0  # ...unless a backlog is still draining
 PRUNE_BATCH = 5000
+# A stuck archive fails once per event — 10k+ stack traces a day at a typical
+# event rate. Log the first in full, then at most one per interval.
+FAILURE_LOG_INTERVAL = 300.0
 
 
 def _utc(ts: datetime | None) -> datetime | None:
@@ -55,6 +59,18 @@ class RawEventArchive:
         self._settings: dict | None = None
         self._settings_at: float = 0.0
         self._prune_due_at: float = 0.0
+        self._failure_logged_at: float | None = None
+        self._health: dict[str, Any] = {
+            "writes": 0,
+            "failures": 0,
+            "last_error": None,
+            "last_error_at": None,
+        }
+
+    @property
+    def health(self) -> dict[str, Any]:
+        """Copy of the write counters, for the connection status panel."""
+        return dict(self._health)
 
     async def store(
         self,
@@ -69,6 +85,7 @@ class RawEventArchive:
         Everything runs inside the guard: this is called from the ingestion
         fan-out, where an escaping exception would stop typed writes too.
         """
+        settings: dict | None = None
         try:
             if not entity_id or not new_state:
                 return
@@ -82,11 +99,37 @@ class RawEventArchive:
                         db, entity_id, slug, new_state, config_id, ha_config
                     )
                     await db.commit()
-            # Retention keeps running with archiving switched off: turning it
-            # off to reclaim disk must not freeze what is already stored.
-            await self._maybe_prune(settings["retention_days"])
-        except Exception:
-            logger.exception("raw archive failed for %s", entity_id)
+                    self._health["writes"] += 1
+        except Exception as exc:
+            self._note_failure(entity_id, exc)
+
+        # Retention runs whatever the write did, and whatever the enabled
+        # switch says. A write failing because the volume is full is exactly
+        # when the delete that reclaims space must still happen. `settings` is
+        # None only on the early returns above, which happen before it loads.
+        if settings is not None:
+            try:
+                await self._maybe_prune(settings["retention_days"])
+            except Exception:
+                logger.exception("raw archive prune failed")
+
+    def _note_failure(self, entity_id: str, exc: Exception) -> None:
+        """Count a write failure; log the first in full, then throttle repeats."""
+        self._health["failures"] += 1
+        self._health["last_error"] = f"{type(exc).__name__}: {exc}"
+        self._health["last_error_at"] = datetime.now(UTC).isoformat()
+        now = time.monotonic()
+        if (
+            self._failure_logged_at is not None
+            and now - self._failure_logged_at < FAILURE_LOG_INTERVAL
+        ):
+            return
+        self._failure_logged_at = now
+        logger.exception(
+            "raw archive failed for %s (%d failures so far)",
+            entity_id,
+            self._health["failures"],
+        )
 
     def invalidate_settings(self) -> None:
         """Drop the cached settings so the next event re-reads them."""
@@ -97,6 +140,13 @@ class RawEventArchive:
         self._settings = None
         self._settings_at = 0.0
         self._prune_due_at = 0.0
+        self._failure_logged_at = None
+        self._health = {
+            "writes": 0,
+            "failures": 0,
+            "last_error": None,
+            "last_error_at": None,
+        }
 
     async def _settings_for(self, db) -> dict:
         """Archive settings, cached for SETTINGS_TTL so events don't each read them."""

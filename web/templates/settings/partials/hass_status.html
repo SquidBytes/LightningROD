@@ -90,6 +90,14 @@
             </div>
             {% endif %}
 
+            <!-- Event archive faults: the connection itself can look healthy
+                 while nothing is being stored, so surface it beside the counters. -->
+            {% if archive_health and archive_health.failures %}
+            <div class="alert alert-warning text-sm mt-2">
+                <span>Event archive: {{ archive_health.failures }} failed write{{ 's' if archive_health.failures != 1 }}{% if archive_health.last_error %} &mdash; {{ archive_health.last_error }}{% endif %}</span>
+            </div>
+            {% endif %}
+
             <!-- Control buttons -->
             <div class="flex flex-wrap gap-2 mt-3">
                 <button class="btn btn-warning btn-sm"

@@ -69,6 +69,7 @@ from web.queries.vehicles import (
 )
 from web.services.csv_parser import get_db_field_options
 from web.services.ingestion import supervisor
+from web.services.ingestion.raw_archive import raw_archive
 from web.services.repair.registry import REPAIR_REGISTRY, get_operation
 from web.services.repair.snapshot import list_runs, purge_run, restore_run
 from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
@@ -1669,6 +1670,7 @@ async def hass_status(request: Request):
             "health": health,
             "detected_vin": detected_vin,
             "unit_system": unit_system,
+            "archive_health": raw_archive.health,
         },
     )
 
@@ -1707,6 +1709,7 @@ async def hass_reconnect(
             "health": health,
             "detected_vin": detected_vin,
             "unit_system": unit_system,
+            "archive_health": raw_archive.health,
         },
     )
 
@@ -1790,6 +1793,7 @@ async def hass_disconnect(
             "health": health,
             "detected_vin": None,
             "unit_system": None,
+            "archive_health": raw_archive.health,
         },
     )
 
