@@ -82,10 +82,10 @@ batched per refresh cycle and flushed as one row on the `lastrefresh` signal.
 | `parking_brake` | `parkingbrakestatus` | text | Yes | |
 | `ignition_status` | `ignitionstatus` | text | Yes | |
 | `torque_at_transmission` | `torqueattransmission` | Nm | Yes | |
-| `brake_torque` | `braketorque` / `metrics.brakeTorque` | Nm | Yes | |
+| `brake_torque` | `braketorque` | Nm | Yes | |
 | `wheel_torque_status` | `wheeltorquestatus` | text | Yes | |
-| `yaw_rate` | `yawrate` / `metrics.yawRate` | deg/s | Yes | |
-| `acceleration` | `acceleration` / `metrics.acceleration` | m/s² | Yes | Longitudinal. |
+| `yaw_rate` | `yawrate` | deg/s | Yes | |
+| `acceleration` | `acceleration` | m/s² | Yes | Longitudinal. |
 | `deep_sleep_status` | `deepsleep` | text | Yes | |
 | `device_connectivity` | `deviceconnectivity` | text | Yes | |
 | `evcc_status` | `evccstatus` | text | Yes | |

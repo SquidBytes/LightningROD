@@ -417,60 +417,10 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_unit="degC",
         notes="Cached from the outsidetemp state; mirrored to start/end",
     ),
-    # --- ev_vehicle_status (from sensor.{vin}_metrics) ----------------------
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="odometer",
-        source_unit="km",
-        ha_unit_system_converted=True,
-        target_db_table="ev_vehicle_status",
-        target_db_column="odometer",
-        target_unit="km",
-        notes=(
-            "Cumulative odometer; ha-fordpass localizes per HA unit_system "
-            "(imperial -> mi, metric -> km)."
-        ),
-    ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="speed",
-        source_unit="kmh",
-        ha_unit_system_converted=True,
-        target_db_table="ev_vehicle_status",
-        target_db_column="speed",
-        target_unit="kmh",
-        notes=(
-            "Instantaneous vehicle speed; ha-fordpass localizes per "
-            "unit_system. Zero when parked."
-        ),
-    ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="brakeTorque",
-        source_unit="Nm",
-        target_db_table="ev_vehicle_status",
-        target_db_column="brake_torque",
-        target_unit="Nm",
-        notes="Brake torque. SI passthrough; no localization in ha-fordpass.",
-    ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="yawRate",
-        source_unit="deg/s",
-        target_db_table="ev_vehicle_status",
-        target_db_column="yaw_rate",
-        target_unit="deg/s",
-        notes="Yaw rate. Passthrough; no localization.",
-    ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="acceleration",
-        source_unit="m/s2",
-        target_db_table="ev_vehicle_status",
-        target_db_column="acceleration",
-        target_unit="m/s2",
-        notes="Longitudinal acceleration. SI passthrough.",
-    ),
+    # --- ev_vehicle_status (from the per-slug temperature sensors) ----------
+    # Vehicle telemetry (odometer, speed, brakeTorque, yawRate, acceleration)
+    # arrives on its own per-slug entities, not on the metrics entity, and is
+    # written by handlers.handle_vehicle_status without a contract.
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_outsidetemp", SourceLocatorKind.HA_ENTITY_ID),
         source_attribute="state",
