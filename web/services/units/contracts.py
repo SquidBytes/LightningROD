@@ -43,6 +43,11 @@ class FieldContract:
     target_unit: str
     notes: str | None = None
     ha_unit_system_converted: bool = False
+    # True for fields read from an entity's own state rather than one of its
+    # attributes. Home Assistant publishes those already converted into the
+    # viewer's display unit and stamps that unit on the event, so the adapter
+    # resolves the source unit from `attributes.unit_of_measurement` per event.
+    read_time_uom: bool = False
     # ha-fordpass versions disagree on capacity scale (raw Wh vs already-kWh);
     # when True and source_unit is Wh, |value| < 1000 is treated as kWh.
     wh_autoscale: bool = False

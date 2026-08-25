@@ -52,9 +52,15 @@ and carry no FIELD_CONTRACTS entry (see `tests/test_unit/test_contract_coverage.
 ### elvehcharging and outsidetemp used for thermal caching
 `sensor.fordpass_{vin}_elvehcharging.batteryTemperature` is cached per-device
 in `_last_charging_battery_temp` and written to ev_battery_status on each
-charging-state event. `sensor.fordpass_{vin}_outsidetemp.ambientTemp` is cached
+charging-state event. The `sensor.fordpass_{vin}_outsidetemp` STATE is cached
 in `_last_outsidetemp`. Both caches are consumed by `_handle_energy_transfer_entity`
 to populate ev_charging_session thermal fields at session-write time.
+
+The outsidetemp entity also carries an `ambientTemp` attribute. It is NOT the
+outside temperature: it mirrors Ford's `ambientTemp` metric, which goes stale
+and sat frozen for weeks on a live vehicle while the state tracked reality.
+The state is the only trustworthy reading, and HA stamps its display unit on
+the event — hence `read_time_uom=True` on both contracts.
 
 ### Canonical source for ev_charging_session.distance_added
 Evidence (from `tests/fixtures/ha_payloads/*.json` — matches real ha-fordpass
@@ -388,27 +394,28 @@ FIELD_CONTRACTS: list[FieldContract] = [
         target_unit="degC",
         notes="Cached from elvehcharging; mirrored to start/end (single snapshot)",
     ),
-    # Charging session ambient temp: sourced from the outsidetemp sensor state.
-    # ha-fordpass calls localize_temperature on ambientTemp, so ha_unit_system_converted=True.
+    # Charging session ambient temp: the outsidetemp entity STATE. Its
+    # `ambientTemp` attribute mirrors a Ford metric that stops updating, so it
+    # is never read (see the outsidetemp note in the module docstring).
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_outsidetemp", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="ambientTemp",
+        source_attribute="state",
         source_unit="degC",
-        ha_unit_system_converted=True,
+        read_time_uom=True,
         target_db_table="ev_charging_session",
         target_db_column="ambient_temp_start",
         target_unit="degC",
-        notes="Cached from outsidetemp sensor; applied at session-write time",
+        notes="Cached from the outsidetemp state; applied at session-write time",
     ),
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_outsidetemp", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="ambientTemp",
+        source_attribute="state",
         source_unit="degC",
-        ha_unit_system_converted=True,
+        read_time_uom=True,
         target_db_table="ev_charging_session",
         target_db_column="ambient_temp_end",
         target_unit="degC",
-        notes="Cached from outsidetemp sensor; mirrored to start/end",
+        notes="Cached from the outsidetemp state; mirrored to start/end",
     ),
     # --- ev_vehicle_status (from sensor.{vin}_metrics) ----------------------
     FieldContract(
@@ -466,30 +473,29 @@ FIELD_CONTRACTS: list[FieldContract] = [
     ),
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_outsidetemp", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="ambientTemp",
+        source_attribute="state",
         source_unit="degC",
-        ha_unit_system_converted=True,
+        read_time_uom=True,
         target_db_table="ev_vehicle_status",
         target_db_column="outside_temperature",
         target_unit="degC",
         notes=(
-            "Time-series ambient temp from per-sensor outsidetemp entity; "
-            "ha-fordpass localizes per HA unit_system. Note: shares the "
-            "same source as ev_charging_session.ambient_temp_start/end "
+            "Time-series ambient temp from the outsidetemp entity state. "
+            "Shares its source with ev_charging_session.ambient_temp_start/end "
             "(different cache discipline — vehicle_status writes per snapshot)."
         ),
     ),
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_cabintemperature", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="cabinTemperature",
+        source_attribute="state",
         source_unit="degC",
-        ha_unit_system_converted=True,
+        read_time_uom=True,
         target_db_table="ev_vehicle_status",
         target_db_column="cabin_temperature",
         target_unit="degC",
         notes=(
-            "Time-series cabin temp from per-sensor cabintemperature entity; "
-            "ha-fordpass localizes per HA unit_system."
+            "Time-series cabin temp from the cabintemperature entity state; "
+            "the entity carries no cabinTemperature attribute."
         ),
     ),
 ]
@@ -646,29 +652,49 @@ def _resolve_source_unit(
     contract: FieldContract,
     new_state: dict | None,
     ha_config: dict | None = None,
-) -> tuple[str, str]:
+) -> tuple[str | None, str]:
     """Resolve the effective source unit for one contract + event.
 
     Returns (unit, method). `method` is one of:
       - "declared"                    — contract.source_unit used verbatim
+      - "read_time_uom"               — from this event's unit_of_measurement
       - "ha_unit_system_converted"    — derived from ha_config.unit_system
       - "declared_fallback"           — signal requested but not available;
                                         fell back to contract.source_unit
+      - "unresolved_uom"              — state field whose event carried no
+                                        usable unit; unit is None and the
+                                        caller must drop the field
+
+    The read-time path (method="read_time_uom") fires when
+    `contract.read_time_uom=True` — i.e. the contract reads the entity's own
+    state, which HA has already converted into the display unit it stamps on
+    the event. Never assume a unit for those: an unreadable UoM drops the
+    field rather than guessing.
 
     The HA-unit-system path (method="ha_unit_system_converted") fires when
     `contract.ha_unit_system_converted=True` — i.e. ha-fordpass calls
     `localize_distance` / `localize_temperature` on this field.
 
-    Contracts NEVER resolve from an entity state's read-time
+    ATTRIBUTE contracts never resolve from an entity state's read-time
     unit_of_measurement: the elveh state uom tracks the vehicle display
     system, not the unit of nested attributes, and using it double-converted
     trip distances (imperial-display vehicle + metric HA).
-
-    This function never raises; on any problem it returns the contract's
-    declared source_unit with method="declared_fallback" so the caller can
-    still convert.
     """
-    # --- 1. HA-unit-system conversion path ---
+    # --- 1. Read-time unit_of_measurement path (state-sourced fields) ---
+    if contract.read_time_uom:
+        attrs = (new_state or {}).get("attributes") or {}
+        resolved = _normalize_uom_string(attrs.get("unit_of_measurement"))
+        if resolved:
+            return resolved, "read_time_uom"
+        logger.warning(
+            "read_time_uom contract %s.%s received no usable "
+            "unit_of_measurement; dropping the field for this event",
+            contract.source_locator.pattern,
+            contract.source_attribute,
+        )
+        return None, "unresolved_uom"
+
+    # --- 2. HA-unit-system conversion path ---
     if contract.ha_unit_system_converted:
         field_type = _field_type_for_contract(contract)
         if field_type is not None:
@@ -687,11 +713,11 @@ def _resolve_source_unit(
         )
         return contract.source_unit, "declared_fallback"
 
-    # --- 2. Declared (contract literal) ---
+    # --- 3. Declared (contract literal) ---
     return contract.source_unit, "declared"
 
 
-def _normalize_uom_string(raw: str) -> str | None:
+def _normalize_uom_string(raw: Any) -> str | None:
     """Normalize an HA `unit_of_measurement` string to a to_metric key.
     Maps the common HA UoM spellings (with/without degree sign, case
     variations) to the canonical strings recognized by to_metric.
@@ -731,8 +757,9 @@ def convert(
     """Convert `raw_value` to metric via `contract` + per-event resolution.
 
     Resolution order (inside `_resolve_source_unit`):
-      1. `ha_unit_system_converted=True` -> ha_config.unit_system
-      2. contract.source_unit (declared)
+      1. `read_time_uom=True` -> this event's unit_of_measurement
+      2. `ha_unit_system_converted=True` -> ha_config.unit_system
+      3. contract.source_unit (declared)
 
     Logs and returns None on UnknownSourceUnit so the adapter boundary absorbs
     unit failures rather than propagating them to the caller. Records the
@@ -746,6 +773,9 @@ def convert(
     if raw_value is None:
         return None
     source_unit, method = _resolve_source_unit(contract, new_state, ha_config)
+    if source_unit is None:
+        # The event carried no readable unit; the adapter never guesses.
+        return None
     if contract.wh_autoscale and source_unit == "Wh":
         # Mixed-scale sources: packs are ~10-300 kWh, so |value| < 1000 can
         # only be already-kWh; >= 1000 is Wh.
@@ -1327,16 +1357,16 @@ async def _handle_outsidetemp_entity(
     ha_config: dict | None = None,
 ) -> None:
     """sensor.fordpass_{vin}_outsidetemp -> cache ambient temp (no DB write)."""
-    attrs = new_state.get("attributes") or {}
     pattern = _entity_pattern(entity_id)
 
-    amb_c = lookup_contract(pattern, "ambientTemp")
+    amb_c = lookup_contract(pattern, "state")
     ambient_temp = (
-        convert(amb_c, attrs.get("ambientTemp"), new_state, ha_config)
+        convert(amb_c, new_state.get("state"), new_state, ha_config)
         if amb_c
         else None
     )
-    _last_outsidetemp[device_id] = ambient_temp
+    if ambient_temp is not None:
+        _last_outsidetemp[device_id] = ambient_temp
 
 
 async def _handle_energy_transfer_entity(

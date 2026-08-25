@@ -211,3 +211,92 @@ async def test_elveh_trip_scores_use_the_score_suffixed_names(db_session):
     assert float(trip.speed_score) == pytest.approx(99.60787, abs=0.001)
     assert float(trip.acceleration_score) == pytest.approx(85.49023, abs=0.001)
     assert float(trip.deceleration_score) == pytest.approx(96.86278, abs=0.001)
+
+
+async def test_outside_temperature_comes_from_the_entity_state(db_session):
+    """The outsidetemp `ambientTemp` attribute goes stale; the state does not.
+
+    On a live vehicle the attribute sat frozen for weeks while the state
+    tracked the real temperature, so charging sessions recorded a garbage
+    ambient temperature.
+    """
+    from db.models.charging_session import EVChargingSession
+    from web.services.sources.ha_fordpass import adapter as fp_adapter
+    from web.services.sources.ha_fordpass.handlers import handle_energy_transfer
+
+    fp_adapter._last_outsidetemp.pop(_DEVICE_ID, None)
+
+    outsidetemp_state = {
+        "entity_id": f"sensor.fordpass_{_DEVICE_ID}_outsidetemp",
+        "state": "86.0",
+        "last_changed": "2026-08-25T13:52:34+00:00",
+        "last_updated": "2026-08-25T13:52:34+00:00",
+        "attributes": {
+            "unit_of_measurement": "°F",
+            "device_class": "temperature",
+            "ambientTemp": 32.0,  # stale mirror of a Ford metric
+        },
+    }
+    await process_event(
+        f"sensor.fordpass_{_DEVICE_ID}_outsidetemp",
+        outsidetemp_state,
+        db_session,
+        {"unit_system": "us_customary"},
+    )
+
+    # 86 degF is 30 degC; the frozen attribute would land 0 degC or 32 degC.
+    assert fp_adapter._last_outsidetemp[_DEVICE_ID] == pytest.approx(30.0, abs=0.01)
+
+    session_state = {
+        "entity_id": f"sensor.fordpass_{_DEVICE_ID}_energytransferlogentry",
+        "state": "complete",
+        "last_changed": "2026-08-25T14:00:00+00:00",
+        "last_updated": "2026-08-25T14:00:00+00:00",
+        "attributes": {
+            "energyConsumed": 23.5,
+            "chargerType": "AC_BASIC",
+            "energyTransferDuration": {
+                "begin": "2026-08-25T13:00:00+00:00",
+                "end": "2026-08-25T13:52:00+00:00",
+                "totalTime": 3120,
+            },
+            "stateOfCharge": {"firstSOC": 56.0, "lastSOC": 80.0},
+        },
+    }
+    await handle_energy_transfer(
+        "energytransferlogentry",
+        session_state,
+        {"unit_system": "us_customary"},
+        _DEVICE_ID,
+        db_session,
+    )
+    await db_session.flush()
+
+    session = (
+        await db_session.execute(
+            select(EVChargingSession)
+            .where(EVChargingSession.device_id == _DEVICE_ID)
+            .order_by(EVChargingSession.id.desc())
+            .limit(1)
+        )
+    ).scalar_one()
+    assert float(session.ambient_temp_start) == pytest.approx(30.0, abs=0.01)
+    assert float(session.ambient_temp_end) == pytest.approx(30.0, abs=0.01)
+
+
+async def test_state_contract_without_a_unit_drops_the_value(db_session):
+    """A state-sourced contract never guesses a unit for an unstamped event."""
+    from web.services.sources.ha_fordpass import adapter as fp_adapter
+
+    fp_adapter._last_outsidetemp.pop(_DEVICE_ID, None)
+    await process_event(
+        f"sensor.fordpass_{_DEVICE_ID}_outsidetemp",
+        {
+            "entity_id": f"sensor.fordpass_{_DEVICE_ID}_outsidetemp",
+            "state": "86.0",
+            "attributes": {"ambientTemp": 32.0},
+        },
+        db_session,
+        {"unit_system": "us_customary"},
+    )
+    assert _DEVICE_ID not in fp_adapter._last_outsidetemp

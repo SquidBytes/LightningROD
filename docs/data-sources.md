@@ -10,7 +10,7 @@ commit time and serves as the observable unit contract.
 
 | Source Entity | Source Attribute | Source Unit | DB Table | DB Column | Target Unit | Notes |
 |---|---|---|---|---|---|---|
-| `sensor.fordpass_{vin}_cabintemperature` | `cabinTemperature` | `degC` | `ev_vehicle_status` | `cabin_temperature` | `degC` | Time-series cabin temp from per-sensor cabintemperature entity; ha-fordpass localizes per HA unit_system. |
+| `sensor.fordpass_{vin}_cabintemperature` | `state` | `degC` | `ev_vehicle_status` | `cabin_temperature` | `degC` | Time-series cabin temp from the cabintemperature entity state; the entity carries no cabinTemperature attribute. |
 | `sensor.fordpass_{vin}_elveh` | `maximumBatteryCapacity` | `Wh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` | Elveh mirror of xevBatteryCapacity; same mixed Wh/kWh autoscale |
 | `sensor.fordpass_{vin}_elveh` | `maximumBatteryRange` | `km` | `ev_battery_status` | `hv_battery_max_range` | `km` | Elveh fallback for metrics xevBatteryMaximumRange; localize_distance |
 | `sensor.fordpass_{vin}_elveh` | `tripAmbientTemp` | `degC` | `ev_trip_metrics` | `ambient_temp` | `degC` | elveh temp attr: HA localizes per unit_system |
@@ -37,9 +37,9 @@ commit time and serves as the observable unit contract.
 | `sensor.fordpass_{vin}_metrics` | `xevBatteryMaximumRange` | `km` | `ev_battery_status` | `hv_battery_max_range` | `km` | Canonical metric source; replaces elveh.maximumBatteryRange |
 | `sensor.fordpass_{vin}_metrics` | `xevBatteryRange` | `km` | `ev_battery_status` | `hv_battery_range` | `km` | Canonical metric source; replaces elveh state reading |
 | `sensor.fordpass_{vin}_metrics` | `yawRate` | `deg/s` | `ev_vehicle_status` | `yaw_rate` | `deg/s` | Yaw rate. Passthrough; no localization. |
-| `sensor.fordpass_{vin}_outsidetemp` | `ambientTemp` | `degC` | `ev_charging_session` | `ambient_temp_start` | `degC` | Cached from outsidetemp sensor; applied at session-write time |
-| `sensor.fordpass_{vin}_outsidetemp` | `ambientTemp` | `degC` | `ev_charging_session` | `ambient_temp_end` | `degC` | Cached from outsidetemp sensor; mirrored to start/end |
-| `sensor.fordpass_{vin}_outsidetemp` | `ambientTemp` | `degC` | `ev_vehicle_status` | `outside_temperature` | `degC` | Time-series ambient temp from per-sensor outsidetemp entity; ha-fordpass localizes per HA unit_system. Note: shares the same source as ev_charging_session.ambient_temp_start/end (different cache discipline — vehicle_status writes per snapshot). |
+| `sensor.fordpass_{vin}_outsidetemp` | `state` | `degC` | `ev_charging_session` | `ambient_temp_start` | `degC` | Cached from the outsidetemp state; applied at session-write time |
+| `sensor.fordpass_{vin}_outsidetemp` | `state` | `degC` | `ev_charging_session` | `ambient_temp_end` | `degC` | Cached from the outsidetemp state; mirrored to start/end |
+| `sensor.fordpass_{vin}_outsidetemp` | `state` | `degC` | `ev_vehicle_status` | `outside_temperature` | `degC` | Time-series ambient temp from the outsidetemp entity state. Shares its source with ev_charging_session.ambient_temp_start/end (different cache discipline — vehicle_status writes per snapshot). |
 
 ## ha_gas_price
 
