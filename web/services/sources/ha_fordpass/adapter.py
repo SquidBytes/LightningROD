@@ -841,6 +841,10 @@ def _metric_value(attrs: dict, key: str) -> Any:
     ha-fordpass hands Ford's raw metrics dict to HA verbatim, so every
     attribute arrives as `{"updateTime": ..., "value": <scalar>}`. Bare
     scalars pass through unchanged for payloads shaped any other way.
+
+    Unwraps exactly one level: a metric whose `value` is itself structured
+    (Ford sends a few, e.g. an x/y/z vector) comes back as that dict, not a
+    number.
     """
     raw = attrs.get(key)
     if isinstance(raw, dict):
