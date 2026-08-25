@@ -141,7 +141,7 @@ A trip is hidden only when it falls under *both* thresholds — minimum duration
 
 LightningROD maps a fixed set of Home Assistant attributes into its own tables and drops the rest, which is why trips sometimes end up missing a duration, driving scores, or regenerated range. With **Keep a copy of every Home Assistant event** on — the default — the full payload of every FordPass event is stored exactly as it arrived, so [Data Repair](data-repair.md) can rebuild those fields from your own records instead of Home Assistant's short recorder history.
 
-**Keep for (days)** controls how long archived events are kept, 90 days by default. Set it to `0` to keep them forever. Expired events are cleared out in the background as new ones arrive, and that clean-up keeps running even after you switch the archive off — so turning it off does reclaim the disk it was using.
+**Keep for (days)** controls how long archived events are kept, 90 days by default, up to a maximum of 3650 (ten years). Set it to `0` to keep them forever. Expired events are cleared out in the background as new ones arrive, and that clean-up keeps running even after you switch the archive off — so turning it off does reclaim the disk it was using.
 
 !!! note "Archived events are part of your backups"
     The archive lives in the same database as everything else, so it is included in the SQLite backup download and in `pg_dump` output. It holds complete event payloads — GPS coordinates and your VIN among them.
