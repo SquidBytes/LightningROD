@@ -12,6 +12,7 @@ import json
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import func, select
@@ -63,6 +64,23 @@ def archive(monkeypatch, db_session):
     instance = RawEventArchive()
     instance._prune_due_at = time.monotonic() + module.PRUNE_INTERVAL
     return instance
+
+
+@pytest.fixture
+def dispatch_archive(monkeypatch, db_session):
+    """The module singleton the ingestion fan-out uses, on the test session.
+
+    Retention is parked: the fixture payloads predate the default window, so
+    an armed prune would delete the very row under test.
+    """
+    import web.services.ingestion.raw_archive as module
+    from web.services.ingestion.raw_archive import raw_archive
+
+    monkeypatch.setattr(module, "AsyncSessionLocal", FixedSessionFactory(db_session))
+    raw_archive.reset()
+    raw_archive._prune_due_at = time.monotonic() + module.PRUNE_INTERVAL
+    yield raw_archive
+    raw_archive.reset()
 
 
 async def _count(db) -> int:
@@ -123,6 +141,70 @@ async def test_every_fixture_entity_is_archived(archive, db_session):
         await archive.store(_entity(suffix), _state(suffix), config_id=1)
 
     assert await _count(db_session) == len(_FIXTURE) == 7
+
+
+@pytest.mark.db
+async def test_dispatch_records_the_unit_system_it_captured_under(
+    dispatch_archive, db_session
+):
+    """The row stores Home Assistant's unit system, and nothing else from its config.
+
+    ha-fordpass localizes trip values into that unit system, so the payload
+    alone does not say what its numbers mean. The rest of the HA config is
+    instance metadata — home coordinates among it — and must not be kept.
+    """
+    from web.services.ingestion.ha_websocket import HAWebSocketRuntime
+
+    unit_system = {"length": "mi", "temperature": "\u00b0F"}
+    rt = HAWebSocketRuntime(config_id=4, ha_url="http://x", ha_token="t")
+    rt._ha_config = {
+        "unit_system": unit_system,
+        "location_name": "Home",
+        "latitude": 1.5,
+        "longitude": -2.5,
+        "time_zone": "America/New_York",
+    }
+
+    with (
+        patch(
+            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            new=AsyncMock(return_value=False),
+        ),
+        patch(
+            "web.services.sources.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
+        ),
+    ):
+        await rt._dispatch(_entity("soc"), _state("soc"))
+
+    rows = await _rows(db_session)
+    assert len(rows) == 1
+    assert rows[0].ha_unit_system == unit_system
+    assert rows[0].config_id == 4
+
+
+@pytest.mark.db
+async def test_dispatch_without_an_ha_config_stores_no_unit_system(
+    dispatch_archive, db_session
+):
+    """Nothing is invented when Home Assistant has not reported its config yet."""
+    from web.services.ingestion.ha_websocket import HAWebSocketRuntime
+
+    rt = HAWebSocketRuntime(config_id=1, ha_url="http://x", ha_token="t")
+
+    with (
+        patch(
+            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            new=AsyncMock(return_value=False),
+        ),
+        patch(
+            "web.services.sources.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
+        ),
+    ):
+        await rt._dispatch(_entity("soc"), _state("soc"))
+
+    rows = await _rows(db_session)
+    assert len(rows) == 1
+    assert rows[0].ha_unit_system is None
 
 
 # ---------------------------------------------------------------------------
