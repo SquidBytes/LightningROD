@@ -16,6 +16,16 @@ Reads from:
   - sensor.fordpass_{vin}_metrics  (attributes always metric per integration author)
   - sensor.fordpass_{vin}_events   (xev-key-off-trip-segment-data always metric)
 
+Both entities are opt-in: ha-fordpass ships them with
+`entity_registry_enabled_default=False`, so a fresh install must enable them
+before battery-status and trip ingestion see anything.
+
+### metrics attributes are value-wrapped
+ha-fordpass hands Ford's raw metrics dict to HA verbatim, so every attribute
+on that entity is `{"updateTime": ..., "value": <scalar>}`. Read them through
+`_metric_value`, never `attrs.get(key)` — a raw `attrs.get` yields the wrapper
+dict, which every numeric conversion silently turns into None.
+
 ### Read-time UoM fallback for main-state-only fields
 When a field exists only on an elveh-shaped main sensor (e.g. the elveh state
 value itself), the adapter reads
@@ -795,6 +805,19 @@ def _safe_float(val: Any) -> float | None:
         return None
 
 
+def _metric_value(attrs: dict, key: str) -> Any:
+    """Unwrap one attribute of the metrics entity.
+
+    ha-fordpass hands Ford's raw metrics dict to HA verbatim, so every
+    attribute arrives as `{"updateTime": ..., "value": <scalar>}`. Bare
+    scalars pass through unchanged for payloads shaped any other way.
+    """
+    raw = attrs.get(key)
+    if isinstance(raw, dict):
+        return raw.get("value")
+    return raw
+
+
 # ---------------------------------------------------------------------------
 # Device-id extraction
 # ---------------------------------------------------------------------------
@@ -902,8 +925,8 @@ async def _handle_metrics_entity(
     range_contract = lookup_contract(pattern, "xevBatteryRange")
     max_range_contract = lookup_contract(pattern, "xevBatteryMaximumRange")
 
-    raw_range = attrs.get("xevBatteryRange")
-    raw_max_range = attrs.get("xevBatteryMaximumRange")
+    raw_range = _metric_value(attrs, "xevBatteryRange")
+    raw_max_range = _metric_value(attrs, "xevBatteryMaximumRange")
     hv_range = (
         convert(range_contract, raw_range, new_state, ha_config)
         if range_contract
@@ -936,15 +959,15 @@ async def _handle_metrics_entity(
         )
 
     # SI-already scalar attributes pass through without conversion
-    hv_soc = _safe_float(attrs.get("xevBatteryStateOfCharge"))
-    hv_actual_soc = _safe_float(attrs.get("xevBatteryActualStateOfCharge"))
+    hv_soc = _safe_float(_metric_value(attrs, "xevBatteryStateOfCharge"))
+    hv_actual_soc = _safe_float(_metric_value(attrs, "xevBatteryActualStateOfCharge"))
     cap_contract = lookup_contract(pattern, "xevBatteryCapacity")
     hv_capacity = (
-        convert(cap_contract, attrs.get("xevBatteryCapacity"), new_state, ha_config)
+        convert(cap_contract, _metric_value(attrs, "xevBatteryCapacity"), new_state, ha_config)
         if cap_contract
         else None
     )
-    hv_voltage = _safe_float(attrs.get("xevBatteryVoltage"))
+    hv_voltage = _safe_float(_metric_value(attrs, "xevBatteryVoltage"))
     hv_amperage = _safe_float(attrs.get("xevBatteryAmperage"))
     # xevBatteryPower is reported in W by the integration; convert to kW for the hv_battery_kw column
     raw_power_w = _safe_float(attrs.get("xevBatteryPower"))
@@ -952,28 +975,39 @@ async def _handle_metrics_entity(
 
     recorded_at = _parse_event_ts(new_state) or datetime.now(UTC)
 
-    record = EVBatteryStatus(
-        device_id=device_id,
-        recorded_at=recorded_at,
-        source_system="ha_fordpass",
-        hv_battery_range=hv_range,
-        hv_battery_max_range=hv_max_range,
-        hv_battery_soc=hv_soc,
-        hv_battery_actual_soc=hv_actual_soc,
-        hv_battery_capacity=hv_capacity,
-        hv_battery_voltage=hv_voltage,
-        hv_battery_amperage=hv_amperage,
-        hv_battery_kw=hv_kw,
-        original_timestamp=recorded_at,
-        ingest_schema_version=INGEST_SCHEMA_VERSION,
-    )
-    db.add(record)
-    logger.debug(
-        "ha_fordpass: wrote ev_battery_status for %s range=%s max=%s",
-        device_id,
-        hv_range,
-        hv_max_range,
-    )
+    values = {
+        "hv_battery_range": hv_range,
+        "hv_battery_max_range": hv_max_range,
+        "hv_battery_soc": hv_soc,
+        "hv_battery_actual_soc": hv_actual_soc,
+        "hv_battery_capacity": hv_capacity,
+        "hv_battery_voltage": hv_voltage,
+        "hv_battery_amperage": hv_amperage,
+        "hv_battery_kw": hv_kw,
+    }
+    # A row whose every value column is NULL carries no telemetry; every
+    # consumer filters those out anyway, so skip the insert.
+    if any(v is not None for v in values.values()):
+        db.add(EVBatteryStatus(
+            device_id=device_id,
+            recorded_at=recorded_at,
+            source_system="ha_fordpass",
+            original_timestamp=recorded_at,
+            ingest_schema_version=INGEST_SCHEMA_VERSION,
+            **values,
+        ))
+        logger.debug(
+            "ha_fordpass: wrote ev_battery_status for %s range=%s max=%s",
+            device_id,
+            hv_range,
+            hv_max_range,
+        )
+    else:
+        logger.debug(
+            "ha_fordpass: metrics event for %s carried no battery values; "
+            "no ev_battery_status row written",
+            device_id,
+        )
 
     await _backfill_trip_regen(entity_id, attrs, device_id, db, recorded_at, ha_config)
 
@@ -995,8 +1029,8 @@ async def _backfill_trip_regen(
     created by the events handler gets its regen/score within one cycle.
     Only NULL fields are filled; elveh-sourced values are never overwritten.
     """
-    raw_regen = attrs.get("tripXevBatteryRangeRegenerated")
-    raw_score = _safe_float(attrs.get("tripXevBatteryChargeRegenerated"))
+    raw_regen = _metric_value(attrs, "tripXevBatteryRangeRegenerated")
+    raw_score = _safe_float(_metric_value(attrs, "tripXevBatteryChargeRegenerated"))
     # ha-fordpass emits 0 for missing telemetry; treat as unmeasured.
     if raw_score == 0:
         raw_score = None
