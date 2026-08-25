@@ -13,12 +13,13 @@ from web.services.repair.recorder_replay import _WINDOW_CACHE_TTL, RecorderRepla
 
 
 class _ArchiveSource:
-    """Bare stand-in for the HA runtime, for when there is no live one.
+    """Bare stand-in for the HA runtime, used whether or not one is connected.
 
     Replay needs a source object with `_ha_config` on it. Archived rows carry
     their own capture-time config, so this contributes nothing but the shape —
     and deliberately no unit system, which makes states that need one and
-    recorded none get skipped rather than guessed at.
+    recorded none get skipped rather than read under whatever units happen to
+    be configured today.
     """
 
     _ha_config: dict | None = None
@@ -57,16 +58,19 @@ class ArchiveReplay(RecorderReplay):
         return AsyncSessionLocal
 
     def _get_runtime(self):
-        """The injected runtime, else the live one, else a bare stand-in.
+        """The injected runtime, else the stand-in. Never the live one.
 
-        Only `_ha_config` is read off it, and only for archived rows that
-        recorded no unit system of their own.
+        Replay reads exactly two things off this object: that it is not None,
+        and `_ha_config`. Every other runtime call in the base class sits in a
+        method this class overrides. So reaching for the live runtime would
+        contribute nothing but its `_ha_config` — today's global unit system,
+        applied to archived rows that recorded none. That is the global
+        resolution the per-row config exists to prevent, so those rows are
+        skipped instead.
         """
         if self._runtime is not None:
             return self._runtime
-        from web.services.ingestion.supervisor import supervisor
-
-        return supervisor.get_runtime("ha_fordpass", "default") or _ArchiveSource()
+        return _ArchiveSource()
 
     def ha_connected(self) -> bool:
         """Always true — the archive is local data."""

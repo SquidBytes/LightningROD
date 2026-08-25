@@ -299,6 +299,45 @@ async def test_states_needing_an_unknown_unit_system_are_skipped(op, db_session)
 
 
 @pytest.mark.db
+async def test_a_live_connection_supplies_no_units_for_rows_without_them(
+    op, db_session, monkeypatch
+):
+    """The branch production actually takes: Home Assistant connected.
+
+    Nothing stops a user running this with a live connection, and the live
+    runtime's config is today's *global* unit system. Applying it to a row
+    that recorded none is the same global resolution the per-row config
+    exists to prevent — and reads an imperial payload as metric.
+    """
+    from web.services.ingestion.supervisor import supervisor
+
+    class _LiveRuntime:
+        source_name = "ha_fordpass"
+        instance_label = "default"
+        detected_vin = VIN
+        health = {"connected": True}
+        _ha_config = {"unit_system": METRIC_UNIT_SYSTEM}
+
+    monkeypatch.setattr(supervisor, "_runtimes", {1: _LiveRuntime()})
+
+    await VehicleFactory.create(db_session, device_id=VIN)
+    # Every event of a session whose get_config handshake failed looks
+    # like this: real payloads, no recorded unit system.
+    await _seed_trip_entities(
+        db_session,
+        fixture="imperial_ha_imperial_vehicle",
+        unit_system=None,
+    )
+
+    await op.execute(db_session)
+
+    assert op.last_details["skipped_unknown_units"] == 2
+    trips = await _trips(db_session)
+    assert len(trips) == 1, "imperial rows were read under the live global units"
+    assert float(trips[0].distance) == pytest.approx(19.0, abs=0.05)
+
+
+@pytest.mark.db
 async def test_replay_is_idempotent(op, db_session):
     """A second run over the same archive converges — no new or changed rows."""
     await VehicleFactory.create(db_session, device_id=VIN)
