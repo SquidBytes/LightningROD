@@ -1031,11 +1031,13 @@ async def has_real_charge_curve_data(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> bool:
-    """True iff any DC session in window has >= 3 EVBatteryStatus rows within its
-    [session_start_utc, session_end_utc] span.
-    Reuses 's "< 3 detailed points" threshold for fallback trigger:
-    when True the synthetic curve is hidden and the real charge curve
-    chart is rendered instead.
+    """True iff any DC session in window has >= 3 plottable EVBatteryStatus rows
+    within its [session_start_utc, session_end_utc] span.
+    Plottable means both axes of the real charge curve are present: SOC (x)
+    and pack power (y). Counting bare rows instead let value-less telemetry
+    suppress the synthetic fallback and render a curve built from nothing.
+    Mirrors the real chart's ">= 3 detailed points" threshold: when True the
+    synthetic curve is hidden and the real charge curve chart is rendered.
     """
     sess_stmt = select(
         EVChargingSession.id,
@@ -1064,6 +1066,8 @@ async def has_real_charge_curve_data(
                 EVBatteryStatus.recorded_at >= start,
                 EVBatteryStatus.recorded_at <= end,
                 EVBatteryStatus.device_id == dev,
+                EVBatteryStatus.hv_battery_soc.isnot(None),
+                EVBatteryStatus.hv_battery_kw.isnot(None),
             )
         )
         count = (await db.execute(count_stmt)).scalar_one()

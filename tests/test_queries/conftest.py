@@ -460,6 +460,94 @@ async def sessions_with_battery_status(db_session):
 
 
 @pytest_asyncio.fixture
+async def sessions_with_valueless_battery_status(db_session):
+    """DC session with >=3 battery_status rows that carry no telemetry.
+    Same shape as `sessions_with_battery_status`, except every value column is
+    NULL — the row pattern a metrics event used to insert on every poll.
+    has_real_charge_curve_data must return False: neither axis of the real
+    charge curve can be plotted from these.
+    """
+    device_id = "charge_p25_empty_vin"
+    vehicle = await _create_vehicle(db_session, device_id=device_id)
+
+    start = BASE_DATE - timedelta(days=2)
+    end = start + timedelta(hours=1)
+    session = EVChargingSession(
+        device_id=device_id,
+        charge_type="DC",
+        energy_kwh=45.0,
+        max_power=120.0,
+        evse_max_power_kw=150.0,
+        session_start_utc=start,
+        session_end_utc=end,
+        is_complete=True,
+        source_system="test_fixture",
+    )
+    db_session.add(session)
+    await db_session.flush()
+
+    for i in range(5):
+        db_session.add(
+            EVBatteryStatus(
+                device_id=device_id,
+                recorded_at=start + timedelta(minutes=10 * i + 5),
+                source_system="test_fixture",
+            )
+        )
+    await db_session.flush()
+
+    return {
+        "vehicle": vehicle,
+        "session": session,
+        "device_id": device_id,
+        "db": db_session,
+    }
+
+
+@pytest_asyncio.fixture
+async def sessions_with_soc_only_battery_status(db_session):
+    """DC session whose battery_status rows carry SOC but no pack power.
+    The charge curve plots kW against SOC; without kW there is no curve, only
+    a flat line pinned to zero.
+    """
+    device_id = "charge_p25_soconly_vin"
+    vehicle = await _create_vehicle(db_session, device_id=device_id)
+
+    start = BASE_DATE - timedelta(days=2)
+    end = start + timedelta(hours=1)
+    session = EVChargingSession(
+        device_id=device_id,
+        charge_type="DC",
+        energy_kwh=45.0,
+        max_power=120.0,
+        session_start_utc=start,
+        session_end_utc=end,
+        is_complete=True,
+        source_system="test_fixture",
+    )
+    db_session.add(session)
+    await db_session.flush()
+
+    for i in range(5):
+        db_session.add(
+            EVBatteryStatus(
+                device_id=device_id,
+                recorded_at=start + timedelta(minutes=10 * i + 5),
+                hv_battery_soc=20.0 + i * 15.0,
+                source_system="test_fixture",
+            )
+        )
+    await db_session.flush()
+
+    return {
+        "vehicle": vehicle,
+        "session": session,
+        "device_id": device_id,
+        "db": db_session,
+    }
+
+
+@pytest_asyncio.fixture
 async def sessions_without_battery_status(db_session):
     """DC-only sessions with no battery_status rows.
     Creates:

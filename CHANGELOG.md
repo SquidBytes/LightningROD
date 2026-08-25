@@ -24,6 +24,8 @@ For feature documentation, see the docs site at
   score chart instead of always being blank
 - Charging sessions now record the ambient temperature it actually was at the
   time, rather than a stale reading that never changed
+- The Performance page no longer draws a charge curve out of empty battery
+  readings; it shows the estimated curve until real charging data exists
 - Charging sessions now show the location name, type and network you approved
   in the review queue. Renaming a location in the vehicle no longer retags new
   sessions with the vehicle's name

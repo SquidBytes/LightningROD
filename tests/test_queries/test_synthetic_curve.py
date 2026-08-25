@@ -37,6 +37,36 @@ async def test_phase_25_fallback_trigger_hides_when_real_data_present(
     )
 
 
+async def test_valueless_battery_rows_do_not_count_as_curve_data(
+    db_session, sessions_with_valueless_battery_status
+):
+    """Rows with every value column NULL must not suppress the synthetic curve.
+
+    A bare row count answered "did any row exist?" where it meant "do we have
+    curve data?", so empty telemetry rendered a real curve built from nothing.
+    """
+    fx = sessions_with_valueless_battery_status
+    assert (
+        await has_real_charge_curve_data(
+            db_session, time_range="all", device_id=fx["device_id"]
+        )
+        is False
+    )
+
+
+async def test_soc_without_pack_power_is_not_curve_data(
+    db_session, sessions_with_soc_only_battery_status
+):
+    """kW is the curve's y-axis; SOC alone plots a flat line at zero."""
+    fx = sessions_with_soc_only_battery_status
+    assert (
+        await has_real_charge_curve_data(
+            db_session, time_range="all", device_id=fx["device_id"]
+        )
+        is False
+    )
+
+
 async def test_phase_25_fallback_trigger_shows_when_no_real_data(
     db_session, sessions_without_battery_status
 ):
