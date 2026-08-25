@@ -133,29 +133,28 @@ EXPECTED_CONTRACTS: list[FieldContract] = [
     ),
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_outsidetemp", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="ambientTemp",
+        source_attribute="state",
         source_unit="degC",
-        ha_unit_system_converted=True,
+        read_time_uom=True,
         target_db_table=_TABLE,
         target_db_column="outside_temperature",
         target_unit="degC",
         notes=(
-            "Outside ambient temperature, time-series from per-sensor "
-            "outsidetemp entity. ha-fordpass localizes via localize_temperature "
-            "(imperial -> degF, metric -> degC)."
+            "Outside ambient temperature, time-series from the outsidetemp "
+            "entity state. HA stamps its display unit on the event."
         ),
     ),
     FieldContract(
         source_locator=SourceLocator("sensor.fordpass_{vin}_cabintemperature", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="cabinTemperature",
+        source_attribute="state",
         source_unit="degC",
-        ha_unit_system_converted=True,
+        read_time_uom=True,
         target_db_table=_TABLE,
         target_db_column="cabin_temperature",
         target_unit="degC",
         notes=(
-            "Cabin temperature, time-series from per-sensor cabintemperature "
-            "entity. ha-fordpass localizes via localize_temperature."
+            "Cabin temperature from the cabintemperature entity state; the "
+            "entity exposes no cabinTemperature attribute."
         ),
     ),
     FieldContract(

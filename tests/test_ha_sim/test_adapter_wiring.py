@@ -62,23 +62,27 @@ def _make_metrics_event(device_id: str) -> tuple[str, dict]:
 
     Values match the existing metric HA fixtures: xevBatteryRange=260 (km),
     xevBatteryMaximumRange=418 (km). Both are already metric per
-    ha-fordpass integration contract.
+    ha-fordpass integration contract, and — like every metrics attribute —
+    arrive wrapped in Ford's `{"updateTime": ..., "value": N}` envelope.
     """
     entity_id = f"sensor.fordpass_{device_id}_metrics"
+    metrics = {
+        "xevBatteryRange": 260,
+        "xevBatteryMaximumRange": 418,
+        "xevBatteryStateOfCharge": 80,
+        "xevBatteryActualStateOfCharge": 77,
+        "xevBatteryCapacity": 131000,
+        "xevBatteryVoltage": 390.0,
+        "xevBatteryIoCurrent": 5.0,
+    }
     new_state = {
         "entity_id": entity_id,
-        "state": "ok",
+        "state": len(metrics),
         "last_changed": "2026-04-19T12:00:00+00:00",
         "last_updated": "2026-04-19T12:00:00+00:00",
         "attributes": {
-            "xevBatteryRange": 260,
-            "xevBatteryMaximumRange": 418,
-            "xevBatteryStateOfCharge": 80,
-            "xevBatteryActualStateOfCharge": 77,
-            "xevBatteryCapacity": 131000,
-            "xevBatteryVoltage": 390.0,
-            "xevBatteryAmperage": 5.0,
-            "xevBatteryPower": 1950,
+            key: {"updateTime": "2026-04-19T12:00:00Z", "value": value}
+            for key, value in metrics.items()
         },
     }
     return entity_id, new_state

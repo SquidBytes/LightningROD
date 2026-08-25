@@ -62,12 +62,12 @@ async def test_metrics_event_records_declared_units(db_session):
     entity_id = f"sensor.fordpass_{_TEST_DEVICE_ID}_metrics"
     new_state = {
         "entity_id": entity_id,
-        "state": "ok",
+        "state": 2,
         "last_changed": "2026-04-19T12:00:00+00:00",
         "last_updated": "2026-04-19T12:00:00+00:00",
         "attributes": {
-            "xevBatteryRange": 260,
-            "xevBatteryMaximumRange": 418,
+            "xevBatteryRange": {"updateTime": "2026-04-19T12:00:00Z", "value": 260},
+            "xevBatteryMaximumRange": {"updateTime": "2026-04-19T12:00:00Z", "value": 418},
         },
     }
     await _dispatch(entity_id, new_state, db_session)
