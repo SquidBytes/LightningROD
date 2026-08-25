@@ -968,10 +968,15 @@ async def _handle_metrics_entity(
         else None
     )
     hv_voltage = _safe_float(_metric_value(attrs, "xevBatteryVoltage"))
-    hv_amperage = _safe_float(attrs.get("xevBatteryAmperage"))
-    # xevBatteryPower is reported in W by the integration; convert to kW for the hv_battery_kw column
-    raw_power_w = _safe_float(attrs.get("xevBatteryPower"))
-    hv_kw = raw_power_w / 1000.0 if raw_power_w is not None else None
+    hv_amperage = _safe_float(_metric_value(attrs, "xevBatteryIoCurrent"))
+    # Ford publishes no pack-power metric. ha-fordpass derives its elveh
+    # batterykW attribute from voltage x current, so deriving it the same way
+    # here keeps the two ingestion paths numerically identical.
+    hv_kw = (
+        round(hv_voltage * hv_amperage / 1000.0, 2)
+        if hv_voltage is not None and hv_amperage is not None
+        else None
+    )
 
     recorded_at = _parse_event_ts(new_state) or datetime.now(UTC)
 

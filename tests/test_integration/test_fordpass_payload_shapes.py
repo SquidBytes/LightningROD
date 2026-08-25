@@ -135,3 +135,37 @@ async def test_metrics_regen_backfill_reads_the_value_wrapper(db_session):
     ).scalar_one()
     assert float(trip.range_regenerated) == pytest.approx(2.1)
     assert float(trip.driving_score) == pytest.approx(85.0)
+
+
+async def test_pack_current_comes_from_xev_battery_io_current(db_session):
+    """The pack current metric is `xevBatteryIoCurrent`.
+
+    `xevBatteryAmperage` and `xevBatteryPower` appear nowhere in Ford's
+    payload or in the integration, so pack power is derived from voltage x
+    current exactly as ha-fordpass derives its elveh `batterykW` attribute.
+    """
+    await process_event(
+        _METRICS_ENTITY,
+        _metrics_state(xevBatteryVoltage=390.0, xevBatteryIoCurrent=-52.4),
+        db_session,
+        {"unit_system": "metric"},
+    )
+    await db_session.flush()
+
+    battery = await _latest_battery(db_session)
+    assert battery is not None
+    assert float(battery.hv_battery_amperage) == pytest.approx(-52.4)
+    assert float(battery.hv_battery_kw) == pytest.approx(-20.44, abs=0.01)
+
+
+async def test_invented_amperage_and_power_keys_are_ignored(db_session):
+    """A payload carrying only the fictional keys must produce no row."""
+    await process_event(
+        _METRICS_ENTITY,
+        _metrics_state(xevBatteryAmperage=5.0, xevBatteryPower=1950),
+        db_session,
+        {"unit_system": "metric"},
+    )
+    await db_session.flush()
+
+    assert await _latest_battery(db_session) is None
