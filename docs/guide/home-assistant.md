@@ -6,8 +6,22 @@ LightningROD connects to [Home Assistant](https://www.home-assistant.io/) throug
 ## Prerequisites
 
 - A running Home Assistant instance with [ha-fordpass](https://github.com/marq24/ha-fordpass) installed and configured
+- The FordPass **Metrics** and **Events** entities enabled (see below)
 - A **long-lived access token** from Home Assistant
 - Network access between LightningROD and your Home Assistant instance
+
+### Enable the Metrics and Events entities
+
+ha-fordpass creates `Metrics`, `Events`, `States` and `Vehicles` as diagnostic
+entities that are **disabled by default**, so a fresh install exposes none of
+them. Metrics and Events are where battery history and completed trips come
+from — without them LightningROD records charging sessions but no battery
+readings and no trips.
+
+In Home Assistant, go to **Settings → Devices & Services → FordPass → 1 device**,
+open the entity list, find `Metrics` and `Events`, and enable each one. It can
+take a few minutes for the first values to appear. `States` and `Vehicles` are
+not used by LightningROD and can stay disabled.
 
 ## Configuration
 

@@ -36,6 +36,14 @@ All stored values are metric/SI. ha-fordpass localizes many fields to your HA
 unit system before LightningROD sees them; the adapter converts them back to
 canonical units on the way in (see [Data Sources](../data-sources.md)).
 
+!!! warning "The `metrics` and `events` entities are off by default"
+    ha-fordpass ships `metrics`, `events`, `states` and `vehicles` as disabled
+    diagnostic entities, so a fresh install exposes none of them. `metrics` and
+    `events` are the canonical sources for battery history and trips — enable
+    both in Home Assistant under **Settings → Devices & Services → FordPass →
+    entities**, or the rows below that name them stay empty. LightningROD reads
+    nothing from `states` or `vehicles`, so those can stay disabled.
+
 ## Battery — `ev_battery_status`
 
 High-voltage pack, 12V system, and motor telemetry. Rows come from the
@@ -49,8 +57,8 @@ High-voltage pack, 12V system, and motor telemetry. Rows come from the
 | `hv_battery_max_range` | `metrics.xevBatteryMaximumRange` / `elveh.maximumBatteryRange` | km | Yes | Full-charge range estimate. |
 | `hv_battery_capacity` | `metrics.xevBatteryCapacity` / `elveh.maximumBatteryCapacity` | kWh | Yes | Mixed Wh/kWh across installs; magnitude-autoscaled. Drives degradation. |
 | `hv_battery_voltage` | `metrics.xevBatteryVoltage` / `elveh.batteryVoltage` | V | Yes | SI passthrough. |
-| `hv_battery_amperage` | `metrics.xevBatteryAmperage` / `elveh.batteryAmperage` | A | Yes | SI passthrough. |
-| `hv_battery_kw` | `metrics.xevBatteryPower` (W→kW) / `elveh.batterykW` | kW | Yes | Instantaneous pack power. |
+| `hv_battery_amperage` | `metrics.xevBatteryIoCurrent` / `elveh.batteryAmperage` | A | Yes | SI passthrough. Negative while discharging. |
+| `hv_battery_kw` | derived from pack voltage × current | kW | Yes | Instantaneous pack power. Ford sends no power metric, so both paths multiply voltage by current. |
 | `hv_battery_temperature` | `elvehcharging.batteryTemperature` | °C | Intermittent | Live only while charging. |
 | `lv_battery_level` | `battery` state | % | Yes | 12V state of charge. |
 | `lv_battery_voltage` | `battery.batteryVoltage` | V | Yes | 12V voltage. |
@@ -81,8 +89,8 @@ batched per refresh cycle and flushed as one row on the `lastrefresh` signal.
 | `deep_sleep_status` | `deepsleep` | text | Yes | |
 | `device_connectivity` | `deviceconnectivity` | text | Yes | |
 | `evcc_status` | `evccstatus` | text | Yes | |
-| `outside_temperature` | `outsidetemp.ambientTemp` | °C | Yes | Time-series ambient. |
-| `cabin_temperature` | `cabintemperature.cabinTemperature` | °C | Yes | |
+| `outside_temperature` | `outsidetemp` state | °C | Yes | Time-series ambient. The entity's `ambientTemp` attribute mirrors a Ford metric that goes stale and is never read. |
+| `cabin_temperature` | `cabintemperature` state | °C | Yes | Comes from the last completed trip, so it updates per trip rather than continuously. |
 | `tire_pressure` | `tirepressure` (JSON) | bar / text | Yes | Per-wheel pressures + system state. |
 | `door_lock_status` | — | JSON | No | Column exists; **no live handler** — see caveats. |
 | `indicators` | — | JSON | No | Column exists; **no live handler** — see caveats. |
@@ -115,9 +123,9 @@ nearest vehicle-status readings.
 | `odometer_start` / `odometer_end` | nearest `ev_vehicle_status.odometer` | km | Yes | Derived, not a direct attribute. |
 | `driving_score` | `metrics.tripXevBatteryChargeRegenerated` / `elveh.tripDrivingScore` | 0–100 | Intermittent | Absent when telemetry reports 0. |
 | `electrical_efficiency` | `elveh.tripElectricalEfficiency` | 0–100 | Yes | |
-| `speed_score` | `elveh.tripSpeed` | 0–100 | Intermittent | elveh-only; empty when the fallback entity is absent. |
-| `acceleration_score` | `elveh.tripAcceleration` | 0–100 | Intermittent | elveh-only. |
-| `deceleration_score` | `elveh.tripDeceleration` | 0–100 | Intermittent | elveh-only. |
+| `speed_score` | `elveh.tripSpeedScore` | 0–100 | Intermittent | elveh-only; empty when the vehicle reports no coaching score. |
+| `acceleration_score` | `elveh.tripAccelerationScore` | 0–100 | Intermittent | elveh-only. |
+| `deceleration_score` | `elveh.tripDecelerationScore` | 0–100 | Intermittent | elveh-only. |
 | `brake_torque` | — | Nm | No | Column exists; not written on the trip path. |
 | `start_location_id` / `end_location_id` | — | — | No | Not populated from the HA path. |
 
@@ -156,7 +164,7 @@ payload. Thermal context is pulled from per-device caches populated by the
 | `location_type` | matched location | text | Yes (derived) | Copied from the location record. |
 | `network_id` | matched location, else `…location.network` | — | Yes | The location's network wins over the payload's. |
 | `battery_temp_start` / `battery_temp_end` | cached `elvehcharging.batteryTemperature` | °C | Intermittent | Single snapshot mirrored to start/end. |
-| `ambient_temp_start` / `ambient_temp_end` | cached `outsidetemp.ambientTemp` | °C | Yes | Single snapshot mirrored to start/end. |
+| `ambient_temp_start` / `ambient_temp_end` | cached `outsidetemp` state | °C | Yes | Single snapshot mirrored to start/end. |
 | `plug_status` / `charging_status` / `station_status` | (logged only) | text | No | Live plug/charge state is logged, not stored. |
 | `charging_voltage` / `charging_amperage` | — | V / A | No | Only session-average kW is captured. |
 | `cost`, `estimated_cost` | cost engine | currency | No (derived) | Calculated, not captured from HA. |

@@ -17,6 +17,13 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Battery history from Home Assistant now records range, state of charge,
+  capacity, voltage, current and power — every one of those readings was
+  arriving empty
+- Trip speed, acceleration and deceleration scores now appear on the driving
+  score chart instead of always being blank
+- Charging sessions now record the ambient temperature it actually was at the
+  time, rather than a stale reading that never changed
 - Charging sessions now show the location name, type and network you approved
   in the review queue. Renaming a location in the vehicle no longer retags new
   sessions with the vehicle's name
