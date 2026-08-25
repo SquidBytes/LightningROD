@@ -130,19 +130,26 @@ async def test_empty_archive_gives_no_window_and_no_states(op, db_session):
 async def test_fetch_states_returns_trip_slugs_ascending(op, db_session):
     """Only trip entities come back, ordered by the time they were recorded."""
     await RawEventFactory.create(
-        db_session, suffix="events", device_id=VIN, recorded_at=STATE_TS
+        db_session,
+        suffix="events",
+        device_id=VIN,
+        recorded_at=STATE_TS,
+        ha_unit_system=METRIC_UNIT_SYSTEM,
     )
+    # Captured after the user switched Home Assistant to imperial.
     await RawEventFactory.create(
         db_session,
         suffix="elveh",
         device_id=VIN,
         recorded_at=STATE_TS + timedelta(hours=2),
+        ha_unit_system=IMPERIAL_UNIT_SYSTEM,
     )
     await RawEventFactory.create(
         db_session,
         suffix="metrics",
         device_id=VIN,
         recorded_at=STATE_TS + timedelta(hours=1),
+        ha_unit_system=METRIC_UNIT_SYSTEM,
     )
     # Out of scope: not a trip entity.
     await RawEventFactory.create(
@@ -151,14 +158,21 @@ async def test_fetch_states_returns_trip_slugs_ascending(op, db_session):
 
     states = await op._fetch_states()
 
-    assert [entity_id.rsplit("_", 1)[-1] for _, entity_id, _ in states] == [
+    assert [entity_id.rsplit("_", 1)[-1] for _, entity_id, _, _ in states] == [
         "events",
         "metrics",
         "elveh",
     ]
-    timestamps = [ts for ts, _, _ in states]
+    timestamps = [ts for ts, _, _, _ in states]
     assert timestamps == sorted(timestamps)
-    assert all(isinstance(payload, dict) for _, _, payload in states)
+    assert all(isinstance(payload, dict) for _, _, payload, _ in states)
+    # Each row hands back the unit system it was captured under, not one
+    # value shared across the batch.
+    assert [config["unit_system"] for _, _, _, config in states] == [
+        METRIC_UNIT_SYSTEM,
+        METRIC_UNIT_SYSTEM,
+        IMPERIAL_UNIT_SYSTEM,
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +231,57 @@ async def test_offline_replay_reads_imperial_payloads_as_imperial(op, db_session
     assert float(trip.distance) == pytest.approx(19.0, abs=0.05)
     assert float(trip.cabin_temp) == pytest.approx(20.0, abs=0.5)
     assert float(trip.ambient_temp) == pytest.approx(15.0, abs=0.5)
+
+
+@pytest.mark.db
+async def test_units_come_from_each_row_not_the_newest_in_the_table(op, db_session):
+    """A later row captured under a different unit system must not retune the rest.
+
+    Resolving the unit system once for the whole replay reads the imperial
+    elveh payload as metric, and the wrong distance stops it matching the
+    trip the events payload created — so a duplicate appears at 11.81 km.
+    """
+    await VehicleFactory.create(db_session, device_id=VIN)
+    await _seed_trip_entities(
+        db_session,
+        fixture="imperial_ha_imperial_vehicle",
+        unit_system=IMPERIAL_UNIT_SYSTEM,
+    )
+    # Not a trip entity, captured later under a different unit system: a
+    # global "newest non-null" probe picks this one.
+    await RawEventFactory.create(
+        db_session,
+        suffix="soc",
+        device_id=VIN,
+        recorded_at=STATE_TS + timedelta(days=1),
+        ha_unit_system=METRIC_UNIT_SYSTEM,
+    )
+
+    await op.execute(db_session)
+
+    trips = await _trips(db_session)
+    assert len(trips) == 1, "elveh was read under another row's unit system"
+    assert float(trips[0].distance) == pytest.approx(19.0, abs=0.05)
+    assert float(trips[0].cabin_temp) == pytest.approx(20.0, abs=0.5)
+
+
+@pytest.mark.db
+async def test_states_needing_an_unknown_unit_system_are_skipped(op, db_session):
+    """With no recorded unit system and no live runtime, do not assume metric."""
+    await VehicleFactory.create(db_session, device_id=VIN)
+    await _seed_trip_entities(
+        db_session,
+        fixture="imperial_ha_imperial_vehicle",
+        unit_system=None,
+    )
+
+    await op.execute(db_session)
+
+    # elveh and metrics skipped; the events payload is raw metric regardless.
+    assert op.last_details["skipped_unknown_units"] == 2
+    trips = await _trips(db_session)
+    assert len(trips) == 1
+    assert float(trips[0].distance) == pytest.approx(19.0, abs=0.05)
 
 
 @pytest.mark.db

@@ -124,10 +124,12 @@ async def test_fetch_states_merges_chronologically():
     states = await op._fetch_states()
 
     assert len(states) == 5
-    timestamps = [ts for ts, _, _ in states]
+    timestamps = [ts for ts, _, _, _ in states]
     assert timestamps == sorted(timestamps)
-    suffixes = [entity_id.rsplit("_", 1)[-1] for _, entity_id, _ in states]
+    suffixes = [entity_id.rsplit("_", 1)[-1] for _, entity_id, _, _ in states]
     assert suffixes == ["events", "metrics", "elveh", "metrics", "events"]
+    # Recorder history is all one live runtime's, so no per-state config.
+    assert all(config is None for _, _, _, config in states)
 
 
 # ---------------------------------------------------------------------------

@@ -78,6 +78,10 @@ class RecorderReplay(RepairOperation):
     runs_when_clean = True
 
     TRIP_ENTITY_SUFFIXES = ("events", "metrics", "elveh")
+    # ha-fordpass localizes these entities' trip attributes into Home
+    # Assistant's unit system before emitting them, so their numbers cannot be
+    # read without knowing it. The events payload is always raw metric.
+    UNIT_SENSITIVE_SUFFIXES = ("metrics", "elveh")
     ENRICHABLE_FIELDS = (
         "duration",
         "start_time",
@@ -185,13 +189,19 @@ class RecorderReplay(RepairOperation):
     # History fetch
     # ------------------------------------------------------------------
 
-    async def _fetch_states(self) -> list[tuple[datetime, str, dict]]:
-        """All trip-entity states in the window, ascending by state timestamp."""
+    async def _fetch_states(self) -> list[tuple[datetime, str, dict, dict | None]]:
+        """All trip-entity states in the window, ascending by state timestamp.
+
+        The fourth element is the config a state must be read under, or None
+        to fall back to the runtime's. Recorder history all comes from one
+        live runtime, so it is always None here; sources whose states carry
+        their own capture-time config return it per state.
+        """
         runtime = self._get_runtime()
         window = await self.recorder_window()
         if runtime is None or window is None:
             return []
-        merged: list[tuple[datetime, str, dict]] = []
+        merged: list[tuple[datetime, str, dict, dict | None]] = []
         for suffix in self.TRIP_ENTITY_SUFFIXES:
             entity_id = self._entity_id(runtime, suffix)
             if suffix == "events":
@@ -204,7 +214,7 @@ class RecorderReplay(RepairOperation):
                 ts = _state_ts(state)
                 if ts is None:
                     continue
-                merged.append((ts, entity_id, state))
+                merged.append((ts, entity_id, state, None))
         merged.sort(key=lambda item: item[0])
         return merged
 
@@ -241,6 +251,7 @@ class RecorderReplay(RepairOperation):
             "trips_recovered": 0,
             "protected_reverted": 0,
             "rows_changed": 0,
+            "skipped_unknown_units": 0,
             "filled": {},
         }
         runtime = self._get_runtime()
@@ -248,7 +259,8 @@ class RecorderReplay(RepairOperation):
         if runtime is None or window is None:
             return details, []
 
-        ha_config = dict(runtime._ha_config or {})
+        runtime_config = dict(runtime._ha_config or {})
+        unit_sensitive = tuple(f"_{s}" for s in self.UNIT_SENSITIVE_SUFFIXES)
         states = await self._fetch_states()
 
         window_stmt = select(EVTripMetrics).where(EVTripMetrics.end_time >= window)
@@ -258,8 +270,27 @@ class RecorderReplay(RepairOperation):
         # invariant is enforced here by reverting protected rows afterward.
         before = {row.id: serialize_row(row) for row in before_rows}
 
-        for _ts, entity_id, state in states:
+        for _ts, entity_id, state, state_config in states:
             try:
+                # A state that recorded its own config is read under it; the
+                # runtime's is only the fallback for states that carry none.
+                ha_config = state_config or runtime_config
+                if not ha_config.get("unit_system") and entity_id.endswith(
+                    unit_sensitive
+                ):
+                    # Guessing metric here silently stores miles as kilometres
+                    # and °F as °C, and the wrong distance spawns a duplicate
+                    # trip alongside the correct one. Skipping loses nothing
+                    # the events payload does not already carry.
+                    if not details["skipped_unknown_units"]:
+                        logger.warning(
+                            "%s: no unit system for %s — skipping states whose "
+                            "values depend on it",
+                            self.slug,
+                            entity_id,
+                        )
+                    details["skipped_unknown_units"] += 1
+                    continue
                 if entity_id.endswith("_metrics"):
                     # Dispatching metrics would write an EVBatteryStatus row
                     # per state; the trip regen backfill is its only
