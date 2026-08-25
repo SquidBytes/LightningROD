@@ -21,11 +21,14 @@ from db.portable_insert import portable_insert
 from web.queries.settings import get_raw_archive_settings
 from web.services.ingestion._helpers import _get_event_timestamp
 from web.services.sources.ha_fordpass.adapter import INGEST_SCHEMA_VERSION
-from web.services.sources.ha_fordpass.handlers import extract_slug, get_device_id
 
 logger = logging.getLogger("lightningrod.ingestion.raw_archive")
 
 SOURCE_SYSTEM = "ha_fordpass"
+# Entity id prefixes the archive keeps. The device tracker is here because it
+# is the only source of GPS accuracy and altitude — the gps sensor carries
+# neither, and ev_location has columns for both.
+ARCHIVED_PREFIXES = ("sensor.fordpass_", "device_tracker.fordpass_")
 # Home Assistant freezes last_changed while only attributes change, so the
 # archive keys off last_updated: it advances on every update, which keeps
 # attribute-only events distinct, and a reconnect snapshot re-emits the same
@@ -50,6 +53,20 @@ def _utc(ts: datetime | None) -> datetime | None:
     if ts is None:
         return None
     return ts.astimezone(UTC) if ts.tzinfo else ts.replace(tzinfo=UTC)
+
+
+def archive_scope(entity_id: str) -> tuple[str, str] | None:
+    """Split a fordpass entity id into (device_id, slug); None if out of scope.
+
+    Deliberately not `extract_slug`, which gates ingestion dispatch: widening
+    that would route device_tracker events at slug handlers written for sensor
+    payloads. What the archive keeps is its own concern.
+    """
+    for prefix in ARCHIVED_PREFIXES:
+        if entity_id.startswith(prefix):
+            device_id, _, slug = entity_id[len(prefix) :].partition("_")
+            return (device_id, slug) if device_id and slug else None
+    return None
 
 
 def state_text(new_state: dict) -> str | None:
@@ -99,14 +116,15 @@ class RawEventArchive:
         try:
             if not entity_id or not new_state:
                 return
-            slug = extract_slug(entity_id)
-            if slug is None:
+            scope = archive_scope(entity_id)
+            if scope is None:
                 return
+            device_id, slug = scope
             async with AsyncSessionLocal() as db:
                 settings = await self._settings_for(db)
                 if settings["enabled"]:
                     await self._insert(
-                        db, entity_id, slug, new_state, config_id, ha_config
+                        db, entity_id, device_id, slug, new_state, config_id, ha_config
                     )
                     await db.commit()
                     self._health["writes"] += 1
@@ -171,6 +189,7 @@ class RawEventArchive:
         self,
         db,
         entity_id: str,
+        device_id: str,
         slug: str,
         new_state: dict,
         config_id: int,
@@ -178,7 +197,7 @@ class RawEventArchive:
     ) -> None:
         stmt = portable_insert(HARawEvent, dialect=db.bind.dialect).values(
             entity_id=entity_id,
-            device_id=get_device_id(entity_id, {}),
+            device_id=device_id,
             slug=slug,
             state=state_text(new_state),
             payload=new_state,

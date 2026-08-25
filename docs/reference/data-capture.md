@@ -193,9 +193,10 @@ that cannot be confirmed without a live HA instance are marked *unverified*.
 
 !!! note "Dropped from the typed tables, not from the database"
     With the [event archive](../guide/settings.md#event-archive) on, the whole
-    payload of every FordPass event is stored as it arrives. Nothing below is
-    mapped to a column, but it stays recoverable from the archive for as long
-    as the retention window keeps it.
+    payload of every FordPass sensor event — plus the vehicle's
+    `device_tracker`, the only source of GPS accuracy and altitude — is stored
+    as it arrives. Nothing below is mapped to a column, but it stays
+    recoverable from the archive for as long as the retention window keeps it.
 
 | Data | Rough value | Status | Note |
 |------|-------------|--------|------|

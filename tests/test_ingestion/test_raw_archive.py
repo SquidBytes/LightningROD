@@ -38,6 +38,30 @@ _FIXTURE = json.loads(
 )
 
 
+TRACKER_ENTITY = f"device_tracker.fordpass_{VIN}_tracker"
+
+
+def _tracker_state(ts: datetime = EVENT_TS) -> dict:
+    """A device_tracker state as the FordPass integration emits it."""
+    return {
+        "entity_id": TRACKER_ENTITY,
+        "state": "not_home",
+        "attributes": {
+            "latitude": 42.123456,
+            "longitude": -71.654321,
+            "gps_accuracy": 12,
+            "Altitude": 47.5,
+            "in_zones": [],
+            "gpsCoordinateMethod": "GPS",
+            "gpsDimension": "3D",
+            "source_type": "gps",
+            "tracking_type": "GPS",
+        },
+        "last_changed": ts.isoformat(),
+        "last_updated": ts.isoformat(),
+    }
+
+
 def _entity(suffix: str) -> str:
     return f"sensor.fordpass_{VIN}_{suffix}"
 
@@ -277,8 +301,58 @@ async def test_non_fordpass_entity_writes_nothing(archive, db_session):
         "sensor.living_room_motion", {"state": "on"}, config_id=1
     )
     await archive.store("sensor.gas_price_station", {"state": "3.50"}, config_id=1)
+    # Someone else's phone is a device_tracker too.
+    await archive.store(
+        "device_tracker.pixel_9", {"state": "home"}, config_id=1
+    )
+    await archive.store(
+        "device_tracker.fordpass", {"state": "home"}, config_id=1
+    )
 
     assert await _count(db_session) == 0
+
+
+@pytest.mark.db
+async def test_device_tracker_is_archived_with_its_attributes(archive, db_session):
+    """The tracker is the only source of GPS accuracy and altitude."""
+    state = _tracker_state()
+
+    await archive.store(TRACKER_ENTITY, state, config_id=2)
+
+    rows = await _rows(db_session)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.entity_id == TRACKER_ENTITY
+    assert row.device_id == VIN
+    assert row.slug == "tracker"
+    assert row.state == "not_home"
+    assert row.payload["attributes"]["gps_accuracy"] == 12
+    assert row.payload["attributes"]["Altitude"] == 47.5
+
+
+@pytest.mark.db
+async def test_tracker_and_sensor_rows_coexist(archive, db_session):
+    """The tracker slug collides with no sensor slug, and dedup still holds."""
+    await archive.store(_entity("gps"), _state("soc"), config_id=1)
+    await archive.store(TRACKER_ENTITY, _tracker_state(), config_id=1)
+    await archive.store(TRACKER_ENTITY, _tracker_state(), config_id=1)
+
+    rows = await _rows(db_session)
+    assert {row.slug for row in rows} == {"gps", "tracker"}
+    assert len(rows) == 2  # the repeated tracker state deduped
+
+
+@pytest.mark.db
+async def test_retention_prunes_tracker_rows_too(archive, db_session):
+    """Nothing about retention is keyed to the sensor prefix."""
+    stale = _tracker_state(datetime.now(UTC) - timedelta(days=120))
+    await archive.store(TRACKER_ENTITY, stale, config_id=1)
+    assert await _count(db_session) == 1
+
+    archive._prune_due_at = 0.0
+    await archive.store(_entity("soc"), _state("soc", datetime.now(UTC)), config_id=1)
+
+    assert TRACKER_ENTITY not in {row.entity_id for row in await _rows(db_session)}
 
 
 @pytest.mark.db

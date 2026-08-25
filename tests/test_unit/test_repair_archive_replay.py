@@ -155,6 +155,20 @@ async def test_fetch_states_returns_trip_slugs_ascending(op, db_session):
     await RawEventFactory.create(
         db_session, suffix="soc", device_id=VIN, recorded_at=STATE_TS
     )
+    # Also out of scope: the device tracker is archived for its GPS accuracy
+    # and altitude, and has no trip payload to replay.
+    db_session.add(
+        HARawEvent(
+            entity_id=f"device_tracker.fordpass_{VIN}_tracker",
+            device_id=VIN,
+            slug="tracker",
+            state="not_home",
+            payload={"state": "not_home", "attributes": {"gps_accuracy": 12}},
+            recorded_at=STATE_TS,
+            source_system="ha_fordpass",
+        )
+    )
+    await db_session.flush()
 
     states = await op._fetch_states()
 
@@ -383,6 +397,11 @@ async def test_preview_persists_nothing():
 # ---------------------------------------------------------------------------
 # Registry wiring
 # ---------------------------------------------------------------------------
+
+
+def test_tracker_is_not_a_trip_entity():
+    """Replay must never dispatch device_tracker payloads at slug handlers."""
+    assert "tracker" not in ArchiveReplay.TRIP_ENTITY_SUFFIXES
 
 
 def test_registered_between_telemetry_derive_and_recorder_replay():
