@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.raw_event import HARawEvent
 from tests.factories import BaseFactory
+from web.services.ingestion.raw_archive import state_text
 
 _FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "ha_payloads"
 
@@ -58,7 +59,9 @@ class RawEventFactory(BaseFactory):
             "entity_id": state["entity_id"],
             "device_id": device_id,
             "slug": suffix,
-            "state": state.get("state"),
+            # Same coercion the writer applies, so factory rows cannot drift
+            # from what production actually stores.
+            "state": state_text(state),
             "payload": state,
             "ha_unit_system": None,
             "recorded_at": recorded_at,

@@ -110,7 +110,8 @@ async def test_store_writes_one_row_with_denormalized_scalars(archive, db_sessio
     assert row.entity_id == _entity("events")
     assert row.device_id == VIN
     assert row.slug == "events"
-    assert row.state == "ok"
+    # The events entity's state is an event count, not a string.
+    assert row.state == str(state["state"])
     assert row.config_id == 3
     assert row.source_system == "ha_fordpass"
     assert row.ingest_schema_version is not None
@@ -135,12 +136,12 @@ async def test_payload_roundtrips_dict_equal(archive, db_session):
 
 @pytest.mark.db
 async def test_every_fixture_entity_is_archived(archive, db_session):
-    """All seven fixture entities are fordpass-scoped and each writes a row."""
+    """Every fixture entity is fordpass-scoped and each writes a row."""
     for key in _FIXTURE:
         suffix = key.rsplit("_", 1)[-1]
         await archive.store(_entity(suffix), _state(suffix), config_id=1)
 
-    assert await _count(db_session) == len(_FIXTURE) == 7
+    assert await _count(db_session) == len(_FIXTURE)
 
 
 @pytest.mark.db

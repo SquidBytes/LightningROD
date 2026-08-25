@@ -52,6 +52,16 @@ def _utc(ts: datetime | None) -> datetime | None:
     return ts.astimezone(UTC) if ts.tzinfo else ts.replace(tzinfo=UTC)
 
 
+def state_text(new_state: dict) -> str | None:
+    """The main state as the column stores it.
+
+    Home Assistant states are not always strings — the events entity's is an
+    event count, the metrics entity's a reading — so coerce rather than trust.
+    """
+    state = new_state.get("state")
+    return None if state is None else str(state)
+
+
 class RawEventArchive:
     """Writes each fordpass event to `ha_raw_events` before typed mapping runs."""
 
@@ -166,12 +176,11 @@ class RawEventArchive:
         config_id: int,
         ha_config: dict | None,
     ) -> None:
-        state = new_state.get("state")
         stmt = portable_insert(HARawEvent, dialect=db.bind.dialect).values(
             entity_id=entity_id,
             device_id=get_device_id(entity_id, {}),
             slug=slug,
-            state=None if state is None else str(state),
+            state=state_text(new_state),
             payload=new_state,
             # Only the unit system, not the whole HA config: the rest of it is
             # instance metadata (home coordinates, location name) the archive
