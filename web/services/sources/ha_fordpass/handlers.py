@@ -713,9 +713,9 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             # Score fields use the 0-as-sentinel converter so empty trips
             # store NULL rather than rendering as a red 0-score gauge.
             "tripDrivingScore": ("driving_score", _score_or_null),
-            "tripSpeed": ("speed_score", _score_or_null),
-            "tripAcceleration": ("acceleration_score", _score_or_null),
-            "tripDeceleration": ("deceleration_score", _score_or_null),
+            "tripSpeedScore": ("speed_score", _score_or_null),
+            "tripAccelerationScore": ("acceleration_score", _score_or_null),
+            "tripDecelerationScore": ("deceleration_score", _score_or_null),
             "tripAmbientTemp": ("ambient_temp", _t),
             "tripOutsideAirAmbientTemp": ("outside_air_temp", _t),
             "tripCabinTemp": ("cabin_temp", _t),

@@ -169,3 +169,45 @@ async def test_invented_amperage_and_power_keys_are_ignored(db_session):
     await db_session.flush()
 
     assert await _latest_battery(db_session) is None
+
+
+async def test_elveh_trip_scores_use_the_score_suffixed_names(db_session):
+    """Coaching scores are `tripSpeedScore` / `tripAccelerationScore` /
+    `tripDecelerationScore` — the unsuffixed names never existed."""
+    from db.models.trip_metrics import EVTripMetrics
+    from web.services.sources.ha_fordpass import handlers as fp_handlers
+    from web.services.sources.ha_fordpass.handlers import handle_battery_status
+
+    fp_handlers._last_trip_values.clear()
+
+    elveh_state = {
+        "entity_id": f"sensor.fordpass_{_DEVICE_ID}_elveh",
+        "state": "343.9",
+        "last_changed": "2026-08-25T13:52:34+00:00",
+        "last_updated": "2026-08-25T13:52:34+00:00",
+        "attributes": {
+            "unit_of_measurement": "km",
+            "tripDistanceTraveled": 19,
+            "tripDuration": "0:30:00",
+            "tripEnergyConsumed": 7.6,
+            "tripSpeedScore": 99.60787,
+            "tripAccelerationScore": 85.49023,
+            "tripDecelerationScore": 96.86278,
+        },
+    }
+    await handle_battery_status(
+        "elveh", elveh_state, {"unit_system": "metric"}, _DEVICE_ID, db_session
+    )
+    await db_session.flush()
+
+    trip = (
+        await db_session.execute(
+            select(EVTripMetrics)
+            .where(EVTripMetrics.device_id == _DEVICE_ID)
+            .order_by(EVTripMetrics.id.desc())
+            .limit(1)
+        )
+    ).scalar_one()
+    assert float(trip.speed_score) == pytest.approx(99.60787, abs=0.001)
+    assert float(trip.acceleration_score) == pytest.approx(85.49023, abs=0.001)
+    assert float(trip.deceleration_score) == pytest.approx(96.86278, abs=0.001)
