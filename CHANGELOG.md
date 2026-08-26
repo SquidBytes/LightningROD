@@ -25,6 +25,8 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Vehicle position is now recorded as soon as LightningROD reconnects to Home
+  Assistant, instead of waiting until the car next moves
 - Battery history from Home Assistant now records range, state of charge,
   capacity, voltage, current and power — every one of those readings was
   arriving empty

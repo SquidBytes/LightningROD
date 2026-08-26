@@ -25,6 +25,14 @@ from web.unit_system import GAL_PER_LITER
 
 logger = logging.getLogger("lightningrod.hass")
 
+# Entity prefixes the connect-time catch-up sweep replays. The device tracker
+# belongs here because a parked car can go hours without moving: without it,
+# nothing about vehicle position is recorded until the position next changes.
+# Re-sending it is safe — the sweep replays each entity's original timestamp,
+# so the archive's (entity_id, recorded_at) index drops the repeat, and
+# `dispatch_slug` ignores any id that is not `sensor.fordpass_`.
+CATCHUP_PREFIXES = ("sensor.fordpass_", "device_tracker.fordpass_")
+
 
 class _AuthInvalid(Exception):
     """Internal exception for HA auth_invalid responses."""
@@ -225,7 +233,7 @@ class HAWebSocketRuntime:
         if self._entity_states:
             snapshot_count = 0
             for entity_id, state_obj in self._entity_states.items():
-                if not entity_id.startswith("sensor.fordpass_"):
+                if not entity_id.startswith(CATCHUP_PREFIXES):
                     continue
                 try:
                     await handler(entity_id, {}, state_obj, self._ha_config or {})
