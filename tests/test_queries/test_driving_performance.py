@@ -1,6 +1,11 @@
 """Query-layer tests for /driving/performance data functions. phase_25."""
+import uuid
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
+from db.models.trip_metrics import EVTripMetrics
+from tests.test_queries.conftest import DEVICE_ID
 from web.queries.driving_performance import (
     _min_points_for_range,
     query_regen_per_trip,
@@ -15,14 +20,53 @@ pytestmark = pytest.mark.query
 # ---------------------------------------------------------------------------
 
 
-async def test_phase_25_temp_correlation_filters_null_ambient_temp(
+async def test_phase_25_temp_correlation_filters_unusable_trips(
     db_session, trips_with_ambient_temp
 ):
-    """query_temperature_correlation excludes trips where ambient_temp IS NULL."""
+    """Every exclusion the query promises is exercised against a trip that trips it.
+
+    The fixture alone contains nothing the filters would drop, so asserting
+    that the returned rows look usable proves nothing — the query would pass
+    with all four WHERE clauses deleted. Each unusable trip below must be
+    absent from the result, and every usable one still present.
+    """
+    now = datetime.now(UTC)
+    unusable = {
+        "null ambient_temp": dict(ambient_temp=None, distance=50.0, energy=12.0),
+        "null distance": dict(ambient_temp=12.0, distance=None, energy=12.0),
+        "null energy": dict(ambient_temp=13.0, distance=50.0, energy=None),
+        "zero energy": dict(ambient_temp=14.0, distance=50.0, energy=0.0),
+    }
+    db_session.add_all(
+        EVTripMetrics(
+            trip_id=uuid.uuid4(),
+            device_id=DEVICE_ID,
+            distance=spec["distance"],
+            duration=45.0,
+            energy_consumed=spec["energy"],
+            ambient_temp=spec["ambient_temp"],
+            start_time=now - timedelta(days=2, minutes=45),
+            end_time=now - timedelta(days=2),
+            is_complete=True,
+            source_system="test_fixture",
+        )
+        for spec in unusable.values()
+    )
+    await db_session.flush()
+
     rows = await query_temperature_correlation(db_session, time_range="all")
-    assert rows
+
+    assert len(rows) == len(trips_with_ambient_temp), (
+        f"expected only the {len(trips_with_ambient_temp)} usable trips, got "
+        f"{len(rows)} — an unusable trip survived the filter"
+    )
+    assert {r["ambient_temp"] for r in rows} == {
+        float(t.ambient_temp) for t in trips_with_ambient_temp
+    }
     for r in rows:
         assert r["ambient_temp"] is not None
+        assert r["distance"] is not None
+        assert r["energy_consumed"] > 0
 
 
 async def test_phase_25_temp_correlation_respects_range_filter(
