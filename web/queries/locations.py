@@ -432,7 +432,11 @@ async def get_location_defaults(
         evse_voltage=_as_float(stall.voltage) if stall else None,
         evse_amperage=_as_float(stall.amperage) if stall else None,
         charger_rated_kw=_as_float(stall.rated_kw) if stall else None,
-        charge_type=_STALL_CHARGE_TYPE.get(stall.charger_type) if stall else None,
+        charge_type=(
+            _STALL_CHARGE_TYPE.get(stall.charger_type)
+            if stall and stall.charger_type
+            else None
+        ),
     )
 
 
