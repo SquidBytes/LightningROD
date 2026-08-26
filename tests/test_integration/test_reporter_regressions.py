@@ -222,7 +222,12 @@ async def test_battery_capacity_already_kwh_not_divided(db_session):
     """
     payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
     metrics = payload["sensor.fordpass_YOUR_VIN_metrics"]
-    metrics["attributes"]["xevBatteryCapacity"] = 141.2
+    # Value-wrapped like every other metrics attribute: ha-fordpass hands
+    # Ford's metrics dict to HA verbatim and never emits a bare scalar here.
+    metrics["attributes"]["xevBatteryCapacity"] = {
+        "updateTime": "2026-04-19T12:00:00Z",
+        "value": 141.2,
+    }
     await process_event(
         "sensor.fordpass_YOUR_VIN_metrics", metrics, db_session, {"unit_system": "metric"},
     )

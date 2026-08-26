@@ -20,9 +20,8 @@
       "tripAccelerationScore": 75,
       "tripDecelerationScore": 70,
       "maximumBatteryCapacity": 131.0,
-      "batteryActualCharge": 115.0,
+      "batteryActualCharge": 77.0,
       "maximumBatteryRange": 260,
-      "totalDistanceAdded": 103,
       "batteryVoltage": 390.0,
       "batteryAmperage": 5.0,
       "batterykW": 1.95,
@@ -64,7 +63,7 @@
       "xevBatteryRange": {
         "updateTime": "2026-04-19T12:00:00Z",
         "oemCorrelationId": "1715",
-        "value": 418
+        "value": 260
       },
       "odometer": {
         "updateTime": "2026-04-19T12:00:00Z",

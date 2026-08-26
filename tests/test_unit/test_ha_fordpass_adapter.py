@@ -35,7 +35,7 @@ def test_metrics_entity_battery_range_passthrough():
     payload = _load("metric_ha_imperial_vehicle.json")
     metrics_state = payload["sensor.fordpass_YOUR_VIN_metrics"]
     raw = metrics_state["attributes"]["xevBatteryRange"]
-    assert _metric_value(metrics_state["attributes"], "xevBatteryRange") == 418
+    assert _metric_value(metrics_state["attributes"], "xevBatteryRange") == 260
     assert "updateTime" in raw, "metrics attributes arrive value-wrapped"
     # Adapter must emit this value unchanged to hv_battery_range column
 
@@ -60,6 +60,49 @@ def test_every_metrics_attribute_is_value_wrapped():
             assert isinstance(value, dict) and "value" in value, (
                 f"{fixture}: metrics attribute {key!r} is not value-wrapped"
             )
+
+
+def test_metrics_attributes_are_identical_across_the_unit_matrix():
+    """The metrics entity ignores Home Assistant's unit system entirely.
+
+    ha-fordpass registers it as `attrs_fn=lambda data, units: get_metrics(data)`
+    — the `units` argument is unused — so the same vehicle reading is the same
+    number in all four fixtures. A per-fixture difference means someone
+    unit-converted a raw passthrough, which is the double-conversion bug this
+    matrix exists to catch.
+    """
+    # displaySystemOfMeasure reports how the vehicle is configured to display
+    # values; it is a setting rather than a reading, and the matrix varies it
+    # on purpose. Its own invariant is asserted below.
+    varies_by_design = ("friendly_name", "icon", "displaySystemOfMeasure")
+    baseline_name = "metric_ha_metric_vehicle.json"
+    baseline = _load(baseline_name)["sensor.fordpass_YOUR_VIN_metrics"]["attributes"]
+    for fixture in sorted(p.name for p in FIXTURES_DIR.glob("*.json")):
+        if fixture == baseline_name:
+            continue
+        attrs = _load(fixture)["sensor.fordpass_YOUR_VIN_metrics"]["attributes"]
+        for key, value in baseline.items():
+            if key in varies_by_design:
+                continue
+            assert attrs.get(key) == value, (
+                f"{fixture}: metrics attribute {key!r} is {attrs.get(key)!r}, "
+                f"but {baseline_name} has {value!r} — metrics are unit-invariant"
+            )
+
+
+def test_display_system_of_measure_tracks_the_vehicle_half_of_the_matrix():
+    """Fixture names read `{ha_unit_system}_ha_{vehicle_display}_vehicle`.
+
+    Both halves vary independently, so a fixture that mirrored HA's system
+    here would quietly collapse the matrix to two cases instead of four.
+    """
+    for fixture in sorted(p.name for p in FIXTURES_DIR.glob("*.json")):
+        vehicle_display = fixture.split("_ha_")[1].removesuffix("_vehicle.json")
+        attrs = _load(fixture)["sensor.fordpass_YOUR_VIN_metrics"]["attributes"]
+        assert attrs["displaySystemOfMeasure"]["value"] == vehicle_display.upper(), (
+            f"{fixture}: displaySystemOfMeasure should follow the vehicle "
+            f"display setting ({vehicle_display.upper()})"
+        )
 
 
 # elveh state reads use per-event unit_of_measurement.

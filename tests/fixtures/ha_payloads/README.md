@@ -40,7 +40,8 @@ Filenames follow `{ha_unit_system}_ha_{vehicle_display}_vehicle.json`:
   `oemCorrelationId`) and the entity **state is `len(metrics)`**, an integer.
   `xevBatteryRange` and `xevBatteryMaximumRange` are km regardless of HA or
   vehicle config (raw API passthrough — ha-fordpass does not HA-convert
-  metrics-entity attributes). Pack current is `xevBatteryIoCurrent`; there is no
+  metrics-entity attributes), so every metrics attribute holds the **same**
+  value in all four fixtures; a value that differs between them is a bug. Pack current is `xevBatteryIoCurrent`; there is no
   `xevBatteryAmperage` and no pack-power metric at all — ha-fordpass derives
   `batterykW` itself from voltage x current.
 - `sensor.fordpass_YOUR_VIN_events` — the state is `len(events)`, an integer.
@@ -51,9 +52,13 @@ Filenames follow `{ha_unit_system}_ha_{vehicle_display}_vehicle.json`:
   state never takes, so anything reading it fails loudly.
 - `sensor.fordpass_YOUR_VIN_cabintemperature` — state only. The entity carries
   **no** `cabinTemperature` attribute.
-- `sensor.fordpass_YOUR_VIN_events` — **always metric**. `xev-key-off-trip-segment-data`
-  exposes `distance_traveled` (km), `energy_consumed` (Wh), `trip_duration` (s),
-  `ambient_temp` / `cabin_temp` / `outside_air_temp` (°C). Raw API passthrough.
+- `sensor.fordpass_YOUR_VIN_events` — **always metric**. The trip segment sits
+  under `customEvents["xev-key-off-trip-segment-data"].oemData.trip_data.stringArrayValue`
+  as a JSON **string**, and exposes `distance_traveled` (km), `energy_consumed`
+  (Wh), `trip_duration` (s), `ambient_temperature` / `cabin_temperature` /
+  `outside_air_ambient_temperature` (°C). Raw API passthrough — these are Ford
+  API keys, not the `ambient_temp` / `cabin_temp` / `outside_air_temp` DB
+  columns they land in.
 - `sensor.fordpass_YOUR_VIN_energytransferlogentry.plugDetails.totalDistanceAdded`
   — **HA-system-converted**. ha-fordpass calls `localize_distance` on this
   field inside `get_energy_transfer_log_attrs`, so the fixture value reflects

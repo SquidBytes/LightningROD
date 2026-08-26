@@ -24,9 +24,9 @@ FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "ha_payloads"
 # All stored values are metric-canonical (km / degC / kWh).
 MATRIX = {
     "metric_ha_metric_vehicle.json":     {"hv_battery_range": 260, "hv_battery_max_range": 418, "trip_distance": 19, "distance_added": 103},
-    "metric_ha_imperial_vehicle.json":   {"hv_battery_range": 418, "hv_battery_max_range": 418, "trip_distance": 19, "distance_added": 103},
-    "imperial_ha_metric_vehicle.json":   {"hv_battery_range": 418, "hv_battery_max_range": 418, "trip_distance": 19, "distance_added": 103},
-    "imperial_ha_imperial_vehicle.json": {"hv_battery_range": 418, "hv_battery_max_range": 418, "trip_distance": 19, "distance_added": 103},
+    "metric_ha_imperial_vehicle.json":   {"hv_battery_range": 260, "hv_battery_max_range": 418, "trip_distance": 19, "distance_added": 103},
+    "imperial_ha_metric_vehicle.json":   {"hv_battery_range": 260, "hv_battery_max_range": 418, "trip_distance": 19, "distance_added": 103},
+    "imperial_ha_imperial_vehicle.json": {"hv_battery_range": 260, "hv_battery_max_range": 418, "trip_distance": 19, "distance_added": 103},
 }
 
 # Display-layer oracles.
@@ -45,8 +45,8 @@ MATRIX_DISPLAY = {
         "distance_added_mi_display": 64.0,  # 103 * 0.621371
     },
     "metric_ha_imperial_vehicle.json": {
-        "hv_battery_range_km_display": 418.0,
-        "hv_battery_range_mi_display": 259.7,
+        "hv_battery_range_km_display": 260.0,
+        "hv_battery_range_mi_display": 161.6,
         "hv_battery_max_range_km_display": 418.0,
         "hv_battery_max_range_mi_display": 259.7,
         "trip_distance_km_display": 19.0,
@@ -55,8 +55,8 @@ MATRIX_DISPLAY = {
         "distance_added_mi_display": 64.0,
     },
     "imperial_ha_metric_vehicle.json": {
-        "hv_battery_range_km_display": 418.0,
-        "hv_battery_range_mi_display": 259.7,
+        "hv_battery_range_km_display": 260.0,
+        "hv_battery_range_mi_display": 161.6,
         "hv_battery_max_range_km_display": 418.0,
         "hv_battery_max_range_mi_display": 259.7,
         "trip_distance_km_display": 19.0,
@@ -65,8 +65,8 @@ MATRIX_DISPLAY = {
         "distance_added_mi_display": 64.0,
     },
     "imperial_ha_imperial_vehicle.json": {
-        "hv_battery_range_km_display": 418.0,
-        "hv_battery_range_mi_display": 259.7,
+        "hv_battery_range_km_display": 260.0,
+        "hv_battery_range_mi_display": 161.6,
         "hv_battery_max_range_km_display": 418.0,
         "hv_battery_max_range_mi_display": 259.7,
         "trip_distance_km_display": 19.0,
