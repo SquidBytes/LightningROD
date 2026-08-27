@@ -338,6 +338,40 @@ async def test_a_live_connection_supplies_no_units_for_rows_without_them(
 
 
 @pytest.mark.db
+async def test_apply_never_consults_the_live_supervisor(op, db_session, monkeypatch):
+    """The invariant itself: a full replay must not reach for live state at all.
+
+    Every unit-correctness assertion above depends on the consequence of
+    touching the live runtime being visible in a trip row. This one does not:
+    a supervisor call added anywhere in the cycle, for any reason, fails here
+    even when it disturbs nothing else.
+    """
+    from web.services.ingestion.supervisor import supervisor
+
+    consulted: list[tuple[tuple, dict]] = []
+    real_get_runtime = supervisor.get_runtime
+
+    def _recording(*args, **kwargs):
+        consulted.append((args, kwargs))
+        return real_get_runtime(*args, **kwargs)
+
+    monkeypatch.setattr(supervisor, "get_runtime", _recording)
+
+    await VehicleFactory.create(db_session, device_id=VIN)
+    await _seed_trip_entities(
+        db_session,
+        fixture="imperial_ha_imperial_vehicle",
+        unit_system=IMPERIAL_UNIT_SYSTEM,
+    )
+
+    await op.apply(db_session)
+
+    assert not consulted, (
+        f"ArchiveReplay.apply() consulted the live supervisor: {consulted}"
+    )
+
+
+@pytest.mark.db
 async def test_replay_is_idempotent(op, db_session):
     """A second run over the same archive converges — no new or changed rows."""
     await VehicleFactory.create(db_session, device_id=VIN)
