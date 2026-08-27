@@ -90,7 +90,12 @@ class _FakeAsyncSessionLocal:
 
 @pytest.fixture
 def patched_supervisor_module(monkeypatch, db_session):
-    """Patch ``_RUNTIME_CLASSES`` and ``AsyncSessionLocal`` on the supervisor module."""
+    """Patch the HA transport class and ``AsyncSessionLocal`` for the supervisor.
+
+    The real ``ha_fordpass`` builder stays in ``_RUNTIME_BUILDERS`` so these
+    tests still exercise its config_json validation; only the transport it
+    constructs is swapped for a fake that never opens a socket.
+    """
     import importlib
 
     # ``from web.services.ingestion import supervisor`` resolves to the
@@ -98,8 +103,9 @@ def patched_supervisor_module(monkeypatch, db_session):
     # so ``import x.y.z as alias`` no longer yields the module object.
     # importlib.import_module returns the actual module.
     sup_module = importlib.import_module("web.services.ingestion.supervisor")
+    ws_module = importlib.import_module("web.services.ingestion.ha_websocket")
 
-    monkeypatch.setitem(sup_module._RUNTIME_CLASSES, "ha_fordpass", _FakeRuntime)
+    monkeypatch.setattr(ws_module, "HAWebSocketRuntime", _FakeRuntime)
     monkeypatch.setattr(
         sup_module, "AsyncSessionLocal", _FakeAsyncSessionLocal(db_session)
     )
@@ -246,5 +252,29 @@ async def test_start_all_skips_invalid_config_json(
     try:
         # Bad row didn't spawn a runtime — supervisor logged + skipped.
         assert sup.get_runtime_by_config_id(bad.id) is None
+    finally:
+        await sup.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_start_all_skips_source_without_a_builder(
+    db_session, patched_supervisor_module
+):
+    """An unregistered source_name is skipped explicitly, never spawned."""
+    await db_session.execute(delete(DataSourceConfig))
+    row = DataSourceConfig(
+        source_name="not_a_registered_source",
+        instance_label="default",
+        config_json={},
+        enabled=True,
+    )
+    db_session.add(row)
+    await db_session.commit()
+    await db_session.refresh(row)
+
+    sup = IngestionSupervisor()
+    await sup.start_all()
+    try:
+        assert sup.get_runtime_by_config_id(row.id) is None
     finally:
         await sup.stop_all()
