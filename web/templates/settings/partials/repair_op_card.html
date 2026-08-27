@@ -1,5 +1,5 @@
 {% set replay_disabled = is_replay and window is none %}
-<div class="card bg-base-200 max-w-2xl">
+<div class="card bg-base-200">
     <div class="card-body">
         <div class="flex items-baseline justify-between gap-4">
             <h2 class="card-title text-base font-semibold">{{ op.display_name }}</h2>
@@ -9,7 +9,7 @@
                 <span class="badge badge-ghost">clean</span>
             {% endif %}
         </div>
-        <p class="text-base-content/60 text-sm -mt-1">{{ op.description }}</p>
+        <p class="text-base-content/60 text-sm -mt-1 max-w-2xl">{{ op.description }}</p>
 
         {% if replay_disabled %}
         <p class="text-sm text-base-content/50 mt-1">{% if ha_connected %}No recorder history available.{% else %}Connect to Home Assistant first.{% endif %}</p>
