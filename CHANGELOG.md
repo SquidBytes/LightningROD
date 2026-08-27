@@ -23,6 +23,11 @@ For feature documentation, see the docs site at
 
 ### Changed
 
+- Data Repair previews now show why each row was picked and every value the
+  repair would change or delete, so you can check it before applying
+- Duplicate trip pairs are previewed side by side, with the distance ratio that
+  matched them, and long previews are paged ten at a time
+
 ### Fixed
 
 - Vehicle position is now recorded as soon as LightningROD reconnects to Home

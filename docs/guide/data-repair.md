@@ -1,6 +1,6 @@
 # Data Repair
 
-The Data Repair tab on the [settings page](settings.md) fixes historical trip data damaged by ingestion bugs that have since been patched. Each repair card shows a live count of affected rows, a **Preview** button that dry-runs the operation and lists the exact changes, and an **Apply** button that snapshots the rows before touching them.
+The Data Repair tab on the [settings page](settings.md) fixes historical trip data damaged by ingestion bugs that have since been patched. Each repair card shows a live count of affected rows, a **Preview** button that dry-runs the operation and shows the exact changes together with the evidence behind them, and an **Apply** button that snapshots the rows before touching them.
 
 !!! info "What repairs will never touch"
     Repairs only modify rows ingested from Home Assistant. Trips you entered manually or imported from CSV are never changed, no matter what an operation finds.
@@ -23,7 +23,7 @@ Per-repair snapshots cover only the rows each operation touches. Before your fir
 ## Running a Repair
 
 1. Open **Settings → Data Repair**. Each card's badge shows how many rows the operation would change right now — a gray "clean" badge means nothing to do.
-2. Click **Preview** on a card with a count. The dry run lists the exact rows and per-field changes (`before → after`) without writing anything.
+2. Click **Preview** on a card with a count. The dry run writes nothing. It lists one collapsed row per change, each tagged with the evidence that selected it — a distance ratio, an odometer contradiction, the telemetry reading a value came from. Expand a row to see every field side by side: what the surviving row keeps, what it gains, and the whole contents of any row about to be deleted. Values are shown exactly as the database stores them, and long previews are paged ten at a time.
 3. Click **Apply** and confirm. The operation snapshots the affected rows, applies the fix, and reports what changed.
 4. Check your data (Trip Sessions, Driving Analytics). If something looks wrong, **Restore** the snapshot from the Snapshots section; if all is well, **Purge** it.
 
