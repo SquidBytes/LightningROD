@@ -1,7 +1,7 @@
 """Tests for `_metrics` / `_events` dispatcher wiring.
 
 These tests exercise the dispatcher path: `_metrics` and `_events` entities
-must route through `ha_fordpass.process_event`.
+must route through `ha_fordpass.process_sample`.
 
 Covers:
   - `_metrics` event -> ev_battery_status row (via adapter)

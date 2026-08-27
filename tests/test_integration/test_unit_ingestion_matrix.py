@@ -13,7 +13,7 @@ from sqlalchemy import select
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
-from web.services.sources.ha_fordpass.adapter import process_event
+from web.services.sources.ha_fordpass.adapter import process_sample
 from web.unit_system import convert_distance
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
@@ -91,14 +91,14 @@ def _ha_config_for_fixture(fixture_name: str) -> dict:
 
 @pytest.mark.parametrize("fixture_name,expected", list(MATRIX.items()))
 async def test_matrix_fixture_yields_metric_storage(fixture_name, expected, db_session):
-    """For each fixture, run every entity through process_event and assert
+    """For each fixture, run every entity through process_sample and assert
     the stored metric-canonical values match the oracle.
     """
     payload = json.loads((FIXTURES_DIR / fixture_name).read_text())
     ha_config = _ha_config_for_fixture(fixture_name)
 
     for entity_id, state_dict in payload.items():
-        await process_event(entity_id, state_dict, db_session, ha_config)
+        await process_sample(entity_id, state_dict, db_session, ha_config)
     await db_session.flush()
 
     # --- ev_battery_status (from sensor.*_metrics) ---

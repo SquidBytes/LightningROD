@@ -103,12 +103,18 @@ async def try_handle_event(entity_id: str, new_state: dict, db) -> bool:
     )
 
 
-async def process_event(entity_id: str, new_state: dict, db: Any) -> None:
+async def process_sample(
+    locator: str,
+    payload: dict,
+    db: Any,
+    source_config: dict | None = None,
+) -> None:
     """SourceAdapter Protocol entry point. Delegates to try_handle_event.
 
-    The Protocol requires `process_event` returning None; gas-price's
+    The Protocol requires `process_sample` returning None; gas-price's
     natural entry point is `try_handle_event` (returns bool). This shim
     adapts that signature for any future caller that walks REGISTRY and
-    dispatches by Protocol shape.
+    dispatches by Protocol shape. `locator` is an HA entity_id and `payload`
+    the event's new_state; gas-price reads no source config.
     """
-    await try_handle_event(entity_id, new_state, db)
+    await try_handle_event(locator, payload, db)

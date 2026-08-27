@@ -53,8 +53,8 @@ def test_registry_adapter_module_importable():
         assert hasattr(module, "FIELD_CONTRACTS"), (
             f"{d.source_name} missing FIELD_CONTRACTS"
         )
-        assert hasattr(module, "process_event"), (
-            f"{d.source_name} missing process_event"
+        assert hasattr(module, "process_sample"), (
+            f"{d.source_name} missing process_sample"
         )
 
 

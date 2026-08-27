@@ -16,7 +16,7 @@ from web.services.sources.ha_fordpass.adapter import (  # noqa: F401
     _last_seen_raw,
     _metric_value,
     compute_trip_id,
-    process_event,
+    process_sample,
 )
 
 pytestmark = pytest.mark.unit

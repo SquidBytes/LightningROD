@@ -823,14 +823,14 @@ def _device_id_from_entity(entity_id: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# process_event — main entry point
+# process_sample — main entry point (SourceAdapter Protocol)
 # ---------------------------------------------------------------------------
 
-async def process_event(
-    entity_id: str,
-    new_state: dict,
+async def process_sample(
+    locator: str,
+    payload: dict,
     db: AsyncSession,
-    ha_config: dict | None = None,
+    source_config: dict | None = None,
 ) -> None:
     """Route an HA state_changed event to the appropriate write path.
     Guarantee: zero runtime unit auto-detection; every conversion goes
@@ -841,12 +841,17 @@ async def process_event(
     _energytransferlogentry -> writes ev_charging_session row
     everything else -> no-op (handled by the ha_fordpass slug handlers, or
     explicitly ignored)
-    `ha_config` is forwarded to `convert()` so contracts flagged
+    `source_config` is forwarded to `convert()` so contracts flagged
     `ha_unit_system_converted` can resolve the effective source unit
     per-event from HA's configured unit_system.
     Unknown entity or missing attribute: log debug + return. No exception
     propagates to the caller (the HA WebSocket event loop).
     """
+    # This source's reading of the transport-neutral SourceAdapter contract:
+    # the locator is an HA entity_id, the payload is the event's new_state,
+    # and the source config is HA's own config (unit system, timezone).
+    entity_id, new_state, ha_config = locator, payload, source_config
+
     if not entity_id or not isinstance(new_state, dict):
         return
 
@@ -881,7 +886,7 @@ async def process_event(
         )
     except Exception:
         # The adapter must never raise into the WebSocket loop.
-        logger.exception("ha_fordpass.process_event failed for %s", entity_id)
+        logger.exception("ha_fordpass.process_sample failed for %s", entity_id)
 
 
 # ---------------------------------------------------------------------------

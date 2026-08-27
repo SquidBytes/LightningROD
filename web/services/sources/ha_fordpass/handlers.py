@@ -402,7 +402,7 @@ def _parse_iso_datetime(val: str | None) -> datetime | None:
 
 @handles("metrics", "events")
 async def handle_via_adapter(slug, new_state, ha_config, device_id, db):
-    """Delegate _metrics and _events entities to ha_fordpass.process_event.
+    """Delegate _metrics and _events entities to ha_fordpass.process_sample.
 
     These slugs are the metric-canonical sources for battery status
     (xevBatteryRange / xevBatteryMaximumRange) and trip metrics
@@ -410,7 +410,7 @@ async def handle_via_adapter(slug, new_state, ha_config, device_id, db):
     routing; this dispatcher simply hands off.
     """
     entity_id = f"sensor.fordpass_{device_id}_{slug}"
-    await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
+    await ha_fordpass.process_sample(entity_id, new_state, db, ha_config)
 
 
 # ---------------------------------------------------------------------------
@@ -521,7 +521,7 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
             pending[field_name] = converter(state_val)
 
     if slug == "outsidetemp":
-        await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
+        await ha_fordpass.process_sample(entity_id, new_state, db, ha_config)
 
     # Check timeout-based flush
     _pending_vehicle_status_ts.setdefault(key, time.time())
@@ -542,7 +542,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
 
     In the legacy adapter path this handler also ingested trip data from
     `elveh.trip*` attributes. Production ingestion now prefers events-entity
-    trip data through `ha_fordpass.adapter.process_event`. This handler keeps
+    trip data through `ha_fordpass.adapter.process_sample`. This handler keeps
     an elveh fallback for installations without that entity.
 
     Unit resolution for every unit-bearing field goes through
@@ -900,7 +900,7 @@ async def handle_charging_live(slug, new_state, ha_config, device_id, db):
             attrs.get("chargingkW"),
         )
         entity_id = f"sensor.fordpass_{device_id}_{slug}"
-        await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
+        await ha_fordpass.process_sample(entity_id, new_state, db, ha_config)
     elif slug == "elvehplug":
         logger.info(
             "Plug state changed: %s (station=%s, type=%s)",
