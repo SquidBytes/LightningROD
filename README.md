@@ -3,10 +3,13 @@
   <img src="website/logo-lockup-light.svg" alt="LightningROD" width="196">
 </picture>
 
-Self-hosted charging and vehicle analytics. Turns vehicle data into charging, battery, and trip insights from a web dashboard.
+Self-hosted charging & vehicle analytics. 
 
-Ford EVs are supported today — developed on an F-150 Lightning — and the data layer is built to grow beyond them.  
-If you'd like support for a vehicle that isn't covered, open an issue and let me know.
+LightningROD turns vehicle data into charging, battery, and trip insights. Your vehicle data is automatically collected from supported data sources so you don't need to keep your own spreadsheets.
+
+Developed using an F-150 Lightning, but other Ford EVs are supported today. The data layer is built to grow beyond them.
+
+> If you'd like support for a vehicle that isn't covered, open an issue and let me know.
 
 Designed to support automatic data ingestion from Home Assistant via [ha-fordpass](https://github.com/marq24/ha-fordpass).
 
@@ -35,7 +38,7 @@ If you find LightningROD useful, and would like to, you can [buy me a coffee](ht
 - **Home Assistant ingestion** — real-time WebSocket capture, auto-detected charging sessions and history backfill
 - **CSV import and manual entry** — for data outside Home Assistant (work in progress, not recommended currently)
 
-Full feature list and screenshots in the [documentation site](https://docs.lightningrod.dev/).
+Full feature list and screenshots are on the [documentation site](https://docs.lightningrod.dev/).
 
 ## What's Next
 
@@ -62,9 +65,7 @@ Full documentation is available at the [documentation site](https://docs.lightni
 
 ## Gallery
 
-Rather than screenshots that go stale, click through the running app yourself at
-[lightningrod.dev/demo](https://lightningrod.dev/demo) — the dashboard, session
-list and drawer, Cost Explorer, and settings are all live there.
+Instead of screenshots, an interactive demo site is available at [lightningrod.dev/demo](https://lightningrod.dev/demo) 
 
 ## Quick Start
 
@@ -91,7 +92,6 @@ docker run -d \
   --name lightningrod \
   ghcr.io/squidbytes/lightningrod-web:latest
 ```
-
 
 Full install options like Unraid, external databases, etc can be found in the [Installation guide](https://docs.lightningrod.dev/getting-started/installation/).
 
