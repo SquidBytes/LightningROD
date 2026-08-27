@@ -26,6 +26,7 @@ def test_registry_has_ha_fordpass():
     assert d.adapter_module == "web.services.sources.ha_fordpass.adapter"
     assert d.config_schema is HAFordpassConfig
     assert d.setup_flow == "ha_websocket"
+    assert d.secret_fields == frozenset({"ha_token"})
 
 
 def test_registry_has_ha_gas_price():
@@ -42,6 +43,7 @@ def test_registry_has_ha_gas_price():
     assert d.adapter_module == "web.services.sources.ha_gas_price.adapter"
     assert issubclass(d.config_schema, BaseModel)
     assert d.setup_flow == "static"
+    assert d.secret_fields == frozenset()
 
 
 def test_registry_adapter_module_importable():
@@ -54,6 +56,13 @@ def test_registry_adapter_module_importable():
         assert hasattr(module, "process_event"), (
             f"{d.source_name} missing process_event"
         )
+
+
+def test_secret_fields_are_declared_config_keys():
+    """Every declared secret names a real key on that source's config schema."""
+    for d in REGISTRY:
+        unknown = d.secret_fields - set(d.config_schema.model_fields)
+        assert not unknown, f"{d.source_name} declares unknown secrets: {unknown}"
 
 
 def test_ha_fordpass_config_validates():

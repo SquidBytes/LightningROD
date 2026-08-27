@@ -18,11 +18,19 @@ from web.services.sources.ha_gas_price.config import HAGasPriceConfig
 
 @dataclass(frozen=True)
 class DataSourceDescriptor:
+    """One shipped source: its config schema, adapter module and setup flow.
+
+    `secret_fields` names the `config_json` keys that hold credentials. It is
+    a declaration only — nothing encrypts or redacts on it yet; it exists so
+    the config-row boundary has one place to ask a source what is sensitive.
+    """
+
     source_name: str
     display_name: str
     adapter_module: str
     config_schema: type[BaseModel]
     setup_flow: Literal["ha_websocket", "oauth", "static", "none"]
+    secret_fields: frozenset[str] = frozenset()
 
 
 REGISTRY: list[DataSourceDescriptor] = [
@@ -32,6 +40,7 @@ REGISTRY: list[DataSourceDescriptor] = [
         adapter_module="web.services.sources.ha_fordpass.adapter",
         config_schema=HAFordpassConfig,
         setup_flow="ha_websocket",
+        secret_fields=frozenset({"ha_token"}),
     ),
     DataSourceDescriptor(
         source_name="ha_gas_price",
@@ -39,5 +48,7 @@ REGISTRY: list[DataSourceDescriptor] = [
         adapter_module="web.services.sources.ha_gas_price.adapter",
         config_schema=HAGasPriceConfig,
         setup_flow="static",
+        # Entity ids only — nothing in this config is a credential.
+        secret_fields=frozenset(),
     ),
 ]
