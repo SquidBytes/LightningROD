@@ -10,7 +10,9 @@ class SourceLocatorKind(StrEnum):
     """How a source locator's pattern string is interpreted by an adapter."""
 
     HA_ENTITY_ID = "ha_entity_id"
-    # Reserved for future: HTTP_ENDPOINT = "http_endpoint", MQTT_TOPIC = "mqtt_topic"
+    # A polling HTTP source's locator is the endpoint it reads, not an entity.
+    HTTP_ENDPOINT = "http_endpoint"
+    # Reserved for future: MQTT_TOPIC = "mqtt_topic"
 
 
 @dataclass(frozen=True)
