@@ -191,7 +191,20 @@ async def test_consolidation_full_lifecycle(db_session):
     op = TripDuplicateConsolidation()
     assert await op.census(db_session) == 1
 
-    diffs = await op.preview(db_session)
+    preview = await op.preview(db_session)
+    (group,) = preview.groups
+    assert preview.total == 1
+    assert preview.unit == "pairs"
+    # The pair is one reviewable unit carrying the evidence that matched it.
+    assert group.label == f"Trips #{survivor.id} + #{loser.id}"
+    assert group.context["distance ratio"].startswith("1.609")
+    assert [d.role for d in group.diffs] == ["keep", "duplicate"]
+    # Both rows are recognisable without opening the database.
+    assert set(group.diffs[0].identity) == {"start_time", "end_time", "distance"}
+    # The deleted twin carries its whole row, not just an id.
+    assert group.diffs[1].before["ambient_temp"] is not None
+
+    diffs = preview.diffs
     assert [(d.action, d.row_id) for d in diffs] == [
         ("update", survivor.id),
         ("delete", loser_id),

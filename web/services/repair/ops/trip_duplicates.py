@@ -15,7 +15,14 @@ from db.migrations.versions.p34_battery_trips_overhaul import (
     _is_events_canonical,
 )
 from db.models.trip_metrics import EVTripMetrics
-from web.services.repair.base import RepairDiff, RepairOperation, mutable_only
+from web.services.repair.base import (
+    DEFAULT_PREVIEW_LIMIT,
+    RepairDiff,
+    RepairGroup,
+    RepairOperation,
+    RepairPreview,
+    mutable_only,
+)
 
 # A km-value stored alongside its double-converted twin sits near x1.609344.
 RATIO_BAND = (1.55, 1.67)
@@ -131,8 +138,35 @@ def merge_pair(survivor: dict, loser: dict) -> dict:
     return merged
 
 
+# What makes a trip recognisable at a glance, independent of what changes.
+_IDENTITY_FIELDS: tuple[str, ...] = ("start_time", "end_time", "distance")
+
+
 def _row_dict(row: EVTripMetrics) -> dict:
     return {field: getattr(row, field) for field in _PAIR_FIELDS}
+
+
+def _identity(row: EVTripMetrics) -> dict:
+    return {field: getattr(row, field) for field in _IDENTITY_FIELDS}
+
+
+def pair_evidence(survivor: dict, loser: dict) -> dict[str, str]:
+    """Why these two rows were paired: the x1.609 ratio and the end-time gap."""
+    smaller, larger = float(survivor["distance"]), float(loser["distance"])
+    gap = abs(
+        (
+            _coerce_datetime(loser["end_time"]) - _coerce_datetime(survivor["end_time"])
+        ).total_seconds()
+    )
+    return {
+        "distance ratio": f"{larger / smaller:.4g}x",
+        "distances": f"{survivor['distance']} kept / {loser['distance']} removed",
+        "end times": f"{gap:g}s apart",
+        "match rule": (
+            f"ratio within {RATIO_BAND[0]}-{RATIO_BAND[1]} and ends within "
+            f"{END_TIME_WINDOW_SECONDS:g}s; the smaller distance is kept"
+        ),
+    }
 
 
 class TripDuplicateConsolidation(RepairOperation):
@@ -170,14 +204,40 @@ class TripDuplicateConsolidation(RepairOperation):
     async def census(self, db: AsyncSession) -> int:
         return len(await self._pairs(db))
 
-    async def preview(self, db: AsyncSession, limit: int = 10) -> list[RepairDiff]:
-        diffs: list[RepairDiff] = []
-        for survivor, loser in (await self._pairs(db))[:limit]:
-            merged = merge_pair(_row_dict(survivor), _row_dict(loser))
+    async def preview(
+        self, db: AsyncSession, limit: int = DEFAULT_PREVIEW_LIMIT, offset: int = 0
+    ) -> RepairPreview:
+        pairs = await self._pairs(db)
+        groups: list[RepairGroup] = []
+        for survivor, loser in pairs[offset : offset + limit]:
+            survivor_row, loser_row = _row_dict(survivor), _row_dict(loser)
+            merged = merge_pair(survivor_row, loser_row)
             before = {field: getattr(survivor, field) for field in merged}
-            diffs.append(RepairDiff(survivor.id, before, merged, "update"))
-            diffs.append(RepairDiff(loser.id, _row_dict(loser), None, "delete"))
-        return diffs
+            groups.append(
+                RepairGroup(
+                    [
+                        RepairDiff(
+                            survivor.id,
+                            before,
+                            merged,
+                            "update",
+                            identity=_identity(survivor),
+                            role="keep",
+                        ),
+                        RepairDiff(
+                            loser.id,
+                            loser_row,
+                            None,
+                            "delete",
+                            identity=_identity(loser),
+                            role="duplicate",
+                        ),
+                    ],
+                    label=f"Trips #{survivor.id} + #{loser.id}",
+                    context=pair_evidence(survivor_row, loser_row),
+                )
+            )
+        return RepairPreview(groups, len(pairs), offset, limit, unit="pairs")
 
     async def affected_rows(self, db: AsyncSession) -> list[EVTripMetrics]:
         return [row for pair in await self._pairs(db) for row in pair]

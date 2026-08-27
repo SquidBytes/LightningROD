@@ -297,11 +297,21 @@ async def test_preview_has_no_side_effects_and_apply_snapshots(db_session):
     await _seed_timeline(db_session, device, end_odo=1030.0, distance=30.0)
 
     op = TelemetryDerive()
-    diffs = await op.preview(db_session)
+    preview = await op.preview(db_session)
+    (group,) = preview.groups
+    diffs = preview.diffs
     assert len(diffs) == 1
     assert diffs[0].action == "update"
     assert diffs[0].before["duration"] is None
     assert diffs[0].after["duration"] == pytest.approx(1800.0)
+
+    # Every derived field explains where its value came from.
+    assert set(diffs[0].notes) == set(diffs[0].after)
+    assert "1800" in diffs[0].notes["duration"]
+    assert "odometer" in diffs[0].notes["start_time"]
+    assert "vehicle status odometer" in diffs[0].notes["odometer_end"]
+    assert "distance" in diffs[0].notes["odometer_start"]
+    assert group.context["derives"] == ", ".join(diffs[0].after)
     # Preview mutated nothing.
     assert trip.duration is None
     assert trip.odometer_end is None
@@ -328,6 +338,11 @@ async def test_ignition_fallback_fills_start_when_odometer_sparse(db_session):
     )
 
     op = TelemetryDerive()
+    # The weakest inference of the three must show its working before applying.
+    (diff,) = (await op.preview(db_session)).diffs
+    assert "ignition OFF->ON" in diff.notes["start_time"]
+    assert "1500" in diff.notes["duration"]
+
     result = await op.apply(db_session)
     assert result.affected == 1
     assert trip.start_time == T0 - timedelta(minutes=25)

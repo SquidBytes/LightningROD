@@ -448,10 +448,15 @@ async def test_preview_persists_nothing():
 
         op = ArchiveReplay(session_factory=sessions)
         op._rollback_engine = engine
-        diffs = await op.preview(None)
+        preview = await op.preview(None)
+        diffs = preview.diffs
 
         assert diffs
         assert {d.action for d in diffs} == {"insert"}
+        # Recovered rows name the archived event they were rebuilt from.
+        for group in preview.groups:
+            assert group.context["replayed from"] == "LightningROD event archive"
+            assert "sensor.fordpass_" in group.context["states applied"]
         async with sessions() as db:
             persisted = await db.scalar(
                 select(func.count())

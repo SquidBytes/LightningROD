@@ -8,14 +8,17 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import event, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
 from web.services.repair.base import (
+    DEFAULT_PREVIEW_LIMIT,
     MUTABLE_SOURCE_SYSTEMS,
     RepairDiff,
+    RepairGroup,
     RepairOperation,
+    RepairPreview,
     RepairResult,
     mutable_only,
     rollback_session,
@@ -30,6 +33,8 @@ logger = logging.getLogger("lightningrod.repair.recorder_replay")
 SENTINEL_CONFIG_ID = -1
 
 _WINDOW_CACHE_TTL = 300.0  # seconds
+# Contributing states listed per row before the rest are summarized as a count.
+_MAX_SOURCES = 6
 
 
 def _state_ts(state: dict) -> datetime | None:
@@ -45,6 +50,45 @@ def _state_ts(state: dict) -> datetime | None:
                 continue
             return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
     return None
+
+
+class _StateAttribution:
+    """Records which replayed state wrote each trip row, for preview evidence.
+
+    Handlers flush (and sometimes commit) mid-replay, so the pending sets are
+    gone by the time a dispatch returns; a flush listener is the only place
+    they can still be read. `after_flush` is the hook rather than
+    `before_flush` because a recovered trip has no primary key to key on until
+    its INSERT has run.
+    """
+
+    def __init__(self, session: AsyncSession):
+        self._session = session.sync_session
+        self._current: tuple[str, datetime] | None = None
+        self._touched: dict[int, list[tuple[str, datetime]]] = {}
+
+    def __enter__(self) -> _StateAttribution:
+        event.listen(self._session, "after_flush", self._on_flush)
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        event.remove(self._session, "after_flush", self._on_flush)
+
+    def dispatching(self, entity_id: str, ts: datetime) -> None:
+        self._current = (entity_id, ts)
+
+    def _on_flush(self, session, _flush_context) -> None:
+        if self._current is None:
+            return
+        for obj in list(session.new) + list(session.dirty):
+            if not isinstance(obj, EVTripMetrics) or obj.id is None:
+                continue
+            seen = self._touched.setdefault(obj.id, [])
+            if self._current not in seen:
+                seen.append(self._current)
+
+    def sources_for(self, row: EVTripMetrics) -> list[tuple[str, datetime]]:
+        return self._touched.get(row.id, [])
 
 
 class RecorderReplay(RepairOperation):
@@ -76,8 +120,12 @@ class RecorderReplay(RepairOperation):
     )
     model = EVTripMetrics
     runs_when_clean = True
+    # Where replayed states came from; shown as preview evidence.
+    source_label = "Home Assistant recorder history"
 
     TRIP_ENTITY_SUFFIXES = ("events", "metrics", "elveh")
+    # What makes a replayed trip recognisable when only a few fields changed.
+    IDENTITY_FIELDS = ("trip_id", "start_time", "end_time", "distance")
     # ha-fordpass localizes these entities' trip attributes into Home
     # Assistant's unit system before emitting them, so their numbers cannot be
     # read without knowing it. The events payload is always raw metric.
@@ -240,7 +288,7 @@ class RecorderReplay(RepairOperation):
 
     async def _replay(
         self, db: AsyncSession, collect_diffs: bool
-    ) -> tuple[dict[str, Any], list[RepairDiff]]:
+    ) -> tuple[dict[str, Any], list[RepairGroup]]:
         from web.services.sources.ha_fordpass import adapter
         from web.services.sources.ha_fordpass import handlers as fp_handlers
         from web.services.sources.ha_fordpass.dispatch import dispatch_slug
@@ -270,46 +318,58 @@ class RecorderReplay(RepairOperation):
         # invariant is enforced here by reverting protected rows afterward.
         before = {row.id: serialize_row(row) for row in before_rows}
 
-        for _ts, entity_id, state, state_config in states:
-            try:
-                # A state that recorded its own config is read under it; the
-                # runtime's is only the fallback for states that carry none.
-                ha_config = state_config or runtime_config
-                if not ha_config.get("unit_system") and entity_id.endswith(
-                    unit_sensitive
-                ):
-                    # Guessing metric here silently stores miles as kilometres
-                    # and °F as °C, and the wrong distance spawns a duplicate
-                    # trip alongside the correct one. Skipping loses nothing
-                    # the events payload does not already carry.
-                    if not details["skipped_unknown_units"]:
-                        logger.warning(
-                            "%s: no unit system for %s — skipping states whose "
-                            "values depend on it",
-                            self.slug,
-                            entity_id,
+        attribution = _StateAttribution(db)
+        with attribution:
+            for ts, entity_id, state, state_config in states:
+                attribution.dispatching(entity_id, ts)
+                try:
+                    # A state that recorded its own config is read under it; the
+                    # runtime's is only the fallback for states that carry none.
+                    ha_config = state_config or runtime_config
+                    if not ha_config.get("unit_system") and entity_id.endswith(
+                        unit_sensitive
+                    ):
+                        # Guessing metric here silently stores miles as kilometres
+                        # and °F as °C, and the wrong distance spawns a duplicate
+                        # trip alongside the correct one. Skipping loses nothing
+                        # the events payload does not already carry.
+                        if not details["skipped_unknown_units"]:
+                            logger.warning(
+                                "%s: no unit system for %s — skipping states whose "
+                                "values depend on it",
+                                self.slug,
+                                entity_id,
+                            )
+                        details["skipped_unknown_units"] += 1
+                        continue
+                    if entity_id.endswith("_metrics"):
+                        # Dispatching metrics would write an EVBatteryStatus row
+                        # per state; the trip regen backfill is its only
+                        # trip-relevant effect, so call it directly.
+                        attrs = state.get("attributes") or {}
+                        device_id = (
+                            adapter._device_id_from_entity(entity_id) or "unknown"
                         )
-                    details["skipped_unknown_units"] += 1
-                    continue
-                if entity_id.endswith("_metrics"):
-                    # Dispatching metrics would write an EVBatteryStatus row
-                    # per state; the trip regen backfill is its only
-                    # trip-relevant effect, so call it directly.
-                    attrs = state.get("attributes") or {}
-                    device_id = adapter._device_id_from_entity(entity_id) or "unknown"
-                    recorded_at = adapter._parse_event_ts(state) or datetime.now(UTC)
-                    await adapter._backfill_trip_regen(
-                        entity_id, attrs, device_id, db, recorded_at, ha_config
+                        recorded_at = adapter._parse_event_ts(state) or datetime.now(
+                            UTC
+                        )
+                        await adapter._backfill_trip_regen(
+                            entity_id, attrs, device_id, db, recorded_at, ha_config
+                        )
+                    else:
+                        await dispatch_slug(
+                            entity_id,
+                            state,
+                            ha_config,
+                            db,
+                            config_id=SENTINEL_CONFIG_ID,
+                        )
+                    details["states_replayed"] += 1
+                except Exception:
+                    logger.exception(
+                        "recorder-replay: dispatch failed for %s", entity_id
                     )
-                else:
-                    await dispatch_slug(
-                        entity_id, state, ha_config, db, config_id=SENTINEL_CONFIG_ID
-                    )
-                details["states_replayed"] += 1
-            except Exception:
-                logger.exception("recorder-replay: dispatch failed for %s", entity_id)
-                details["errors"] += 1
-
+                    details["errors"] += 1
         # Purge sentinel pending state WITHOUT flushing: replay must never
         # write EVVehicleStatus/EVBatteryStatus rows (trips-only scope).
         for cache in (
@@ -349,7 +409,7 @@ class RecorderReplay(RepairOperation):
             await db.flush()
 
         # Per-field fill counts + diffs over mutable rows and new inserts.
-        diffs: list[RepairDiff] = []
+        groups: list[RepairGroup] = []
         filled: dict[str, int] = {}
         for row in after_rows:
             if row.id in reverted_ids:
@@ -360,7 +420,14 @@ class RecorderReplay(RepairOperation):
                 details["trips_recovered"] += 1
                 details["rows_changed"] += 1
                 if collect_diffs:
-                    diffs.append(RepairDiff(row.id, None, after_img, "insert"))
+                    groups.append(
+                        self._group(
+                            RepairDiff(row.id, None, after_img, "insert"),
+                            after_img,
+                            window,
+                            attribution.sources_for(row),
+                        )
+                    )
                 continue
             if after_img.get("source_system") not in MUTABLE_SOURCE_SYSTEMS:
                 continue
@@ -374,29 +441,65 @@ class RecorderReplay(RepairOperation):
                 if f in changed and before_img.get(f) is None and changed[f] is not None:
                     filled[f] = filled.get(f, 0) + 1
             if collect_diffs:
-                diffs.append(
-                    RepairDiff(
-                        row.id,
-                        {f: before_img.get(f) for f in changed},
-                        changed,
-                        "update",
+                groups.append(
+                    self._group(
+                        RepairDiff(
+                            row.id,
+                            {f: before_img.get(f) for f in changed},
+                            changed,
+                            "update",
+                            identity={
+                                f: after_img.get(f) for f in self.IDENTITY_FIELDS
+                            },
+                        ),
+                        after_img,
+                        window,
+                        attribution.sources_for(row),
                     )
                 )
         details["filled"] = filled
-        return details, diffs
+        return details, groups
+
+    def _group(
+        self,
+        diff: RepairDiff,
+        after_img: dict[str, Any],
+        window: datetime,
+        sources: list[tuple[str, datetime]],
+    ) -> RepairGroup:
+        """Wrap one replayed row with the states and window it came from."""
+        context: dict[str, Any] = {}
+        shown = [f"{entity_id} at {ts}" for entity_id, ts in sources[:_MAX_SOURCES]]
+        if shown:
+            extra = len(sources) - len(shown)
+            context["states applied"] = "; ".join(shown) + (
+                f"; +{extra} more" if extra > 0 else ""
+            )
+        if diff.action == "insert":
+            context["recovered"] = (
+                f"no trip row existed for trip_id {after_img.get('trip_id')} "
+                "before the replay"
+            )
+        context["replayed from"] = self.source_label
+        context["history window"] = f"since {window}"
+        return RepairGroup([diff], label=f"Trip #{diff.row_id}", context=context)
 
     # ------------------------------------------------------------------
     # RepairOperation interface
     # ------------------------------------------------------------------
 
-    async def preview(self, db: AsyncSession, limit: int = 10) -> list[RepairDiff]:
+    async def preview(
+        self, db: AsyncSession, limit: int = DEFAULT_PREVIEW_LIMIT, offset: int = 0
+    ) -> RepairPreview:
         """Dry-run replay in a rollback_session; `db` is unused (interface compat)."""
         async with rollback_session(engine=self._rollback_engine) as session:
-            _details, diffs = await self._replay(session, collect_diffs=True)
-        return diffs[:limit]
+            _details, groups = await self._replay(session, collect_diffs=True)
+        return RepairPreview(
+            groups[offset : offset + limit], len(groups), offset, limit
+        )
 
     async def execute(self, db: AsyncSession) -> int:
-        details, _diffs = await self._replay(db, collect_diffs=False)
+        details, _groups = await self._replay(db, collect_diffs=False)
         self.last_details = details
         return details["rows_changed"]
 

@@ -300,11 +300,20 @@ async def test_preview_returns_diffs_but_persists_nothing():
     _attach_sqlite_pragmas(engine)
     op._rollback_engine = engine
     try:
-        diffs = await op.preview(None)
+        preview = await op.preview(None)
+        diffs = preview.diffs
 
         assert len(diffs) == 2
         assert {d.action for d in diffs} == {"insert"}
         assert all(d.after["device_id"] == VIN for d in diffs)
+
+        # Every recovered row names the state that produced it, so a user can
+        # check the value against Home Assistant before applying.
+        for group in preview.groups:
+            assert "recovered" in group.context
+            assert group.context["replayed from"] == op.source_label
+            applied = group.context["states applied"]
+            assert _entity("events") in applied or _entity("elveh") in applied
 
         async with engine.connect() as conn:
             persisted = await conn.scalar(

@@ -1,9 +1,12 @@
 """Data-repair framework: restorable, idempotent operations over ingested rows."""
 
 from web.services.repair.base import (
+    DEFAULT_PREVIEW_LIMIT,
     MUTABLE_SOURCE_SYSTEMS,
     RepairDiff,
+    RepairGroup,
     RepairOperation,
+    RepairPreview,
     RepairResult,
     mutable_only,
     rollback_session,
@@ -19,10 +22,13 @@ from web.services.repair.snapshot import (
 )
 
 __all__ = [
+    "DEFAULT_PREVIEW_LIMIT",
     "MUTABLE_SOURCE_SYSTEMS",
     "REPAIR_REGISTRY",
     "RepairDiff",
+    "RepairGroup",
     "RepairOperation",
+    "RepairPreview",
     "RepairResult",
     "deserialize_row",
     "get_operation",

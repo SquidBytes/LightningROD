@@ -6,7 +6,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
-from web.services.repair.base import RepairDiff, RepairOperation, mutable_only
+from web.services.repair.base import (
+    DEFAULT_PREVIEW_LIMIT,
+    RepairDiff,
+    RepairGroup,
+    RepairOperation,
+    RepairPreview,
+    mutable_only,
+)
 
 KM_PER_MILE = 1.609344
 # distance / odometer-delta near x1.609 marks a double conversion; after the
@@ -52,6 +59,25 @@ class TripDistanceDoubleConversion(RepairOperation):
         return out
 
     @staticmethod
+    def _evidence(row: EVTripMetrics) -> dict[str, str]:
+        """Why this row is a candidate: distance against the odometer it contradicts."""
+        if row.distance is None or row.odometer_start is None or row.odometer_end is None:
+            return {}  # candidates are pre-filtered; keeps mypy honest
+        odo_delta = float(row.odometer_end) - float(row.odometer_start)
+        ratio = float(row.distance) / odo_delta
+        return {
+            "distance / odometer delta": f"{ratio:.4g}x",
+            "odometer": (
+                f"{row.odometer_start} -> {row.odometer_end} "
+                f"(delta {odo_delta:g}, min {MIN_ODO_DELTA_KM:g})"
+            ),
+            "match rule": (
+                f"ratio within {RATIO_BAND[0]}-{RATIO_BAND[1]}; the odometer "
+                f"delta is the trip's true distance"
+            ),
+        }
+
+    @staticmethod
     def _fixed_values(row: EVTripMetrics) -> dict:
         if row.distance is None:  # candidates are pre-filtered; keeps mypy honest
             return {}
@@ -64,13 +90,39 @@ class TripDistanceDoubleConversion(RepairOperation):
     async def census(self, db: AsyncSession) -> int:
         return len(await self._candidates(db))
 
-    async def preview(self, db: AsyncSession, limit: int = 10) -> list[RepairDiff]:
-        diffs: list[RepairDiff] = []
-        for row in (await self._candidates(db))[:limit]:
+    async def preview(
+        self, db: AsyncSession, limit: int = DEFAULT_PREVIEW_LIMIT, offset: int = 0
+    ) -> RepairPreview:
+        candidates = await self._candidates(db)
+        groups: list[RepairGroup] = []
+        for row in candidates[offset : offset + limit]:
             fixed = self._fixed_values(row)
             before = {field: getattr(row, field) for field in fixed}
-            diffs.append(RepairDiff(row.id, before, fixed, "update"))
-        return diffs
+            notes = {"distance": f"stored distance / {KM_PER_MILE}"}
+            if "efficiency" in fixed:
+                notes["efficiency"] = "corrected distance / energy_consumed"
+            groups.append(
+                RepairGroup(
+                    [
+                        RepairDiff(
+                            row.id,
+                            before,
+                            fixed,
+                            "update",
+                            identity={
+                                "start_time": row.start_time,
+                                "end_time": row.end_time,
+                                "odometer_start": row.odometer_start,
+                                "odometer_end": row.odometer_end,
+                            },
+                            notes=notes,
+                        )
+                    ],
+                    label=f"Trip #{row.id}",
+                    context=self._evidence(row),
+                )
+            )
+        return RepairPreview(groups, len(candidates), offset, limit)
 
     async def affected_rows(self, db: AsyncSession) -> list[EVTripMetrics]:
         return await self._candidates(db)

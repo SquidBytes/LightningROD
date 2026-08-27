@@ -40,14 +40,120 @@ def _aware(ts: datetime | None) -> datetime | None:
     return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
 
 
+DEFAULT_PREVIEW_LIMIT = 10
+
+
 @dataclass
 class RepairDiff:
-    """One row's before/after change from a preview or apply."""
+    """One row's before/after change from a preview or apply.
+
+    Everything after `action` is optional review context: `identity` names the
+    row in human terms, `notes` explains a single field's provenance, and
+    `role` labels this row's part in a multi-row group.
+    """
 
     row_id: int | None
     before: dict[str, Any] | None
     after: dict[str, Any] | None
     action: str  # "update" | "delete" | "insert"
+    identity: dict[str, Any] = field(default_factory=dict)
+    notes: dict[str, str] = field(default_factory=dict)
+    role: str | None = None
+
+
+@dataclass
+class RepairGroup:
+    """The diffs a reviewer must judge together, plus the evidence that paired them."""
+
+    diffs: list[RepairDiff]
+    label: str | None = None
+    context: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def actions(self) -> list[str]:
+        """Distinct member actions, in member order."""
+        return list(dict.fromkeys(diff.action for diff in self.diffs))
+
+    @property
+    def fields(self) -> list[str]:
+        """Every field any member mentions; identity fields lead."""
+        ordered: list[str] = []
+        for source in ("identity", "before", "after"):
+            for diff in self.diffs:
+                for name in getattr(diff, source) or {}:
+                    if name not in ordered:
+                        ordered.append(name)
+        return ordered
+
+    @property
+    def rows(self) -> list[dict[str, Any]]:
+        """Field-major view of the group: one entry per field, one cell per member."""
+        return [
+            {"field": name, "cells": [_cell(diff, name) for diff in self.diffs]}
+            for name in self.fields
+        ]
+
+
+def _cell(diff: RepairDiff, name: str) -> dict[str, Any]:
+    """One field of one diff, with enough flags for a template to render it raw."""
+    before = diff.before or {}
+    after = diff.after or {}
+    has_before, has_after = name in before, name in after
+    return {
+        "before": before.get(name),
+        "after": after.get(name),
+        "has_before": has_before,
+        "has_after": has_after,
+        "identity": diff.identity.get(name),
+        "has_identity": name in diff.identity,
+        "note": diff.notes.get(name),
+    }
+
+
+@dataclass
+class RepairPreview:
+    """One page of review groups plus the total the operation would touch."""
+
+    groups: list[RepairGroup]
+    total: int
+    offset: int = 0
+    limit: int = DEFAULT_PREVIEW_LIMIT
+    unit: str = "rows"
+
+    @property
+    def diffs(self) -> list[RepairDiff]:
+        return [diff for group in self.groups for diff in group.diffs]
+
+    @property
+    def unit_label(self) -> str:
+        """The unit noun, singular when the total is one."""
+        if self.total == 1 and self.unit.endswith("s"):
+            return self.unit[:-1]
+        return self.unit
+
+    @property
+    def first(self) -> int:
+        return self.offset + 1 if self.groups else 0
+
+    @property
+    def last(self) -> int:
+        return self.offset + len(self.groups)
+
+    @property
+    def has_prev(self) -> bool:
+        return self.offset > 0
+
+    @property
+    def has_next(self) -> bool:
+        return self.last < self.total
+
+    @property
+    def prev_offset(self) -> int:
+        return max(self.offset - self.limit, 0)
+
+    @property
+    def next_offset(self) -> int:
+        return self.offset + self.limit
 
 
 @dataclass
@@ -77,8 +183,13 @@ class RepairOperation(ABC):
         """Count rows this operation would currently affect."""
 
     @abstractmethod
-    async def preview(self, db: AsyncSession, limit: int = 10) -> list[RepairDiff]:
-        """Return sample diffs without persisting anything."""
+    async def preview(
+        self,
+        db: AsyncSession,
+        limit: int = DEFAULT_PREVIEW_LIMIT,
+        offset: int = 0,
+    ) -> RepairPreview:
+        """Return one page of review groups without persisting anything."""
 
     @abstractmethod
     async def affected_rows(self, db: AsyncSession) -> list[Any]:

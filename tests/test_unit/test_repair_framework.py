@@ -25,7 +25,10 @@ from db.models.trip_metrics import EVTripMetrics
 from tests.factories.trips import TripFactory
 from tests.factories.vehicles import VehicleFactory
 from web.services.repair import (
+    RepairDiff,
+    RepairGroup,
     RepairOperation,
+    RepairPreview,
     deserialize_row,
     mutable_only,
     purge_run,
@@ -132,8 +135,8 @@ class _DummyDistanceRepair(RepairOperation):
     async def census(self, db):
         return len(await self._candidates(db))
 
-    async def preview(self, db, limit=10):
-        return []
+    async def preview(self, db, limit=10, offset=0):
+        return RepairPreview([], 0, offset, limit)
 
     async def affected_rows(self, db):
         return await self._candidates(db)
@@ -282,3 +285,104 @@ async def test_rollback_session_discards_internal_commit(db_session):
         assert persisted == 0
     finally:
         await engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# Review grouping and pagination
+# ---------------------------------------------------------------------------
+
+
+def _pair_group() -> RepairGroup:
+    """A survivor/loser group shaped like duplicate consolidation produces."""
+    return RepairGroup(
+        [
+            RepairDiff(
+                343,
+                {"energy_consumed": 1.594},
+                {"energy_consumed": 2.463},
+                "update",
+                identity={"start_time": "2026-08-04T14:22", "distance": 62.14},
+                notes={"energy_consumed": "max of the pair"},
+                role="keep",
+            ),
+            RepairDiff(
+                349,
+                {"energy_consumed": 2.463, "duration": 2481.0},
+                None,
+                "delete",
+                identity={"start_time": "2026-08-04T14:22", "distance": 100.0},
+                role="duplicate",
+            ),
+        ],
+        label="Trips #343 + #349",
+        context={"distance ratio": "1.609x"},
+    )
+
+
+def test_group_fields_lead_with_identity_then_changed_fields():
+    """A reviewer sees what the row IS before what changes about it."""
+    assert _pair_group().fields == [
+        "start_time",
+        "distance",
+        "energy_consumed",
+        "duration",
+    ]
+
+
+def test_group_cells_carry_what_each_action_keeps():
+    """Update shows both sides; delete shows the values it removes."""
+    by_field = {row["field"]: row["cells"] for row in _pair_group().rows}
+
+    keep, duplicate = by_field["energy_consumed"]
+    assert (keep["before"], keep["after"]) == (1.594, 2.463)
+    assert keep["has_before"] and keep["has_after"]
+    assert keep["note"] == "max of the pair"
+    # The doomed row's value is the merged value's origin — it must be visible.
+    assert duplicate["before"] == 2.463
+    assert duplicate["has_before"] and not duplicate["has_after"]
+
+    # duration exists only on the loser; the survivor's cell renders as empty.
+    keep_duration, drop_duration = by_field["duration"]
+    assert not keep_duration["has_before"] and not keep_duration["has_identity"]
+    assert drop_duration["before"] == 2481.0
+
+    # Identity fields are not changes; they fall back to the identity value.
+    keep_distance, drop_distance = by_field["distance"]
+    assert (keep_distance["identity"], drop_distance["identity"]) == (62.14, 100.0)
+    assert keep_distance["has_identity"] and not keep_distance["has_after"]
+
+
+def test_group_without_context_still_exposes_its_rows():
+    """An operation that supplies nothing optional still renders."""
+    group = RepairGroup([RepairDiff(7, None, {"distance": 3.0}, "insert")])
+    assert group.label is None
+    assert group.context == {}
+    assert group.actions == ["insert"]
+    (cell,) = group.rows[0]["cells"]
+    assert cell["has_after"] and not cell["has_before"]
+    assert cell["after"] == 3.0
+
+
+def test_preview_pagination_arithmetic():
+    """first/last/has_next track the page, not the whole census."""
+    groups = [RepairGroup([RepairDiff(i, None, {}, "update")]) for i in range(10)]
+
+    first_page = RepairPreview(groups, total=25, offset=0, limit=10)
+    assert (first_page.first, first_page.last) == (1, 10)
+    assert not first_page.has_prev and first_page.has_next
+    assert first_page.next_offset == 10
+    assert first_page.prev_offset == 0
+
+    last_page = RepairPreview(groups[:5], total=25, offset=20, limit=10)
+    assert (last_page.first, last_page.last) == (21, 25)
+    assert last_page.has_prev and not last_page.has_next
+    assert last_page.prev_offset == 10
+
+    empty = RepairPreview([], total=0, offset=0, limit=10)
+    assert (empty.first, empty.last) == (0, 0)
+    assert not empty.has_prev and not empty.has_next
+
+
+def test_preview_unit_label_is_singular_for_one():
+    assert RepairPreview([], total=1, unit="pairs").unit_label == "pair"
+    assert RepairPreview([], total=2, unit="pairs").unit_label == "pairs"

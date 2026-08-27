@@ -2196,6 +2196,7 @@ async def update_developer_mode(
 # ---------------------------------------------------------------------------
 
 REPLAY_SLUG = "recorder-replay"
+PREVIEW_PAGE_SIZE = 10
 
 
 async def _repair_card_ctx(op, db: AsyncSession) -> dict:
@@ -2294,18 +2295,18 @@ async def download_database_backup(db: AsyncSession = Depends(get_db)):
 async def data_repair_preview(
     slug: str,
     request: Request,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
-    """Dry-run a repair operation and render the diff table."""
+    """Dry-run a repair operation and render one page of its review groups."""
     op = get_operation(slug)
     if op is None:
         raise HTTPException(status_code=404, detail=f"Unknown repair: {slug}")
-    diffs = await op.preview(db)
-    census = await op.census(db)
+    preview = await op.preview(db, limit=PREVIEW_PAGE_SIZE, offset=max(offset, 0))
     return templates.TemplateResponse(
         request,
         "settings/partials/repair_preview.html",
-        {"diffs": diffs, "census": census},
+        {"preview": preview, "op": op},
     )
 
 

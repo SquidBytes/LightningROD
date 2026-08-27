@@ -65,10 +65,22 @@ async def test_census_hits_only_odometer_contradicting_mutable_row(db_session):
     assert await op.census(db_session) == 1
     assert [r.id for r in await op.affected_rows(db_session)] == [corrupted.id]
 
-    diffs = await op.preview(db_session)
+    preview = await op.preview(db_session)
+    (group,) = preview.groups
+    diffs = preview.diffs
     assert len(diffs) == 1
     assert diffs[0].action == "update"
     assert diffs[0].after["distance"] == pytest.approx(196.34 / KM_PER_MILE)
+
+    # The odometer contradiction that flagged the row is on the diff.
+    assert group.label == f"Trip #{corrupted.id}"
+    assert group.context["distance / odometer delta"].startswith("1.609")
+    assert "odometer" in group.context
+    # The correction itself is explained field by field.
+    assert str(KM_PER_MILE) in diffs[0].notes["distance"]
+    assert "energy_consumed" in diffs[0].notes["efficiency"]
+    # The odometer readings the ratio came from are shown alongside.
+    assert "odometer_start" in diffs[0].identity
 
 
 async def test_apply_divides_and_recomputes_efficiency(db_session):

@@ -13,8 +13,11 @@ from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle_status import EVVehicleStatus
 from web.queries.trips import detect_trip_location_ids
 from web.services.repair.base import (
+    DEFAULT_PREVIEW_LIMIT,
     RepairDiff,
+    RepairGroup,
     RepairOperation,
+    RepairPreview,
     RepairResult,
     _aware,
 )
@@ -35,6 +38,10 @@ IGNITION_ODO_MATCH_KM = 1.0
 ODO_START_TOLERANCE_KM = 0.5
 DURATION_BAND_SECONDS = (60.0, 86400.0)
 SPEED_BAND_KMH = (2.0, 180.0)
+
+
+def _minutes(delta: timedelta) -> int:
+    return int(delta.total_seconds() // 60)
 
 
 class TelemetryDerive(RepairOperation):
@@ -86,10 +93,10 @@ class TelemetryDerive(RepairOperation):
 
     async def _odometer_at_end(
         self, db: AsyncSession, device_id: str, end_time: datetime
-    ) -> float | None:
-        """Latest odometer reading in the window around trip end."""
+    ) -> tuple[float, datetime | None] | None:
+        """Latest odometer reading in the window around trip end, with its timestamp."""
         stmt = (
-            select(EVVehicleStatus.odometer)
+            select(EVVehicleStatus.odometer, EVVehicleStatus.recorded_at)
             .where(
                 EVVehicleStatus.device_id == device_id,
                 EVVehicleStatus.odometer.is_not(None),
@@ -99,8 +106,10 @@ class TelemetryDerive(RepairOperation):
             .order_by(EVVehicleStatus.recorded_at.desc())
             .limit(1)
         )
-        val = (await db.execute(stmt)).scalar_one_or_none()
-        return float(val) if val is not None else None
+        row = (await db.execute(stmt)).first()
+        if row is None or row[0] is None:
+            return None
+        return float(row[0]), _aware(row[1])
 
     async def _start_from_odometer(
         self, db: AsyncSession, device_id: str, end_time: datetime, odo_start: float
@@ -194,8 +203,8 @@ class TelemetryDerive(RepairOperation):
 
     async def _mean_temps(
         self, db: AsyncSession, device_id: str, start_time: datetime, end_time: datetime
-    ) -> tuple[float | None, float | None]:
-        """Mean (outside, cabin) temperature over the trip window."""
+    ) -> tuple[tuple[float | None, int], tuple[float | None, int]]:
+        """Mean (outside, cabin) temperature over the trip window, each with its sample count."""
         stmt = select(
             EVVehicleStatus.outside_temperature, EVVehicleStatus.cabin_temperature
         ).where(
@@ -205,9 +214,9 @@ class TelemetryDerive(RepairOperation):
         )
         rows = (await db.execute(stmt)).all()
 
-        def mean(values: list) -> float | None:
+        def mean(values: list) -> tuple[float | None, int]:
             present = [float(v) for v in values if v is not None]
-            return sum(present) / len(present) if present else None
+            return (sum(present) / len(present) if present else None), len(present)
 
         return mean([r[0] for r in rows]), mean([r[1] for r in rows])
 
@@ -225,14 +234,26 @@ class TelemetryDerive(RepairOperation):
         speed_kmh = distance / (seconds / 3600.0)
         return SPEED_BAND_KMH[0] <= speed_kmh <= SPEED_BAND_KMH[1]
 
-    async def _changes(self, db: AsyncSession, trip: EVTripMetrics) -> dict[str, Any]:
-        """Fill values derivable for this trip; only NULL fields, never overwrites."""
+    @staticmethod
+    def _duration_note(distance: float | None, seconds: float) -> str:
+        speed = distance / (seconds / 3600.0) if distance else None
+        speed_text = f", implies {speed:.4g} km/h" if speed is not None else ""
+        return f"end_time - start_time = {seconds:g}s{speed_text}"
+
+    async def _changes(
+        self, db: AsyncSession, trip: EVTripMetrics
+    ) -> tuple[dict[str, Any], dict[str, str]]:
+        """Fill values derivable for this trip, with a note per field explaining how.
+
+        Only NULL fields are filled; nothing is ever overwritten.
+        """
         changes: dict[str, Any] = {}
+        notes: dict[str, str] = {}
         end_time = _aware(trip.end_time)
         if end_time is None:
             # _candidates() filters these out; without an end anchor every
             # derivation below is unanchored.
-            return changes
+            return changes, notes
         distance = float(trip.distance) if trip.distance is not None else None
         start_effective = _aware(trip.start_time)
 
@@ -241,12 +262,19 @@ class TelemetryDerive(RepairOperation):
         if start_effective is None and trip.duration is not None:
             start_effective = end_time - timedelta(seconds=float(trip.duration))
             changes["start_time"] = start_effective
+            notes["start_time"] = f"end_time - stored duration ({trip.duration}s)"
 
         odo_end = float(trip.odometer_end) if trip.odometer_end is not None else None
         if odo_end is None:
-            odo_end = await self._odometer_at_end(db, trip.device_id, end_time)
-            if odo_end is not None:
+            found = await self._odometer_at_end(db, trip.device_id, end_time)
+            if found is not None:
+                odo_end, odo_end_ts = found
                 changes["odometer_end"] = odo_end
+                notes["odometer_end"] = (
+                    f"vehicle status odometer at {odo_end_ts}, the last reading "
+                    f"in the {_minutes(ODO_END_LOOKBACK)} min before / "
+                    f"{_minutes(ODO_END_LOOKAHEAD)} min after trip end"
+                )
 
         odo_start = None
         # No end odometer anchor -> skip odometer/timing derivation entirely.
@@ -257,6 +285,9 @@ class TelemetryDerive(RepairOperation):
             if odo_start is None and distance is not None and distance > 0:
                 odo_start = odo_end - distance
                 changes["odometer_start"] = odo_start
+                notes["odometer_start"] = (
+                    f"odometer_end {odo_end:g} - trip distance {trip.distance}"
+                )
 
             derived_start = None
             if start_effective is None and odo_start is not None:
@@ -272,9 +303,15 @@ class TelemetryDerive(RepairOperation):
                 if self._plausible(distance, seconds):
                     if derived_start is not None:
                         changes["start_time"] = derived_start
+                        notes["start_time"] = (
+                            f"last vehicle status before trip end reading odometer "
+                            f"{odo_start:g} (+{ODO_START_TOLERANCE_KM:g} / "
+                            f"-{IGNITION_ODO_MATCH_KM:g} km)"
+                        )
                         start_effective = derived_start
                     if trip.duration is None:
                         changes["duration"] = seconds
+                        notes["duration"] = self._duration_note(distance, seconds)
 
         # Sparse odometer history can leave start unknown; fall back to the
         # latest OFF->ON ignition transition before trip end.
@@ -286,9 +323,15 @@ class TelemetryDerive(RepairOperation):
                 seconds = (end_time - ign_start).total_seconds()
                 if self._plausible(distance, seconds):
                     changes["start_time"] = ign_start
+                    notes["start_time"] = (
+                        f"ignition OFF->ON at {ign_start}, the latest transition "
+                        f"before trip end within {IGNITION_ODO_MATCH_KM:g} km of "
+                        f"the trip's start odometer"
+                    )
                     start_effective = ign_start
                     if trip.duration is None:
                         changes["duration"] = seconds
+                        notes["duration"] = self._duration_note(distance, seconds)
                     self._ignition_fills += 1
 
         if trip.efficiency is None and distance is not None and distance > 0:
@@ -300,17 +343,28 @@ class TelemetryDerive(RepairOperation):
             if energy is not None and energy > 0:
                 # Same formula ingestion and manual entry store: km/kWh.
                 changes["efficiency"] = distance / energy
+                notes["efficiency"] = (
+                    f"distance {trip.distance} / energy_consumed "
+                    f"{trip.energy_consumed} (km/kWh)"
+                )
 
         if start_effective is not None and (
             trip.outside_air_temp is None or trip.cabin_temp is None
         ):
-            outside, cabin = await self._mean_temps(
+            (outside, outside_n), (cabin, cabin_n) = await self._mean_temps(
                 db, trip.device_id, start_effective, end_time
             )
+            window = f"{start_effective} to {end_time}"
             if trip.outside_air_temp is None and outside is not None:
                 changes["outside_air_temp"] = outside
+                notes["outside_air_temp"] = (
+                    f"mean of {outside_n} vehicle status readings, {window}"
+                )
             if trip.cabin_temp is None and cabin is not None:
                 changes["cabin_temp"] = cabin
+                notes["cabin_temp"] = (
+                    f"mean of {cabin_n} vehicle status readings, {window}"
+                )
 
         # Resolve endpoint FKs from GPS history. Uses the effective start
         # (possibly just derived above) so timing and location land together;
@@ -323,19 +377,25 @@ class TelemetryDerive(RepairOperation):
             )
             if need_start_loc and start_id is not None:
                 changes["start_location_id"] = start_id
+                notes["start_location_id"] = (
+                    "known location matched from GPS history at the trip's start"
+                )
             if need_end_loc and end_id is not None:
                 changes["end_location_id"] = end_id
+                notes["end_location_id"] = (
+                    "known location matched from GPS history at the trip's end"
+                )
 
-        return changes
+        return changes, notes
 
     async def _pending(
         self, db: AsyncSession, limit: int | None = None
-    ) -> list[tuple[EVTripMetrics, dict[str, Any]]]:
-        out: list[tuple[EVTripMetrics, dict[str, Any]]] = []
+    ) -> list[tuple[EVTripMetrics, dict[str, Any], dict[str, str]]]:
+        out: list[tuple[EVTripMetrics, dict[str, Any], dict[str, str]]] = []
         for trip in await self._candidates(db):
-            changes = await self._changes(db, trip)
+            changes, notes = await self._changes(db, trip)
             if changes:
-                out.append((trip, changes))
+                out.append((trip, changes, notes))
                 if limit is not None and len(out) >= limit:
                     break
         return out
@@ -347,21 +407,47 @@ class TelemetryDerive(RepairOperation):
     async def census(self, db: AsyncSession) -> int:
         return len(await self._pending(db))
 
-    async def preview(self, db: AsyncSession, limit: int = 10) -> list[RepairDiff]:
-        diffs: list[RepairDiff] = []
-        for trip, changes in await self._pending(db, limit=limit):
+    async def preview(
+        self, db: AsyncSession, limit: int = DEFAULT_PREVIEW_LIMIT, offset: int = 0
+    ) -> RepairPreview:
+        pending = await self._pending(db)
+        groups: list[RepairGroup] = []
+        for trip, changes, notes in pending[offset : offset + limit]:
             before = {field: getattr(trip, field) for field in changes}
-            diffs.append(RepairDiff(trip.id, before, changes, "update"))
-        return diffs
+            groups.append(
+                RepairGroup(
+                    [
+                        RepairDiff(
+                            trip.id,
+                            before,
+                            changes,
+                            "update",
+                            identity={
+                                "start_time": trip.start_time,
+                                "end_time": trip.end_time,
+                                "distance": trip.distance,
+                                "energy_consumed": trip.energy_consumed,
+                            },
+                            notes=notes,
+                        )
+                    ],
+                    label=f"Trip #{trip.id}",
+                    context={
+                        "derives": ", ".join(changes),
+                        "source": "stored vehicle telemetry and GPS history",
+                    },
+                )
+            )
+        return RepairPreview(groups, len(pending), offset, limit)
 
     async def affected_rows(self, db: AsyncSession) -> list[EVTripMetrics]:
-        return [trip for trip, _changes in await self._pending(db)]
+        return [trip for trip, _changes, _notes in await self._pending(db)]
 
     async def execute(self, db: AsyncSession) -> int:
         filled: dict[str, int] = {}
         self._ignition_fills = 0
         pending = await self._pending(db)
-        for trip, changes in pending:
+        for trip, changes, _notes in pending:
             for field, val in changes.items():
                 setattr(trip, field, val)
                 filled[field] = filled.get(field, 0) + 1
