@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -27,6 +28,7 @@ pytestmark = pytest.mark.unit
 
 VIN = "TESTVIN001"
 EVENT_TS = datetime(2026, 4, 19, 12, 0, tzinfo=UTC)
+ARCHIVE_LOGGER = "lightningrod.ingestion.raw_archive"
 
 _FIXTURE = json.loads(
     (
@@ -547,7 +549,9 @@ async def test_retention_still_runs_when_the_write_fails(archive, db_session):
 
 
 @pytest.mark.db
-async def test_repeat_failures_are_counted_but_not_all_logged(archive, db_session):
+async def test_repeat_failures_are_counted_but_not_all_logged(
+    archive, db_session, caplog
+):
     """One stack trace per event would be 10k+ a day; count them instead."""
 
     async def _boom(*_args, **_kwargs):
@@ -555,12 +559,19 @@ async def test_repeat_failures_are_counted_but_not_all_logged(archive, db_sessio
 
     archive._insert = _boom
 
-    for _ in range(5):
-        await archive.store(_entity("soc"), _state("soc"), config_id=1)
+    with caplog.at_level(logging.ERROR, logger=ARCHIVE_LOGGER):
+        for _ in range(5):
+            await archive.store(_entity("soc"), _state("soc"), config_id=1)
 
     assert archive.health["failures"] == 5
     assert archive.health["last_error"].startswith("RuntimeError:")
     assert archive.health["last_error_at"] is not None
+
+    logged = [r for r in caplog.records if r.name == ARCHIVE_LOGGER]
+    assert len(logged) == 1, f"5 failures logged {len(logged)} times, not 1"
+    # The one that gets through is the full report: stack trace and entity.
+    assert logged[0].exc_info is not None
+    assert _entity("soc") in logged[0].getMessage()
 
 
 @pytest.mark.db
