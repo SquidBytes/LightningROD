@@ -27,6 +27,13 @@ from web.services.repair.base import (
 # A km-value stored alongside its double-converted twin sits near x1.609344.
 RATIO_BAND = (1.55, 1.67)
 END_TIME_WINDOW_SECONDS = 120.0
+# The two trip sources disagree by seconds on where a drive begins, never by
+# minutes: a far-off start means a different drive that merely ended alongside.
+START_TIME_WINDOW_SECONDS = 120.0
+# Only distance carries the unit bug, so a twin's duration and kWh must still
+# agree. The band is wide enough for source rounding drift, far tighter than
+# the x1.609 spread two genuinely different drives show.
+SAME_DRIVE_TOLERANCE = 0.25
 
 # P34's _MAX_FIELDS also maxed distance/efficiency; here MAX would resurrect
 # the corrupted larger distance, so only these two are safe to max-merge.
@@ -48,6 +55,40 @@ _PAIR_FIELDS: tuple[str, ...] = (
     + _MAX_FIELDS_SAFE
     + _NULL_FILL_FIELDS
 )
+
+
+def _measurements_agree(val_a: Any, val_b: Any) -> bool:
+    """One drive measured twice: values agree, or a source never recorded it."""
+    if val_a is None or val_b is None:
+        return True
+    num_a, num_b = float(val_a), float(val_b)
+    scale = max(abs(num_a), abs(num_b))
+    return scale <= 0 or abs(num_a - num_b) / scale <= SAME_DRIVE_TOLERANCE
+
+
+def _starts_agree(row_a: dict, row_b: dict) -> bool:
+    """Same drive start, or a source never recorded one."""
+    start_a = _coerce_datetime(row_a.get("start_time"))
+    start_b = _coerce_datetime(row_b.get("start_time"))
+    if start_a is None or start_b is None:
+        return True
+    return abs((start_b - start_a).total_seconds()) <= START_TIME_WINDOW_SECONDS
+
+
+def is_unit_twin(row_a: dict, row_b: dict) -> bool:
+    """Whether two rows can be one drive whose distance was written twice.
+
+    The bug rewrote distance alone, so every other measurement the pair
+    shares must still line up. Fields NULL on either side prove nothing and
+    are left to the checks that can still run.
+    """
+    return (
+        _starts_agree(row_a, row_b)
+        and _measurements_agree(row_a.get("duration"), row_b.get("duration"))
+        and _measurements_agree(
+            row_a.get("energy_consumed"), row_b.get("energy_consumed")
+        )
+    )
 
 
 def find_unit_duplicate_pairs(
@@ -84,6 +125,8 @@ def find_unit_duplicate_pairs(
                 continue
             ratio = larger / smaller
             if not (RATIO_BAND[0] <= ratio <= RATIO_BAND[1]):
+                continue
+            if not is_unit_twin(row_a, row_b):
                 continue
             survivor, loser = (row_a, row_b) if dist_a <= dist_b else (row_b, row_a)
             pairs.append((survivor, loser))
@@ -163,8 +206,9 @@ def pair_evidence(survivor: dict, loser: dict) -> dict[str, str]:
         "distances": f"{survivor['distance']} kept / {loser['distance']} removed",
         "end times": f"{gap:g}s apart",
         "match rule": (
-            f"ratio within {RATIO_BAND[0]}-{RATIO_BAND[1]} and ends within "
-            f"{END_TIME_WINDOW_SECONDS:g}s; the smaller distance is kept"
+            f"ratio within {RATIO_BAND[0]}-{RATIO_BAND[1]}, ends within "
+            f"{END_TIME_WINDOW_SECONDS:g}s, and the same drive start, duration "
+            f"and energy; the smaller distance is kept"
         ),
     }
 

@@ -82,6 +82,100 @@ def test_greedy_each_row_in_at_most_one_pair():
     assert pairs == [(a, b)]
 
 
+# A genuine twin is one drive written twice: same start, same duration, same
+# kWh, only the distance re-converted. These fixtures hold that shape.
+_SAME_DRIVE = {
+    "start_time": T0 - timedelta(minutes=15),
+    "duration": 900.0,
+    "energy_consumed": 18.0,
+}
+
+
+def test_shared_end_time_but_different_drive_rejected():
+    """Two drives that ended at one instant, half an hour and 55% of the
+    energy apart. Their 1.625 distance ratio lands in the band by coincidence."""
+    end = datetime(2026, 6, 1, 8, 30, 12, tzinfo=UTC)
+    short = _row(
+        1,
+        8,
+        end_time=end,
+        start_time=end - timedelta(seconds=655),
+        duration=655,
+        energy_consumed=1.594,
+    )
+    long_run = _row(
+        2,
+        13,
+        end_time=end,
+        start_time=end - timedelta(seconds=2481),
+        duration=2481,
+        energy_consumed=2.463,
+    )
+    assert find_unit_duplicate_pairs([short, long_run]) == []
+
+
+def test_genuine_twin_differs_only_in_distance():
+    """One drive, two sources: the distance is x1.609, everything else drifts
+    by rounding at most."""
+    survivor = _row(1, 122.0, **_SAME_DRIVE)
+    loser = _row(
+        2,
+        122.0 * 1.609344,
+        end_time=T0 + timedelta(seconds=30),
+        start_time=_SAME_DRIVE["start_time"] + timedelta(seconds=5),
+        duration=905.0,
+        energy_consumed=18.4,
+    )
+    assert find_unit_duplicate_pairs([loser, survivor]) == [(survivor, loser)]
+
+
+@pytest.mark.parametrize(
+    "disagreement",
+    [
+        {"start_time": T0 - timedelta(minutes=45)},  # began half an hour earlier
+        {"duration": 2400.0},  # ran nearly three times as long
+        {"energy_consumed": 30.0},  # drew 60% more energy
+    ],
+    ids=["start_time", "duration", "energy_consumed"],
+)
+def test_one_disagreeing_measurement_rejects_the_pair(disagreement):
+    survivor = _row(1, 122.0, **_SAME_DRIVE)
+    loser = _row(
+        2,
+        122.0 * 1.609344,
+        end_time=T0 + timedelta(seconds=30),
+        **{**_SAME_DRIVE, **disagreement},
+    )
+    assert find_unit_duplicate_pairs([survivor, loser]) == []
+
+
+@pytest.mark.parametrize("field", ["start_time", "duration", "energy_consumed"])
+@pytest.mark.parametrize("missing_on", ["survivor", "loser"])
+def test_field_only_one_source_recorded_still_pairs(field, missing_on):
+    """A NULL proves nothing: the checks that can still run decide the pair."""
+    survivor_fields, loser_fields = dict(_SAME_DRIVE), dict(_SAME_DRIVE)
+    target = survivor_fields if missing_on == "survivor" else loser_fields
+    target[field] = None
+    survivor = _row(1, 122.0, **survivor_fields)
+    loser = _row(
+        2, 122.0 * 1.609344, end_time=T0 + timedelta(seconds=30), **loser_fields
+    )
+    assert find_unit_duplicate_pairs([survivor, loser]) == [(survivor, loser)]
+
+
+def test_missing_energy_does_not_excuse_a_different_start():
+    survivor = _row(1, 122.0, **{**_SAME_DRIVE, "energy_consumed": None})
+    loser = _row(
+        2,
+        122.0 * 1.609344,
+        end_time=T0 + timedelta(seconds=30),
+        start_time=T0 - timedelta(minutes=45),
+        duration=900.0,
+        energy_consumed=None,
+    )
+    assert find_unit_duplicate_pairs([survivor, loser]) == []
+
+
 def test_string_end_time_coerced():
     rows = [_row(1, 100.0, end_time="2026-06-01T12:00:00Z"), _row(2, 160.9344)]
     assert len(find_unit_duplicate_pairs(rows)) == 1

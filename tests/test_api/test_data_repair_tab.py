@@ -24,6 +24,14 @@ T0 = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
 CONSOLIDATION = "trip-duplicate-consolidation"
 
 
+# One drive written twice: only the distance differs, by x1.609344.
+SAME_DRIVE = {
+    "start_time": T0 - timedelta(minutes=15),
+    "duration": 900.0,
+    "energy_consumed": 18.0,
+}
+
+
 async def _seed_corrupt_pair(db_session):
     """Seed a x1.609 duplicate trip pair (both ha_fordpass, ~1 min apart)."""
     survivor = await TripFactory.create(
@@ -32,6 +40,8 @@ async def _seed_corrupt_pair(db_session):
         distance=122.0,
         end_time=T0,
         source_system="ha_fordpass",
+        driving_score=90.0,
+        **SAME_DRIVE,
     )
     loser = await TripFactory.create(
         db_session,
@@ -39,6 +49,8 @@ async def _seed_corrupt_pair(db_session):
         distance=196.34,
         end_time=T0 + timedelta(seconds=60),
         source_system="ha_fordpass",
+        ambient_temp=21.5,
+        **SAME_DRIVE,
     )
     await db_session.commit()
     return survivor, loser
@@ -190,6 +202,7 @@ async def test_preview_delete_column_carries_the_merged_values_origin(
         end_time=T0,
         ambient_temp=None,
         source_system="ha_fordpass",
+        **SAME_DRIVE,
     )
     await TripFactory.create(
         db_session,
@@ -198,6 +211,7 @@ async def test_preview_delete_column_carries_the_merged_values_origin(
         end_time=T0 + timedelta(seconds=30),
         ambient_temp=21.5,
         source_system="ha_fordpass",
+        **SAME_DRIVE,
     )
     await db_session.commit()
 
@@ -218,6 +232,9 @@ async def _seed_pairs(db_session, count: int) -> None:
             device_id="PAGING_VIN",
             distance=122.0,
             end_time=end,
+            start_time=end - timedelta(minutes=15),
+            duration=900.0,
+            energy_consumed=18.0,
             source_system="ha_fordpass",
         )
         await TripFactory.create(
@@ -225,6 +242,9 @@ async def _seed_pairs(db_session, count: int) -> None:
             device_id="PAGING_VIN",
             distance=196.34,
             end_time=end + timedelta(seconds=30),
+            start_time=end - timedelta(minutes=15),
+            duration=900.0,
+            energy_consumed=18.0,
             source_system="ha_fordpass",
         )
     await db_session.commit()

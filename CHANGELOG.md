@@ -30,6 +30,9 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Duplicate trip consolidation no longer offers to delete a real trip that
+  merely ended at the same moment as another; a pair now has to match on start
+  time, duration and energy as well as distance
 - Vehicle position is now recorded as soon as LightningROD reconnects to Home
   Assistant, instead of waiting until the car next moves
 - Battery history from Home Assistant now records range, state of charge,
