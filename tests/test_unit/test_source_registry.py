@@ -5,8 +5,9 @@ import importlib
 import pytest
 from pydantic import BaseModel, ValidationError
 
+from web.services.sources.base import DataSource
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
-from web.services.sources.registry import REGISTRY, DataSource
+from web.services.sources.registry import REGISTRY
 
 pytestmark = pytest.mark.unit
 

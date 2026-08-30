@@ -1,54 +1,16 @@
-"""Source-adapter registry.
+"""Source registry.
 
-Single source of truth for which source adapters this app ships. The admin
-diagnostic and the auto-doc generator both iterate this list instead of
-maintaining their own hardcoded module manifests.
+Single source of truth for which sources this app ships. The admin diagnostic
+and the auto-doc generator iterate this list instead of maintaining their own
+module manifests. Each source declares itself in its own package.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
-
-from pydantic import BaseModel
-
-from web.services.sources.ha_fordpass.config import HAFordpassConfig
-from web.services.sources.ha_gas_price.config import HAGasPriceConfig
-
-
-@dataclass(frozen=True)
-class DataSource:
-    """One shipped source: its config schema, adapter module and setup flow.
-
-    `secret_fields` names the `config_json` keys that hold credentials. It is
-    a declaration only — nothing encrypts or redacts on it yet; it exists so
-    the config-row boundary has one place to ask a source what is sensitive.
-    """
-
-    source_name: str
-    display_name: str
-    adapter_module: str
-    config_schema: type[BaseModel]
-    setup_flow: Literal["ha_websocket", "oauth", "static", "none"]
-    secret_fields: frozenset[str] = frozenset()
-
+from web.services.sources import ha_fordpass, ha_gas_price
+from web.services.sources.base import DataSource
 
 REGISTRY: list[DataSource] = [
-    DataSource(
-        source_name="ha_fordpass",
-        display_name="Home Assistant (FordPass)",
-        adapter_module="web.services.sources.ha_fordpass.adapter",
-        config_schema=HAFordpassConfig,
-        setup_flow="ha_websocket",
-        secret_fields=frozenset({"ha_token"}),
-    ),
-    DataSource(
-        source_name="ha_gas_price",
-        display_name="Home Assistant (Gas Price Sensors)",
-        adapter_module="web.services.sources.ha_gas_price.adapter",
-        config_schema=HAGasPriceConfig,
-        setup_flow="static",
-        # Entity ids only — nothing in this config is a credential.
-        secret_fields=frozenset(),
-    ),
+    ha_fordpass.DATA_SOURCE,
+    ha_gas_price.DATA_SOURCE,
 ]

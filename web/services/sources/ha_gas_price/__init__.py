@@ -9,3 +9,16 @@ milestone; for now this package keeps the existing app_settings shape.
 
 See `adapter.py` for the entry point and `handlers.py` for the writer.
 """
+
+from web.services.sources.base import DataSource
+from web.services.sources.ha_gas_price.config import HAGasPriceConfig
+
+DATA_SOURCE = DataSource(
+    source_name="ha_gas_price",
+    display_name="Home Assistant (Gas Price Sensors)",
+    adapter_module="web.services.sources.ha_gas_price.adapter",
+    config_schema=HAGasPriceConfig,
+    setup_flow="static",
+    # Entity ids only — nothing in this config is a credential.
+    secret_fields=frozenset(),
+)
