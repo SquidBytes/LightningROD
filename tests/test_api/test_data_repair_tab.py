@@ -17,6 +17,7 @@ from web.services.repair import (
     RepairOperation,
     RepairPreview,
 )
+from web.services.repair.ops.trip_duplicates import merge_pair
 
 pytestmark = pytest.mark.db
 
@@ -221,6 +222,58 @@ async def test_preview_delete_column_carries_the_merged_values_origin(
     # ambient_temp appears twice: NULL -> 21.5 on the survivor, 21.5 on the loser.
     assert body.count("21.5") >= 2
     assert "ambient_temp" in body
+
+
+_FIELD_ROW = re.compile(
+    r'<div class="font-mono text-base-content/50[^"]*">([^<]+)</div>(.*?)'
+    r'(?=<div class="font-mono text-base-content/50|\Z)',
+    re.S,
+)
+_CELL = '<div class="font-mono tabular-nums'
+
+
+def _plain(cell: str) -> str:
+    """One cell's markup as the text a reviewer actually sees."""
+    body = cell.partition('">')[2]
+    return " ".join(re.sub(r"<[^>]+>", " ", body).replace("&rarr;", "->").split())
+
+
+def _grid(body: str) -> dict[str, list[str]]:
+    """The first review group's grid as field -> one text per member column."""
+    group = body.partition("</details>")[0]
+    return {
+        field.strip(): [_plain(chunk) for chunk in cells.split(_CELL)[1:]]
+        for field, cells in _FIELD_ROW.findall(group)
+    }
+
+
+def _shown(value) -> str:
+    return "NULL" if value is None else str(value)
+
+
+async def test_preview_keep_column_accounts_for_every_field(client, db_session):
+    """Every field the merge writes shows its before and after, and every field
+    it leaves alone shows what the surviving trip keeps. A blank in that column
+    reads as data thrown away."""
+    survivor, loser = await _seed_corrupt_pair(db_session)
+    columns = [c.name for c in EVTripMetrics.__table__.columns]
+    merged = merge_pair(
+        {c: getattr(survivor, c) for c in columns},
+        {c: getattr(loser, c) for c in columns},
+    )
+    assert merged, "fixture must give the merge something to change"
+
+    body = (await client.post(f"/settings/data-repair/{CONSOLIDATION}/preview")).text
+    keep = {field: cells[0] for field, cells in _grid(body).items()}
+
+    for field, after in merged.items():
+        cell = keep[field]
+        assert _shown(getattr(survivor, field)) in cell
+        assert _shown(after) in cell
+
+    for field, cell in keep.items():
+        assert "mdash" not in cell, f"{field} rendered as absent on the keep row"
+        assert _shown(getattr(survivor, field)) in cell
 
 
 async def _seed_pairs(db_session, count: int) -> None:

@@ -30,6 +30,8 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- The duplicate trip preview now shows what the surviving trip keeps, not just
+  what changes, so merged temperatures no longer look like they are discarded
 - Duplicate trip consolidation no longer offers to delete a real trip that
   merely ended at the same moment as another; a pair now has to match on start
   time, duration and energy as well as distance

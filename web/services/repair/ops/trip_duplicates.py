@@ -256,13 +256,15 @@ class TripDuplicateConsolidation(RepairOperation):
         for survivor, loser in pairs[offset : offset + limit]:
             survivor_row, loser_row = _row_dict(survivor), _row_dict(loser)
             merged = merge_pair(survivor_row, loser_row)
-            before = {field: getattr(survivor, field) for field in merged}
             groups.append(
                 RepairGroup(
                     [
                         RepairDiff(
                             survivor.id,
-                            before,
+                            # The whole row, not just what changes: the group
+                            # renders a cell per member per field, so a member
+                            # that omits a field reads as holding nothing.
+                            survivor_row,
                             merged,
                             "update",
                             identity=_identity(survivor),
