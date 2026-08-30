@@ -402,13 +402,7 @@ def _parse_iso_datetime(val: str | None) -> datetime | None:
 
 @handles("metrics", "events")
 async def handle_via_adapter(slug, new_state, ha_config, device_id, db):
-    """Delegate _metrics and _events entities to ha_fordpass.process_sample.
-
-    These slugs are the metric-canonical sources for battery status
-    (xevBatteryRange / xevBatteryMaximumRange) and trip metrics
-    (xev-key-off-trip-segment-data). The adapter owns the DATA_MAP
-    routing; this dispatcher simply hands off.
-    """
+    """Delegate _metrics and _events entities to ha_fordpass.process_sample."""
     entity_id = f"sensor.fordpass_{device_id}_{slug}"
     await ha_fordpass.process_sample(entity_id, new_state, db, ha_config)
 
@@ -603,14 +597,12 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             )
             if converted is not None:
                 pending["hv_battery_range"] = converted
-        # Rich battery attributes (SI-already — no conversion needed, no
-        # DATA_MAP entry per _EXEMPTIONS in test_data_map_coverage).
+        # SI-already, so no conversion and no DATA_MAP entry.
         hv_voltage = _safe_float(attrs.get("batteryVoltage"))
         hv_amperage = _safe_float(attrs.get("batteryAmperage"))
         hv_kw = _safe_float(attrs.get("batterykW"))
-        # `maximumBatteryCapacity` mirrors xevBatteryCapacity (mixed Wh/kWh
-        # across ha-fordpass versions); the wh_autoscale mapping lands it in
-        # kWh so /battery health math compares against the rated-kWh setting.
+        # Mirrors xevBatteryCapacity, so it inherits the same mixed Wh/kWh
+        # problem; the wh_autoscale mapping lands it in kWh.
         _cap_mapping = ha_fordpass.lookup_mapping(
             "sensor.fordpass_{vin}_elveh", "maximumBatteryCapacity"
         )
@@ -684,12 +676,8 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 device_id=device_id,
             )
 
-        # Adapter-routed converters for elveh-sourced fields that DO have a
-        # DATA_MAP entry. Routing through ha_fordpass.convert records
-        # the conversion in adapter._last_seen_raw so /admin/data-sources
-        # shows elveh observations alongside metrics/events ones. Mappings
-        # for elveh state-unit distance fields use read-time UoM resolution
-        # internally via adapter._resolve_source_unit.
+        # Route these through ha_fordpass.convert rather than converting
+        # locally, so /admin/data-sources sees the elveh observations too.
         _elveh_pattern = "sensor.fordpass_{vin}_elveh"
         _efficiency_mapping = ha_fordpass.lookup_mapping(_elveh_pattern, "tripEfficiency")
         _range_regen_mapping = ha_fordpass.lookup_mapping(_elveh_pattern, "tripRangeRegenerated")
@@ -1052,11 +1040,8 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     plug_data = attrs.get("plugDetails", {}) or {}
     plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
     raw_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
-    # plugDetails.totalDistanceAdded is HA-unit-system-converted by ha-fordpass
-    # (localize_distance in get_energy_transfer_log_attrs). The mapping
-    # carries ha_unit_system_converted=True; the adapter resolves the
-    # effective source unit per-event from ha_config.unit_system before
-    # routing through to_metric.
+    # ha-fordpass localizes this field, so its unit is HA's unit system, not
+    # necessarily km — the mapping resolves it per event.
     dist_mapping = ha_fordpass.lookup_mapping(
         "sensor.fordpass_{vin}_energytransferlogentry",
         "plugDetails.totalDistanceAdded",
@@ -1099,15 +1084,9 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # Timestamp
     original_timestamp = _parse_iso_datetime(attrs.get("timeStamp"))
 
-    # Thermal context.
-    # DATA_MAP for batteryTemperature / outsidetemp live on the
-    # elvehcharging / outsidetemp entity patterns, not energytransferlogentry,
-    # so mapping-lookup against this payload returns None by design. The
-    # adapter's per-device caches (_last_charging_battery_temp, _last_outsidetemp)
-    # are populated by the elvehcharging / outsidetemp handlers prior to this
-    # event firing and are the canonical source for charging-session thermals.
-    # Fall back to the energytransferlogentry payload when caches are empty
-    # (e.g. fixture-driven tests that only inject the charging-session event).
+    # Thermal context comes from the elvehcharging / outsidetemp caches the
+    # earlier handlers filled — this payload's own values are the fallback for
+    # tests that inject the charging-session event alone.
     battery_temp = ha_fordpass._last_charging_battery_temp.get(device_id)
     ambient_temp = ha_fordpass._last_outsidetemp.get(device_id)
     if battery_temp is None:

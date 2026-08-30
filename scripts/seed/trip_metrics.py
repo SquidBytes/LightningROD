@@ -1,18 +1,9 @@
 """Seed module: EV trip metrics — 60-80 realistic trips across 90-day window.
 
 Generates deterministic (seed=42) trips with correlated distance/energy/regen.
-All 7 DATA_MAP-covered columns for ev_trip_metrics are populated via
-DataMapSeeder; remaining model columns use sensible defaults.
-
-DATA_MAP columns used via DataMapSeeder:
-  - cabin_temp      (degC)
-  - ambient_temp    (degC)
-  - outside_air_temp (degC)
-  - efficiency      (km/kWh — note: mapping db_unit="km", but realistic_value
-                     for "km" returns a generic km range; we override with computed)
-  - range_regenerated (km)
-  - distance        (km — used for validation, computed directly for realism)
-  - energy_consumed (kWh — used for validation, computed directly for realism)
+Every DATA_MAP-covered ev_trip_metrics column goes through DataMapSeeder;
+distance, energy and efficiency are then overridden with computed values so
+the three stay consistent with each other.
 
 Idempotent: if ≥60 trip_metrics rows exist for the demo vehicle, returns 0.
 """

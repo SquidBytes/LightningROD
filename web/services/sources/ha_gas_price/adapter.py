@@ -1,20 +1,11 @@
 """ha-gas-price adapter.
 
-Matches incoming HA state_changed events against configured gas-price
-sensor entity_ids. v1 reads entity_ids from app_settings keys
-(gas_sensor_station_entity_id, gas_sensor_average_entity_id). A future
-milestone migrates these into data_source_configs[ha_gas_price].config_json.
+Matches incoming HA state_changed events against the configured gas-price
+sensor entity_ids, which still live in app_settings rather than this source's
+own config_json row.
 
-This adapter has no DATA_MAP today: gas-price values are unitless
-(currency per gallon) and handled by direct write helpers in
-`web/queries/gas_prices.py`. The empty DATA_MAP list is required
-by the SourceAdapter Protocol (`web/services/sources/base.py`) and by
-the admin diagnostic page (`web/routes/admin/data_sources.py`).
-
-The runtime's per-event fan-out calls `try_handle_event` first; on False
-return, the runtime falls through to slug-based ha_fordpass dispatch. The
-fan-out reads configured entity_ids and dispatches matching events to the
-gas writer in one entry point.
+The runtime calls `try_handle_event` first and falls through to ha_fordpass
+slug dispatch when it returns False.
 """
 
 from __future__ import annotations

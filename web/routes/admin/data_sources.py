@@ -1,14 +1,11 @@
 """Admin: Data Sources diagnostic page.
-Reads the DATA_MAP registry + _last_seen_raw cache from each source
-adapter and renders a searchable table. Purpose: ,
-let the user trace any displayed value -> source entity -> attribute -> unit ->
-raw value last observed.
-Single-user app -> ungated route . Future multi-user would add an
-admin-only guard here.
 
-Also merges in unit-detection records (web.services.units.detection) so the
-table surfaces cross-referenced + read-time-detected sources that do NOT
-appear in DATA_MAP.
+Lets the user trace any displayed value back to source entity -> field ->
+unit -> the raw value last observed. Detection records are merged in so the
+table also shows sources that resolve their unit at read time and therefore
+have no DATA_MAP entry.
+
+Ungated because the app is single-user; multi-user would add a guard here.
 """
 from __future__ import annotations
 
@@ -39,18 +36,8 @@ def _mapping_key(c: DataMapping) -> str:
 def _load_groups() -> list[dict[str, Any]]:
     """Read every adapter's DATA_MAP + _last_seen_raw at request time.
 
-    Returns a list of dicts shaped for the template:
-        [
-            {
-                "source_name": "ha_fordpass",
-                "rows": [
-                    {"mapping": DataMapping, "last_seen": dict | None,
-                     "detection": DetectionRecord | None},
-                    ...
-                ],
-            },
-            ...
-        ]
+    Returns `[{"source_name": str, "rows": [{"mapping", "last_seen",
+    "detection"}]}]` — the shape the template iterates.
     """
     out: list[dict[str, Any]] = []
     detection_index = {
@@ -77,9 +64,8 @@ def _load_groups() -> list[dict[str, Any]]:
                 }
             )
 
-        # Surface detection-only sources (no DATA_MAP entry) so the
-        # user can see unit-detection coverage for elveh attributes, soc
-        # batteryRange, vehicle-status sensors, etc.
+        # Detection-only signals still deserve a row so their unit coverage
+        # is visible alongside the mapped ones.
         for (ent, attr), rec in sorted(detection_index.items()):
             if (ent, attr) in covered:
                 continue

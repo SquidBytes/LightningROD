@@ -105,10 +105,8 @@ def _key(entity_pattern: str, attribute: str) -> str:
 # (canonical_entity_pattern, canonical_attribute,
 #  target_entity_pattern, target_attribute, field_type)
 #
-# For each pairing, when the canonical source is observed with a known-metric
-# value, the detection layer checks the recent-reads buffer for matching
-# target reads from the same device and tries to derive the target's unit
-# from the observed ratio / delta.
+# Seeing the canonical (known-metric) value lets the target's unit be derived
+# from the ratio against a recent read of the same device.
 CROSS_REF_PAIRINGS: list[tuple[str, str, str, str, str]] = [
     # events.distance_traveled (km) pairs with elveh.tripDistanceTraveled
     (
@@ -707,12 +705,8 @@ def resolve_source_unit(
     mapping = ha_fordpass.lookup_mapping(entity_pattern, attribute)
     if mapping is not None:
         try:
-            # adapter._resolve_source_unit returns (unit, method). The method
-            # returned from the adapter (declared / ha_unit_system_converted /
-            # declared_fallback) is richer than the detection layer's
-            # "declared" bucket — we still label the detection record
-            # "declared" here because the mapping existed, but the adapter's
-            # observability path captures the nuance per-event.
+            # The adapter's method is finer-grained than this layer's
+            # "declared" bucket; the mapping existing is what matters here.
             resolved, _adapter_method = ha_fordpass._resolve_source_unit(
                 mapping, new_state, ha_config
             )

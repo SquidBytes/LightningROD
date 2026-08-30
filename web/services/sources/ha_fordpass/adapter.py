@@ -1,93 +1,26 @@
 """ha-fordpass source adapter.
 
-Ingestion adapter for the home-assistant-fordpass (ha-fordpass) HA integration.
-Owns the DATA_MAP registry mapping HA entity attributes to DB columns,
-and routes every conversion through web.services.units.to_metric so unit
-handling is explicit and testable.
+Maps home-assistant-fordpass entity attributes to DB columns via DATA_MAP,
+routing every conversion through web.services.units.to_metric.
 
-### No runtime unit auto-detection
-This module does NOT import or reference the legacy FordPass preferred-unit
-flags (previously carried on ha_config and the legacy value-normalizer
-helper now superseded by `web.services.units.to_metric`). Every conversion
-here flows through a DATA_MAP entry with a declared `source_unit`.
+Quirks of the upstream integration that this adapter exists to absorb:
 
-### Prefer documented-metric entities
-Reads from:
-  - sensor.fordpass_{vin}_metrics  (attributes always metric per integration author)
-  - sensor.fordpass_{vin}_events   (xev-key-off-trip-segment-data always metric)
-
-Both entities are opt-in: ha-fordpass ships them with
-`entity_registry_enabled_default=False`, so a fresh install must enable them
-before battery-status and trip ingestion see anything.
-
-### metrics attributes are value-wrapped
-ha-fordpass hands Ford's raw metrics dict to HA verbatim, so every attribute
-on that entity is `{"updateTime": ..., "value": <scalar>}`. Read them through
-`_metric_value`, never `attrs.get(key)` — a raw `attrs.get` yields the wrapper
-dict, which every numeric conversion silently turns into None.
-
-### Read-time UoM fallback for main-state-only fields
-When a field exists only on an elveh-shaped main sensor (e.g. the elveh state
-value itself), the adapter reads
-`new_state["attributes"]["unit_of_measurement"]` at event-processing time and
-uses it as the declared source_unit for THAT SINGLE EVENT. Never a
-process-global flag. Unknown/missing UoM short-circuits the field with a
-warning log. The adapter never silently assumes metric.
-
-### Elveh trip attributes are HA-unit-system localized
-The events entity (`customEvents`) is the canonical raw-metric trip source.
-The elveh trip attributes (`tripDistanceTraveled`, `tripEfficiency`,
-`tripRangeRegenerated`, `maximumBatteryRange`, temps) are built by ha-fordpass
-via `localize_distance` / `localize_temperature` — i.e. converted from raw
-metric into **HA's configured unit system** (metric HA -> km/°C, imperial HA
--> mi/°F). Their mappings carry `ha_unit_system_converted=True`. The elveh
-STATE's `unit_of_measurement` tracks the vehicle's display system, NOT the HA
-unit system, so it must never be used to resolve trip-attribute units (doing
-so double-converted distances for imperial-display vehicles on metric HA).
-Battery-related attributes (voltage/amperage/kW) are SI-already (V, A, kW)
-and carry no DATA_MAP entry (see `tests/test_unit/test_data_map_coverage.py`
-`_EXEMPTIONS`); capacity is mixed Wh/kWh across installs and carries a
-`wh_autoscale` mapping.
-
-### elvehcharging and outsidetemp used for thermal caching
-`sensor.fordpass_{vin}_elvehcharging.batteryTemperature` is cached per-device
-in `_last_charging_battery_temp` and written to ev_battery_status on each
-charging-state event. The `sensor.fordpass_{vin}_outsidetemp` STATE is cached
-in `_last_outsidetemp`. Both caches are consumed by `_handle_energy_transfer_entity`
-to populate ev_charging_session thermal fields at session-write time.
-
-The outsidetemp entity also carries an `ambientTemp` attribute. It is NOT the
-outside temperature: it mirrors Ford's `ambientTemp` metric, which goes stale
-and sat frozen for weeks on a live vehicle while the state tracked reality.
-The state is the only trustworthy reading, and HA stamps its display unit on
-the event — hence `read_time_uom=True` on both mappings.
-
-### Canonical source for ev_charging_session.distance_added
-Evidence (from `tests/fixtures/ha_payloads/*.json` — matches real ha-fordpass
-behavior):
-
-  | Fixture                            | plugDetails.totalDistanceAdded |
-  |------------------------------------|--------------------------------|
-  | metric_ha_metric_vehicle.json      | 103 (km)                       |
-  | metric_ha_imperial_vehicle.json    | 103 (km)                       |
-  | imperial_ha_metric_vehicle.json    | 64 (mi)                        |
-  | imperial_ha_imperial_vehicle.json  | 64 (mi)                        |
-
-ha-fordpass calls `localize_distance` on this field inside
-`fordpass_handler.get_energy_transfer_log_attrs`, so the emitted value
-reflects HA's configured unit system: metric HA -> km, imperial HA -> mi.
-The mapping below carries `ha_unit_system_converted=True`; `_resolve_source_unit`
-derives the per-event source unit from `ha_config.unit_system` and routes
-through `to_metric` to convert mi -> km back to canonical storage.
-
-There is NO distance-added-shaped attribute on sensor.fordpass_{vin}_metrics
-or sensor.fordpass_{vin}_events. The elveh.totalDistanceAdded attribute was a
-fixture fabrication (ha-fordpass does not emit it on elveh) — not used.
-
-**Decision: source = sensor.fordpass_{vin}_energytransferlogentry /
-plugDetails.totalDistanceAdded, source_unit resolved per-event from
-ha_config.unit_system.** This kills the 2026-03-21 double-conversion bug
-which assumed the field was always km and produced 165.8 on imperial-HA events.
+- The metrics and events entities ship with
+  `entity_registry_enabled_default=False`, so a fresh install ingests nothing
+  from them until the user enables them.
+- Every attribute on the metrics entity is `{"updateTime": ..., "value": x}`.
+  Read them through `_metric_value` — a raw `attrs.get` yields the wrapper
+  dict, which every numeric conversion silently turns into None.
+- ha-fordpass builds the elveh trip attributes with `localize_distance` /
+  `localize_temperature`, so they arrive in HA's unit system, not raw metric.
+  The elveh STATE's `unit_of_measurement` tracks the *vehicle's* display
+  system rather than HA's, so it must never resolve those attributes' units —
+  that double-converted distances for imperial-display vehicles on metric HA.
+- The outsidetemp entity's `ambientTemp` attribute is NOT the outside
+  temperature: it mirrors a Ford metric that sat frozen for weeks on a live
+  vehicle. Only the entity state is trustworthy.
+- `energytransferlogentry.plugDetails.totalDistanceAdded` is the only source
+  of charging distance_added; no metrics or events attribute carries it.
 """
 
 import json
@@ -117,33 +50,25 @@ LIGHTNINGROD_TRIP_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-4a5b-9c8d-7e6f5a4b3c20")
 def compute_trip_id(device_id: str | None, trip_update_time: str | None) -> uuid.UUID | None:
     """Deterministic trip_id for cross-source dedup.
 
-    Hash inputs: device_id + tripUpdateTime. Returns None when either input
-    is missing; callers fall back to the legacy `_find_matching_trip`
-    predicate match in that case.
+    Returns None when either input is missing; callers fall back to the
+    `_find_matching_trip` predicate match in that case.
     """
     if not device_id or not trip_update_time:
         return None
     canonical = f"{device_id}|{trip_update_time}"
     return uuid.uuid5(LIGHTNINGROD_TRIP_NAMESPACE, canonical)
 
-# Dedicated logger for per-field unit-conversion traces. Separate from the
-# module logger so it can be toggled independently at runtime:
-#   logging.getLogger("lightningrod.units.trace").setLevel(logging.INFO)
-# Default level stays WARNING so normal deployments are quiet; flip to INFO
-# (or DEBUG) to see every (field, raw, method, effective_unit, converted).
+# Separate from the module logger so per-field conversion traces can be
+# switched on alone: getLogger("lightningrod.units.trace").setLevel(INFO).
 _trace = logging.getLogger("lightningrod.units.trace")
 
 
 # ---------------------------------------------------------------------------
 # DATA_MAP registry
 # ---------------------------------------------------------------------------
-# Every unit-ful DB column handled by this adapter appears here. The
-# tests/test_unit/test_data_map_coverage.py invariant test asserts that every
-# (table, column) in its _UNIT_FUL_COLUMNS set appears in a DATA_MAP
-# entry below (with exemptions for dimensionless / SI-already fields).
-#
-# Source-unit strings MUST be recognized by web.services.units.to_metric.
-# Today that means: km, mi, kmh, mph, degC, degF, F, kWh, Wh, s, seconds.
+# Every unit-ful DB column handled by this adapter appears here;
+# tests/test_unit/test_data_map_coverage.py locks that invariant.
+# `source_unit` strings must be ones web.services.units.to_metric recognizes.
 
 DATA_MAP: list[DataMapping] = [
     # --- ev_battery_status (from sensor.{vin}_metrics) -------------------
@@ -165,11 +90,9 @@ DATA_MAP: list[DataMapping] = [
         db_unit="km",
         notes="Canonical metric source; replaces elveh.maximumBatteryRange",
     ),
-    # Pack capacity: ha-fordpass installs disagree on scale — some report raw
-    # Wh (131 kWh pack -> 131000), others already-kWh (141.2). wh_autoscale
-    # disambiguates by magnitude: real packs are ~10-300 kWh, so |value| < 1000
-    # means kWh; >= 1000 means Wh. A blind Wh/1000 corrupted kWh-reporting
-    # installs (141.2 -> 0.1412).
+    # ha-fordpass installs disagree on pack-capacity scale — some report raw Wh
+    # (131000), others already-kWh (141.2). A blind Wh/1000 corrupted the
+    # kWh-reporting installs, so wh_autoscale disambiguates by magnitude.
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
         source_field="xevBatteryCapacity",
@@ -192,11 +115,6 @@ DATA_MAP: list[DataMapping] = [
     ),
 
     # --- ev_battery_status: hv_battery_temperature --------------------------
-    # Source is sensor.fordpass_{vin}_elvehcharging.batteryTemperature.
-    # ha-fordpass calls localize_temperature on this value, so it is emitted
-    # in the HA-configured unit system (°F for imperial, °C for metric).
-    # ha_unit_system_converted=True tells _resolve_source_unit to read
-    # ha_config.unit_system at event-processing time.
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_elvehcharging", SourceKind.HA_ENTITY),
         source_field="batteryTemperature",
@@ -254,12 +172,9 @@ DATA_MAP: list[DataMapping] = [
         db_unit="degC",
         notes="Canonical metric source; Ford API key is outside_air_ambient_temperature (raw °C)",
     ),
-    # Elveh trip distance/efficiency/regen attributes: ha-fordpass builds them
-    # via localize_distance (fordpass_handler.py), i.e. raw metric converted to
-    # HA's configured unit system. ha_unit_system_converted=True resolves the
-    # per-event source unit from ha_config.unit_system. The elveh STATE uom
-    # tracks the vehicle display system and MUST NOT be used for these — that
-    # was the duplicate-trip double-conversion bug (imperial vehicle+metric HA).
+    # Elveh trip attributes: never resolve these from the elveh state's uom.
+    # It tracks the vehicle display system, which is where the duplicate-trip
+    # double-conversion bug came from (imperial vehicle on metric HA).
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
         source_field="tripDistanceTraveled",
@@ -294,10 +209,8 @@ DATA_MAP: list[DataMapping] = [
         db_unit="km",
         notes="From metrics tripXevBatteryRangeRegenerated via localize_distance",
     ),
-    # Primary regen source: the metrics entity carries the raw-metric value,
-    # is always enabled, and backfills the newest trip row directly — the
-    # elveh mapping above stays as the localized fallback for installs
-    # where metrics lacks the attribute.
+    # Primary regen source; the elveh mapping above is the localized fallback
+    # for installs whose metrics entity lacks the attribute.
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
         source_field="tripXevBatteryRangeRegenerated",
@@ -317,11 +230,8 @@ DATA_MAP: list[DataMapping] = [
         db_unit="km",
         notes="Elveh fallback for metrics xevBatteryMaximumRange; localize_distance",
     ),
-    # Temperature attributes on elveh are localized by ha-fordpass to the HA
-    # unit system (°F for imperial, °C for metric). ha_unit_system_converted=True
-    # tells _resolve_source_unit to read ha_config.unit_system at event time
-    # rather than using the state's unit_of_measurement (which is a distance
-    # unit — "mi"/"km" — because the elveh entity's primary state is a range).
+    # The elveh entity's primary state is a range, so its unit_of_measurement
+    # is a distance unit and is useless for these temperature attributes.
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
         source_field="tripCabinTemp",
@@ -371,9 +281,8 @@ DATA_MAP: list[DataMapping] = [
             "back to canonical."
         ),
     ),
-    # Charging session battery temp: sourced from elvehcharging (live during
-    # charging). The most recent elvehcharging reading is cached and applied
-    # when the energytransferlogentry session record is written.
+    # Cached from the live elvehcharging reading and applied when the
+    # energytransferlogentry session record is written.
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_elvehcharging", SourceKind.HA_ENTITY),
         source_field="batteryTemperature",
@@ -394,9 +303,7 @@ DATA_MAP: list[DataMapping] = [
         db_unit="degC",
         notes="Cached from elvehcharging; mirrored to start/end (single snapshot)",
     ),
-    # Charging session ambient temp: the outsidetemp entity STATE. Its
-    # `ambientTemp` attribute mirrors a Ford metric that stops updating, so it
-    # is never read (see the outsidetemp note in the module docstring).
+    # The entity state, never its stale `ambientTemp` attribute.
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_outsidetemp", SourceKind.HA_ENTITY),
         source_field="state",
@@ -418,9 +325,8 @@ DATA_MAP: list[DataMapping] = [
         notes="Cached from the outsidetemp state; mirrored to start/end",
     ),
     # --- ev_vehicle_status (from the per-slug temperature sensors) ----------
-    # Vehicle telemetry (odometer, speed, brakeTorque, yawRate, acceleration)
-    # arrives on its own per-slug entities, not on the metrics entity, and is
-    # written by handlers.handle_vehicle_status without a mapping.
+    # The rest of vehicle telemetry (odometer, speed, yaw, acceleration) has no
+    # mapping: it arrives on per-slug entities that handlers write directly.
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_outsidetemp", SourceKind.HA_ENTITY),
         source_field="state",
@@ -454,9 +360,8 @@ DATA_MAP: list[DataMapping] = [
 # ---------------------------------------------------------------------------
 # _last_seen_raw cache
 # ---------------------------------------------------------------------------
-# Keyed by f"{source.pattern}|{source_field}". Stores a dict of
-# {"value": <raw>, "unit": <source_unit>, "seen_at": <iso8601 UTC>, "converted": <metric>}.
-# Consumed by /admin/data-sources diagnostic page.
+# Keyed by f"{source.pattern}|{source_field}" — /admin/data-sources rebuilds
+# the same key, so the two must stay in step.
 
 _last_seen_raw: dict[str, dict[str, Any]] = {}
 _last_charging_battery_temp: dict[str, float | None] = {}
@@ -472,10 +377,8 @@ def _record_last_seen(
 ) -> None:
     """Record the last-seen raw value for diagnostic display.
 
-    `effective_unit` overrides `mapping.source_unit` when the HA-unit-system
-    path resolved a different unit. `method` captures how the unit was
-    resolved (declared / ha_unit_system_converted / declared_fallback /
-    wh_autoscale) so the data-sources page can show the reason per field.
+    `effective_unit` overrides `mapping.source_unit` when per-event resolution
+    produced a different one; `method` names which path resolved it.
     """
     key = f"{mapping.source.pattern}|{mapping.source_field}"
     _last_seen_raw[key] = {
@@ -500,13 +403,8 @@ _ENTITY_SUFFIX_PREFIX = "sensor.fordpass_"
 def _entity_suffix(entity_id: str | None) -> str | None:
     """Return the trailing slug of a fordpass entity_id, or None.
 
-    Example: sensor.fordpass_ABC123_elveh -> "elveh"
-    Example: sensor.fordpass_YOUR_VIN_metrics -> "metrics"
-
-    Uses rsplit so VINs containing underscores (e.g., the PII-free fixture
-    placeholder `YOUR_VIN`) still parse correctly. Fordpass slugs are always
-    single tokens (elveh, metrics, events, energytransferlogentry, outsidetemp,
-    soc, odometer, etc.) so the trailing segment is unambiguous.
+    sensor.fordpass_ABC123_elveh -> "elveh". Splits from the right because
+    VINs can contain underscores; fordpass slugs never do.
     """
     if not entity_id or not isinstance(entity_id, str):
         return None
@@ -549,13 +447,8 @@ def lookup_mapping(
 
 
 def _field_type_for_mapping(mapping: DataMapping) -> str | None:
-    """Classify a mapping's source/target unit as distance/temperature/etc.
-
-    Returns None when the mapping's units are dimensionless or unsupported
-    for HA-unit-system resolution. Used by _resolve_source_unit when the
-    mapping carries `ha_unit_system_converted=True`.
-    """
-    # Same semantics as web.services.units.detection._UNIT_FIELD_TYPES
+    """Classify a mapping's unit as distance/speed/temperature, else None."""
+    # Same semantics as web.services.units.detection._UNIT_FIELD_TYPES,
     # duplicated locally to avoid widening the import graph.
     unit = mapping.db_unit or mapping.source_unit
     if unit in ("km", "mi"):
@@ -572,12 +465,7 @@ def _unit_for_ha_system(
 ) -> str | None:
     """Return the source-unit string HA would emit for `field_type`.
 
-    Reads `ha_config.unit_system` (either the flat-string or nested-dict
-    shape) and returns the matching to_metric unit key for `field_type`:
-      metric + distance -> km ; imperial + distance -> mi
-      metric + temperature -> degC ; imperial + temperature -> degF
-      metric + speed -> kmh ; imperial + speed -> mph
-    Returns None when the unit system cannot be resolved.
+    None when `ha_config.unit_system` cannot be resolved.
     """
     # Delegate to detection._coerce_unit_system_family so the two resolvers
     # stay in sync and both accept the same unit_system shapes.
@@ -605,30 +493,11 @@ def _resolve_source_unit(
 ) -> tuple[str | None, str]:
     """Resolve the effective source unit for one mapping + event.
 
-    Returns (unit, method). `method` is one of:
-      - "declared"                    — mapping.source_unit used verbatim
-      - "read_time_uom"               — from this event's unit_of_measurement
-      - "ha_unit_system_converted"    — derived from ha_config.unit_system
-      - "declared_fallback"           — signal requested but not available;
-                                        fell back to mapping.source_unit
-      - "unresolved_uom"              — state field whose event carried no
-                                        usable unit; unit is None and the
-                                        caller must drop the field
-
-    The read-time path (method="read_time_uom") fires when
-    `mapping.read_time_uom=True` — i.e. the mapping reads the entity's own
-    state, which HA has already converted into the display unit it stamps on
-    the event. Never assume a unit for those: an unreadable UoM drops the
-    field rather than guessing.
-
-    The HA-unit-system path (method="ha_unit_system_converted") fires when
-    `mapping.ha_unit_system_converted=True` — i.e. ha-fordpass calls
-    `localize_distance` / `localize_temperature` on this field.
-
-    ATTRIBUTE mappings never resolve from an entity state's read-time
-    unit_of_measurement: the elveh state uom tracks the vehicle display
-    system, not the unit of nested attributes, and using it double-converted
-    trip distances (imperial-display vehicle + metric HA).
+    Returns (unit, method); /admin/data-sources displays `method`, which is
+    one of declared, read_time_uom, ha_unit_system_converted,
+    declared_fallback, or unresolved_uom. On unresolved_uom the unit is None
+    and the caller must drop the field — never guess a unit for an event that
+    did not stamp one.
     """
     # --- 1. Read-time unit_of_measurement path (state-sourced fields) ---
     if mapping.read_time_uom:
@@ -669,9 +538,8 @@ def _resolve_source_unit(
 
 def _normalize_uom_string(raw: Any) -> str | None:
     """Normalize an HA `unit_of_measurement` string to a to_metric key.
-    Maps the common HA UoM spellings (with/without degree sign, case
-    variations) to the canonical strings recognized by to_metric.
-    Returns None for unrecognized inputs so callers can fall back.
+
+    None for spellings to_metric would not recognize, so callers can fall back.
     """
     if not isinstance(raw, str):
         return None
@@ -706,19 +574,8 @@ def convert(
 ) -> float | None:
     """Convert `raw_value` to metric via `mapping` + per-event resolution.
 
-    Resolution order (inside `_resolve_source_unit`):
-      1. `read_time_uom=True` -> this event's unit_of_measurement
-      2. `ha_unit_system_converted=True` -> ha_config.unit_system
-      3. mapping.source_unit (declared)
-
-    Logs and returns None on UnknownSourceUnit so the adapter boundary absorbs
-    unit failures rather than propagating them to the caller. Records the
-    conversion in `_last_seen_raw` AND in the unit-detection layer so the
-    /admin/data-sources diagnostic page surfaces the resolution path.
-
-    Also emits a per-field trace on `lightningrod.units.trace` logger (INFO
-    level) so you can follow: field, raw, method, source_unit, converted,
-    target column.
+    Returns None on an unknown source unit so the adapter boundary absorbs
+    unit failures instead of propagating them to the caller.
     """
     if raw_value is None:
         return None
@@ -727,8 +584,7 @@ def convert(
         # The event carried no readable unit; the adapter never guesses.
         return None
     if mapping.wh_autoscale and source_unit == "Wh":
-        # Mixed-scale sources: packs are ~10-300 kWh, so |value| < 1000 can
-        # only be already-kWh; >= 1000 is Wh.
+        # Real packs are ~10-300 kWh, so |value| < 1000 can only be kWh already.
         numeric = _safe_float(raw_value)
         if numeric is not None and abs(numeric) < 1000:
             source_unit, method = "kWh", "wh_autoscale"
@@ -786,15 +642,11 @@ def _safe_float(val: Any) -> float | None:
 
 
 def _metric_value(attrs: dict, key: str) -> Any:
-    """Unwrap one attribute of the metrics entity.
+    """Unwrap one `{"updateTime": ..., "value": x}` metrics attribute.
 
-    ha-fordpass hands Ford's raw metrics dict to HA verbatim, so every
-    attribute arrives as `{"updateTime": ..., "value": <scalar>}`. Bare
-    scalars pass through unchanged for payloads shaped any other way.
-
-    Unwraps exactly one level: a metric whose `value` is itself structured
-    (Ford sends a few, e.g. an x/y/z vector) comes back as that dict, not a
-    number.
+    Unwraps exactly one level, so a metric whose `value` is itself structured
+    (Ford sends a few) comes back as that dict rather than a number. Bare
+    scalars pass through unchanged.
     """
     raw = attrs.get(key)
     if isinstance(raw, dict):
@@ -809,9 +661,7 @@ def _metric_value(attrs: dict, key: str) -> Any:
 def _device_id_from_entity(entity_id: str) -> str | None:
     """Extract the VIN segment from sensor.fordpass_{vin}_{slug}.
 
-    Uses rsplit so that VIN placeholders containing underscores (e.g. the
-    PII-free fixture placeholder `YOUR_VIN`) return as the full VIN rather
-    than being truncated at the first underscore.
+    Splits from the right so VINs containing underscores survive intact.
     """
     if not entity_id or not entity_id.startswith(_ENTITY_SUFFIX_PREFIX):
         return None
@@ -833,23 +683,13 @@ async def process_sample(
     source_config: dict | None = None,
 ) -> None:
     """Route an HA state_changed event to the appropriate write path.
-    Guarantee: zero runtime unit auto-detection; every conversion goes
-    through a DATA_MAP entry via `convert`.
-    Dispatches by entity suffix:
-    _metrics -> writes ev_battery_status row (range / max_range)
-    _events -> writes ev_trip_metrics row (from xev-key-off-trip-segment-data)
-    _energytransferlogentry -> writes ev_charging_session row
-    everything else -> no-op (handled by the ha_fordpass slug handlers, or
-    explicitly ignored)
-    `source_config` is forwarded to `convert()` so mappings flagged
-    `ha_unit_system_converted` can resolve the effective source unit
-    per-event from HA's configured unit_system.
-    Unknown entity or missing attribute: log debug + return. No exception
-    propagates to the caller (the HA WebSocket event loop).
+
+    Never raises: the caller is the HA WebSocket event loop. `source_config`
+    is HA's own config, forwarded so per-event unit resolution can read its
+    unit_system.
     """
     # This source's reading of the transport-neutral SourceAdapter Protocol:
-    # the source_ref is an HA entity_id, the payload is the event's new_state,
-    # and the source config is HA's own config (unit system, timezone).
+    # the source_ref is an HA entity_id and the payload is the new_state.
     entity_id, new_state, ha_config = source_ref, payload, source_config
 
     if not entity_id or not isinstance(new_state, dict):

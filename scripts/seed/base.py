@@ -171,8 +171,7 @@ def realistic_value(
 ) -> object:
     """Return a plausible seed value for *db_unit*.
 
-    Uses a seeded ``random.Random(42)`` instance by default for determinism.
-    Pass *rng* to supply your own instance.
+    Defaults to a seeded ``random.Random(42)`` so seed runs are reproducible.
     """
     r = rng or _DEFAULT_RNG
     tag = _UNIT_ALIASES.get(_normalise_unit(db_unit))
@@ -216,15 +215,8 @@ def realistic_value(
 class DataMapSeeder:
     """Generate realistic seed values driven by ``DATA_MAP`` declarations.
 
-    Parameters
-    ----------
-    declared:
-        The adapter's ``DATA_MAP`` list (fields the adapter already
-        declares).
-    expected:
-        Mappings that THIS seed module needs but which may not yet be in
-        ``DATA_MAP``.  Hits here are recorded in ``self.gaps`` so a
-        gap report can be emitted after the seed run.
+    `expected` holds mappings a seed module needs that the adapter has not
+    declared yet; using one records a gap for the post-run report.
     """
 
     def __init__(
@@ -248,9 +240,7 @@ class DataMapSeeder:
     ) -> object:
         """Return a realistic value for the given *(table, column)* pair.
 
-        Looks up *declared* mappings first.  Falls back to *expected*,
-        recording the mapping in ``gaps`` (deduped).  Raises ``KeyError``
-        if neither list knows the pair.
+        Raises ``KeyError`` when neither declared nor expected knows the pair.
         """
         key = (table, column)
 
@@ -276,11 +266,7 @@ class DataMapSeeder:
 
 
 def write_data_map_gap_report(gaps: list[DataMapping], path: Path) -> None:
-    """Write a Markdown gap report to *path*.
-
-    If *gaps* is empty the file notes that no gaps were detected.
-    Parent directories are created automatically.
-    """
+    """Write a Markdown gap report to *path*, creating parent directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 

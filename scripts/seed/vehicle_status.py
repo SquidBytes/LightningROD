@@ -4,27 +4,9 @@ Sampling strategy:
   * During known trips (queried from ev_trip_metrics): one snapshot every 10 min.
   * Outside of trips (parked): one snapshot every 6 h across the 90-day window.
 
-This module declares its OWN ``EXPECTED_MAPPINGS`` because
-``ev_vehicle_status`` currently has ZERO entries in
-``web/services/sources/ha_fordpass/adapter.py::DATA_MAP``. Every
-column populated via ``DataMapSeeder.value_for(...)`` here will be
-recorded as a gap, and T19's gap-report step will turn ``EXPECTED_MAPPINGS``
-into copy-pasteable ``DataMapping(...)`` blocks for the adapter.
-
-EXPECTED_MAPPINGS (db_column → db_unit):
-  * acceleration            → m/s²
-  * accelerator_position    → %
-  * brake_status            → str
-  * brake_torque            → Nm
-  * cabin_temperature       → degC
-  * gear_position           → str
-  * ignition_status         → str
-  * odometer                → km
-  * outside_temperature     → degC
-  * parking_brake           → str
-  * speed                   → km/h
-  * tire_pressure           → kPa  (JSONB; one mapping per corner)
-  * yaw_rate                → deg/s
+``ev_vehicle_status`` has no entries in the adapter's DATA_MAP, so this
+module declares its own ``EXPECTED_MAPPINGS``; every column it seeds is
+reported as a gap, ready to paste into the adapter.
 
 Idempotent: if ≥500 status rows exist for the demo vehicle, returns 0.
 Determinism: ``random.Random(42)``.
@@ -64,7 +46,7 @@ _IGNITION_PARKED = "off"
 
 
 # ---------------------------------------------------------------------------
-# Expected mappings — these become the gap report content for T19.
+# Expected mappings — the gap report's content.
 # ---------------------------------------------------------------------------
 
 EXPECTED_MAPPINGS: list[DataMapping] = [
@@ -184,9 +166,8 @@ EXPECTED_MAPPINGS: list[DataMapping] = [
         db_unit="m/s2",
         notes="Longitudinal acceleration. SI passthrough.",
     ),
-    # Tire pressures: HA emits four corner-specific attributes; we pack them
-    # into the single JSONB ``tire_pressure`` column. Four mappings, one per
-    # corner, share the same target column so the gap report shows all four.
+    # HA emits one attribute per corner; all four pack into the single JSONB
+    # ``tire_pressure`` column, so all four share a db_column.
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
         source_field="tirePressure.frontLeft",
@@ -404,9 +385,8 @@ async def seed(db: AsyncSession) -> int:
         else:
             dt_hours = 0.0
 
-        # --- Always call seeder.value_for(...) so EVERY mapping is recorded ---
-        # DataMapSeeder logs the gap once per (table,column) — repeat
-        # calls are cheap and ensure all 13 expected mappings are flagged.
+        # Call value_for for every column even when the value is overridden
+        # below, so each one shows up in the gap report.
         _ = seeder.value_for(_TABLE, "odometer")  # km — overridden below
         speed_random = seeder.value_for(_TABLE, "speed")
         accel_random = seeder.value_for(_TABLE, "accelerator_position")
