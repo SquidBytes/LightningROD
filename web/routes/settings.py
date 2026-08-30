@@ -1433,8 +1433,8 @@ def _last_event_timeago(adapter_module) -> str | None:
     return f"{seconds // 86400}d ago"
 
 
-async def _load_existing_config(db: AsyncSession, descriptor):
-    """Load existing data_source_configs row for descriptor, return Pydantic instance or None.
+async def _load_existing_config(db: AsyncSession, source):
+    """Load existing data_source_configs row for source, return Pydantic instance or None.
 
     Returns None for both missing rows and rows whose stored config_json fails
     schema validation (e.g. the pre-WR-05 seed shape with empty ha_url/ha_token).
@@ -1443,7 +1443,7 @@ async def _load_existing_config(db: AsyncSession, descriptor):
     """
     result = await db.execute(
         select(DataSourceConfig).where(
-            DataSourceConfig.source_name == descriptor.source_name,
+            DataSourceConfig.source_name == source.source_name,
             DataSourceConfig.instance_label == "default",
         )
     )
@@ -1451,7 +1451,7 @@ async def _load_existing_config(db: AsyncSession, descriptor):
     if row is None:
         return None
     try:
-        return descriptor.config_schema.model_validate(row.config_json)
+        return source.config_schema.model_validate(row.config_json)
     except ValidationError:
         return None
 
@@ -1462,7 +1462,7 @@ def _masked_token_for_config(config: object | None) -> str:
     return ""
 
 
-async def _upsert_data_source_config(db: AsyncSession, descriptor, config) -> None:
+async def _upsert_data_source_config(db: AsyncSession, source, config) -> None:
     """Persist config: UPDATE the existing row, INSERT one if missing.
 
     Fresh installs can reach first-save with no existing config row, while
@@ -1472,14 +1472,14 @@ async def _upsert_data_source_config(db: AsyncSession, descriptor, config) -> No
 
     result = await db.execute(
         select(DataSourceConfig).where(
-            DataSourceConfig.source_name == descriptor.source_name,
+            DataSourceConfig.source_name == source.source_name,
             DataSourceConfig.instance_label == "default",
         )
     )
     row = result.scalar_one_or_none()
     if row is None:
         row = DataSourceConfig(
-            source_name=descriptor.source_name,
+            source_name=source.source_name,
             instance_label="default",
             config_json=config.model_dump(),
             enabled=True,
@@ -1491,9 +1491,9 @@ async def _upsert_data_source_config(db: AsyncSession, descriptor, config) -> No
     await db.commit()
 
 
-def _card_health_inputs(descriptor) -> tuple[dict, str | None]:
+def _card_health_inputs(source) -> tuple[dict, str | None]:
     """Return (health_dict, last_seen_str) for the badge — only ha_fordpass today."""
-    if descriptor.source_name == "ha_fordpass":
+    if source.source_name == "ha_fordpass":
         rt = supervisor.get_runtime("ha_fordpass", "default")
         health = rt.health if rt is not None else {}
         return health, _last_event_timeago(ha_fordpass_adapter)
@@ -1511,12 +1511,12 @@ async def data_sources_tab(
     # for ha_fordpass) — its sensor-entity-id inputs save to app_settings via
     # the FordPass save handler, so we skip rendering it as its own card.
     cards = []
-    for descriptor in SOURCE_REGISTRY:
-        if descriptor.source_name == "ha_gas_price":
+    for source in SOURCE_REGISTRY:
+        if source.source_name == "ha_gas_price":
             continue
         result = await db.execute(
             select(DataSourceConfig).where(
-                DataSourceConfig.source_name == descriptor.source_name,
+                DataSourceConfig.source_name == source.source_name,
                 DataSourceConfig.instance_label == "default",
             )
         )
@@ -1525,22 +1525,22 @@ async def data_sources_tab(
         partial_config = None
         if row is not None:
             try:
-                config = descriptor.config_schema.model_validate(row.config_json)
+                config = source.config_schema.model_validate(row.config_json)
             except ValidationError:
                 # Seed rows ship with empty ha_url/ha_token until the operator
                 # configures the source. Surface stored values into the form
                 # without exposing them as a fully-validated config object.
                 partial_config = row.config_json or {}
-        health, last_seen = _card_health_inputs(descriptor)
+        health, last_seen = _card_health_inputs(source)
         card_ctx = {
-            "descriptor": descriptor,
+            "source": source,
             "config": config,
             "partial_config": partial_config,
             "masked_token": _masked_token_for_config(config),
             "health": health,
             "last_seen": last_seen,
         }
-        if descriptor.source_name == "ha_fordpass":
+        if source.source_name == "ha_fordpass":
             gas_settings = await get_app_settings_dict(
                 db,
                 ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"],
@@ -1567,10 +1567,10 @@ async def save_data_source(
     db: AsyncSession = Depends(get_db),
 ):
     """Save per-source config; one handler covers the whole registry."""
-    descriptor = next(
+    source = next(
         (d for d in SOURCE_REGISTRY if d.source_name == source_name), None
     )
-    if descriptor is None:
+    if source is None:
         raise HTTPException(status_code=404, detail=f"Unknown source: {source_name}")
 
     form: dict[str, Any] = dict(await request.form())
@@ -1583,7 +1583,7 @@ async def save_data_source(
     # including a real token starting with `*` — is treated as a legitimate
     # update.
     if "ha_token" in form:
-        existing = await _load_existing_config(db, descriptor)
+        existing = await _load_existing_config(db, source)
         if (
             isinstance(existing, HAFordpassConfig)
             and form["ha_token"] == _mask_token(existing.ha_token)
@@ -1605,15 +1605,15 @@ async def save_data_source(
     gas_average_entity = str(form.pop("gas_sensor_average_entity_id", "") or "")
 
     try:
-        config = descriptor.config_schema.model_validate(form)
+        config = source.config_schema.model_validate(form)
     except ValidationError as e:
-        health, last_seen = _card_health_inputs(descriptor)
+        health, last_seen = _card_health_inputs(source)
         return templates.TemplateResponse(
             request,
             "settings/partials/data_source_card.html",
             {
                 "card": {
-                    "descriptor": descriptor,
+                    "source": source,
                     "config": None,
                     "partial_config": form,
                     "masked_token": form.get("ha_token", ""),
@@ -1627,7 +1627,7 @@ async def save_data_source(
             status_code=422,
         )
 
-    await _upsert_data_source_config(db, descriptor, config)
+    await _upsert_data_source_config(db, source, config)
 
     if source_name == "ha_fordpass":
         await set_app_setting(db, "gas_sensor_station_entity_id", gas_station_entity)
@@ -1637,13 +1637,13 @@ async def save_data_source(
         )
         invalidate_gas_sensor_cache()
 
-    health, last_seen = _card_health_inputs(descriptor)
+    health, last_seen = _card_health_inputs(source)
     return templates.TemplateResponse(
         request,
         "settings/partials/data_source_card.html",
         {
             "card": {
-                "descriptor": descriptor,
+                "source": source,
                 "config": config,
                 "partial_config": None,
                 "masked_token": _masked_token_for_config(config),

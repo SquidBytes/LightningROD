@@ -2,7 +2,7 @@
 hass_processor's ingestion path after the hardcoded-default removal.
 
 The resolver MUST never return a hardcoded default. Its priority chain:
-    1. declared               — FIELD_CONTRACTS entry
+    1. declared               — DATA_MAP entry
     2. read_time_uom          — new_state.attributes.unit_of_measurement
     3. device_class_ha_config — attributes.device_class + ha_config.unit_system
     4. cross_reference        — prior detection cache
@@ -57,7 +57,7 @@ def _state(attributes: dict) -> dict:
 
 
 def test_declared_wins_over_read_time_and_device_class():
-    """A FIELD_CONTRACTS entry takes precedence even when the event carries
+    """A DATA_MAP entry takes precedence even when the event carries
     conflicting UoM / device_class signals."""
     state = _state(
         {
@@ -103,7 +103,7 @@ def test_read_time_uom_rejected_when_field_type_mismatches():
     state = _state({"unit_of_measurement": "mi"})  # distance UoM
     unit, method, _ = detection.resolve_source_unit(
         entity_id="sensor.fordpass_ABC_elveh",
-        attribute="tripHumidity",  # not in FIELD_CONTRACTS; exercises non-declared path
+        attribute="tripHumidity",  # not in DATA_MAP; exercises non-declared path
         new_state=state,
         ha_config=_IMPERIAL_CONFIG,
         field_type="temperature",
@@ -123,7 +123,7 @@ def test_device_class_temperature_metric_config_resolves_degC():
     state = _state({"device_class": "temperature"})
     unit, method, confidence = detection.resolve_source_unit(
         entity_id="sensor.fordpass_ABC_elveh",
-        attribute="tripHumidity",  # not in FIELD_CONTRACTS; exercises device_class path
+        attribute="tripHumidity",  # not in DATA_MAP; exercises device_class path
         new_state=state,
         ha_config=_METRIC_CONFIG,
         field_type="temperature",
@@ -137,7 +137,7 @@ def test_device_class_temperature_imperial_config_resolves_degF():
     state = _state({"device_class": "temperature"})
     unit, method, _ = detection.resolve_source_unit(
         entity_id="sensor.fordpass_ABC_elveh",
-        attribute="tripHumidity",  # not in FIELD_CONTRACTS; exercises device_class path
+        attribute="tripHumidity",  # not in DATA_MAP; exercises device_class path
         new_state=state,
         ha_config=_IMPERIAL_CONFIG,
         field_type="temperature",
@@ -248,7 +248,7 @@ def test_cross_reference_fires_from_prior_detection():
     even when the current event carries no signals of its own."""
     device_id = "VINXREF"
     # Seed a cross-reference detection for soc.batteryRange (a paired source
-    # with no declared FIELD_CONTRACTS entry, so resolution can reach the
+    # with no declared DATA_MAP entry, so resolution can reach the
     # cross-reference stage).
     detection.record_unknown(
         "sensor.fordpass_{vin}_soc",
@@ -364,7 +364,7 @@ def test_missing_ha_config_produces_unknown():
     state = _state({"device_class": "temperature"})  # no UoM
     unit, method, _ = detection.resolve_source_unit(
         entity_id="sensor.fordpass_ABC_elveh",
-        attribute="tripHumidity",  # not in FIELD_CONTRACTS; exercises unknown path
+        attribute="tripHumidity",  # not in DATA_MAP; exercises unknown path
         new_state=state,
         ha_config={},  # no unit_system key
         field_type="temperature",

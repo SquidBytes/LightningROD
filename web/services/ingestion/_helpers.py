@@ -58,7 +58,7 @@ def _convert_with_uom(
 ) -> float | None:
     """Convert raw_value from source_unit to metric; log + return None on failure.
 
-    Used by handlers for fields not represented in FIELD_CONTRACTS today.
+    Used by handlers for fields not represented in DATA_MAP today.
     When `source_unit` is None, the event carries no UoM attribute. In that
     case we first consult the unit-detection layer (which may have
     cross-referenced a unit from a sibling entity), and if that also has no

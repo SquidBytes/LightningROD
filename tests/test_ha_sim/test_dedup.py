@@ -29,7 +29,7 @@ pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 _TEST_DEVICE_ID = "TESTVIN001"
 
 # The legacy FordPass preferred-unit flags on ha_config were deleted;
-# unit handling now lives in the ha_fordpass adapter FIELD_CONTRACTS
+# unit handling now lives in the ha_fordpass adapter DATA_MAP
 # + to_metric dispatch.
 _HA_CONFIG = {
     "location_name": "Test Home",
@@ -369,7 +369,7 @@ async def test_trip_different_values_create_separate_rows(db_session):
 _TRIP_DIST_MILES = 15.0
 _TRIP_DIST_KM = _TRIP_DIST_MILES * 1.609344   # ≈ 24.14016
 _TRIP_ENERGY_KWH = 7.2
-_TRIP_ENERGY_WH = _TRIP_ENERGY_KWH * 1000.0   # 7200 Wh → 7.2 kWh after contract conversion
+_TRIP_ENERGY_WH = _TRIP_ENERGY_KWH * 1000.0   # 7200 Wh → 7.2 kWh after mapping conversion
 
 
 async def test_elveh_first_then_events_enriches_temps(db_session):

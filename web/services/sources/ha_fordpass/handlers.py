@@ -406,7 +406,7 @@ async def handle_via_adapter(slug, new_state, ha_config, device_id, db):
 
     These slugs are the metric-canonical sources for battery status
     (xevBatteryRange / xevBatteryMaximumRange) and trip metrics
-    (xev-key-off-trip-segment-data). The adapter owns the FIELD_CONTRACTS
+    (xev-key-off-trip-segment-data). The adapter owns the DATA_MAP
     routing; this dispatcher simply hands off.
     """
     entity_id = f"sensor.fordpass_{device_id}_{slug}"
@@ -604,21 +604,21 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             if converted is not None:
                 pending["hv_battery_range"] = converted
         # Rich battery attributes (SI-already — no conversion needed, no
-        # FIELD_CONTRACTS entry per _EXEMPTIONS in test_contract_coverage).
+        # DATA_MAP entry per _EXEMPTIONS in test_data_map_coverage).
         hv_voltage = _safe_float(attrs.get("batteryVoltage"))
         hv_amperage = _safe_float(attrs.get("batteryAmperage"))
         hv_kw = _safe_float(attrs.get("batterykW"))
         # `maximumBatteryCapacity` mirrors xevBatteryCapacity (mixed Wh/kWh
-        # across ha-fordpass versions); the wh_autoscale contract lands it in
+        # across ha-fordpass versions); the wh_autoscale mapping lands it in
         # kWh so /battery health math compares against the rated-kWh setting.
-        _cap_contract = ha_fordpass.lookup_contract(
+        _cap_mapping = ha_fordpass.lookup_mapping(
             "sensor.fordpass_{vin}_elveh", "maximumBatteryCapacity"
         )
         hv_capacity = (
             ha_fordpass.convert(
-                _cap_contract, attrs.get("maximumBatteryCapacity"), new_state, ha_config
+                _cap_mapping, attrs.get("maximumBatteryCapacity"), new_state, ha_config
             )
-            if _cap_contract
+            if _cap_mapping
             else None
         )
         hv_actual_soc = _safe_float(attrs.get("batteryActualCharge"))
@@ -685,24 +685,24 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             )
 
         # Adapter-routed converters for elveh-sourced fields that DO have a
-        # FIELD_CONTRACTS entry. Routing through ha_fordpass.convert records
+        # DATA_MAP entry. Routing through ha_fordpass.convert records
         # the conversion in adapter._last_seen_raw so /admin/data-sources
-        # shows elveh observations alongside metrics/events ones. Contracts
+        # shows elveh observations alongside metrics/events ones. Mappings
         # for elveh state-unit distance fields use read-time UoM resolution
         # internally via adapter._resolve_source_unit.
         _elveh_pattern = "sensor.fordpass_{vin}_elveh"
-        _efficiency_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripEfficiency")
-        _range_regen_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripRangeRegenerated")
+        _efficiency_mapping = ha_fordpass.lookup_mapping(_elveh_pattern, "tripEfficiency")
+        _range_regen_mapping = ha_fordpass.lookup_mapping(_elveh_pattern, "tripRangeRegenerated")
 
         def _efficiency_conv(v):
-            if _efficiency_contract is None:
+            if _efficiency_mapping is None:
                 return _d(v)
-            return ha_fordpass.convert(_efficiency_contract, v, new_state, ha_config)
+            return ha_fordpass.convert(_efficiency_mapping, v, new_state, ha_config)
 
         def _range_regen_conv(v):
-            if _range_regen_contract is None:
+            if _range_regen_mapping is None:
                 return _d(v)
-            return ha_fordpass.convert(_range_regen_contract, v, new_state, ha_config)
+            return ha_fordpass.convert(_range_regen_mapping, v, new_state, ha_config)
 
         trip_attr_map: dict[str, tuple[str, Callable[..., Any]]] = {
             "tripDistanceTraveled": ("distance", _d),
@@ -1053,20 +1053,20 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
     raw_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
     # plugDetails.totalDistanceAdded is HA-unit-system-converted by ha-fordpass
-    # (localize_distance in get_energy_transfer_log_attrs). The contract
+    # (localize_distance in get_energy_transfer_log_attrs). The mapping
     # carries ha_unit_system_converted=True; the adapter resolves the
     # effective source unit per-event from ha_config.unit_system before
     # routing through to_metric.
-    dist_contract = ha_fordpass.lookup_contract(
+    dist_mapping = ha_fordpass.lookup_mapping(
         "sensor.fordpass_{vin}_energytransferlogentry",
         "plugDetails.totalDistanceAdded",
     )
-    if dist_contract is not None:
+    if dist_mapping is not None:
         distance_added = ha_fordpass.convert(
-            dist_contract, raw_distance_added, new_state, ha_config
+            dist_mapping, raw_distance_added, new_state, ha_config
         )
     else:
-        # Should never happen — contract is registered unconditionally.
+        # Should never happen — mapping is registered unconditionally.
         distance_added = _convert_with_uom(
             raw_distance_added, "km", "distance_added", slug,
         )
@@ -1100,9 +1100,9 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     original_timestamp = _parse_iso_datetime(attrs.get("timeStamp"))
 
     # Thermal context.
-    # FIELD_CONTRACTS for batteryTemperature / outsidetemp live on the
+    # DATA_MAP for batteryTemperature / outsidetemp live on the
     # elvehcharging / outsidetemp entity patterns, not energytransferlogentry,
-    # so contract-lookup against this payload returns None by design. The
+    # so mapping-lookup against this payload returns None by design. The
     # adapter's per-device caches (_last_charging_battery_temp, _last_outsidetemp)
     # are populated by the elvehcharging / outsidetemp handlers prior to this
     # event firing and are the canonical source for charging-session thermals.

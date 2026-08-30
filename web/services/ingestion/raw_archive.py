@@ -1,6 +1,6 @@
 """Verbatim archive of incoming Home Assistant events.
 
-Typed ingestion maps only the attributes it has contracts for; everything
+Typed ingestion maps only the attributes it has mappings for; everything
 else is dropped and is recoverable afterwards only from Home Assistant's own
 recorder retention. The archive keeps the whole event payload so the data
 stays re-derivable locally.

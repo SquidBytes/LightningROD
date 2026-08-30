@@ -4,7 +4,7 @@ Records and resolves the unit-of-measurement for every (entity, attribute)
 data source we ingest from Home Assistant.
 
 Five detection methods, priority order when resolving a unit:
-  1. declared                — source appears in FIELD_CONTRACTS (events/
+  1. declared                — source appears in DATA_MAP (events/
                                metrics/energytransferlogentry fields)
   2. read_time_uom           — event carried
                                new_state.attributes.unit_of_measurement
@@ -295,7 +295,7 @@ def record_declared(
     unit: str,
     raw_value: Any,
 ) -> None:
-    """Record a source whose unit is declared in FIELD_CONTRACTS."""
+    """Record a source whose unit is declared in DATA_MAP."""
     rec = DetectionRecord(
         entity_pattern=entity_pattern,
         attribute=attribute,
@@ -680,7 +680,7 @@ def resolve_source_unit(
     Returns (unit, method, confidence).
 
     Priority chain:
-      1. declared              — (entity_pattern, attribute) in FIELD_CONTRACTS
+      1. declared              — (entity_pattern, attribute) in DATA_MAP
       2. read_time_uom         — normalized new_state.attributes.unit_of_measurement
       3. device_class_ha_config — new_state.attributes.device_class + ha_config.unit_system
       4. cross_reference       — prior resolved entry in detection cache
@@ -703,21 +703,21 @@ def resolve_source_unit(
     entity_pattern = ha_fordpass._entity_pattern(entity_id) if entity_id else ""
     attrs = (new_state or {}).get("attributes") or {} if isinstance(new_state, dict) else {}
 
-    # --- 1. declared via FIELD_CONTRACTS ---------------------------------
-    contract = ha_fordpass.lookup_contract(entity_pattern, attribute)
-    if contract is not None:
+    # --- 1. declared via DATA_MAP ---------------------------------
+    mapping = ha_fordpass.lookup_mapping(entity_pattern, attribute)
+    if mapping is not None:
         try:
             # adapter._resolve_source_unit returns (unit, method). The method
             # returned from the adapter (declared / ha_unit_system_converted /
             # declared_fallback) is richer than the detection layer's
             # "declared" bucket — we still label the detection record
-            # "declared" here because the contract existed, but the adapter's
+            # "declared" here because the mapping existed, but the adapter's
             # observability path captures the nuance per-event.
             resolved, _adapter_method = ha_fordpass._resolve_source_unit(
-                contract, new_state, ha_config
+                mapping, new_state, ha_config
             )
         except Exception:
-            resolved = contract.source_unit
+            resolved = mapping.source_unit
         if record and resolved:
             record_declared(entity_pattern, attribute, resolved, raw_value)
         return resolved, _METHOD_DECLARED, _confidence_for_declared()

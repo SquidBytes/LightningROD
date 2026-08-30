@@ -101,7 +101,7 @@ async def test_reporter_no_duplicate_trip_from_elveh_and_events(db_session):
     2026-06 reporter scenario (imperial FordPass display + metric HA): every
     trip appeared twice — 122 km (correct, events) and 196.34 km (elveh
     tripDistanceTraveled, already km, re-converted mi->km via the elveh state
-    uom). With the ha_unit_system_converted contract both paths agree and the
+    uom). With the ha_unit_system_converted mapping both paths agree and the
     predicate match dedups them into a single enriched row.
     """
     from web.services.sources.ha_fordpass import handlers as fp_handlers
@@ -157,7 +157,7 @@ async def test_elveh_trip_distance_canonical_km_across_unit_matrix(
     """Lock: elveh-only trip ingestion stores ~19 km on every HA/vehicle combo.
 
     ha-fordpass localizes elveh trip attrs to the HA unit system (metric HA
-    -> 19 km, imperial HA -> 11.81 mi); the ha_unit_system_converted contract
+    -> 19 km, imperial HA -> 11.81 mi); the ha_unit_system_converted mapping
     must convert every combo back to canonical km. The elveh STATE uom (which
     tracks the vehicle display system) must play no part.
     """

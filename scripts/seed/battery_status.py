@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.vehicle import EVVehicle
-from scripts.seed.base import ContractDrivenSeeder, load_declared_contracts
+from scripts.seed.base import DataMapSeeder, load_declared_mappings
 
 _DEMO_VIN = "1FT6W1EV0NWG00000"
 _IDEMPOTENCY_THRESHOLD = 140
@@ -98,9 +98,9 @@ async def seed(db: AsyncSession) -> int:
             "Run the charging_sessions seed module (T9) before battery_status (T10)."
         )
 
-    # --- set up deterministic RNG and ContractDrivenSeeder -------------------
+    # --- set up deterministic RNG and DataMapSeeder -------------------
     rng = random.Random(42)
-    seeder = ContractDrivenSeeder(declared=load_declared_contracts(), rng=rng)
+    seeder = DataMapSeeder(declared=load_declared_mappings(), rng=rng)
 
     rows: list[EVBatteryStatus] = []
 

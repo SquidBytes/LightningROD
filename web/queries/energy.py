@@ -312,7 +312,7 @@ async def query_regen_summary(
     trip_count: int
     NOTE: range_regenerated is stored canonical km. Source-verified against
     ha-fordpass: metrics tripXevBatteryRangeRegenerated routes through
-    localize_distance, and the adapter contract converts back to km.
+    localize_distance, and the adapter mapping converts back to km.
     PITFALL: SUM on empty/null data returns NULL not 0. Count-first guard prevents
     TypeError: float(None).
     """

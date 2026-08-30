@@ -25,7 +25,7 @@ pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
 # Default HA config matching the simulator's config.
 # The legacy FordPass preferred-unit flags on ha_config were deleted;
-# unit handling now lives in the ha_fordpass adapter FIELD_CONTRACTS
+# unit handling now lives in the ha_fordpass adapter DATA_MAP
 # + to_metric dispatch.
 _HA_CONFIG = {
     "location_name": "Test Home",
@@ -106,7 +106,7 @@ async def test_ingestion_captures_charging_temps(db_session):
     """(updated by ): batteryTemperature + outsidetemp
     arrive in degC on the energytransferlogentry payload (matches real
     ha-fordpass integration). They populate EVChargingSession.{battery,ambient}_temp_{start,end}
-    in degC via adapter FIELD_CONTRACTS (passthrough, no unit conversion).
+    in degC via adapter DATA_MAP (passthrough, no unit conversion).
     """
     from db.models.charging_session import EVChargingSession
 

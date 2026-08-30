@@ -1,14 +1,14 @@
-{% set is_ha = card.descriptor.source_name == 'ha_fordpass' %}
+{% set is_ha = card.source.source_name == 'ha_fordpass' %}
 <div class="card bg-base-200 max-w-2xl">
     <div class="card-body">
         <div class="flex items-baseline justify-between">
             <div>
                 <h2 class="card-title text-base font-semibold">
-                    {% if is_ha %}Home Assistant{% else %}{{ card.descriptor.display_name }}{% endif %}
+                    {% if is_ha %}Home Assistant{% else %}{{ card.source.display_name }}{% endif %}
                 </h2>
                 <p class="text-base-content/60 text-sm -mt-1">
                     {% if is_ha %}Configure the connection to your Home Assistant instance and the integrations LightningROD reads from it.
-                    {% else %}Configure the connection to your {{ card.descriptor.display_name }} instance.{% endif %}
+                    {% else %}Configure the connection to your {{ card.source.display_name }} instance.{% endif %}
                 </p>
             </div>
             <div class="flex items-baseline">
@@ -30,7 +30,7 @@
             </div>
         </div>
 
-        <form hx-post="/settings/data-sources/{{ card.descriptor.source_name }}"
+        <form hx-post="/settings/data-sources/{{ card.source.source_name }}"
               hx-target="closest .card" hx-swap="outerHTML"
               class="space-y-4 mt-4">
 
@@ -49,12 +49,12 @@
             <label class="form-control w-full">
                 <div class="label"><span class="label-text font-semibold">Long-Lived Access Token</span></div>
                 <div class="join w-full">
-                    <input type="password" name="ha_token" id="ha-token-input-{{ card.descriptor.source_name }}"
+                    <input type="password" name="ha_token" id="ha-token-input-{{ card.source.source_name }}"
                            value="{{ card.masked_token }}"
                            placeholder="Long-lived access token"
                            class="input input-bordered join-item w-full" required>
                     <button type="button" class="btn btn-square join-item"
-                            onclick="(function(id){var i=document.getElementById(id);i.type=i.type==='password'?'text':'password';})('ha-token-input-{{ card.descriptor.source_name }}')"
+                            onclick="(function(id){var i=document.getElementById(id);i.type=i.type==='password'?'text':'password';})('ha-token-input-{{ card.source.source_name }}')"
                             title="Toggle visibility">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />

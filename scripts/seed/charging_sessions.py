@@ -7,7 +7,7 @@ Distribution:
   ~15% EA Costco DCFC  — fast DC, public
 
 Thermal fields (battery_temp_*, ambient_temp_*) are populated via
-ContractDrivenSeeder.value_for() using the FIELD_CONTRACTS declared in the
+DataMapSeeder.value_for() using the DATA_MAP declared in the
 HA Fordpass adapter.
 """
 
@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargingNetwork, EVLocationLookup
 from db.models.vehicle import EVVehicle
-from scripts.seed.base import ContractDrivenSeeder, load_declared_contracts
+from scripts.seed.base import DataMapSeeder, load_declared_mappings
 
 _DEMO_VIN = "1FT6W1EV0NWG00000"
 _TABLE = "ev_charging_session"
@@ -152,8 +152,8 @@ async def seed(db: AsyncSession) -> int:
             )
 
     # --- Set up seeder and RNG ---
-    seeder = ContractDrivenSeeder(
-        declared=load_declared_contracts(),
+    seeder = DataMapSeeder(
+        declared=load_declared_mappings(),
         expected=[],
         rng=random.Random(42),
     )
@@ -254,7 +254,7 @@ async def seed(db: AsyncSession) -> int:
         voltage = 240.0 if current_type == "AC" else 400.0
         amperage = round(avg_kw * 1000 / voltage, 1)
 
-        # Thermal fields via ContractDrivenSeeder
+        # Thermal fields via DataMapSeeder
         battery_temp_start = seeder.value_for(_TABLE, "battery_temp_start")
         battery_temp_end = seeder.value_for(_TABLE, "battery_temp_end")
         ambient_temp_start = seeder.value_for(_TABLE, "ambient_temp_start")

@@ -284,8 +284,8 @@ async def test_outside_temperature_comes_from_the_entity_state(db_session):
     assert float(session.ambient_temp_end) == pytest.approx(30.0, abs=0.01)
 
 
-async def test_state_contract_without_a_unit_drops_the_value(db_session):
-    """A state-sourced contract never guesses a unit for an unstamped event."""
+async def test_state_mapping_without_a_unit_drops_the_value(db_session):
+    """A state-sourced mapping never guesses a unit for an unstamped event."""
     from web.services.sources.ha_fordpass import adapter as fp_adapter
 
     fp_adapter._last_outsidetemp.pop(_DEVICE_ID, None)

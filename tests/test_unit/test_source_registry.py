@@ -6,22 +6,22 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
-from web.services.sources.registry import REGISTRY, DataSourceDescriptor
+from web.services.sources.registry import REGISTRY, DataSource
 
 pytestmark = pytest.mark.unit
 
 
-def test_registry_has_two_descriptors():
+def test_registry_has_two_sources():
     """ha_gas_price joined ha_fordpass in the registry."""
     assert len(REGISTRY) == 2
 
 
 def test_registry_has_ha_fordpass():
-    """Existing ha_fordpass descriptor still present (regression-lock)."""
+    """Existing ha_fordpass source still present (regression-lock)."""
     by_name = {d.source_name: d for d in REGISTRY}
     assert "ha_fordpass" in by_name
     d = by_name["ha_fordpass"]
-    assert isinstance(d, DataSourceDescriptor)
+    assert isinstance(d, DataSource)
     assert d.display_name == "Home Assistant (FordPass)"
     assert d.adapter_module == "web.services.sources.ha_fordpass.adapter"
     assert d.config_schema is HAFordpassConfig
@@ -30,7 +30,7 @@ def test_registry_has_ha_fordpass():
 
 
 def test_registry_has_ha_gas_price():
-    """ha_gas_price descriptor with static setup flow.
+    """ha_gas_price source with static setup flow.
 
     `setup_flow="static"` reflects v1's app_settings-keyed config — there is
     no auth handshake to run; entity_ids live in app_settings keys.
@@ -38,7 +38,7 @@ def test_registry_has_ha_gas_price():
     by_name = {d.source_name: d for d in REGISTRY}
     assert "ha_gas_price" in by_name
     d = by_name["ha_gas_price"]
-    assert isinstance(d, DataSourceDescriptor)
+    assert isinstance(d, DataSource)
     assert d.display_name == "Home Assistant (Gas Price Sensors)"
     assert d.adapter_module == "web.services.sources.ha_gas_price.adapter"
     assert issubclass(d.config_schema, BaseModel)
@@ -50,8 +50,8 @@ def test_registry_adapter_module_importable():
     """Every registered adapter module imports cleanly and exposes Protocol attrs."""
     for d in REGISTRY:
         module = importlib.import_module(d.adapter_module)
-        assert hasattr(module, "FIELD_CONTRACTS"), (
-            f"{d.source_name} missing FIELD_CONTRACTS"
+        assert hasattr(module, "DATA_MAP"), (
+            f"{d.source_name} missing DATA_MAP"
         )
         assert hasattr(module, "process_sample"), (
             f"{d.source_name} missing process_sample"

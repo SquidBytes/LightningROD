@@ -37,13 +37,13 @@ async def test_data_sources_page_contains_table_headers(client: AsyncClient):
         assert header in r.text, f"Missing column header '{header}'"
 
 
-async def test_data_sources_page_renders_every_contract(client: AsyncClient):
-    """Every FIELD_CONTRACTS entry must appear in the rendered HTML."""
-    from web.services.sources.ha_fordpass.adapter import FIELD_CONTRACTS
+async def test_data_sources_page_renders_every_mapping(client: AsyncClient):
+    """Every DATA_MAP entry must appear in the rendered HTML."""
+    from web.services.sources.ha_fordpass.adapter import DATA_MAP
     r = await client.get("/admin/data-sources")
-    for contract in FIELD_CONTRACTS:
-        assert contract.target_db_column in r.text, (
-            f"Contract {contract.target_db_column} missing from rendered page"
+    for mapping in DATA_MAP:
+        assert mapping.db_column in r.text, (
+            f"Mapping {mapping.db_column} missing from rendered page"
         )
 
 

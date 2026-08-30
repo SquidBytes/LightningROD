@@ -2,7 +2,7 @@
 
 Replaces the legacy normalize_value helper. The key difference: `to_metric`
 dispatches on an explicit, declared `source_unit` string supplied by the
-caller (typically an adapter's FIELD_CONTRACTS entry). There is no
+caller (typically an adapter's DATA_MAP entry). There is no
 process-global flag, no runtime unit detection, and no silent fallback.
 Unknown source_unit raises UnknownSourceUnit so callers can log full context
 and fail loudly.
@@ -70,5 +70,5 @@ def to_metric(value, source_unit: str) -> float | None:
 
     raise UnknownSourceUnit(
         f"to_metric: unrecognized source_unit={source_unit!r} (value={value!r}). "
-        "Add a branch here or fix the FIELD_CONTRACTS entry."
+        "Add a branch here or fix the DATA_MAP entry."
     )

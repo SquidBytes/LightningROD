@@ -3,12 +3,12 @@
 **AUTO-GENERATED — DO NOT EDIT.** Run `uv run python scripts/gen_data_sources_doc.py` to refresh.
 
 Every field ingested by LightningROD is declared in a source adapter's
-`FIELD_CONTRACTS` registry. This page is a reflection of that registry at
-commit time and serves as the observable unit contract.
+`DATA_MAP` registry. This page reflects that registry at commit time and is
+the observable record of how each value is mapped and converted.
 
 ## ha_fordpass
 
-| Source Entity | Source Attribute | Source Unit | DB Table | DB Column | Target Unit | Notes |
+| Source Entity | Source Field | Source Unit | DB Table | DB Column | DB Unit | Notes |
 |---|---|---|---|---|---|---|
 | `sensor.fordpass_{vin}_cabintemperature` | `state` | `degC` | `ev_vehicle_status` | `cabin_temperature` | `degC` | Time-series cabin temp from the cabintemperature entity state; the entity carries no cabinTemperature attribute. |
 | `sensor.fordpass_{vin}_elveh` | `maximumBatteryCapacity` | `Wh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` | Elveh mirror of xevBatteryCapacity; same mixed Wh/kWh autoscale |
@@ -38,4 +38,4 @@ commit time and serves as the observable unit contract.
 
 ## ha_gas_price
 
-_No contracts registered._
+_No mappings registered._

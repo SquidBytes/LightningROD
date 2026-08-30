@@ -1,4 +1,4 @@
-"""Unit tests for the Home Assistant FordPass adapter contracts.
+"""Unit tests for the Home Assistant FordPass adapter mappings.
 
 These tests verify that key fields are read from the expected entities and
 handled with the expected unit behavior.
@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from web.services.sources.ha_fordpass.adapter import (  # noqa: F401
-    FIELD_CONTRACTS,
+    DATA_MAP,
     LIGHTNINGROD_TRIP_NAMESPACE,
     _last_seen_raw,
     _metric_value,
@@ -118,11 +118,11 @@ def test_elveh_state_read_time_uom_lookup():
 
 # Elveh unit-bearing trip/range attributes are HA-unit-system localized
 # (ha-fordpass fordpass_handler.py routes them through localize_distance),
-# so their contracts must resolve from ha_config.unit_system — never from
+# so their mappings must resolve from ha_config.unit_system — never from
 # the elveh state's unit_of_measurement, which tracks the vehicle display
 # system and caused the duplicate-trip double-conversion bug.
 
-def test_elveh_distance_contracts_are_ha_localized():
+def test_elveh_distance_mappings_are_ha_localized():
     elveh_distance_attrs = {
         "tripDistanceTraveled",
         "tripEfficiency",
@@ -130,17 +130,17 @@ def test_elveh_distance_contracts_are_ha_localized():
         "maximumBatteryRange",
     }
     seen = set()
-    for c in FIELD_CONTRACTS:
-        if "elveh" not in c.source_locator.pattern:
+    for c in DATA_MAP:
+        if "elveh" not in c.source.pattern:
             continue
-        if c.source_attribute in elveh_distance_attrs:
-            seen.add(c.source_attribute)
+        if c.source_field in elveh_distance_attrs:
+            seen.add(c.source_field)
             assert c.ha_unit_system_converted, (
-                f"elveh.{c.source_attribute} must be ha_unit_system_converted=True; "
+                f"elveh.{c.source_field} must be ha_unit_system_converted=True; "
                 "resolving it via the elveh state uom double-converts for "
                 "imperial-display vehicles on metric HA"
             )
-    assert seen == elveh_distance_attrs, f"missing elveh contracts: {elveh_distance_attrs - seen}"
+    assert seen == elveh_distance_attrs, f"missing elveh mappings: {elveh_distance_attrs - seen}"
 
 
 # Deterministic trip-id helper — closes the cross-source dedup invariant.

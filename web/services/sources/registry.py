@@ -17,7 +17,7 @@ from web.services.sources.ha_gas_price.config import HAGasPriceConfig
 
 
 @dataclass(frozen=True)
-class DataSourceDescriptor:
+class DataSource:
     """One shipped source: its config schema, adapter module and setup flow.
 
     `secret_fields` names the `config_json` keys that hold credentials. It is
@@ -33,8 +33,8 @@ class DataSourceDescriptor:
     secret_fields: frozenset[str] = frozenset()
 
 
-REGISTRY: list[DataSourceDescriptor] = [
-    DataSourceDescriptor(
+REGISTRY: list[DataSource] = [
+    DataSource(
         source_name="ha_fordpass",
         display_name="Home Assistant (FordPass)",
         adapter_module="web.services.sources.ha_fordpass.adapter",
@@ -42,7 +42,7 @@ REGISTRY: list[DataSourceDescriptor] = [
         setup_flow="ha_websocket",
         secret_fields=frozenset({"ha_token"}),
     ),
-    DataSourceDescriptor(
+    DataSource(
         source_name="ha_gas_price",
         display_name="Home Assistant (Gas Price Sensors)",
         adapter_module="web.services.sources.ha_gas_price.adapter",

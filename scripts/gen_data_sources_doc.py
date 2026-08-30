@@ -1,4 +1,4 @@
-"""Auto-generate docs/data-sources.md from adapter FIELD_CONTRACTS registries.
+"""Auto-generate docs/data-sources.md from adapter DATA_MAP registries.
 
 Usage:
     uv run python scripts/gen_data_sources_doc.py          # write file
@@ -20,25 +20,25 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from web.services.sources.registry import REGISTRY  # noqa: E402
-from web.services.units.contracts import FieldContract  # noqa: E402
+from web.services.units.data_map import DataMapping  # noqa: E402
 
 _OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "data-sources.md"
 
 
-def discover_adapters() -> list[tuple[str, list[FieldContract]]]:
-    """Return [(source_name, contracts), ...] sorted by source_name."""
+def discover_adapters() -> list[tuple[str, list[DataMapping]]]:
+    """Return [(source_name, mappings), ...] sorted by source_name."""
     import importlib
 
-    out: list[tuple[str, list[FieldContract]]] = []
-    for descriptor in REGISTRY:
-        module = importlib.import_module(descriptor.adapter_module)
-        contracts = list(getattr(module, "FIELD_CONTRACTS", []))
-        out.append((descriptor.source_name, contracts))
+    out: list[tuple[str, list[DataMapping]]] = []
+    for source in REGISTRY:
+        module = importlib.import_module(source.adapter_module)
+        mappings = list(getattr(module, "DATA_MAP", []))
+        out.append((source.source_name, mappings))
     out.sort(key=lambda pair: pair[0])
     return out
 
 
-def render_markdown(groups: list[tuple[str, list[FieldContract]]]) -> str:
+def render_markdown(groups: list[tuple[str, list[DataMapping]]]) -> str:
     """Pure function: groups -> deterministic markdown string."""
     lines: list[str] = [
         "# Data Sources",
@@ -46,33 +46,33 @@ def render_markdown(groups: list[tuple[str, list[FieldContract]]]) -> str:
         "**AUTO-GENERATED — DO NOT EDIT.** Run `uv run python scripts/gen_data_sources_doc.py` to refresh.",
         "",
         "Every field ingested by LightningROD is declared in a source adapter's",
-        "`FIELD_CONTRACTS` registry. This page is a reflection of that registry at",
-        "commit time and serves as the observable unit contract.",
+        "`DATA_MAP` registry. This page reflects that registry at commit time and is",
+        "the observable record of how each value is mapped and converted.",
         "",
     ]
-    for source_name, contracts in groups:
+    for source_name, mappings in groups:
         lines.append(f"## {source_name}")
         lines.append("")
-        if not contracts:
-            lines.append("_No contracts registered._")
+        if not mappings:
+            lines.append("_No mappings registered._")
             lines.append("")
             continue
-        lines.append("| Source Entity | Source Attribute | Source Unit | DB Table | DB Column | Target Unit | Notes |")
+        lines.append("| Source Entity | Source Field | Source Unit | DB Table | DB Column | DB Unit | Notes |")
         lines.append("|---|---|---|---|---|---|---|")
-        sorted_contracts = sorted(
-            contracts,
-            key=lambda c: (c.source_locator.pattern, c.source_attribute),
+        sorted_mappings = sorted(
+            mappings,
+            key=lambda c: (c.source.pattern, c.source_field),
         )
-        for c in sorted_contracts:
+        for c in sorted_mappings:
             # Escape pipe characters in notes so they don't break the table.
             notes = (c.notes or "").replace("|", "\\|").replace("\n", " ")
             lines.append(
-                f"| `{c.source_locator.pattern}` "
-                f"| `{c.source_attribute}` "
+                f"| `{c.source.pattern}` "
+                f"| `{c.source_field}` "
                 f"| `{c.source_unit}` "
-                f"| `{c.target_db_table}` "
-                f"| `{c.target_db_column}` "
-                f"| `{c.target_unit}` "
+                f"| `{c.db_table}` "
+                f"| `{c.db_column}` "
+                f"| `{c.db_unit}` "
                 f"| {notes} |"
             )
         lines.append("")
@@ -94,9 +94,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         existing = _OUTPUT_PATH.read_text() if _OUTPUT_PATH.exists() else ""
         if existing == rendered:
-            print(f"OK: {_OUTPUT_PATH} is in sync with FIELD_CONTRACTS.")
+            print(f"OK: {_OUTPUT_PATH} is in sync with DATA_MAP.")
             return 0
-        print(f"DRIFT: {_OUTPUT_PATH} does not match the current FIELD_CONTRACTS registry.")
+        print(f"DRIFT: {_OUTPUT_PATH} does not match the current DATA_MAP registry.")
         diff = difflib.unified_diff(
             existing.splitlines(keepends=True),
             rendered.splitlines(keepends=True),
@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     _OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     _OUTPUT_PATH.write_text(rendered)
     print(f"Wrote {_OUTPUT_PATH} ({len(groups)} source(s), "
-          f"{sum(len(c) for _, c in groups)} contract(s)).")
+          f"{sum(len(c) for _, c in groups)} mapping(s)).")
     return 0
 
 

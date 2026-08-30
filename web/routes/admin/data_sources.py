@@ -1,5 +1,5 @@
 """Admin: Data Sources diagnostic page.
-Reads the FIELD_CONTRACTS registry + _last_seen_raw cache from each source
+Reads the DATA_MAP registry + _last_seen_raw cache from each source
 adapter and renders a searchable table. Purpose: ,
 let the user trace any displayed value -> source entity -> attribute -> unit ->
 raw value last observed.
@@ -8,7 +8,7 @@ admin-only guard here.
 
 Also merges in unit-detection records (web.services.units.detection) so the
 table surfaces cross-referenced + read-time-detected sources that do NOT
-appear in FIELD_CONTRACTS.
+appear in DATA_MAP.
 """
 from __future__ import annotations
 
@@ -25,26 +25,26 @@ from web.queries.vehicles import get_active_vehicle, get_all_vehicles
 from web.services.ingestion import supervisor
 from web.services.sources.registry import REGISTRY
 from web.services.units import detection
-from web.services.units.contracts import FieldContract
+from web.services.units.data_map import DataMapping
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="web/templates")
 
 
-def _contract_key(c: FieldContract) -> str:
+def _mapping_key(c: DataMapping) -> str:
     """Key convention matches ha_fordpass.adapter._record_last_seen."""
-    return f"{c.source_locator.pattern}|{c.source_attribute}"
+    return f"{c.source.pattern}|{c.source_field}"
 
 
 def _load_groups() -> list[dict[str, Any]]:
-    """Read every adapter's FIELD_CONTRACTS + _last_seen_raw at request time.
+    """Read every adapter's DATA_MAP + _last_seen_raw at request time.
 
     Returns a list of dicts shaped for the template:
         [
             {
                 "source_name": "ha_fordpass",
                 "rows": [
-                    {"contract": FieldContract, "last_seen": dict | None,
+                    {"mapping": DataMapping, "last_seen": dict | None,
                      "detection": DetectionRecord | None},
                     ...
                 ],
@@ -57,33 +57,33 @@ def _load_groups() -> list[dict[str, Any]]:
         (r.entity_pattern, r.attribute): r for r in detection.snapshot()
     }
 
-    for descriptor in REGISTRY:
-        source_name = descriptor.source_name
-        module = importlib.import_module(descriptor.adapter_module)
-        contracts: list[FieldContract] = list(getattr(module, "FIELD_CONTRACTS", []))
+    for source in REGISTRY:
+        source_name = source.source_name
+        module = importlib.import_module(source.adapter_module)
+        mappings: list[DataMapping] = list(getattr(module, "DATA_MAP", []))
         last_seen: dict[str, dict[str, Any]] = dict(getattr(module, "_last_seen_raw", {}))
         rows: list[dict[str, Any]] = []
         covered: set[tuple[str, str]] = set()
         for c in sorted(
-            contracts, key=lambda x: (x.source_locator.pattern, x.source_attribute)
+            mappings, key=lambda x: (x.source.pattern, x.source_field)
         ):
-            key = (c.source_locator.pattern, c.source_attribute)
+            key = (c.source.pattern, c.source_field)
             covered.add(key)
             rows.append(
                 {
-                    "contract": c,
-                    "last_seen": last_seen.get(_contract_key(c)),
+                    "mapping": c,
+                    "last_seen": last_seen.get(_mapping_key(c)),
                     "detection": detection_index.get(key),
                 }
             )
 
-        # Surface detection-only sources (no FIELD_CONTRACTS entry) so the
+        # Surface detection-only sources (no DATA_MAP entry) so the
         # user can see unit-detection coverage for elveh attributes, soc
         # batteryRange, vehicle-status sensors, etc.
         for (ent, attr), rec in sorted(detection_index.items()):
             if (ent, attr) in covered:
                 continue
-            rows.append({"contract": None, "last_seen": None, "detection": rec})
+            rows.append({"mapping": None, "last_seen": None, "detection": rec})
 
         out.append({"source_name": source_name, "rows": rows})
     out.sort(key=lambda g: g["source_name"])

@@ -5,9 +5,9 @@ sensor entity_ids. v1 reads entity_ids from app_settings keys
 (gas_sensor_station_entity_id, gas_sensor_average_entity_id). A future
 milestone migrates these into data_source_configs[ha_gas_price].config_json.
 
-This adapter has no FIELD_CONTRACTS today: gas-price values are unitless
+This adapter has no DATA_MAP today: gas-price values are unitless
 (currency per gallon) and handled by direct write helpers in
-`web/queries/gas_prices.py`. The empty FIELD_CONTRACTS list is required
+`web/queries/gas_prices.py`. The empty DATA_MAP list is required
 by the SourceAdapter Protocol (`web/services/sources/base.py`) and by
 the admin diagnostic page (`web/routes/admin/data_sources.py`).
 
@@ -23,12 +23,12 @@ import logging
 import time
 from typing import Any
 
-from web.services.units.contracts import FieldContract
+from web.services.units.data_map import DataMapping
 
 logger = logging.getLogger("lightningrod.sources.ha_gas_price")
 
 # Required by SourceAdapter Protocol; gas-price has no unit-ful columns.
-FIELD_CONTRACTS: list[FieldContract] = []
+DATA_MAP: list[DataMapping] = []
 
 # Cache for gas sensor entity_ids from app_settings to avoid per-event DB query
 _gas_sensor_cache: dict[str, str] = {}
@@ -104,7 +104,7 @@ async def try_handle_event(entity_id: str, new_state: dict, db) -> bool:
 
 
 async def process_sample(
-    locator: str,
+    source_ref: str,
     payload: dict,
     db: Any,
     source_config: dict | None = None,
@@ -114,7 +114,7 @@ async def process_sample(
     The Protocol requires `process_sample` returning None; gas-price's
     natural entry point is `try_handle_event` (returns bool). This shim
     adapts that signature for any future caller that walks REGISTRY and
-    dispatches by Protocol shape. `locator` is an HA entity_id and `payload`
+    dispatches by Protocol shape. `source_ref` is an HA entity_id and `payload`
     the event's new_state; gas-price reads no source config.
     """
-    await try_handle_event(locator, payload, db)
+    await try_handle_event(source_ref, payload, db)

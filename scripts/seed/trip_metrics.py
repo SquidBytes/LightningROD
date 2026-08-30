@@ -1,14 +1,14 @@
 """Seed module: EV trip metrics — 60-80 realistic trips across 90-day window.
 
 Generates deterministic (seed=42) trips with correlated distance/energy/regen.
-All 7 FIELD_CONTRACTS-covered columns for ev_trip_metrics are populated via
-ContractDrivenSeeder; remaining model columns use sensible defaults.
+All 7 DATA_MAP-covered columns for ev_trip_metrics are populated via
+DataMapSeeder; remaining model columns use sensible defaults.
 
-FIELD_CONTRACTS columns used via ContractDrivenSeeder:
+DATA_MAP columns used via DataMapSeeder:
   - cabin_temp      (degC)
   - ambient_temp    (degC)
   - outside_air_temp (degC)
-  - efficiency      (km/kWh — note: contract target_unit="km", but realistic_value
+  - efficiency      (km/kWh — note: mapping db_unit="km", but realistic_value
                      for "km" returns a generic km range; we override with computed)
   - range_regenerated (km)
   - distance        (km — used for validation, computed directly for realism)
@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.reference import EVLocationLookup
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle import EVVehicle
-from scripts.seed.base import ContractDrivenSeeder, load_declared_contracts
+from scripts.seed.base import DataMapSeeder, load_declared_mappings
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ async def seed(db: AsyncSession) -> int:
         return 0
 
     rng = random.Random(42)
-    seeder = ContractDrivenSeeder(declared=load_declared_contracts(), rng=rng)
+    seeder = DataMapSeeder(declared=load_declared_mappings(), rng=rng)
 
     # Resolve seeded location IDs so trips can attribute start/end FKs.
     # Falls through with empty list if locations.seed() hasn't run; trips
@@ -160,23 +160,23 @@ async def seed(db: AsyncSession) -> int:
             round(distance_km / energy_kwh, 3) if energy_kwh > 0 else 0.0
         )
 
-        # --- ContractDrivenSeeder-driven columns (thermal & range) ---
+        # --- DataMapSeeder-driven columns (thermal & range) ---
         cabin_temp = seeder.value_for("ev_trip_metrics", "cabin_temp")
         ambient_temp = seeder.value_for("ev_trip_metrics", "ambient_temp")
         outside_air_temp = seeder.value_for("ev_trip_metrics", "outside_air_temp")
-        # range_regenerated contract target_unit="km" → realistic_value gives km range
+        # range_regenerated mapping db_unit="km" → realistic_value gives km range
         range_regenerated = regen_km  # override seeder: use correlated computed value
 
         # For distance and energy_consumed we use the seeder to validate coverage
         # but supply our correlated computed values for realism.
-        _dist_contract_check = seeder.value_for("ev_trip_metrics", "distance")  # noqa: F841
-        _energy_contract_check = seeder.value_for("ev_trip_metrics", "energy_consumed")  # noqa: F841
-        _efficiency_contract_check = seeder.value_for("ev_trip_metrics", "efficiency")  # noqa: F841
-        _range_regen_contract_check = seeder.value_for(
+        _dist_mapping_check = seeder.value_for("ev_trip_metrics", "distance")  # noqa: F841
+        _energy_mapping_check = seeder.value_for("ev_trip_metrics", "energy_consumed")  # noqa: F841
+        _efficiency_mapping_check = seeder.value_for("ev_trip_metrics", "efficiency")  # noqa: F841
+        _range_regen_mapping_check = seeder.value_for(
             "ev_trip_metrics", "range_regenerated"
         )  # noqa: F841
 
-        # --- Driving scores (not in FIELD_CONTRACTS — sensible defaults) ---
+        # --- Driving scores (not in DATA_MAP — sensible defaults) ---
         driving_score = round(rng.uniform(60.0, 100.0), 1)
         speed_score = round(rng.uniform(55.0, 100.0), 1)
         acceleration_score = round(rng.uniform(50.0, 100.0), 1)
