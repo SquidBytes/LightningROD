@@ -55,6 +55,7 @@ async def get_charge_type_network_groupings(
     ac_ids: set[int] = set()
     dc_ids: set[int] = set()
     for net_id, ct in result.all():
+        assert net_id is not None  # filtered in SQL
         if ct == "AC":
             ac_ids.add(net_id)
         elif ct == "DC":

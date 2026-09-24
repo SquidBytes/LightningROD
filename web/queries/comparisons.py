@@ -251,6 +251,7 @@ async def _monthly_distance_from_odometer(
     monthly: dict[tuple[int, int], float] = {}
     prev = None
     for recorded_at, odometer in rows:
+        assert odometer is not None  # filtered in SQL
         odo = float(odometer)
         if prev is not None:
             delta = odo - prev
@@ -279,6 +280,7 @@ async def _monthly_distance_from_trips(
     rows = (await db.execute(stmt)).all()
     monthly: dict[tuple[int, int], float] = {}
     for end_time, distance in rows:
+        assert end_time is not None and distance is not None  # filtered in SQL
         key = (end_time.year, end_time.month)
         monthly[key] = monthly.get(key, 0.0) + float(distance)
     return monthly

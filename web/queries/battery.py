@@ -95,7 +95,7 @@ async def query_soc_timeline(
             bucket = "2 hours"
 
         bucket_col = date_trunc_compat(
-            bucket, EVBatteryStatus.recorded_at, dialect=db.bind.dialect
+            bucket, EVBatteryStatus.recorded_at, dialect=db.get_bind().dialect
         ).label("bucket")
         stmt = (
             select(
@@ -265,7 +265,7 @@ async def query_degradation_data(
 
     Returns list of dicts with keys: date, max_capacity.
     """
-    date_col = date_trunc_compat("day", EVBatteryStatus.recorded_at, dialect=db.bind.dialect)
+    date_col = date_trunc_compat("day", EVBatteryStatus.recorded_at, dialect=db.get_bind().dialect)
 
     stmt = (
         select(
@@ -586,7 +586,7 @@ async def query_degradation_by_mileage(
     """
     # Daily max capacity with latest timestamp per day. Use date_trunc_compat
     # for portability — `cast(col, Date)` reads back as integer-year on SQLite.
-    date_col = date_trunc_compat("day", EVBatteryStatus.recorded_at, dialect=db.bind.dialect)
+    date_col = date_trunc_compat("day", EVBatteryStatus.recorded_at, dialect=db.get_bind().dialect)
     cap_stmt = (
         select(
             date_col.label("date"),

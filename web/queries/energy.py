@@ -184,7 +184,7 @@ async def monthly_energy_series(
     stmt = (
         select(
             date_trunc_compat(
-                "month", EVChargingSession.session_start_utc, dialect=db.bind.dialect
+                "month", EVChargingSession.session_start_utc, dialect=db.get_bind().dialect
             ).label("m"),
             func.coalesce(func.sum(EVChargingSession.energy_kwh), 0.0).label("kwh"),
         )
@@ -223,7 +223,7 @@ async def charging_speed_series(
     stmt = (
         select(
             date_trunc_compat(
-                "month", EVChargingSession.session_start_utc, dialect=db.bind.dialect
+                "month", EVChargingSession.session_start_utc, dialect=db.get_bind().dialect
             ).label("m"),
             func.coalesce(func.sum(EVChargingSession.energy_kwh), 0.0).label("kwh"),
             func.coalesce(func.sum(duration_hours), 0.0).label("hours"),
@@ -289,10 +289,11 @@ async def efficiency_over_time_series(
         stmt = stmt.where(EVChargingSession.device_id == device_id)
 
     result = await db.execute(stmt)
-    return [
-        (start, float(dist) / float(kwh))
-        for start, dist, kwh in result.all()
-    ]
+    rows: list[tuple[datetime, float]] = []
+    for start, dist, kwh in result.all():
+        assert start is not None and dist is not None and kwh is not None  # filtered in SQL
+        rows.append((start, float(dist) / float(kwh)))
+    return rows
 
 
 async def query_regen_summary(

@@ -150,6 +150,7 @@ class TelemetryDerive(RepairOperation):
         if not rows:
             return None
         nearest = min(rows, key=lambda r: abs((_aware(r[0]) - ts).total_seconds()))
+        assert nearest[1] is not None  # filtered in SQL
         return float(nearest[1])
 
     async def _start_from_ignition(
@@ -177,6 +178,7 @@ class TelemetryDerive(RepairOperation):
         transitions: list[tuple[datetime, float | None]] = []
         prev = None
         for recorded_at, status, odometer in (await db.execute(stmt)).all():
+            assert status is not None  # filtered in SQL
             state = status.strip().upper()
             if state not in ("OFF", "ON"):
                 continue  # 'Unsupported' etc. must not break OFF->ON pairing

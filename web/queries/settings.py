@@ -524,7 +524,7 @@ async def get_raw_archive_settings(db: AsyncSession) -> dict:
 
 async def set_app_setting(db: AsyncSession, key: str, value: str) -> None:
     """Upsert a single key-value pair in app_settings."""
-    stmt = portable_insert(AppSettings, dialect=db.bind.dialect).values(
+    stmt = portable_insert(AppSettings, dialect=db.get_bind().dialect).values(
         key=key, value=value
     )
     stmt = stmt.on_conflict_do_update(
