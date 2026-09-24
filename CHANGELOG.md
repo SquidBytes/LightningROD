@@ -20,6 +20,8 @@ For feature documentation, see the docs site at
   Assistant connection needed
 - Settings options to turn the event archive off and choose how long archived
   events are kept
+- Data Repair previews let you untick items; Apply now works one page at a time
+  and remembers what you skipped, with a button to bring skipped items back
 
 ### Changed
 

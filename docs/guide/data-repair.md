@@ -1,6 +1,6 @@
 # Data Repair
 
-The Data Repair tab on the [settings page](settings.md) fixes historical trip data damaged by ingestion bugs that have since been patched. Each repair card shows a live count of affected rows, a **Preview** button that dry-runs the operation and shows the exact changes together with the evidence behind them, and an **Apply** button that snapshots the rows before touching them.
+The Data Repair tab on the [settings page](settings.md) fixes historical trip data damaged by ingestion bugs that have since been patched. Each repair card shows a live count of affected rows, and a **Preview** button that dry-runs the operation and shows the exact changes together with the evidence behind them. You apply a repair from its preview, one page at a time, and the rows are snapshotted before anything is touched.
 
 !!! info "What repairs will never touch"
     Repairs only modify rows ingested from Home Assistant. Trips you entered manually or imported from CSV are never changed, no matter what an operation finds.
@@ -24,8 +24,9 @@ Per-repair snapshots cover only the rows each operation touches. Before your fir
 
 1. Open **Settings → Data Repair**. Each card's badge shows how many rows the operation would change right now — a gray "clean" badge means nothing to do.
 2. Click **Preview** on a card with a count. The dry run writes nothing. It lists one collapsed row per change, each tagged with the evidence that selected it — a distance ratio, an odometer contradiction, the telemetry reading a value came from. Expand a row to see every field side by side: what the surviving row keeps, what it gains, and the whole contents of any row about to be deleted. Values are shown exactly as the database stores them, and long previews are paged ten at a time.
-3. Click **Apply** and confirm. The operation snapshots the affected rows, applies the fix, and reports what changed.
-4. Check your data (Trip Sessions, Driving Analytics). If something looks wrong, **Restore** the snapshot from the Snapshots section; if all is well, **Purge** it.
+3. Every item on the page starts ticked. Untick anything you don't want changed (the box in the header ticks or unticks the whole page), then click **Apply selected** and confirm. Only the ticked items on that page are applied: the operation re-checks them, snapshots the rows, applies the fix, reports what changed, and shows the next page of what is left.
+4. Unticked items are remembered as skipped, so they don't come back on later previews or runs. The card shows how many are skipped; **Restore skipped** brings them all back for review.
+5. Check your data (Trip Sessions, Driving Analytics). If something looks wrong, **Restore** the snapshot from the Snapshots section; if all is well, **Purge** it.
 
 Run the cards top to bottom — duplicate consolidation should run before distance double-conversion, which is the order they appear in.
 
@@ -69,4 +70,4 @@ Event archive replay is not bound by that window — it reads events LightningRO
 
 ## Safe to Re-run
 
-Every operation is idempotent: applying it twice changes nothing the second time. A clean census badge means the operation currently has nothing to do.
+Every operation is idempotent: applying it twice changes nothing the second time. A clean census badge means the operation currently has nothing to do, apart from anything you skipped.
