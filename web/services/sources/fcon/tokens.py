@@ -72,11 +72,19 @@ class TokenManager:
     def config(self) -> FconConfig:
         return self._config
 
+    def invalidate(self) -> None:
+        """Forget the access token so the next call refreshes — Ford said it is dead."""
+        self._config = self._config.model_copy(update={"access_token": None})
+
     async def access_token(self) -> str:
         cfg = self._config
         if cfg.needs_consent or not cfg.refresh_token:
             raise ConsentRequired("no usable refresh token")
-        if cfg.access_token and cfg.expires_at and cfg.expires_at - REFRESH_LEEWAY > self._now():
+        if (
+            cfg.access_token
+            and cfg.expires_at
+            and cfg.expires_at - REFRESH_LEEWAY > self._now()
+        ):
             return cfg.access_token
         await self.refresh()
         assert self._config.access_token is not None
