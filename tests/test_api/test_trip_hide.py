@@ -42,7 +42,7 @@ async def test_default_off_lists_all_trips(client, db_session):
     response = await client.get("/driving/sessions?range=all")
     assert response.status_code == 200
     assert '<p class="text-3xl font-bold">2</p>' in response.text
-    assert "short trip" not in response.text
+    assert "trip hidden" not in response.text
 
 
 async def test_enabled_hides_short_trip_and_keeps_db_row(client, db_session):
@@ -54,7 +54,7 @@ async def test_enabled_hides_short_trip_and_keeps_db_row(client, db_session):
     assert response.status_code == 200
     # Only the long trip counts; the note explains the missing row
     assert '<p class="text-3xl font-bold">1</p>' in response.text
-    assert "1 short trip hidden" in response.text
+    assert "1 trip hidden" in response.text
 
     row = (
         await db_session.execute(
@@ -90,3 +90,31 @@ async def test_settings_round_trip_converts_display_units(client, db_session):
     assert await get_app_setting(db_session, "trip_hide_enabled") == "true"
     # Re-rendered partial shows the value back in display units
     assert 'value="3.0"' in response.text
+
+
+async def test_vehicle_on_trip_badged_and_hidden_on_request(client, db_session):
+    """A zero-distance trip shows a Vehicle on badge; the stationary option hides it."""
+    vehicle = await VehicleFactory.create(db_session)
+    await TripFactory.create(
+        db_session, device_id=vehicle.device_id, duration=1800.0, distance=0.0
+    )
+    await TripFactory.create(
+        db_session, device_id=vehicle.device_id, duration=1800.0, distance=25.0
+    )
+
+    response = await client.get("/driving/sessions?range=all")
+    assert "Vehicle on</span>" in response.text
+
+    await _enable_hide(client)
+    response = await client.get("/driving/sessions?range=all")
+    assert '<p class="text-3xl font-bold">2</p>' in response.text
+
+    response = await client.post(
+        "/settings/trip-display", data={"trip_hide_stationary": "on"}
+    )
+    assert response.status_code == 200
+    assert await get_app_setting(db_session, "trip_hide_stationary") == "true"
+    response = await client.get("/driving/sessions?range=all")
+    assert '<p class="text-3xl font-bold">1</p>' in response.text
+    assert "1 trip hidden" in response.text
+    assert "Vehicle on</span>" not in response.text

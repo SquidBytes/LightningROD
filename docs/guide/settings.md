@@ -137,6 +137,8 @@ Vehicles sometimes log a key-on event as a "trip" with little or no distance and
 
 A trip is hidden only when it falls under *both* thresholds — minimum duration (minutes) and minimum distance (in your configured distance unit). A trip clearing either threshold stays visible. Hidden trips remain in the database untouched; the sessions list shows a muted note with the hidden count.
 
+Switching the vehicle on without driving it — sitting with the climate running, say — can log a long "trip" with no distance, which the thresholds above keep visible because of its duration. These rows carry a **Vehicle on** badge in the trip list. Turn on **Hide vehicle-on trips** to hide them as well; it works on its own or alongside **Hide short trips**.
+
 ### Event Archive
 
 LightningROD maps a fixed set of Home Assistant attributes into its own tables and drops the rest, which is why trips sometimes end up missing a duration, driving scores, or regenerated range. With **Keep a copy of every Home Assistant event** on — the default — the full payload of every FordPass event is stored exactly as it arrived, so [Data Repair](data-repair.md) can rebuild those fields from your own records instead of Home Assistant's short recorder history.
