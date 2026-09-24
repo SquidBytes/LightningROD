@@ -680,3 +680,36 @@ async def test_ignition_unsupported_rows_do_not_break_pairing(db_session):
     await op.apply(db_session)
     assert trip.start_time == T0 - timedelta(minutes=25)
     assert float(trip.duration) == pytest.approx(1500.0)
+
+
+async def test_key_names_trip_and_fields_and_apply_honours_it(db_session):
+    device = "DERIVE_KEY_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    trips = [
+        await TripFactory.create(
+            db_session,
+            device_id=device,
+            source_system="ha_fordpass",
+            distance=30.0,
+            energy_consumed=6.0,
+            efficiency=None,
+            start_time=T0 + timedelta(days=day, minutes=-30),
+            end_time=T0 + timedelta(days=day),
+        )
+        for day in (0, 1)
+    ]
+
+    op = TelemetryDerive()
+    groups = (await op.preview(db_session)).groups
+    keyed = {g.diffs[0].row_id: g.key for g in groups}
+    assert keyed[trips[0].id] == f"trip:{trips[0].id}:efficiency"
+    assert [g.key for g in (await op.preview(db_session)).groups] == list(keyed.values())
+
+    result = await op.apply(db_session, keys=[keyed[trips[1].id]])
+    assert result.affected == 1
+    assert trips[0].efficiency is None
+    assert float(trips[1].efficiency) == pytest.approx(5.0)
+
+    # A key whose derivable fields no longer match is stale and applies nothing.
+    assert (await op.apply(db_session, keys=[f"trip:{trips[0].id}:duration"])).affected == 0
+    assert trips[0].efficiency is None

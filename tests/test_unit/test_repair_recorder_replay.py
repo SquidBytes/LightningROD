@@ -23,6 +23,7 @@ from sqlalchemy import func, select
 from db.models.trip_metrics import EVTripMetrics
 from tests.factories.trips import TripFactory
 from tests.factories.vehicles import VehicleFactory
+from web.services.repair import add_skips
 from web.services.repair.recorder_replay import RecorderReplay
 from web.services.repair.snapshot import serialize_row
 
@@ -389,3 +390,94 @@ async def test_fetch_entity_history_forwards_end_time(monkeypatch):
 
     await runtime._fetch_entity_history("sensor.test")
     assert "end_time" not in captured["params"]
+
+
+# ---------------------------------------------------------------------------
+# Selection and skips
+# ---------------------------------------------------------------------------
+
+
+def _two_recovery_histories() -> dict[str, list[dict]]:
+    """Events and elveh states that each recover a distinct trip."""
+    return {
+        _entity("events"): [_state("events", STATE_TS)],
+        _entity("elveh"): [
+            _state(
+                "elveh",
+                STATE_TS + timedelta(hours=1),
+                tripDistanceTraveled=30,
+                tripEnergyConsumed=10.0,
+            )
+        ],
+    }
+
+
+async def _vin_distances(db) -> list[float]:
+    stmt = select(EVTripMetrics.distance).where(EVTripMetrics.device_id == VIN)
+    return sorted(float(d) for d in (await db.execute(stmt)).scalars().all())
+
+
+@pytest.mark.db
+async def test_recovered_trip_keys_match_between_preview_and_apply(db_session):
+    """A key ticked in the dry-run preview selects the same trip at apply."""
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    from tests.conftest import TEST_DB_URL, _attach_sqlite_pragmas
+
+    op = RecorderReplay(runtime=FakeRuntime(_two_recovery_histories()))
+    engine = create_async_engine(TEST_DB_URL)
+    _attach_sqlite_pragmas(engine)
+    op._rollback_engine = engine
+    try:
+        preview = await op.preview(None)
+    finally:
+        await engine.dispose()
+    keys = {g.key: float(g.diffs[0].after["distance"]) for g in preview.groups}
+    assert len(keys) == 2
+    assert all(key.startswith("new:") for key in keys)
+    chosen, distance = next(iter(keys.items()))
+
+    result = await op.apply(db_session, keys=[chosen])
+
+    assert result.details["trips_recovered"] == 1
+    assert await _vin_distances(db_session) == [pytest.approx(distance)]
+
+
+@pytest.mark.db
+async def test_skipped_recovery_is_not_inserted(db_session):
+    op = RecorderReplay(runtime=FakeRuntime(_two_recovery_histories()))
+    # Learn both recoveries' keys, then undo them so apply starts clean.
+    _details, groups = await op._replay(db_session)
+    for group in groups:
+        await db_session.delete(await db_session.get(EVTripMetrics, group.diffs[0].row_id))
+    await db_session.flush()
+    await add_skips(db_session, op.slug, [groups[0].key])
+
+    result = await op.apply(db_session)
+
+    assert result.details["trips_recovered"] == 1
+    kept = float(groups[1].diffs[0].after["distance"])
+    assert await _vin_distances(db_session) == [pytest.approx(kept)]
+
+
+@pytest.mark.db
+async def test_skipped_update_is_reverted_and_leaves_the_census(db_session):
+    await VehicleFactory.create(db_session, device_id=VIN)
+    trip = await TripFactory.create(
+        db_session,
+        device_id=VIN,
+        source_system="ha_fordpass",
+        distance=19.0,
+        energy_consumed=7.6,
+        end_time=STATE_TS,
+        duration=None,
+    )
+    before = serialize_row(trip)
+    op = RecorderReplay(runtime=FakeRuntime(_full_histories()))
+    assert await op.census(db_session) == 1
+
+    await add_skips(db_session, op.slug, [op.update_key(trip.id)])
+
+    assert await op.census(db_session) == 0
+    assert await op.execute(db_session) == 0
+    assert serialize_row(trip) == before

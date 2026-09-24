@@ -18,7 +18,7 @@ from db.models.repair_backup import RepairBackup
 from db.models.trip_metrics import EVTripMetrics
 from tests.factories.trips import TripFactory
 from tests.factories.vehicles import VehicleFactory
-from web.services.repair import restore_run
+from web.services.repair import add_skips, clear_skips, restore_run
 from web.services.repair.ops.trip_duplicates import (
     TripDuplicateConsolidation,
     find_unit_duplicate_pairs,
@@ -382,3 +382,104 @@ async def test_manual_twin_pair_invisible_and_untouched(db_session):
     )
     assert len(rows) == 2
     assert {float(r.distance) for r in rows} == {122.0, 196.34}
+
+
+# ---------------------------------------------------------------------------
+# Selection and skips
+# ---------------------------------------------------------------------------
+
+
+async def _seed_two_pairs(db, device: str):
+    """Two independent corrupt pairs a day apart."""
+    first = await _seed_corrupt_pair(db, device)
+    second = await _seed_corrupt_pair(db, device)
+    for row in second:
+        row.end_time = row.end_time + timedelta(days=1)
+    await db.flush()
+    return first, second
+
+
+async def _device_ids(db, device: str) -> set[int]:
+    stmt = select(EVTripMetrics.id).where(EVTripMetrics.device_id == device)
+    return set((await db.execute(stmt)).scalars().all())
+
+
+@pytest.mark.db
+async def test_preview_key_is_stable_and_names_both_rows(db_session):
+    device = "DUP_KEY_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    survivor, loser = await _seed_corrupt_pair(db_session, device)
+
+    op = TripDuplicateConsolidation()
+    (first,) = (await op.preview(db_session)).groups
+    (again,) = (await op.preview(db_session)).groups
+    low, high = sorted((survivor.id, loser.id))
+    assert first.key == again.key == f"pair:{low}-{high}"
+
+
+@pytest.mark.db
+async def test_apply_with_keys_merges_only_the_selected_pair(db_session):
+    device = "DUP_SUBSET_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    (s1, l1), (s2, l2) = await _seed_two_pairs(db_session, device)
+
+    op = TripDuplicateConsolidation()
+    keys = [group.key for group in (await op.preview(db_session)).groups]
+    assert len(keys) == 2
+
+    result = await op.apply(db_session, keys=[keys[0]])
+    assert result.affected == 2
+    assert result.snapshot_rows == 2
+    assert await _device_ids(db_session, device) == {s1.id, s2.id, l2.id}
+    assert [g.key for g in (await op.preview(db_session)).groups] == [keys[1]]
+
+
+@pytest.mark.db
+async def test_unknown_keys_apply_nothing(db_session):
+    device = "DUP_FORGED_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    survivor, loser = await _seed_corrupt_pair(db_session, device)
+
+    result = await TripDuplicateConsolidation().apply(
+        db_session, keys=[f"pair:{survivor.id}-999999", "not-a-key"]
+    )
+    assert result.affected == 0
+    assert await _device_ids(db_session, device) == {survivor.id, loser.id}
+
+
+@pytest.mark.db
+async def test_manual_pair_untouched_even_when_its_key_is_submitted(db_session):
+    device = "DUP_MANUAL_KEY_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    survivor, loser = await _seed_corrupt_pair(db_session, device, source="manual_entry")
+    low, high = sorted((survivor.id, loser.id))
+
+    result = await TripDuplicateConsolidation().apply(
+        db_session, keys=[f"pair:{low}-{high}"]
+    )
+    assert result.affected == 0
+    assert await _device_ids(db_session, device) == {survivor.id, loser.id}
+
+
+@pytest.mark.db
+async def test_skipped_pair_hidden_and_left_alone_until_restored(db_session):
+    device = "DUP_SKIP_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    (s1, l1), (s2, l2) = await _seed_two_pairs(db_session, device)
+
+    op = TripDuplicateConsolidation()
+    skipped, kept = [g.key for g in (await op.preview(db_session)).groups]
+    await add_skips(db_session, op.slug, [skipped])
+
+    assert await op.census(db_session) == 1
+    preview = await op.preview(db_session)
+    assert preview.total == 1
+    assert [g.key for g in preview.groups] == [kept]
+
+    # Apply-all still honours the skip.
+    result = await op.apply(db_session)
+    assert result.affected == 2
+    assert await _device_ids(db_session, device) == {s1.id, l1.id, s2.id}
+
+    assert await clear_skips(db_session, op.slug) == 1
+    assert [g.key for g in (await op.preview(db_session)).groups] == [skipped]

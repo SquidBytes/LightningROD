@@ -518,3 +518,87 @@ async def test_preview_renders_without_any_context(client, bare_op):
     # Falls back to naming rows by id.
     assert "Row 11" in body and "Row 12" in body and "Row 13" in body
     assert "3 rows to review" in body
+
+
+async def test_bare_preview_offers_apply_all_without_checkboxes(client, bare_op):
+    body = (await client.post(f"/settings/data-repair/{bare_op.slug}/preview")).text
+    assert 'name="keys"' not in body
+    assert "Apply all" in body
+
+
+# ---------------------------------------------------------------------------
+# Per-page selection
+# ---------------------------------------------------------------------------
+
+
+async def _seed_two_pairs(db_session):
+    first = await _seed_corrupt_pair(db_session)
+    second = await _seed_corrupt_pair(db_session)
+    for row in second:
+        row.end_time = row.end_time + timedelta(days=1)
+        row.start_time = row.start_time + timedelta(days=1)
+    await db_session.commit()
+    return first, second
+
+
+def _page_keys(body: str) -> list[str]:
+    return re.findall(r'name="page_keys" value="([^"]+)"', body)
+
+
+async def test_preview_ticks_every_group_with_its_key(client, db_session):
+    await _seed_two_pairs(db_session)
+    body = (await client.post(f"/settings/data-repair/{CONSOLIDATION}/preview")).text
+    keys = _page_keys(body)
+    assert len(keys) == 2
+    for key in keys:
+        assert re.search(rf'name="keys"\s+value="{re.escape(key)}" checked', body)
+    assert "Apply selected" in body
+    assert "Select all on this page" in body
+
+
+async def test_apply_page_applies_ticked_skips_unticked_and_rerenders(
+    client, db_session
+):
+    await _seed_two_pairs(db_session)
+    body = (await client.post(f"/settings/data-repair/{CONSOLIDATION}/preview")).text
+    ticked, unticked = _page_keys(body)
+
+    response = await client.post(
+        f"/settings/data-repair/{CONSOLIDATION}/apply",
+        data={"page_keys": [ticked, unticked], "keys": [ticked]},
+    )
+    assert response.status_code == 200
+    body = response.text
+    assert await _trip_count(db_session) == 3
+    assert "skipped 1" in body
+    assert "1 skipped" in body
+    assert "Restore skipped" in body
+    # The fresh preview is re-detected: the applied pair is gone, the skipped one hidden.
+    assert "Nothing to repair." in body
+    assert ">clean</span>" in body
+
+    restored = await client.post(f"/settings/data-repair/{CONSOLIDATION}/skips/clear")
+    assert restored.status_code == 200
+    assert "Restore skipped" not in restored.text
+    assert "1 rows" in restored.text
+    again = await client.post(f"/settings/data-repair/{CONSOLIDATION}/preview")
+    assert _page_keys(again.text) == [unticked]
+
+
+async def test_apply_ignores_keys_that_were_not_on_the_page(client, db_session):
+    await _seed_two_pairs(db_session)
+    body = (await client.post(f"/settings/data-repair/{CONSOLIDATION}/preview")).text
+    first, second = _page_keys(body)
+
+    response = await client.post(
+        f"/settings/data-repair/{CONSOLIDATION}/apply",
+        data={"page_keys": [first], "keys": [first, second]},
+    )
+    assert response.status_code == 200
+    assert await _trip_count(db_session) == 3
+    assert _page_keys(response.text) == [second]
+
+
+async def test_clear_skips_unknown_slug_404(client):
+    response = await client.post("/settings/data-repair/not-a-repair/skips/clear")
+    assert response.status_code == 404

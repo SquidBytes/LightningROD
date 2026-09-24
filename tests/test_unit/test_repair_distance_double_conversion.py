@@ -10,6 +10,7 @@ from sqlalchemy import select
 from db.models.trip_metrics import EVTripMetrics
 from tests.factories.trips import TripFactory
 from tests.factories.vehicles import VehicleFactory
+from web.services.repair import add_skips
 from web.services.repair.ops.trip_distance_double_conversion import (
     KM_PER_MILE,
     TripDistanceDoubleConversion,
@@ -141,3 +142,24 @@ async def test_apply_without_energy_skips_efficiency(db_session):
         .all()
     )
     assert len(rows) == 1
+
+
+async def test_apply_with_keys_fixes_only_selected_rows_and_honours_skips(db_session):
+    device = "DBLCONV_SUBSET_VIN"
+    await VehicleFactory.create(db_session, device_id=device)
+    first, _, _ = await _seed(db_session, device)
+    second, _, _ = await _seed(db_session, device)
+
+    op = TripDistanceDoubleConversion()
+    keys = [g.key for g in (await op.preview(db_session)).groups]
+    assert keys == [f"trip:{first.id}", f"trip:{second.id}"]
+
+    result = await op.apply(db_session, keys=[keys[1]])
+    assert result.affected == 1
+    assert float(first.distance) == pytest.approx(196.34)
+    assert float(second.distance) == pytest.approx(196.34 / KM_PER_MILE)
+
+    await add_skips(db_session, op.slug, [keys[0]])
+    assert await op.census(db_session) == 0
+    assert (await op.apply(db_session)).affected == 0
+    assert float(first.distance) == pytest.approx(196.34)

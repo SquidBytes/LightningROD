@@ -29,12 +29,17 @@ from web.services.repair import (
     RepairGroup,
     RepairOperation,
     RepairPreview,
+    Selection,
+    add_skips,
+    clear_skips,
+    count_skips,
     deserialize_row,
     mutable_only,
     purge_run,
     restore_run,
     rollback_session,
     serialize_row,
+    skipped_keys,
 )
 
 pytestmark = pytest.mark.unit
@@ -386,3 +391,79 @@ def test_preview_pagination_arithmetic():
 def test_preview_unit_label_is_singular_for_one():
     assert RepairPreview([], total=1, unit="pairs").unit_label == "pair"
     assert RepairPreview([], total=2, unit="pairs").unit_label == "pairs"
+
+
+# ---------------------------------------------------------------------------
+# Selection and skips
+# ---------------------------------------------------------------------------
+
+
+def test_selection_never_allows_skipped_and_narrows_to_only():
+    everything = Selection(skipped=frozenset({"b"}))
+    assert everything.pick(["a", "b", "c"], str) == ["a", "c"]
+
+    narrowed = Selection(skipped=frozenset({"b"}), only=frozenset({"b", "c"}))
+    assert narrowed.pick(["a", "b", "c"], str) == ["c"]
+    assert Selection(only=frozenset()).pick(["a"], str) == []
+
+
+def test_preview_selectable_only_when_every_group_has_a_key():
+    keyed = RepairGroup([RepairDiff(1, {}, {}, "update")], key="trip:1")
+    bare = RepairGroup([RepairDiff(2, {}, {}, "update")])
+    assert RepairPreview([keyed], 1).selectable
+    assert not RepairPreview([keyed, bare], 2).selectable
+    assert not RepairPreview([], 0).selectable
+
+
+@pytest.mark.db
+async def test_skip_store_adds_once_counts_and_clears_per_operation(db_session):
+    assert await add_skips(db_session, "op-a", ["k1", "k2", "", "x" * 300]) == 2
+    assert await add_skips(db_session, "op-a", ["k1", "k3"]) == 1
+    assert await add_skips(db_session, "op-b", ["k1"]) == 1
+
+    assert await skipped_keys(db_session, "op-a") == {"k1", "k2", "k3"}
+    assert await count_skips(db_session, "op-b") == 1
+
+    assert await clear_skips(db_session, "op-a") == 3
+    assert await skipped_keys(db_session, "op-a") == frozenset()
+    assert await skipped_keys(db_session, "op-b") == {"k1"}
+
+
+class _GuardProbe(RepairOperation):
+    """Test-only op that hands back whatever rows it was built with."""
+
+    slug = "guard-probe"
+    display_name = "Guard probe"
+    description = "Test-only operation."
+    model = EVTripMetrics
+
+    def __init__(self, rows):
+        self.rows = rows
+        self.executed = False
+
+    async def census(self, db):
+        return len(self.rows)
+
+    async def preview(self, db, limit=10, offset=0):
+        return RepairPreview([], 0, offset, limit)
+
+    async def affected_rows(self, db, keys=None):
+        return (await self.selection(db, keys)).pick(
+            self.rows, lambda row: f"trip:{row.id}"
+        )
+
+    async def execute(self, db, keys=None):
+        self.executed = True
+        return 0
+
+
+@pytest.mark.db
+async def test_guard_still_refuses_protected_rows_under_a_key_selection(db_session):
+    manual = await TripFactory.create(db_session, source_system="manual_entry")
+    op = _GuardProbe([manual])
+
+    with pytest.raises(ValueError, match="non-mutable"):
+        await op.apply(db_session, keys=[f"trip:{manual.id}"])
+    assert not op.executed
+    backups = await db_session.scalar(select(func.count()).select_from(RepairBackup))
+    assert backups == 0
