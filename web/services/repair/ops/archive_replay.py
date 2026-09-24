@@ -43,7 +43,6 @@ class ArchiveReplay(RecorderReplay):
         "recovering trips that were never ingested. No Home Assistant "
         "connection needed."
     )
-    runs_when_clean = True
     source_label = "LightningROD event archive"
 
     def __init__(self, runtime=None, session_factory=None):

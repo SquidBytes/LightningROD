@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import event, func, or_, select
+from sqlalchemy import event, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
@@ -119,7 +121,6 @@ class RecorderReplay(RepairOperation):
         "recovering trips that were never ingested."
     )
     model = EVTripMetrics
-    runs_when_clean = True
     # Where replayed states came from; shown as preview evidence.
     source_label = "Home Assistant recorder history"
 
@@ -211,18 +212,33 @@ class RecorderReplay(RepairOperation):
             or_(*(getattr(EVTripMetrics, f).is_(None) for f in self.ENRICHABLE_FIELDS)),
         )
 
+    @staticmethod
+    def update_key(row_id: int) -> str:
+        return f"trip:{row_id}"
+
+    @staticmethod
+    def insert_key(after_img: dict[str, Any], sources: list[tuple[str, datetime]]) -> str:
+        """Key a recovered trip by the states that produced it.
+
+        Its row id and (when the payload lacks an update time) its trip_id are
+        new on every run, so neither can match between preview and apply.
+        """
+        if not sources:
+            return f"new:{after_img.get('trip_id')}"
+        evidence = "|".join(f"{entity_id}@{ts.isoformat()}" for entity_id, ts in sources)
+        return f"new:{hashlib.sha1(evidence.encode()).hexdigest()[:20]}"
+
     async def census(self, db: AsyncSession) -> int:
         window = await self.recorder_window()
         if window is None:
             return 0
-        stmt = (
-            select(func.count())
-            .select_from(EVTripMetrics)
-            .where(*self._census_filters(window))
-        )
-        return (await db.execute(stmt)).scalar_one()
+        stmt = select(EVTripMetrics.id).where(*self._census_filters(window))
+        ids = (await db.execute(stmt)).scalars().all()
+        return len((await self.selection(db)).pick(ids, self.update_key))
 
-    async def affected_rows(self, db: AsyncSession) -> list[EVTripMetrics]:
+    async def affected_rows(
+        self, db: AsyncSession, keys: Iterable[str] | None = None
+    ) -> list[EVTripMetrics]:
         window = await self.recorder_window()
         if window is None:
             return []
@@ -231,7 +247,9 @@ class RecorderReplay(RepairOperation):
             .where(*self._census_filters(window))
             .order_by(EVTripMetrics.id)
         )
-        return list((await db.execute(stmt)).scalars().all())
+        rows = (await db.execute(stmt)).scalars().all()
+        selection = await self.selection(db, keys)
+        return selection.pick(rows, lambda row: self.update_key(row.id))
 
     # ------------------------------------------------------------------
     # History fetch
@@ -286,9 +304,22 @@ class RecorderReplay(RepairOperation):
     # Replay core
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _revert(row: EVTripMetrics, before_img: dict[str, Any], fields: Iterable[str]) -> None:
+        """Put the named fields back to their pre-replay values."""
+        original = deserialize_row(EVTripMetrics, before_img)
+        for f in fields:
+            setattr(row, f, original[f])
+
     async def _replay(
-        self, db: AsyncSession, collect_diffs: bool
+        self, db: AsyncSession, keys: Iterable[str] | None = None
     ) -> tuple[dict[str, Any], list[RepairGroup]]:
+        """Replay every state, then undo whatever falls outside the selection.
+
+        Replay can't be aimed at single trips — a state can feed several — so
+        unselected or skipped groups are reverted (updates) or deleted
+        (recovered inserts) after the fact.
+        """
         from web.services.sources.ha_fordpass import adapter
         from web.services.sources.ha_fordpass import handlers as fp_handlers
         from web.services.sources.ha_fordpass.dispatch import dispatch_slug
@@ -400,34 +431,40 @@ class RecorderReplay(RepairOperation):
             ]
             if not changed_fields:
                 continue
-            original = deserialize_row(EVTripMetrics, before_img)
-            for f in changed_fields:
-                setattr(row, f, original[f])
+            self._revert(row, before_img, changed_fields)
             details["protected_reverted"] += 1
             reverted_ids.add(row.id)
         if reverted_ids:
             await db.flush()
 
-        # Per-field fill counts + diffs over mutable rows and new inserts.
+        # Per-field fill counts + diffs over selected mutable rows and inserts.
+        selection = await self.selection(db, keys)
         groups: list[RepairGroup] = []
         filled: dict[str, int] = {}
+        dropped = False
         for row in after_rows:
             if row.id in reverted_ids:
                 continue
             before_img = before.get(row.id)
             after_img = serialize_row(row)
+            sources = attribution.sources_for(row)
             if before_img is None:
+                group_key = self.insert_key(after_img, sources)
+                if not selection.allows(group_key):
+                    await db.delete(row)
+                    dropped = True
+                    continue
                 details["trips_recovered"] += 1
                 details["rows_changed"] += 1
-                if collect_diffs:
-                    groups.append(
-                        self._group(
-                            RepairDiff(row.id, None, after_img, "insert"),
-                            after_img,
-                            window,
-                            attribution.sources_for(row),
-                        )
+                groups.append(
+                    self._group(
+                        RepairDiff(row.id, None, after_img, "insert"),
+                        after_img,
+                        window,
+                        sources,
+                        group_key,
                     )
+                )
                 continue
             if after_img.get("source_system") not in MUTABLE_SOURCE_SYSTEMS:
                 continue
@@ -436,27 +473,32 @@ class RecorderReplay(RepairOperation):
             }
             if not changed:
                 continue
+            group_key = self.update_key(row.id)
+            if not selection.allows(group_key):
+                self._revert(row, before_img, changed)
+                dropped = True
+                continue
             details["rows_changed"] += 1
             for f in self.ENRICHABLE_FIELDS:
                 if f in changed and before_img.get(f) is None and changed[f] is not None:
                     filled[f] = filled.get(f, 0) + 1
-            if collect_diffs:
-                groups.append(
-                    self._group(
-                        RepairDiff(
-                            row.id,
-                            {f: before_img.get(f) for f in changed},
-                            changed,
-                            "update",
-                            identity={
-                                f: after_img.get(f) for f in self.IDENTITY_FIELDS
-                            },
-                        ),
-                        after_img,
-                        window,
-                        attribution.sources_for(row),
-                    )
+            groups.append(
+                self._group(
+                    RepairDiff(
+                        row.id,
+                        {f: before_img.get(f) for f in changed},
+                        changed,
+                        "update",
+                        identity={f: after_img.get(f) for f in self.IDENTITY_FIELDS},
+                    ),
+                    after_img,
+                    window,
+                    sources,
+                    group_key,
                 )
+            )
+        if dropped:
+            await db.flush()
         details["filled"] = filled
         return details, groups
 
@@ -466,6 +508,7 @@ class RecorderReplay(RepairOperation):
         after_img: dict[str, Any],
         window: datetime,
         sources: list[tuple[str, datetime]],
+        key: str,
     ) -> RepairGroup:
         """Wrap one replayed row with the states and window it came from."""
         context: dict[str, Any] = {}
@@ -482,7 +525,9 @@ class RecorderReplay(RepairOperation):
             )
         context["replayed from"] = self.source_label
         context["history window"] = f"since {window}"
-        return RepairGroup([diff], label=f"Trip #{diff.row_id}", context=context)
+        return RepairGroup(
+            [diff], label=f"Trip #{diff.row_id}", context=context, key=key
+        )
 
     # ------------------------------------------------------------------
     # RepairOperation interface
@@ -493,17 +538,19 @@ class RecorderReplay(RepairOperation):
     ) -> RepairPreview:
         """Dry-run replay in a rollback_session; `db` is unused (interface compat)."""
         async with rollback_session(engine=self._rollback_engine) as session:
-            _details, groups = await self._replay(session, collect_diffs=True)
+            _details, groups = await self._replay(session)
         return RepairPreview(
             groups[offset : offset + limit], len(groups), offset, limit
         )
 
-    async def execute(self, db: AsyncSession) -> int:
-        details, _groups = await self._replay(db, collect_diffs=False)
+    async def execute(self, db: AsyncSession, keys: Iterable[str] | None = None) -> int:
+        details, _groups = await self._replay(db, keys)
         self.last_details = details
         return details["rows_changed"]
 
-    async def apply(self, db: AsyncSession) -> RepairResult:
+    async def apply(
+        self, db: AsyncSession, keys: Iterable[str] | None = None
+    ) -> RepairResult:
         """Snapshot enrichable rows, then always replay — even at census 0.
 
         Unlike the base template, an empty census does not short-circuit:
@@ -514,19 +561,15 @@ class RecorderReplay(RepairOperation):
         """
         from web.services.repair.snapshot import snapshot_rows
 
-        rows = await self.affected_rows(db)
+        keys = None if keys is None else frozenset(keys)
+        rows = await self.affected_rows(db, keys)
         run_id: uuid.UUID | None = None
         snapshot_count = 0
         if rows:
-            for row in rows:
-                if getattr(row, "source_system", None) not in MUTABLE_SOURCE_SYSTEMS:
-                    raise ValueError(
-                        f"repair '{self.slug}' targeted a non-mutable row "
-                        f"(id={row.id}, source_system={row.source_system!r})"
-                    )
+            self.guard(rows)
             run_id = uuid.uuid4()
             snapshot_count = await snapshot_rows(db, run_id, self.slug, rows)
-        affected = await self.execute(db)
+        affected = await self.execute(db, keys)
         return RepairResult(
             self.slug, run_id, affected, snapshot_count, details=dict(self.last_details)
         )

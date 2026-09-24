@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, overload
+from typing import Any, TypeVar, overload
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +43,8 @@ def _aware(ts: datetime | None) -> datetime | None:
 
 DEFAULT_PREVIEW_LIMIT = 10
 
+T = TypeVar("T")
+
 
 @dataclass
 class RepairDiff:
@@ -63,11 +66,16 @@ class RepairDiff:
 
 @dataclass
 class RepairGroup:
-    """The diffs a reviewer must judge together, plus the evidence that paired them."""
+    """The diffs a reviewer must judge together, plus the evidence that paired them.
+
+    `key` names the group stably across requests so a reviewer can select or
+    skip it; an empty key means the group cannot be selected on its own.
+    """
 
     diffs: list[RepairDiff]
     label: str | None = None
     context: dict[str, Any] = field(default_factory=dict)
+    key: str = ""
 
     @property
     def actions(self) -> list[str]:
@@ -125,6 +133,11 @@ class RepairPreview:
         return [diff for group in self.groups for diff in group.diffs]
 
     @property
+    def selectable(self) -> bool:
+        """Whether every group on the page can be ticked on its own."""
+        return bool(self.groups) and all(group.key for group in self.groups)
+
+    @property
     def unit_label(self) -> str:
         """The unit noun, singular when the total is one."""
         if self.total == 1 and self.unit.endswith("s"):
@@ -156,6 +169,20 @@ class RepairPreview:
         return self.offset + self.limit
 
 
+@dataclass(frozen=True)
+class Selection:
+    """Which group keys an operation may act on: never skipped ones, only `only` if set."""
+
+    skipped: frozenset[str] = frozenset()
+    only: frozenset[str] | None = None
+
+    def allows(self, key: str) -> bool:
+        return key not in self.skipped and (self.only is None or key in self.only)
+
+    def pick(self, items: Iterable[T], key: Callable[[T], str]) -> list[T]:
+        return [item for item in items if self.allows(key(item))]
+
+
 @dataclass
 class RepairResult:
     """Outcome of a repair apply: run identity plus affected/snapshot counts."""
@@ -168,19 +195,22 @@ class RepairResult:
 
 
 class RepairOperation(ABC):
-    """A restorable, idempotent repair over one model's rows."""
+    """A restorable, idempotent repair over one model's rows.
+
+    `keys` on affected_rows/execute/apply limits the run to groups with those
+    keys; None means every group. Skipped groups are always excluded.
+    """
 
     slug: str
     display_name: str
     description: str
     model: type
-    # Set on operations that can recover rows the census cannot see — replays
-    # insert trips that were never ingested — so Apply stays live at census 0.
-    runs_when_clean: bool = False
+    # Source systems apply() lets this operation mutate.
+    guarded_source_systems: tuple[str, ...] = MUTABLE_SOURCE_SYSTEMS
 
     @abstractmethod
     async def census(self, db: AsyncSession) -> int:
-        """Count rows this operation would currently affect."""
+        """Count groups this operation would currently affect."""
 
     @abstractmethod
     async def preview(
@@ -192,30 +222,51 @@ class RepairOperation(ABC):
         """Return one page of review groups without persisting anything."""
 
     @abstractmethod
-    async def affected_rows(self, db: AsyncSession) -> list[Any]:
+    async def affected_rows(
+        self, db: AsyncSession, keys: Iterable[str] | None = None
+    ) -> list[Any]:
         """Return the ORM rows the next execute() will mutate."""
 
     @abstractmethod
-    async def execute(self, db: AsyncSession) -> int:
+    async def execute(self, db: AsyncSession, keys: Iterable[str] | None = None) -> int:
         """Mutate affected rows in-session; return count changed."""
 
-    async def apply(self, db: AsyncSession) -> RepairResult:
-        """Template method: guard -> snapshot -> execute. Caller commits."""
-        from web.services.repair.snapshot import snapshot_rows
+    async def selection(
+        self, db: AsyncSession, keys: Iterable[str] | None = None
+    ) -> Selection:
+        """This operation's skips, narrowed to `keys` when given."""
+        from web.services.repair.skips import skipped_keys
 
-        rows = await self.affected_rows(db)
-        if not rows:
-            return RepairResult(self.slug, None, 0, 0)
+        return Selection(
+            await skipped_keys(db, self.slug),
+            None if keys is None else frozenset(keys),
+        )
+
+    def guard(self, rows: Iterable[Any]) -> None:
+        """Refuse to touch any row outside guarded_source_systems."""
         for row in rows:
-            if getattr(row, "source_system", None) not in MUTABLE_SOURCE_SYSTEMS:
+            if getattr(row, "source_system", None) not in self.guarded_source_systems:
                 raise ValueError(
                     f"repair '{self.slug}' targeted a non-mutable row "
                     f"(id={row.id}, source_system={row.source_system!r})"
                 )
+
+    async def apply(
+        self, db: AsyncSession, keys: Iterable[str] | None = None
+    ) -> RepairResult:
+        """Template method: guard -> snapshot -> execute. Caller commits."""
+        from web.services.repair.snapshot import snapshot_rows
+
+        keys = None if keys is None else frozenset(keys)
+        rows = await self.affected_rows(db, keys=keys)
+        if not rows:
+            return RepairResult(self.slug, None, 0, 0)
+        self.guard(rows)
         run_id = uuid.uuid4()
         count = await snapshot_rows(db, run_id, self.slug, rows)
-        affected = await self.execute(db)
-        return RepairResult(self.slug, run_id, affected, count)
+        affected = await self.execute(db, keys=keys)
+        details = dict(getattr(self, "last_details", {}))
+        return RepairResult(self.slug, run_id, affected, count, details=details)
 
 
 @asynccontextmanager

@@ -8,10 +8,17 @@ from web.services.repair.base import (
     RepairOperation,
     RepairPreview,
     RepairResult,
+    Selection,
     mutable_only,
     rollback_session,
 )
 from web.services.repair.registry import REPAIR_REGISTRY, get_operation
+from web.services.repair.skips import (
+    add_skips,
+    clear_skips,
+    count_skips,
+    skipped_keys,
+)
 from web.services.repair.snapshot import (
     deserialize_row,
     list_runs,
@@ -22,6 +29,10 @@ from web.services.repair.snapshot import (
 )
 
 __all__ = [
+    "add_skips",
+    "clear_skips",
+    "count_skips",
+    "skipped_keys",
     "DEFAULT_PREVIEW_LIMIT",
     "MUTABLE_SOURCE_SYSTEMS",
     "REPAIR_REGISTRY",
@@ -30,6 +41,7 @@ __all__ = [
     "RepairOperation",
     "RepairPreview",
     "RepairResult",
+    "Selection",
     "deserialize_row",
     "get_operation",
     "list_runs",

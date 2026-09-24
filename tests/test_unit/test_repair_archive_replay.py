@@ -483,9 +483,8 @@ def test_tracker_is_not_a_trip_entity():
 
 
 def test_registered_between_telemetry_derive_and_recorder_replay():
-    from web.services.repair.registry import REPAIR_REGISTRY, get_operation
+    from web.services.repair.registry import REPAIR_REGISTRY
 
     slugs = [op.slug for op in REPAIR_REGISTRY]
     assert slugs.index("archive-replay") == slugs.index("telemetry-derive") + 1
     assert slugs.index("archive-replay") == slugs.index("recorder-replay") - 1
-    assert get_operation("archive-replay").runs_when_clean is True

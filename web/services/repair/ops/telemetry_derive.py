@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import uuid
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -18,7 +18,6 @@ from web.services.repair.base import (
     RepairGroup,
     RepairOperation,
     RepairPreview,
-    RepairResult,
     _aware,
 )
 
@@ -55,11 +54,13 @@ class TelemetryDerive(RepairOperation):
         "stored in the database — no Home Assistant connection needed."
     )
     model = EVTripMetrics
+    guarded_source_systems = DERIVABLE_SOURCE_SYSTEMS
 
     def __init__(self):
         # Detail counts from the most recent execute(), for route rendering.
         self.last_details: dict[str, Any] = {}
-        self._ignition_fills = 0
+        # Trips whose start came from the ignition fallback, for the detail count.
+        self._ignition_trips: set[int] = set()
 
     async def _candidates(self, db: AsyncSession) -> list[EVTripMetrics]:
         # Coarse SQL filter; whether anything is actually derivable is
@@ -332,7 +333,7 @@ class TelemetryDerive(RepairOperation):
                     if trip.duration is None:
                         changes["duration"] = seconds
                         notes["duration"] = self._duration_note(distance, seconds)
-                    self._ignition_fills += 1
+                    self._ignition_trips.add(trip.id)
 
         if trip.efficiency is None and distance is not None and distance > 0:
             energy = (
@@ -388,17 +389,21 @@ class TelemetryDerive(RepairOperation):
 
         return changes, notes
 
+    @staticmethod
+    def group_key(trip: EVTripMetrics, changes: dict[str, Any]) -> str:
+        """Trip id plus the fields it would gain, so new evidence resurfaces a skip."""
+        return f"trip:{trip.id}:{'+'.join(sorted(changes))}"
+
     async def _pending(
-        self, db: AsyncSession, limit: int | None = None
+        self, db: AsyncSession, keys: Iterable[str] | None = None
     ) -> list[tuple[EVTripMetrics, dict[str, Any], dict[str, str]]]:
         out: list[tuple[EVTripMetrics, dict[str, Any], dict[str, str]]] = []
         for trip in await self._candidates(db):
             changes, notes = await self._changes(db, trip)
             if changes:
                 out.append((trip, changes, notes))
-                if limit is not None and len(out) >= limit:
-                    break
-        return out
+        selection = await self.selection(db, keys)
+        return selection.pick(out, lambda item: self.group_key(item[0], item[1]))
 
     # ------------------------------------------------------------------
     # RepairOperation interface
@@ -436,43 +441,27 @@ class TelemetryDerive(RepairOperation):
                         "derives": ", ".join(changes),
                         "source": "stored vehicle telemetry and GPS history",
                     },
+                    key=self.group_key(trip, changes),
                 )
             )
         return RepairPreview(groups, len(pending), offset, limit)
 
-    async def affected_rows(self, db: AsyncSession) -> list[EVTripMetrics]:
-        return [trip for trip, _changes, _notes in await self._pending(db)]
+    async def affected_rows(
+        self, db: AsyncSession, keys: Iterable[str] | None = None
+    ) -> list[EVTripMetrics]:
+        return [trip for trip, _changes, _notes in await self._pending(db, keys)]
 
-    async def execute(self, db: AsyncSession) -> int:
+    async def execute(self, db: AsyncSession, keys: Iterable[str] | None = None) -> int:
         filled: dict[str, int] = {}
-        self._ignition_fills = 0
-        pending = await self._pending(db)
+        self._ignition_trips = set()
+        pending = await self._pending(db, keys)
         for trip, changes, _notes in pending:
             for field, val in changes.items():
                 setattr(trip, field, val)
                 filled[field] = filled.get(field, 0) + 1
-        if self._ignition_fills:
-            filled["start_time_ignition"] = self._ignition_fills
+        ignition = sum(1 for trip, _c, _n in pending if trip.id in self._ignition_trips)
+        if ignition:
+            filled["start_time_ignition"] = ignition
         await db.flush()
         self.last_details = {"rows_changed": len(pending), "filled": filled}
         return len(pending)
-
-    async def apply(self, db: AsyncSession) -> RepairResult:
-        """Base template with the guard widened to DERIVABLE_SOURCE_SYSTEMS."""
-        from web.services.repair.snapshot import snapshot_rows
-
-        rows = await self.affected_rows(db)
-        if not rows:
-            return RepairResult(self.slug, None, 0, 0)
-        for row in rows:
-            if getattr(row, "source_system", None) not in DERIVABLE_SOURCE_SYSTEMS:
-                raise ValueError(
-                    f"repair '{self.slug}' targeted a non-mutable row "
-                    f"(id={row.id}, source_system={row.source_system!r})"
-                )
-        run_id = uuid.uuid4()
-        count = await snapshot_rows(db, run_id, self.slug, rows)
-        affected = await self.execute(db)
-        return RepairResult(
-            self.slug, run_id, affected, count, details=dict(self.last_details)
-        )

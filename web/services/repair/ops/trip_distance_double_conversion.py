@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,7 +35,13 @@ class TripDistanceDoubleConversion(RepairOperation):
     )
     model = EVTripMetrics
 
-    async def _candidates(self, db: AsyncSession) -> list[EVTripMetrics]:
+    @staticmethod
+    def group_key(row: EVTripMetrics) -> str:
+        return f"trip:{row.id}"
+
+    async def _candidates(
+        self, db: AsyncSession, keys: Iterable[str] | None = None
+    ) -> list[EVTripMetrics]:
         # Coarse SQL filter; exact ratio check stays in Python for portability.
         stmt = (
             select(EVTripMetrics)
@@ -56,7 +64,7 @@ class TripDistanceDoubleConversion(RepairOperation):
             ratio = float(row.distance) / odo_delta
             if RATIO_BAND[0] <= ratio <= RATIO_BAND[1]:
                 out.append(row)
-        return out
+        return (await self.selection(db, keys)).pick(out, self.group_key)
 
     @staticmethod
     def _evidence(row: EVTripMetrics) -> dict[str, str]:
@@ -120,15 +128,18 @@ class TripDistanceDoubleConversion(RepairOperation):
                     ],
                     label=f"Trip #{row.id}",
                     context=self._evidence(row),
+                    key=self.group_key(row),
                 )
             )
         return RepairPreview(groups, len(candidates), offset, limit)
 
-    async def affected_rows(self, db: AsyncSession) -> list[EVTripMetrics]:
-        return await self._candidates(db)
+    async def affected_rows(
+        self, db: AsyncSession, keys: Iterable[str] | None = None
+    ) -> list[EVTripMetrics]:
+        return await self._candidates(db, keys)
 
-    async def execute(self, db: AsyncSession) -> int:
-        rows = await self._candidates(db)
+    async def execute(self, db: AsyncSession, keys: Iterable[str] | None = None) -> int:
+        rows = await self._candidates(db, keys)
         for row in rows:
             for field, val in self._fixed_values(row).items():
                 setattr(row, field, val)

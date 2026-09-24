@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import select
@@ -213,6 +214,12 @@ def pair_evidence(survivor: dict, loser: dict) -> dict[str, str]:
     }
 
 
+def pair_key(survivor: EVTripMetrics, loser: EVTripMetrics) -> str:
+    """Stable group key: the pair's row ids, ascending."""
+    low, high = sorted((survivor.id, loser.id))
+    return f"pair:{low}-{high}"
+
+
 class TripDuplicateConsolidation(RepairOperation):
     """Merge x1.609 duplicate trip pairs, keeping the smaller (correct) distance."""
 
@@ -238,12 +245,16 @@ class TripDuplicateConsolidation(RepairOperation):
         return list((await db.execute(stmt)).scalars().all())
 
     async def _pairs(
-        self, db: AsyncSession
+        self, db: AsyncSession, keys: Iterable[str] | None = None
     ) -> list[tuple[EVTripMetrics, EVTripMetrics]]:
+        # Pair over every candidate before filtering, so a skipped pair's rows
+        # can never be re-paired with something else.
         rows = await self._load_candidates(db)
         by_pk = {row.id: row for row in rows}
         dict_pairs = find_unit_duplicate_pairs([_row_dict(r) for r in rows])
-        return [(by_pk[s["id"]], by_pk[lo["id"]]) for s, lo in dict_pairs]
+        pairs = [(by_pk[s["id"]], by_pk[lo["id"]]) for s, lo in dict_pairs]
+        selection = await self.selection(db, keys)
+        return selection.pick(pairs, lambda pair: pair_key(*pair))
 
     async def census(self, db: AsyncSession) -> int:
         return len(await self._pairs(db))
@@ -281,16 +292,19 @@ class TripDuplicateConsolidation(RepairOperation):
                     ],
                     label=f"Trips #{survivor.id} + #{loser.id}",
                     context=pair_evidence(survivor_row, loser_row),
+                    key=pair_key(survivor, loser),
                 )
             )
         return RepairPreview(groups, len(pairs), offset, limit, unit="pairs")
 
-    async def affected_rows(self, db: AsyncSession) -> list[EVTripMetrics]:
-        return [row for pair in await self._pairs(db) for row in pair]
+    async def affected_rows(
+        self, db: AsyncSession, keys: Iterable[str] | None = None
+    ) -> list[EVTripMetrics]:
+        return [row for pair in await self._pairs(db, keys) for row in pair]
 
-    async def execute(self, db: AsyncSession) -> int:
+    async def execute(self, db: AsyncSession, keys: Iterable[str] | None = None) -> int:
         changed = 0
-        for survivor, loser in await self._pairs(db):
+        for survivor, loser in await self._pairs(db, keys):
             merged = merge_pair(_row_dict(survivor), _row_dict(loser))
             for field, val in merged.items():
                 setattr(survivor, field, val)

@@ -138,10 +138,10 @@ class _DummyDistanceRepair(RepairOperation):
     async def preview(self, db, limit=10, offset=0):
         return RepairPreview([], 0, offset, limit)
 
-    async def affected_rows(self, db):
+    async def affected_rows(self, db, keys=None):
         return await self._candidates(db)
 
-    async def execute(self, db):
+    async def execute(self, db, keys=None):
         rows = await self._candidates(db)
         if not rows:
             return 0
