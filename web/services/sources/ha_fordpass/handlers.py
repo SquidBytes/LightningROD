@@ -973,7 +973,6 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     duration, power stats, location, and plug times. Performs duplicate detection
     and network resolution.
     """
-    from sqlalchemy import select
 
     from db.models.charging_session import EVChargingSession
 
@@ -1070,41 +1069,20 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # -----------------------------------------------------------------------
     duplicate_of_id = None
     if session_start_utc is not None:
-        from datetime import timedelta
-        window_start = session_start_utc - timedelta(minutes=30)
-        window_end = session_start_utc + timedelta(minutes=30)
+        from web.queries.sessions import find_matching_sessions
 
-        fuzzy_result = await db.execute(
-            select(
-                EVChargingSession.id,
-                EVChargingSession.energy_kwh,
-                EVChargingSession.source_system,
-            )
-            .where(EVChargingSession.session_start_utc.between(window_start, window_end))
-            .where(EVChargingSession.device_id == device_id)
-        )
-        for match_id, match_energy, match_source in fuzzy_result.all():
-            if energy_kwh is not None and match_energy is not None:
-                tolerance = abs(float(match_energy)) * 0.1 if float(match_energy) != 0 else 0.5
-                if abs(float(energy_kwh) - float(match_energy)) <= tolerance:
-                    if match_source == "ha_fordpass":
-                        # Same source duplicate -- skip silently (existing behavior)
-                        logger.info(
-                            "Duplicate HA session detected (start=%s, energy=%.3f kWh), skipping",
-                            session_start_utc, energy_kwh,
-                        )
-                        return
-                    else:
-                        # Cross-source duplicate -- create but flag for review
-                        duplicate_of_id = match_id
-                        break
-            elif energy_kwh is None and match_energy is None:
-                if match_source == "ha_fordpass":
-                    logger.info("Duplicate HA session detected (start=%s, no energy), skipping", session_start_utc)
-                    return
-                else:
-                    duplicate_of_id = match_id
-                    break
+        matches = await find_matching_sessions(db, device_id, session_start_utc, energy_kwh)
+        if matches:
+            match_id, match_source = matches[0]
+            if match_source == "ha_fordpass":
+                # Same source duplicate -- skip silently (existing behavior)
+                logger.info(
+                    "Duplicate HA session detected (start=%s, energy=%s kWh), skipping",
+                    session_start_utc, energy_kwh,
+                )
+                return
+            # Cross-source duplicate -- create but flag for review
+            duplicate_of_id = match_id
 
     # -----------------------------------------------------------------------
     # Network resolution
