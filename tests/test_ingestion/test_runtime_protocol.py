@@ -21,6 +21,22 @@ def test_ha_websocket_runtime_is_ingestion_runtime():
     assert isinstance(rt, IngestionRuntime)
 
 
+def test_runtime_without_identity_is_not_ingestion_runtime():
+    """source_name and instance_label are contract members, not getattr defaults."""
+
+    class _Anonymous:
+        config_id = 1
+
+        async def start(self) -> None: ...
+        async def stop(self) -> None: ...
+
+        @property
+        def health(self) -> dict:
+            return {}
+
+    assert not isinstance(_Anonymous(), IngestionRuntime)
+
+
 def test_ha_websocket_runtime_carries_config_id():
     rt = HAWebSocketRuntime(config_id=42, ha_url="http://x", ha_token="t")
     assert rt.config_id == 42

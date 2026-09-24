@@ -165,10 +165,7 @@ class IngestionSupervisor:
         same accessor works for multi-instance lookups in v2.
         """
         for rt in self._runtimes.values():
-            if (
-                getattr(rt, "source_name", None) == source_name
-                and getattr(rt, "instance_label", None) == instance_label
-            ):
+            if rt.source_name == source_name and rt.instance_label == instance_label:
                 return rt
         return None
 
@@ -185,8 +182,8 @@ class IngestionSupervisor:
         return [
             {
                 "config_id": cid,
-                "source_name": getattr(rt, "source_name", "unknown"),
-                "instance_label": getattr(rt, "instance_label", "default"),
+                "source_name": rt.source_name,
+                "instance_label": rt.instance_label,
                 **rt.health,
             }
             for cid, rt in self._runtimes.items()
