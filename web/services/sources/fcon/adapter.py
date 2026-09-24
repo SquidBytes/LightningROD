@@ -1,12 +1,48 @@
-"""FordConnect adapter: maps `/telemetry` metrics onto LightningROD tables."""
+"""FordConnect adapter: maps endpoint responses onto LightningROD tables."""
 
 from __future__ import annotations
 
+import logging
+from datetime import UTC, datetime
 from typing import Any
 
-from web.services.units.data_map import DataMapping
+from web.services.sources.fcon.identity import SOURCE_SYSTEM, device_id_of
+from web.services.sources.ford_metrics.parser import data_map, parse_metrics
+from web.services.sources.ford_metrics.writer import upsert_rows
+from web.services.units.data_map import DataMapping, SourceKind, SourceRef
+from web.services.vehicles.auto_create import ensure_vehicle
 
-DATA_MAP: list[DataMapping] = []
+logger = logging.getLogger("lightningrod.sources.fcon")
+
+TELEMETRY = SourceRef("telemetry", SourceKind.HTTP_ENDPOINT)
+DATA_MAP: list[DataMapping] = data_map(TELEMETRY)
+_BY_FIELD = {m.source_field: m for m in DATA_MAP}
+
+# Keyed by DataMapping.key, read back by /admin/data-sources.
+_last_seen_raw: dict[str, dict[str, Any]] = {}
+
+
+def _record_last_seen(metric: str, entry: Any, converted: Any) -> None:
+    mapping = _BY_FIELD.get(metric)
+    if mapping is None:
+        return
+    value = entry.get("value") if isinstance(entry, dict) else entry
+    _last_seen_raw[mapping.key] = {
+        "value": value,
+        "unit": mapping.source_unit,
+        "declared_unit": mapping.source_unit,
+        "method": "declared",
+        "seen_at": datetime.now(UTC).isoformat(),
+        "converted": converted,
+    }
+
+
+def _display_name(garage: dict) -> str | None:
+    nickname = (garage.get("nickName") or "").strip()
+    if nickname:
+        return nickname
+    model = " ".join(str(garage[k]) for k in ("modelYear", "modelName") if garage.get(k))
+    return model or None
 
 
 async def process_sample(
@@ -15,4 +51,27 @@ async def process_sample(
     db: Any,
     source_config: dict | None = None,
 ) -> None:
-    """Parse one endpoint response. Nothing is mapped yet."""
+    """Parse one endpoint response; `source_ref` is the endpoint name."""
+    device_id = device_id_of(payload)
+    if source_ref == "garage":
+        if device_id:
+            await ensure_vehicle(
+                db,
+                device_id,
+                source_system=SOURCE_SYSTEM,
+                vin=payload.get("vin"),
+                display_name=_display_name(payload),
+            )
+        return
+    if source_ref != "telemetry":
+        return
+    if device_id is None:
+        logger.warning("fcon telemetry without a vin; skipped")
+        return
+    await ensure_vehicle(db, device_id, source_system=SOURCE_SYSTEM, vin=payload.get("vin"))
+    rows = parse_metrics(payload.get("metrics") or {})
+    for row in rows:
+        for metric, entry in row.raw.items():
+            column = _BY_FIELD[metric].db_column
+            _record_last_seen(metric, entry, row.values.get(column))
+    await upsert_rows(db, device_id, rows, source_system=SOURCE_SYSTEM)

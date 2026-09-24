@@ -24,6 +24,7 @@ from web.services.sources.fcon.client import (
 )
 from web.services.sources.fcon.config import FconConfig
 from web.services.sources.fcon.tokens import ConsentRequired, TokenManager
+from web.services.sources.ford_metrics.parser import parse_time
 
 logger = logging.getLogger("lightningrod.ingestion.fcon")
 
@@ -53,16 +54,6 @@ def vehicle_is_awake(payload: dict) -> bool:
         or plug in ("CHARGING", "CHARGINGAC", "CONNECTED")
         or display == "IN_PROGRESS"
     )
-
-
-def parse_update_time(raw: Any) -> datetime | None:
-    if not isinstance(raw, str) or not raw:
-        return None
-    try:
-        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def age_text(then: datetime, now: datetime) -> str:
@@ -207,7 +198,7 @@ class FconPollingRuntime:
                 self._schedules_at = self._now()
             elif endpoint == "telemetry" and isinstance(payload, dict):
                 awake = vehicle_is_awake(payload)
-                reading = parse_update_time(payload.get("updateTime"))
+                reading = parse_time(payload.get("updateTime"))
                 if reading is not None:
                     self._newest_reading = reading
         if self._health["connection_state"] in ("starting", "rate_limited"):

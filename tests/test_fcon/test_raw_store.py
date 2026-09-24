@@ -11,11 +11,8 @@ from db.models.fcon_raw_sample import FconRawSample
 from tests.conftest import FixedSessionFactory
 from tests.test_fcon.payloads import telemetry
 from web.services.sources.fcon import ingest
-from web.services.sources.fcon.raw_store import (
-    FconRawArchive,
-    device_id_of,
-    fingerprint,
-)
+from web.services.sources.fcon.identity import device_id_of
+from web.services.sources.fcon.raw_store import FconRawArchive, fingerprint
 
 pytestmark = pytest.mark.db
 

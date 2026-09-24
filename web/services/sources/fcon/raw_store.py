@@ -19,12 +19,12 @@ from db.engine import AsyncSessionLocal
 from db.models.fcon_raw_sample import FconRawSample
 from db.portable_insert import portable_insert
 from web.queries.settings import get_app_setting
-from web.services.ingestion.fcon_poller import parse_update_time
 from web.services.ingestion.raw_archive import RetentionPruner
+from web.services.sources.fcon.identity import SOURCE_SYSTEM, device_id_of
+from web.services.sources.ford_metrics.parser import parse_time
 
 logger = logging.getLogger("lightningrod.sources.fcon.raw_store")
 
-SOURCE_SYSTEM = "fcon"
 INGEST_SCHEMA_VERSION = 2
 RETENTION_SETTING = "fcon_raw_retention_days"
 DEFAULT_RETENTION_DAYS = 30
@@ -49,12 +49,6 @@ def fingerprint(endpoint: str, payload: dict) -> str:
         basis = payload
     raw = json.dumps({"endpoint": endpoint, "basis": basis}, sort_keys=True, default=str)
     return hashlib.sha256(raw.encode()).hexdigest()
-
-
-def device_id_of(payload: dict) -> str | None:
-    """Lower-cased VIN — the same device_id the Home Assistant source writes."""
-    vin = payload.get("vin")
-    return vin.strip().lower() if isinstance(vin, str) and vin.strip() else None
 
 
 class FconRawArchive(RetentionPruner):
@@ -88,7 +82,7 @@ class FconRawArchive(RetentionPruner):
             endpoint=endpoint,
             payload=payload,
             fingerprint=fp,
-            recorded_at=parse_update_time(payload.get("updateTime")) or fetched_at,
+            recorded_at=parse_time(payload.get("updateTime")) or fetched_at,
             last_seen_at=fetched_at,
             source_system=SOURCE_SYSTEM,
             ingest_schema_version=INGEST_SCHEMA_VERSION,
