@@ -1488,7 +1488,7 @@ async def data_sources_tab(
     # the FordPass save handler, so we skip rendering it as its own card.
     cards = []
     for source in SOURCE_REGISTRY:
-        if source.source_name == "ha_gas_price":
+        if source.source_name in ("ha_gas_price", "fcon"):
             continue
         row = await find_row(db, source.source_name)
         config = None

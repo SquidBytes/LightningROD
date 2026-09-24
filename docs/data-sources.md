@@ -6,6 +6,10 @@ Every field ingested by LightningROD is declared in a source adapter's
 `DATA_MAP` registry. This page reflects that registry at commit time and is
 the observable record of how each value is mapped and converted.
 
+## fcon
+
+_No mappings registered._
+
 ## ha_fordpass
 
 | Source Entity | Source Field | Source Unit | DB Table | DB Column | DB Unit | Notes |

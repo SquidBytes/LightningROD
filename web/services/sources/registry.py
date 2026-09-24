@@ -7,10 +7,11 @@ module manifests. Each source declares itself in its own package.
 
 from __future__ import annotations
 
-from web.services.sources import ha_fordpass, ha_gas_price
+from web.services.sources import fcon, ha_fordpass, ha_gas_price
 from web.services.sources.base import DataSource
 
 REGISTRY: list[DataSource] = [
     ha_fordpass.DATA_SOURCE,
     ha_gas_price.DATA_SOURCE,
+    fcon.DATA_SOURCE,
 ]

@@ -12,9 +12,18 @@ from web.services.sources.registry import REGISTRY
 pytestmark = pytest.mark.unit
 
 
-def test_registry_has_two_sources():
-    """ha_gas_price joined ha_fordpass in the registry."""
-    assert len(REGISTRY) == 2
+def test_registry_sources():
+    assert [d.source_name for d in REGISTRY] == ["ha_fordpass", "ha_gas_price", "fcon"]
+
+
+def test_registry_has_fcon():
+    by_name = {d.source_name: d for d in REGISTRY}
+    d = by_name["fcon"]
+    assert d.setup_flow == "oauth"
+    assert d.secret_fields == frozenset(
+        {"client_secret", "access_token", "refresh_token", "id_token"}
+    )
+    assert "client_id" not in d.secret_fields
 
 
 def test_registry_has_ha_fordpass():
