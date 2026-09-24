@@ -114,3 +114,31 @@ async def test_retention_prunes_old_rows(db_session, monkeypatch):
     await db_session.commit()
     await archive.prune()
     assert await _count(db_session) == 1
+
+
+async def test_retention_estimate_falls_back_then_uses_observed_rate(db_session):
+    from web.services.sources.fcon.retention import (
+        TYPICAL_SAMPLE_BYTES,
+        TYPICAL_SAMPLES_PER_DAY,
+        estimate,
+        human_size,
+    )
+
+    fresh = await estimate(db_session, 30)
+    assert not fresh.observed
+    factor = 0.45 if db_session.get_bind().dialect.name == "postgresql" else 1.0
+    assert fresh.bytes == int(TYPICAL_SAMPLES_PER_DAY * TYPICAL_SAMPLE_BYTES * factor * 30)
+    assert (await estimate(db_session, 0)).per_year
+
+    archive = FconRawArchive()
+    for i in range(60):
+        await archive.store(db_session, 1, "garage", {"n": i}, FETCHED)
+    await db_session.commit()
+    rows = (await db_session.execute(select(FconRawSample))).scalars().all()
+    for i, row in enumerate(rows):
+        row.ingested_at = datetime.now(UTC) - timedelta(hours=i)
+    await db_session.commit()
+    seen = await estimate(db_session, 30)
+    assert seen.observed
+    assert 20 < seen.samples_per_day < 30
+    assert human_size(38_000_000) == "38 MB"

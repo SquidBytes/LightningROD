@@ -95,6 +95,10 @@
                 {% endif %}
             </div>
 
+            {% if s == 'connected' and card.refresh_expires_at %}
+            <p class="text-xs text-base-content/50">Ford's permission lasts 90 days; renew it with Connect Vehicle before {{ card.refresh_expires_at[:10] }}.</p>
+            {% endif %}
+
             {% if card.authorize_url or card.pasting %}
             {% if card.authorize_url %}
             <div class="text-sm space-y-1">
@@ -115,6 +119,22 @@
             {% endif %}
         </div>
         {% endif %}
+
+        <div class="divider my-1"></div>
+        <form hx-post="/settings/fcon/retention" hx-target="#fcon-card" hx-swap="outerHTML" class="space-y-2">
+            <label class="form-control w-36">
+                <span class="label-text text-xs mb-1">Keep raw responses for (days)</span>
+                <input type="number" name="days" min="0" step="1" value="{{ card.retention_days }}"
+                       class="input input-bordered input-sm"
+                       hx-get="/settings/fcon/retention-estimate" hx-trigger="input changed delay:300ms"
+                       hx-target="#fcon-retention-estimate" hx-swap="outerHTML" hx-include="this">
+            </label>
+            <p class="text-xs text-base-content/60">
+                {% with estimate = card.estimate %}{% include "settings/partials/fcon_retention_estimate.html" %}{% endwith %}
+                Only the raw copies expire; charging sessions and readings are kept forever. 0 keeps everything.
+            </p>
+            <button type="submit" class="btn btn-sm">Save</button>
+        </form>
 
         {% if card.message %}<div class="alert alert-success text-sm mt-2">{{ card.message }}</div>{% endif %}
     </div>

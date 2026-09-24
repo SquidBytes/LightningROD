@@ -6,7 +6,7 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
@@ -26,6 +26,11 @@ from web.services.sources.fcon.consent import (
     start_consent,
 )
 from web.services.sources.fcon.oauth import CALLBACK_PATH, redirect_uri_for
+from web.services.sources.fcon.retention import (
+    estimate,
+    get_retention_days,
+    set_retention_days,
+)
 from web.services.sources.fcon.tokens import TOKEN_FIELDS
 
 logger = logging.getLogger("lightningrod.routes.fcon")
@@ -33,6 +38,7 @@ router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
 
 CARD = "settings/partials/fcon_card.html"
+ESTIMATE = "settings/partials/fcon_retention_estimate.html"
 _NO_KEY = (
     "Not saved: LightningROD has no encryption key. Set LR_SECRET_KEY, "
     "or make the key file location writable."
@@ -65,6 +71,7 @@ async def fcon_card_context(request: Request, db: AsyncSession, **extra: Any) ->
         request.url.hostname, request.url.port, app_settings.app_port
     )
     runtime = supervisor.get_runtime(SOURCE_NAME, "default")
+    retention_days = await get_retention_days(db)
     return {
         "source": DATA_SOURCE,
         "status": _status(values, bool(opened.unreadable)),
@@ -74,6 +81,8 @@ async def fcon_card_context(request: Request, db: AsyncSession, **extra: Any) ->
         "redirect_guessed": guessed and not values.get("redirect_uri"),
         "refresh_expires_at": values.get("refresh_expires_at"),
         "health": runtime.health if runtime is not None else {},
+        "retention_days": retention_days,
+        "estimate": await estimate(db, retention_days),
         **extra,
     }
 
@@ -162,6 +171,27 @@ async def finish_connect(
         return await _card(request, db, status_code=422, paste_error=result.message, pasting=True)
     await _restart(db)
     return await _card(request, db, message=result.message)
+
+
+@router.get("/settings/fcon/retention-estimate", response_class=HTMLResponse)
+async def retention_estimate(
+    request: Request,
+    days: int = Query(0),
+    db: AsyncSession = Depends(get_db),
+):
+    return templates.TemplateResponse(
+        request, ESTIMATE, {"estimate": await estimate(db, max(days, 0))}
+    )
+
+
+@router.post("/settings/fcon/retention", response_class=HTMLResponse)
+async def save_retention(
+    request: Request,
+    days: int = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    await set_retention_days(db, days)
+    return await _card(request, db, message="Saved.")
 
 
 @router.post("/settings/fcon/disconnect", response_class=HTMLResponse)
