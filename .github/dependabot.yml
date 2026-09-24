@@ -49,6 +49,10 @@ updates:
     labels:
       - dependencies
       - docker
+    # Python version moves are deliberate: they must match .python-version and CI.
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       docker-all:
         patterns:

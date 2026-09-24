@@ -34,6 +34,8 @@ VOLUME /data
 
 # Install uv for fast dependency resolution
 RUN pip install uv
+# The environment is built once below; `uv run` at start-up must not rebuild it.
+ENV UV_NO_SYNC=1
 
 # Layer: dependencies (cached separately from app code)
 COPY pyproject.toml uv.lock ./

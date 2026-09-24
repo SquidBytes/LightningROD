@@ -32,6 +32,8 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- The Docker container no longer downloads Python and rebuilds its packages every
+  time it starts
 - Stopped blank charging sessions appearing when Home Assistant reports a charge
   log with no data
 - The duplicate trip preview now shows what the surviving trip keeps, not just
