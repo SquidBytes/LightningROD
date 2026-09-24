@@ -50,7 +50,7 @@ Replays trip-related events from LightningROD's own [event archive](settings.md#
 
 ### Recorder history replay
 
-Replays trip sensor history from Home Assistant's recorder back through the ingestion pipeline. This fills trip fields that were missed the first time — duration, start time, odometer readings, regenerated range, driving scores, and temperatures — and recovers trips that were never ingested at all. Replay needs an active Home Assistant connection *and* recorder history for the trip events sensor; the card stays disabled (with a banner explaining which is missing) until both are available. If Home Assistant is connected but no history is found, check your recorder retention — the window is re-probed every few minutes.
+Replays trip sensor history from Home Assistant's recorder back through the ingestion pipeline. This fills trip fields that were missed the first time — duration, start time, odometer readings, regenerated range, driving scores, and temperatures — and recovers trips that were never ingested at all. Both replays skip a recovered trip when it is the same drive as one you already have, so a duplicate you consolidated does not come back. Replay needs an active Home Assistant connection *and* recorder history for the trip events sensor; the card stays disabled (with a banner explaining which is missing) until both are available. If Home Assistant is connected but no history is found, check your recorder retention — the window is re-probed every few minutes.
 
 ## Snapshots and Restore
 

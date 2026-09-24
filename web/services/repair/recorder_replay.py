@@ -24,6 +24,7 @@ from web.services.repair.base import (
     mutable_only,
     rollback_session,
 )
+from web.services.repair.ops.trip_duplicates import is_same_drive
 from web.services.repair.snapshot import deserialize_row, serialize_row
 
 logger = logging.getLogger("lightningrod.repair.recorder_replay")
@@ -329,6 +330,7 @@ class RecorderReplay(RepairOperation):
             "states_replayed": 0,
             "errors": 0,
             "trips_recovered": 0,
+            "duplicates_skipped": 0,
             "protected_reverted": 0,
             "rows_changed": 0,
             "skipped_unknown_units": 0,
@@ -438,6 +440,12 @@ class RecorderReplay(RepairOperation):
         if reverted_ids:
             await db.flush()
 
+        # A recovered trip that repeats a drive already stored (e.g. the twin a
+        # consolidation deleted, whose trip_id no longer matches) is dropped.
+        known_drives = [
+            before[row.id] for row in after_rows if row.id in before
+        ]
+
         # Per-field fill counts + diffs over selected mutable rows and inserts.
         selection = await self.selection(db, keys)
         groups: list[RepairGroup] = []
@@ -450,11 +458,17 @@ class RecorderReplay(RepairOperation):
             after_img = serialize_row(row)
             sources = attribution.sources_for(row)
             if before_img is None:
+                if any(is_same_drive(after_img, known) for known in known_drives):
+                    await db.delete(row)
+                    dropped = True
+                    details["duplicates_skipped"] += 1
+                    continue
                 group_key = self.insert_key(after_img)
                 if not selection.allows(group_key):
                     await db.delete(row)
                     dropped = True
                     continue
+                known_drives.append(after_img)
                 details["trips_recovered"] += 1
                 details["rows_changed"] += 1
                 groups.append(

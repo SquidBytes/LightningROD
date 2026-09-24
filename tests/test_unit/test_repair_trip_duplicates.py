@@ -22,6 +22,7 @@ from web.services.repair import add_skips, clear_skips, restore_run
 from web.services.repair.ops.trip_duplicates import (
     TripDuplicateConsolidation,
     find_unit_duplicate_pairs,
+    is_same_drive,
     merge_pair,
 )
 
@@ -34,6 +35,22 @@ def _row(id: int, distance, end_time=T0, device_id="VIN_A", **extra) -> dict:
     row = {"id": id, "device_id": device_id, "end_time": end_time, "distance": distance}
     row.update(extra)
     return row
+
+
+@pytest.mark.parametrize(
+    ("other", "expected"),
+    [
+        (_row(2, 20.4, end_time=T0 + timedelta(seconds=30)), True),  # near-equal
+        (_row(2, 20.0 * 1.609344), True),  # unit twin
+        (_row(2, 45.0), False),  # different distance
+        (_row(2, 20.0, end_time=T0 + timedelta(minutes=10)), False),
+        (_row(2, 20.0, device_id="VIN_B"), False),
+        (_row(2, 20.0, start_time=T0 - timedelta(hours=2)), False),  # other drive
+    ],
+)
+def test_is_same_drive(other, expected):
+    trip = _row(1, 20.0, start_time=T0 - timedelta(minutes=30))
+    assert is_same_drive(trip, other) is expected
 
 
 # ---------------------------------------------------------------------------

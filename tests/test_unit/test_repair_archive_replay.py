@@ -387,6 +387,37 @@ async def test_replay_is_idempotent(op, db_session):
 
 
 @pytest.mark.db
+async def test_replay_does_not_recover_a_drive_already_stored(op, db_session):
+    """The twin a consolidation removed must not come back as a recovered trip."""
+    await VehicleFactory.create(db_session, device_id=VIN)
+    await _seed_trip_entities(db_session)
+    await op.execute(db_session)
+    [recovered] = await _trips(db_session)
+    drive = serialize_row(recovered)
+
+    # What consolidation leaves: the drive under another trip_id, with readings
+    # just far enough apart that ingestion's own match misses it.
+    await db_session.delete(recovered)
+    await db_session.flush()
+    await TripFactory.create(
+        db_session,
+        device_id=VIN,
+        source_system="ha_fordpass",
+        end_time=recovered.end_time,
+        start_time=recovered.start_time,
+        distance=float(drive["distance"]) * 1.02,
+        energy_consumed=float(drive["energy_consumed"]) * 1.02,
+        duration=drive["duration"],
+    )
+
+    await op.execute(db_session)
+
+    assert await _trip_count(db_session) == 1
+    assert op.last_details["duplicates_skipped"] == 1
+    assert op.last_details["trips_recovered"] == 0
+
+
+@pytest.mark.db
 async def test_csv_import_trip_is_left_byte_identical(op, db_session):
     """The preservation invariant holds: protected rows are reverted."""
     await VehicleFactory.create(db_session, device_id=VIN)

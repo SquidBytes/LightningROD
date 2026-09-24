@@ -92,6 +92,25 @@ def is_unit_twin(row_a: dict, row_b: dict) -> bool:
     )
 
 
+def is_same_drive(row_a: dict, row_b: dict) -> bool:
+    """Whether two rows record one drive, at equal distances or as x1.609 twins."""
+    if row_a.get("device_id") != row_b.get("device_id"):
+        return False
+    end_a = _coerce_datetime(row_a.get("end_time"))
+    end_b = _coerce_datetime(row_b.get("end_time"))
+    if end_a is None or end_b is None:
+        return False
+    if abs((end_b - end_a).total_seconds()) > END_TIME_WINDOW_SECONDS:
+        return False
+    dist_a, dist_b = row_a.get("distance"), row_b.get("distance")
+    if dist_a is not None and dist_b is not None:
+        smaller, larger = sorted((float(dist_a), float(dist_b)))
+        twin = smaller > 0 and RATIO_BAND[0] <= larger / smaller <= RATIO_BAND[1]
+        if not (twin or _measurements_agree(dist_a, dist_b)):
+            return False
+    return is_unit_twin(row_a, row_b)
+
+
 def find_unit_duplicate_pairs(
     rows: list[dict],
 ) -> list[tuple[dict, dict]]:

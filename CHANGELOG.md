@@ -33,6 +33,8 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Event archive replay no longer brings back duplicate trips that were already
+  consolidated
 - The Docker container no longer downloads Python and rebuilds its packages every
   time it starts
 - Stopped blank charging sessions appearing when Home Assistant reports a charge
