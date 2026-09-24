@@ -6,6 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from web.services.sources.fcon.charge_sessions import record_session_if_ended
 from web.services.sources.fcon.identity import SOURCE_SYSTEM, device_id_of
 from web.services.sources.ford_metrics.parser import data_map, parse_metrics
 from web.services.sources.ford_metrics.writer import upsert_rows
@@ -75,3 +76,5 @@ async def process_sample(
             column = _BY_FIELD[metric].db_column
             _record_last_seen(metric, entry, row.values.get(column))
     await upsert_rows(db, device_id, rows, source_system=SOURCE_SYSTEM)
+    config_id = (source_config or {}).get("config_id")
+    await record_session_if_ended(db, device_id, payload, config_id)

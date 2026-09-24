@@ -13,6 +13,7 @@ For feature documentation, see the docs site at
 - Trips where the vehicle was switched on but not driven carry a "Vehicle on"
   badge, and a new Trip Display setting hides them
 - Charging and trip CSV exports include each record's ID, source and ingest time
+- Added FordConnect as a data source: connect a Ford vehicle through Ford's own API, no Home Assistant needed
 
 ### Changed
 
