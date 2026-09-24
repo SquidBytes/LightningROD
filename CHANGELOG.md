@@ -9,6 +9,8 @@ For feature documentation, see the docs site at
 
 ### Added
 
+- Charging and trip CSV exports include each record's ID, source and ingest time
+
 ### Changed
 
 ### Fixed

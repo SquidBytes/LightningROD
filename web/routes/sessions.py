@@ -256,13 +256,13 @@ async def export_sessions_csv(
     except Exception:
         tz = ZoneInfo("UTC")
 
-    def _local(dt) -> str:
+    def _local(dt, timespec: str = "minutes") -> str:
         if dt is None:
             return ""
         if dt.tzinfo is None:
             from datetime import UTC as _utc
             dt = dt.replace(tzinfo=_utc)
-        return dt.astimezone(tz).isoformat(sep=" ", timespec="minutes")
+        return dt.astimezone(tz).isoformat(sep=" ", timespec=timespec)
 
     def _num(v, dp: int) -> str:
         return "" if v is None else f"{float(v):.{dp}f}"
@@ -277,6 +277,9 @@ async def export_sessions_csv(
         "plugged_in_duration_min", "max_power_kw", "min_power_kw",
         "avg_power_kw", "charging_voltage", "charging_amperage",
         f"distance_added_{distance_label}",
+        # Record metadata, for spotting duplicates and tracing where a row came from.
+        "session_id", "source_system", f"ingested_at ({user_tz})",
+        f"original_timestamp ({user_tz})",
     ])
     for s in session_list:
         writer.writerow([
@@ -303,6 +306,10 @@ async def export_sessions_csv(
             _num(s.charging_voltage, 0),
             _num(s.charging_amperage, 0),
             _num(convert_distance(s.distance_added, distance_unit) if s.distance_added is not None else None, 1),
+            str(s.session_id),
+            s.source_system or "",
+            _local(s.ingested_at, "seconds"),
+            _local(s.original_timestamp, "seconds"),
         ])
 
     filename = f"charging-sessions-{date.today().isoformat()}.csv"

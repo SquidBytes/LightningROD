@@ -35,7 +35,7 @@ If **Hide short trips** is enabled in [Settings → General](settings.md#trip-di
 
 ### Exporting Trips
 
-Click **Export CSV** above the table to download the trips matching the current filters (date range and sort order). Hidden short trips stay out of the export too.
+Click **Export CSV** above the table to download the trips matching the current filters (date range and sort order). Hidden short trips stay out of the export too. Each row ends with the trip ID, its source, and when it was ingested.
 
 One row per trip, with start/end times, start and end location, distance, duration, energy, efficiency, odometer readings, ambient/cabin/outside temperatures, driving scores, regenerated range, and the source system. Distances, efficiency, and temperatures export in your configured display units; times in your configured timezone; energy in kWh.
 
