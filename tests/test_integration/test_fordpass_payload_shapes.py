@@ -300,3 +300,27 @@ async def test_state_contract_without_a_unit_drops_the_value(db_session):
         {"unit_system": "us_customary"},
     )
     assert _DEVICE_ID not in fp_adapter._last_outsidetemp
+
+
+async def test_log_entry_without_session_data_records_nothing(db_session):
+    """An entity with only HA's default attributes must not create a blank session."""
+    from db.models.charging_session import EVChargingSession
+    from web.services.sources.ha_fordpass.handlers import handle_energy_transfer
+
+    state = {
+        "entity_id": f"sensor.fordpass_{_DEVICE_ID}_energytransferlogentry",
+        "state": "unknown",
+        "attributes": {"friendly_name": "Energy Transfer Log", "icon": "mdi:ev-station"},
+    }
+    for _ in range(2):
+        await handle_energy_transfer(
+            "energytransferlogentry", state, {"unit_system": "metric"}, _DEVICE_ID, db_session
+        )
+    await db_session.flush()
+
+    rows = (
+        await db_session.execute(
+            select(EVChargingSession).where(EVChargingSession.device_id == _DEVICE_ID)
+        )
+    ).scalars().all()
+    assert rows == []

@@ -70,7 +70,7 @@ async def query_sessions(
             else sort_col.desc().nulls_last()
         )
     else:
-        order_expr = EVChargingSession.session_start_utc.desc()
+        order_expr = EVChargingSession.session_start_utc.desc().nulls_last()
 
     # Base statement with resolved order
     stmt = select(EVChargingSession).order_by(order_expr)

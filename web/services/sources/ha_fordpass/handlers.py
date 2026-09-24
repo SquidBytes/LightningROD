@@ -1042,6 +1042,12 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     session_end_utc = _parse_iso_datetime(duration_data.get("end"))
     charge_duration_seconds = _safe_float(duration_data.get("totalTime"))
 
+    # HA always sends friendly_name/icon, so an entity with no log entry still
+    # has attributes; without a start or energy there is no session to record.
+    if session_start_utc is None and energy_kwh is None:
+        logger.debug("energytransferlogentry carries no session data, skipping")
+        return
+
     # Plug details
     plug_data = attrs.get("plugDetails", {}) or {}
     plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
