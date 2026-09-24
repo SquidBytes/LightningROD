@@ -59,10 +59,7 @@ def render_markdown(groups: list[tuple[str, list[DataMapping]]]) -> str:
             continue
         lines.append("| Source Entity | Source Field | Source Unit | DB Table | DB Column | DB Unit | Notes |")
         lines.append("|---|---|---|---|---|---|---|")
-        sorted_mappings = sorted(
-            mappings,
-            key=lambda c: (c.source.pattern, c.source_field),
-        )
+        sorted_mappings = sorted(mappings, key=lambda c: (c.source.kind, c.source.pattern, c.source_field))
         for c in sorted_mappings:
             # Escape pipe characters in notes so they don't break the table.
             notes = (c.notes or "").replace("|", "\\|").replace("\n", " ")

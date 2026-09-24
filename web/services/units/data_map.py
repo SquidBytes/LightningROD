@@ -43,3 +43,8 @@ class DataMapping:
     # ha-fordpass versions disagree on capacity scale (raw Wh vs already-kWh);
     # when True and source_unit is Wh, |value| < 1000 is treated as kWh.
     wh_autoscale: bool = False
+
+    @property
+    def key(self) -> str:
+        """Cache identity; kind keeps an endpoint and a same-named entity apart."""
+        return f"{self.source.kind}|{self.source.pattern}|{self.source_field}"

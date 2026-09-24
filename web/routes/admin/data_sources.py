@@ -28,11 +28,6 @@ router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="web/templates")
 
 
-def _mapping_key(c: DataMapping) -> str:
-    """Key convention matches ha_fordpass.adapter._record_last_seen."""
-    return f"{c.source.pattern}|{c.source_field}"
-
-
 def _load_groups() -> list[dict[str, Any]]:
     """Read every adapter's DATA_MAP + _last_seen_raw at request time.
 
@@ -51,15 +46,13 @@ def _load_groups() -> list[dict[str, Any]]:
         last_seen: dict[str, dict[str, Any]] = dict(getattr(module, "_last_seen_raw", {}))
         rows: list[dict[str, Any]] = []
         covered: set[tuple[str, str]] = set()
-        for c in sorted(
-            mappings, key=lambda x: (x.source.pattern, x.source_field)
-        ):
+        for c in sorted(mappings, key=lambda x: (x.source.kind, x.source.pattern, x.source_field)):
             key = (c.source.pattern, c.source_field)
             covered.add(key)
             rows.append(
                 {
                     "mapping": c,
-                    "last_seen": last_seen.get(_mapping_key(c)),
+                    "last_seen": last_seen.get(c.key),
                     "detection": detection_index.get(key),
                 }
             )

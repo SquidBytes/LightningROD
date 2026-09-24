@@ -37,7 +37,7 @@ def test_record_last_seen_writes_key():
     c = _sample_mapping()
     adapter._record_last_seen(c, raw_value=418.0, converted=418.0)
 
-    key = f"{c.source.pattern}|{c.source_field}"
+    key = c.key
     assert key in adapter._last_seen_raw
     entry = adapter._last_seen_raw[key]
     assert entry["value"] == 418.0
@@ -55,7 +55,7 @@ def test_record_last_seen_updates_existing_key():
     adapter._record_last_seen(c, raw_value=100, converted=100)
     adapter._record_last_seen(c, raw_value=200, converted=200)
 
-    key = f"{c.source.pattern}|{c.source_field}"
+    key = c.key
     # Only one entry per key, and it holds the latest value.
     assert len(adapter._last_seen_raw) == 1
     assert adapter._last_seen_raw[key]["value"] == 200
@@ -77,7 +77,7 @@ def test_record_last_seen_effective_unit_overrides_mapping_unit():
         notes="",
     )
     adapter._record_last_seen(c, raw_value=2.5, converted=4.02, effective_unit="mi")
-    key = f"{c.source.pattern}|{c.source_field}"
+    key = c.key
     entry = adapter._last_seen_raw[key]
     assert entry["unit"] == "mi"
     assert entry["value"] == 2.5
@@ -160,12 +160,23 @@ def test_ha_unit_system_converted_missing_config_falls_back():
 
 
 def test_key_convention_matches_mapping():
-    """Key format must be f'{entity_pattern}|{attribute}'.
+    """Key format must be f'{kind}|{entity_pattern}|{attribute}'.
 
     /admin/data-sources builds the same key when displaying cached values;
     any drift here silently breaks the diagnostic page.
     """
     c = _sample_mapping()
     adapter._record_last_seen(c, raw_value=42, converted=42)
-    expected_key = "sensor.fordpass_{vin}_metrics|xevBatteryMaximumRange"
+    expected_key = "ha_entity_id|sensor.fordpass_{vin}_metrics|xevBatteryMaximumRange"
     assert expected_key in adapter._last_seen_raw
+
+
+def test_key_separates_source_kinds():
+    """An HTTP endpoint named like an HA entity must not share its cache slot."""
+    from dataclasses import replace
+
+    from web.services.units.data_map import SourceKind, SourceRef
+
+    c = _sample_mapping()
+    http = replace(c, source=SourceRef(c.source.pattern, SourceKind.HTTP_ENDPOINT))
+    assert c.key != http.key

@@ -360,8 +360,7 @@ DATA_MAP: list[DataMapping] = [
 # ---------------------------------------------------------------------------
 # _last_seen_raw cache
 # ---------------------------------------------------------------------------
-# Keyed by f"{source.pattern}|{source_field}" — /admin/data-sources rebuilds
-# the same key, so the two must stay in step.
+# Keyed by DataMapping.key, which /admin/data-sources reads back.
 
 _last_seen_raw: dict[str, dict[str, Any]] = {}
 _last_charging_battery_temp: dict[str, float | None] = {}
@@ -380,8 +379,7 @@ def _record_last_seen(
     `effective_unit` overrides `mapping.source_unit` when per-event resolution
     produced a different one; `method` names which path resolved it.
     """
-    key = f"{mapping.source.pattern}|{mapping.source_field}"
-    _last_seen_raw[key] = {
+    _last_seen_raw[mapping.key] = {
         "value": raw_value,
         "unit": effective_unit or mapping.source_unit,
         "declared_unit": mapping.source_unit,
