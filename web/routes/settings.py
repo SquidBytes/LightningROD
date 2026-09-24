@@ -76,7 +76,7 @@ from web.services.repair.registry import REPAIR_REGISTRY, get_operation
 from web.services.repair.skips import add_skips, clear_skips, count_skips
 from web.services.repair.snapshot import list_runs, purge_run, restore_run
 from web.services.secrets import SecretKeyUnavailable
-from web.services.sources.config_secrets import open_config, seal_config
+from web.services.sources.config_store import find_row, merge_into_row, read_row
 from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
 from web.services.sources.registry import REGISTRY as SOURCE_REGISTRY
@@ -1444,26 +1444,14 @@ def _last_event_timeago(adapter_module) -> str | None:
 
 
 async def _load_existing_config(db: AsyncSession, source):
-    """Load existing data_source_configs row for source, return Pydantic instance or None.
+    """Stored config as a validated model, or None when absent or invalid.
 
-    Returns None for both missing rows and rows whose stored config_json fails
-    schema validation (e.g. the pre-WR-05 seed shape with empty ha_url/ha_token).
-    Mirrors the defensive validation the GET handler does so the masked-token
-    preprocess can safely skip when there's no usable existing token to compare.
+    Invalid covers seed rows with an empty token and rows whose secret the
+    current key cannot read — either way there is no token to compare against.
     """
-    result = await db.execute(
-        select(DataSourceConfig).where(
-            DataSourceConfig.source_name == source.source_name,
-            DataSourceConfig.instance_label == "default",
-        )
-    )
-    row = result.scalar_one_or_none()
-    if row is None:
-        return None
+    row = await find_row(db, source.source_name)
     try:
-        return source.config_schema.model_validate(
-            open_config(source.source_name, row.config_json).values
-        )
+        return source.config_schema.model_validate(read_row(row).values)
     except ValidationError:
         return None
 
@@ -1475,34 +1463,8 @@ def _masked_token_for_config(config: object | None) -> str:
 
 
 async def _upsert_data_source_config(db: AsyncSession, source, config) -> None:
-    """Persist config: UPDATE the existing row, INSERT one if missing.
-
-    Fresh installs can reach first-save with no existing config row, while
-    migrated installs usually update the seeded row.
-    """
-    from datetime import UTC, datetime
-
-    result = await db.execute(
-        select(DataSourceConfig).where(
-            DataSourceConfig.source_name == source.source_name,
-            DataSourceConfig.instance_label == "default",
-        )
-    )
-    row = result.scalar_one_or_none()
-    # Seal before touching the row, so a missing key leaves it unchanged.
-    sealed = seal_config(source.source_name, config.model_dump())
-    if row is None:
-        row = DataSourceConfig(
-            source_name=source.source_name,
-            instance_label="default",
-            config_json=sealed,
-            enabled=True,
-        )
-        db.add(row)
-    else:
-        row.config_json = sealed
-        row.updated_at = datetime.now(UTC)
-    await db.commit()
+    """Persist config over the default row, inserting it on a fresh install."""
+    await merge_into_row(db, source.source_name, config.model_dump(mode="json"))
 
 
 def _card_health_inputs(source) -> tuple[dict, str | None]:
@@ -1528,18 +1490,12 @@ async def data_sources_tab(
     for source in SOURCE_REGISTRY:
         if source.source_name == "ha_gas_price":
             continue
-        result = await db.execute(
-            select(DataSourceConfig).where(
-                DataSourceConfig.source_name == source.source_name,
-                DataSourceConfig.instance_label == "default",
-            )
-        )
-        row = result.scalar_one_or_none()
+        row = await find_row(db, source.source_name)
         config = None
         partial_config = None
         needs_reauth = False
         if row is not None:
-            opened = open_config(source.source_name, row.config_json)
+            opened = read_row(row)
             needs_reauth = bool(opened.unreadable)
             try:
                 config = source.config_schema.model_validate(opened.values)
