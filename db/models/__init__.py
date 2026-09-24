@@ -20,6 +20,7 @@ from db.models.reference import (
     GasPriceReading,
 )
 from db.models.repair_backup import RepairBackup
+from db.models.repair_skip import RepairSkip
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle import EVVehicle
 from db.models.vehicle_status import EVVehicleStatus
@@ -43,4 +44,5 @@ __all__ = [
     "GasPriceReading",
     "HARawEvent",
     "RepairBackup",
+    "RepairSkip",
 ]
