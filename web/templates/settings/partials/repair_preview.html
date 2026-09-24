@@ -1,7 +1,8 @@
 {#
   Repair preview: one expandable card per review group. The summary line
   carries the detection evidence; the body shows every member row side by
-  side, field by field, with values rendered exactly as stored.
+  side, field by field, with values rendered exactly as stored. When every
+  group has a key, each gets a checkbox and Apply acts on this page only.
 #}
 {% macro raw(value) -%}
     {%- if value is none -%}
@@ -37,17 +38,31 @@
     {%- endif -%}
 {%- endmacro %}
 
+{% set selectable = preview.selectable %}
 {% if preview.groups %}
-<div class="space-y-2">
-    <div class="text-sm text-base-content/70">
-        {{ preview.total }} {{ preview.unit_label }} to review &mdash;
-        showing {{ preview.first }}&ndash;{{ preview.last }}
+<form class="space-y-2" onsubmit="return false">
+    <div class="flex items-center gap-3 text-sm text-base-content/70">
+        {% if selectable %}
+        <input type="checkbox" class="checkbox checkbox-sm" checked
+               aria-label="Select all on this page"
+               onchange="var on = this.checked; this.form.querySelectorAll('.repair-select').forEach(function (cb) { cb.checked = on; });">
+        {% endif %}
+        <span>
+            {{ preview.total }} {{ preview.unit_label }} to review &mdash;
+            showing {{ preview.first }}&ndash;{{ preview.last }}
+        </span>
     </div>
 
     {% for group in preview.groups %}
     {% set label = group.label or ('Row ' ~ (group.diffs | map(attribute='row_id') | join(' + '))) %}
     {% set headline = (group.context.items() | list | first) if group.context else none %}
-    <details class="group border border-base-300 rounded-lg bg-base-100 overflow-hidden">
+    <div class="flex items-start gap-3">
+    {% if selectable %}
+    <input type="hidden" name="page_keys" value="{{ group.key }}">
+    <input type="checkbox" class="checkbox checkbox-sm repair-select mt-2.5" name="keys"
+           value="{{ group.key }}" checked aria-label="Apply {{ label }}">
+    {% endif %}
+    <details class="group flex-1 min-w-0 border border-base-300 rounded-lg bg-base-100 overflow-hidden">
         <summary class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 cursor-pointer hover:bg-base-200/50 transition-colors">
             <svg class="w-3 h-3 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
                  viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.75"
@@ -105,12 +120,34 @@
             </div>
         </div>
     </details>
+    </div>
     {% endfor %}
 
+    <div class="flex flex-wrap items-center gap-2 pt-1">
+        {% if selectable %}
+        <button type="button" class="btn btn-warning btn-sm"
+                hx-post="/settings/data-repair/{{ op.slug }}/apply?offset={{ preview.offset }}"
+                hx-target="closest .card"
+                hx-swap="outerHTML"
+                hx-indicator="#repair-spinner-{{ op.slug }}"
+                hx-confirm="Apply the ticked items on this page? A restorable snapshot is taken first, and unticked items are skipped until you restore them.">
+            Apply selected
+        </button>
+        <span class="text-xs text-base-content/50">Unticked items are skipped and hidden.</span>
+        {% else %}
+        <button type="button" class="btn btn-warning btn-sm"
+                hx-post="/settings/data-repair/{{ op.slug }}/apply"
+                hx-target="closest .card"
+                hx-swap="outerHTML"
+                hx-indicator="#repair-spinner-{{ op.slug }}"
+                hx-confirm="Snapshot and apply all {{ preview.total }} {{ preview.unit_label }}? A restorable backup will be created.">
+            Apply all
+        </button>
+        {% endif %}
+
     {% if preview.has_prev or preview.has_next %}
-    <div class="flex items-center justify-end gap-2 pt-1">
-        <div class="join">
-            <button class="btn btn-xs join-item"
+        <div class="join ml-auto">
+            <button type="button" class="btn btn-xs join-item"
                     hx-post="/settings/data-repair/{{ op.slug }}/preview?offset={{ preview.prev_offset }}"
                     hx-target="#repair-preview-{{ op.slug }}"
                     hx-swap="innerHTML"
@@ -118,7 +155,7 @@
                     {% if not preview.has_prev %}disabled{% endif %}>
                 Previous
             </button>
-            <button class="btn btn-xs join-item"
+            <button type="button" class="btn btn-xs join-item"
                     hx-post="/settings/data-repair/{{ op.slug }}/preview?offset={{ preview.next_offset }}"
                     hx-target="#repair-preview-{{ op.slug }}"
                     hx-swap="innerHTML"
@@ -127,9 +164,9 @@
                 Next
             </button>
         </div>
-    </div>
     {% endif %}
-</div>
+    </div>
+</form>
 {% else %}
 <p class="text-sm text-base-content/50">Nothing to repair.</p>
 {% endif %}

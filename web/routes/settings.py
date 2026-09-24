@@ -70,7 +70,9 @@ from web.queries.vehicles import (
 from web.services.csv_parser import get_db_field_options
 from web.services.ingestion import supervisor
 from web.services.ingestion.raw_archive import raw_archive
+from web.services.repair.base import RepairResult
 from web.services.repair.registry import REPAIR_REGISTRY, get_operation
+from web.services.repair.skips import add_skips, clear_skips, count_skips
 from web.services.repair.snapshot import list_runs, purge_run, restore_run
 from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
@@ -2200,16 +2202,26 @@ PREVIEW_PAGE_SIZE = 10
 
 
 async def _repair_card_ctx(op, db: AsyncSession) -> dict:
-    """Per-card context: op, census, and (for the replay op) recorder window."""
+    """Per-card context: op, census, skips, and (for the replay op) recorder window."""
     is_replay = op.slug == REPLAY_SLUG
     window = await op.recorder_window() if is_replay else None
     return {
         "op": op,
         "census": await op.census(db),
+        "skipped": await count_skips(db, op.slug),
         "is_replay": is_replay,
         "window": window,
         "ha_connected": op.ha_connected() if is_replay else False,
     }
+
+
+async def _repair_preview_page(op, db: AsyncSession, offset: int):
+    """One preview page at offset, stepping back to the last page if it ran off the end."""
+    preview = await op.preview(db, limit=PREVIEW_PAGE_SIZE, offset=offset)
+    if not preview.groups and offset > 0 and preview.total:
+        last = (preview.total - 1) // PREVIEW_PAGE_SIZE * PREVIEW_PAGE_SIZE
+        preview = await op.preview(db, limit=PREVIEW_PAGE_SIZE, offset=last)
+    return preview
 
 
 @router.get("/settings/data-repair", response_class=HTMLResponse)
@@ -2314,18 +2326,61 @@ async def data_repair_preview(
 async def data_repair_apply(
     slug: str,
     request: Request,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
-    """Snapshot + apply a repair, then re-render its card with a toast."""
+    """Snapshot + apply a repair, then re-render its card with a toast.
+
+    A preview page posts `page_keys` (every group shown) and `keys` (the ticked
+    ones): only ticked groups are applied, the rest are remembered as skipped,
+    and the card comes back with a freshly detected preview. Without
+    `page_keys` the whole operation runs.
+    """
     op = get_operation(slug)
     if op is None:
         raise HTTPException(status_code=404, detail=f"Unknown repair: {slug}")
-    result = await op.apply(db)
+    form = await request.form()
+    page_keys = {str(k) for k in form.getlist("page_keys")}
+    skipped_now = 0
+    if page_keys:
+        # The op re-detects and acts only on keys it still finds; these are
+        # never trusted as row ids.
+        selected = page_keys & {str(k) for k in form.getlist("keys")}
+        skipped_now = await add_skips(db, op.slug, page_keys - selected)
+        result = (
+            await op.apply(db, keys=selected)
+            if selected
+            else RepairResult(op.slug, None, 0, 0)
+        )
+    else:
+        result = await op.apply(db)
     await db.commit()
     ctx = await _repair_card_ctx(op, db)
     ctx["result"] = result
+    ctx["skipped_now"] = skipped_now
+    if page_keys:
+        ctx["preview"] = await _repair_preview_page(op, db, max(offset, 0))
     return templates.TemplateResponse(
         request, "settings/partials/repair_op_card.html", ctx
+    )
+
+
+@router.post("/settings/data-repair/{slug}/skips/clear", response_class=HTMLResponse)
+async def data_repair_clear_skips(
+    slug: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Forget every skipped group for an operation and re-render its card."""
+    op = get_operation(slug)
+    if op is None:
+        raise HTTPException(status_code=404, detail=f"Unknown repair: {slug}")
+    await clear_skips(db, op.slug)
+    await db.commit()
+    return templates.TemplateResponse(
+        request,
+        "settings/partials/repair_op_card.html",
+        await _repair_card_ctx(op, db),
     )
 
 

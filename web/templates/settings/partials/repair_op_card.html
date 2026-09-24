@@ -24,27 +24,26 @@
                     {% if replay_disabled %}disabled{% endif %}>
                 Preview
             </button>
-            <button class="btn btn-warning btn-sm"
-                    hx-post="/settings/data-repair/{{ op.slug }}/apply"
+            <span id="repair-spinner-{{ op.slug }}" class="loading loading-spinner loading-sm htmx-indicator"></span>
+            {% if skipped %}
+            <span class="text-xs text-base-content/50 ml-auto">{{ skipped }} skipped</span>
+            <button class="btn btn-ghost btn-xs"
+                    hx-post="/settings/data-repair/{{ op.slug }}/skips/clear"
                     hx-target="closest .card"
                     hx-swap="outerHTML"
-                    hx-indicator="#repair-spinner-{{ op.slug }}"
-                    {% if op.runs_when_clean and census == 0 %}
-                    hx-confirm="Replay stored history? Recovered trips are new rows (no snapshot needed)."
-                    {% else %}
-                    hx-confirm="Snapshot and repair {{ census }} rows? A restorable backup will be created."
-                    {% endif %}
-                    {% if replay_disabled or (not op.runs_when_clean and census == 0) %}disabled{% endif %}>
-                Apply
+                    hx-indicator="#repair-spinner-{{ op.slug }}">
+                Restore skipped
             </button>
-            <span id="repair-spinner-{{ op.slug }}" class="loading loading-spinner loading-sm htmx-indicator"></span>
+            {% endif %}
         </div>
 
-        <div id="repair-preview-{{ op.slug }}" class="mt-2"></div>
+        <div id="repair-preview-{{ op.slug }}" class="mt-2">
+            {% if preview %}{% include "settings/partials/repair_preview.html" %}{% endif %}
+        </div>
 
         {% if result %}
         <div class="text-xs text-base-content/60 mt-2 space-y-0.5">
-            <div>Repaired {{ result.affected }} rows{% if result.snapshot_rows %} &mdash; {{ result.snapshot_rows }} rows snapshotted{% endif %}.</div>
+            <div>Repaired {{ result.affected }} rows{% if result.snapshot_rows %} &mdash; {{ result.snapshot_rows }} rows snapshotted{% endif %}{% if skipped_now %}; skipped {{ skipped_now }}{% endif %}.</div>
             {% for key, val in result.details.items() if key != 'filled' and val %}
             <div>{{ key.replace('_', ' ') }}: {{ val }}</div>
             {% endfor %}

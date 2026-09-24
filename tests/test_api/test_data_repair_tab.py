@@ -124,17 +124,19 @@ async def test_tab_connected_with_recorder_history(client, replay_op):
     assert "recorder replay unavailable" not in body
 
 
-async def test_replay_apply_stays_enabled_at_census_zero(client, replay_op):
-    """Replay recovers never-ingested trips, so a clean census must not grey it out."""
+async def test_replay_preview_stays_enabled_at_census_zero(client, replay_op):
+    """Replay recovers never-ingested trips, so a clean census must not grey out its preview."""
     window_ts = datetime.now(UTC) - timedelta(days=3)
     replay_op._runtime = _FakeRuntime([{"last_updated": window_ts.isoformat()}])
     response = await client.get("/settings/data-repair")
     assert response.status_code == 200
-    body = response.text
-    # Only rendered for an operation that declares it runs with a clean census.
-    assert "Replay stored history?" in body
-    # The other ops are clean too, and theirs stay on the snapshot confirm.
-    assert "Snapshot and repair 0 rows?" in body
+    button = re.search(
+        r'hx-post="/settings/data-repair/recorder-replay/preview"[^>]*>', response.text
+    )
+    assert button is not None
+    assert "disabled" not in button.group(0)
+    # Apply lives on the preview page now, never on the card.
+    assert "/apply" not in response.text
 
 
 async def test_census_badge_for_seeded_pair(client, db_session):
@@ -477,10 +479,10 @@ class _BareOperation(RepairOperation):
         ]
         return RepairPreview(groups[offset : offset + limit], len(groups), offset, limit)
 
-    async def affected_rows(self, db):
+    async def affected_rows(self, db, keys=None):
         return []
 
-    async def execute(self, db):
+    async def execute(self, db, keys=None):
         return 0
 
 
