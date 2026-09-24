@@ -1,5 +1,6 @@
 """Environment-backed application settings."""
 
+from pathlib import Path
 from typing import Any, cast
 
 from pydantic import AliasChoices, Field
@@ -14,6 +15,11 @@ class Settings(BaseSettings):
     debug: bool = Field(
         default=False,
         validation_alias=AliasChoices("APP_DEBUG", "LIGHTNINGROD_DEBUG"),
+    )
+    # Key for stored credentials. Unset: a generated key file is used instead.
+    secret_key: str | None = Field(default=None, validation_alias="LR_SECRET_KEY")
+    secret_key_file: Path | None = Field(
+        default=None, validation_alias="LR_SECRET_KEY_FILE"
     )
 
 

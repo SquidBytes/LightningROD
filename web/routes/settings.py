@@ -1,6 +1,7 @@
 """Settings routes for app options, vehicles, networks, and data sources."""
 
 import json
+import logging
 import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -74,6 +75,8 @@ from web.services.repair.base import RepairResult
 from web.services.repair.registry import REPAIR_REGISTRY, get_operation
 from web.services.repair.skips import add_skips, clear_skips, count_skips
 from web.services.repair.snapshot import list_runs, purge_run, restore_run
+from web.services.secrets import SecretKeyUnavailable
+from web.services.sources.config_secrets import open_config, seal_config
 from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
 from web.services.sources.registry import REGISTRY as SOURCE_REGISTRY
@@ -99,6 +102,7 @@ def _vehicle_presets_for_template() -> list[dict]:
     return [asdict(r) for r in profile.presets()] if profile else []
 
 router = APIRouter()
+logger = logging.getLogger("lightningrod.routes.settings")
 templates = Jinja2Templates(directory="web/templates")
 
 
@@ -1401,6 +1405,12 @@ HASS_SETTINGS_KEYS = [
 # ---------------------------------------------------------------------------
 
 
+_NO_KEY_MESSAGE = (
+    "Credentials were not saved: LightningROD has no encryption key. "
+    "Set LR_SECRET_KEY, or make the key file location writable."
+)
+
+
 def _mask_token(token: str) -> str:
     """Return a masked rendering of a stored token: asterisks + last 8 chars."""
     if not token:
@@ -1451,7 +1461,9 @@ async def _load_existing_config(db: AsyncSession, source):
     if row is None:
         return None
     try:
-        return source.config_schema.model_validate(row.config_json)
+        return source.config_schema.model_validate(
+            open_config(source.source_name, row.config_json).values
+        )
     except ValidationError:
         return None
 
@@ -1477,16 +1489,18 @@ async def _upsert_data_source_config(db: AsyncSession, source, config) -> None:
         )
     )
     row = result.scalar_one_or_none()
+    # Seal before touching the row, so a missing key leaves it unchanged.
+    sealed = seal_config(source.source_name, config.model_dump())
     if row is None:
         row = DataSourceConfig(
             source_name=source.source_name,
             instance_label="default",
-            config_json=config.model_dump(),
+            config_json=sealed,
             enabled=True,
         )
         db.add(row)
     else:
-        row.config_json = config.model_dump()
+        row.config_json = sealed
         row.updated_at = datetime.now(UTC)
     await db.commit()
 
@@ -1523,19 +1537,23 @@ async def data_sources_tab(
         row = result.scalar_one_or_none()
         config = None
         partial_config = None
+        needs_reauth = False
         if row is not None:
+            opened = open_config(source.source_name, row.config_json)
+            needs_reauth = bool(opened.unreadable)
             try:
-                config = source.config_schema.model_validate(row.config_json)
+                config = source.config_schema.model_validate(opened.values)
             except ValidationError:
                 # Seed rows ship with empty ha_url/ha_token until the operator
-                # configures the source. Surface stored values into the form
-                # without exposing them as a fully-validated config object.
-                partial_config = row.config_json or {}
+                # configures the source, and an unreadable secret is dropped.
+                # Surface what is left without claiming a valid config.
+                partial_config = opened.values
         health, last_seen = _card_health_inputs(source)
         card_ctx = {
             "source": source,
             "config": config,
             "partial_config": partial_config,
+            "needs_reauth": needs_reauth,
             "masked_token": _masked_token_for_config(config),
             "health": health,
             "last_seen": last_seen,
@@ -1627,7 +1645,29 @@ async def save_data_source(
             status_code=422,
         )
 
-    await _upsert_data_source_config(db, source, config)
+    try:
+        await _upsert_data_source_config(db, source, config)
+    except SecretKeyUnavailable:
+        logger.exception("Cannot encrypt %s credentials", source_name)
+        health, last_seen = _card_health_inputs(source)
+        return templates.TemplateResponse(
+            request,
+            "settings/partials/data_source_card.html",
+            {
+                "card": {
+                    "source": source,
+                    "config": None,
+                    "partial_config": form,
+                    "masked_token": "",
+                    "health": health,
+                    "last_seen": last_seen,
+                    "gas_sensor_station_entity_id": gas_station_entity,
+                    "gas_sensor_average_entity_id": gas_average_entity,
+                },
+                "errors": [{"loc": ["secret key"], "msg": _NO_KEY_MESSAGE}],
+            },
+            status_code=500,
+        )
 
     if source_name == "ha_fordpass":
         await set_app_setting(db, "gas_sensor_station_entity_id", gas_station_entity)

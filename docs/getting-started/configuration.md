@@ -12,6 +12,15 @@ LightningROD is configured through environment variables and in-app settings.
 | `POSTGRES_HOST` | `localhost` | Database host. Set to `db` when using Docker Compose (handled automatically). |
 | `APP_PORT` | `8000` | Port the web UI is served on |
 | `DEBUG` | `false` | Enable debug logging and SQL echo |
+| `LR_SECRET_KEY` | *(unset)* | Key that encrypts stored credentials. Unset: a key is generated into `LR_SECRET_KEY_FILE` |
+| `LR_SECRET_KEY_FILE` | `/data/secret.key` in Docker, else `data/secret.key` | Where the generated key is kept |
+
+!!! warning "Keep the encryption key"
+    Credentials saved in LightningROD (the Home Assistant token, Ford tokens) are
+    encrypted in the database. If the key is lost, LightningROD asks you to enter
+    them again — nothing else is affected. In the default Postgres stack `/data` is
+    not a named volume, so set `LR_SECRET_KEY` in `.env` to keep the key across
+    `docker compose down`.
 
 ## Example
 
@@ -62,8 +71,8 @@ Settings configured through the web UI at `/settings`:
 | Timezone | `app_settings` | Display timezone (e.g., America/New_York) |
 | Comparison toggles | `app_settings` | Show or hide cost comparison sections |
 | Gas price sensor IDs | `app_settings` | HA entity IDs used for gas price ingestion |
-| HA URL | `app_settings` | Home Assistant instance URL |
-| HA Access Token | `app_settings` | Long-lived access token for HA WebSocket |
+| HA URL | `data_source_configs` | Home Assistant instance URL |
+| HA Access Token | `data_source_configs` | Long-lived access token for HA WebSocket, encrypted at rest |
 | HA VIN Override | `app_settings` | Override auto-detected vehicle VIN |
 | HA Unit System | `app_settings` | Auto-detect, metric, or imperial |
 | HA Auto-connect | `app_settings` | Connect to HA automatically on startup |

@@ -33,6 +33,8 @@ def _resolve_test_db_url() -> str:
 # assignments separate the import groups.
 TEST_DB_URL = _resolve_test_db_url()
 os.environ["DATABASE_URL"] = TEST_DB_URL
+# A fixed key keeps tests from generating a key file in the working tree.
+os.environ["LR_SECRET_KEY"] = "test-secret-key"
 
 import pytest
 import pytest_asyncio

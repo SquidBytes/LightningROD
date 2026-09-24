@@ -2,6 +2,7 @@
 
 from web.services.sources.base import DataSource
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
+from web.services.sources.ha_fordpass.runtime import build_runtime
 
 DATA_SOURCE = DataSource(
     source_name="ha_fordpass",
@@ -10,4 +11,5 @@ DATA_SOURCE = DataSource(
     config_schema=HAFordpassConfig,
     setup_flow="ha_websocket",
     secret_fields=frozenset({"ha_token"}),
+    build_runtime=build_runtime,
 )

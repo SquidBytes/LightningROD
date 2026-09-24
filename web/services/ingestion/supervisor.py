@@ -10,14 +10,17 @@ servers adds a second config row and gets a second runtime; no code change.
 
 The ``ha_gas_price`` source name does not spawn a transport runtime — it
 contributes a handler that ``HAWebSocketRuntime._dispatch`` fans out to.
-``_RUNTIME_BUILDERS`` defines which source names get a transport runtime.
+A source gets a runtime when its ``DataSource.build_runtime`` is set.
+
+Secrets are decrypted here, once, before a builder sees the config. A row
+whose secrets the current key cannot read is not started; it is reported as
+needing re-authorization instead.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import select
@@ -25,23 +28,16 @@ from sqlalchemy import select
 from db.engine import AsyncSessionLocal
 from db.models.data_source_config import DataSourceConfig
 from web.services.ingestion.base import IngestionRuntime
-from web.services.sources.ha_fordpass.runtime import (
-    build_runtime as build_ha_fordpass_runtime,
-)
+from web.services.secrets import SecretKeyUnavailable
+from web.services.sources.base import RuntimeBuilder
+from web.services.sources.config_secrets import open_config
+from web.services.sources.registry import REGISTRY
 
 logger = logging.getLogger("lightningrod.ingestion.supervisor")
 
-RuntimeBuilder = Callable[[DataSourceConfig], IngestionRuntime]
 
-# source_name -> the source package's own runtime builder. Adding a source
-# with its own transport (FCON polling, MQTT) means one new entry here and a
-# `build_runtime` in that source package; the supervisor learns nothing about
-# the source itself. ha_gas_price is intentionally absent — it has no
-# transport runtime, only a handler that HAWebSocketRuntime._dispatch fans
-# out to.
-_RUNTIME_BUILDERS: dict[str, RuntimeBuilder] = {
-    "ha_fordpass": build_ha_fordpass_runtime,
-}
+def _builders() -> dict[str, RuntimeBuilder]:
+    return {s.source_name: s.build_runtime for s in REGISTRY if s.build_runtime}
 
 
 class IngestionSupervisor:
@@ -50,6 +46,9 @@ class IngestionSupervisor:
     def __init__(self) -> None:
         self._runtimes: dict[int, IngestionRuntime] = {}
         self._tasks: dict[int, asyncio.Task] = {}
+        # config_id -> (source_name, instance_label) for rows whose stored
+        # secrets are unreadable with the current key.
+        self._needs_reauth: dict[int, tuple[str, str]] = {}
 
     # ----- Lifecycle -----
 
@@ -93,6 +92,7 @@ class IngestionSupervisor:
 
     async def stop_runtime(self, config_id: int) -> None:
         """Stop a single runtime, cancel its task, drop from the registry."""
+        self._needs_reauth.pop(config_id, None)
         rt = self._runtimes.pop(config_id, None)
         task = self._tasks.pop(config_id, None)
         if rt is None:
@@ -113,13 +113,11 @@ class IngestionSupervisor:
     async def _start_one(self, row: DataSourceConfig) -> None:
         """Ask the source to build its runtime, then schedule its start coroutine.
 
-        Membership in ``_RUNTIME_BUILDERS`` is the single source of truth for
-        "this supervisor knows how to spawn this source_name". An
-        unrecognized source_name is logged and skipped explicitly — never a
-        silent pass — and because construction lives in the source package
-        there is no second mapping that can drift out of step with this one.
+        A source_name with no builder is logged and skipped explicitly — never
+        a silent pass.
         """
-        builder = _RUNTIME_BUILDERS.get(row.source_name)
+        self._needs_reauth.pop(row.id, None)
+        builder = _builders().get(row.source_name)
         if builder is None:
             logger.info(
                 "No transport runtime registered for source_name=%s "
@@ -130,7 +128,25 @@ class IngestionSupervisor:
             return
 
         try:
-            rt = builder(row)
+            opened = open_config(row.source_name, row.config_json)
+        except SecretKeyUnavailable:
+            logger.exception(
+                "No secret key available; config_id=%d not started", row.id
+            )
+            return
+        if opened.unreadable:
+            # Never retry with garbage: the user re-enters the credentials.
+            logger.warning(
+                "Stored credentials for config_id=%d (source=%s) cannot be "
+                "decrypted with the current key - re-authorization required",
+                row.id,
+                row.source_name,
+            )
+            self._needs_reauth[row.id] = (row.source_name, row.instance_label)
+            return
+
+        try:
+            rt = builder(row, opened.values)
         except Exception:
             # Never log raw config_json — it carries credentials. Pydantic's
             # default exception repr does not include field values, so the
@@ -172,6 +188,9 @@ class IngestionSupervisor:
     def get_runtime_by_config_id(self, config_id: int) -> IngestionRuntime | None:
         return self._runtimes.get(config_id)
 
+    def needs_reauth(self, config_id: int) -> bool:
+        return config_id in self._needs_reauth
+
     def health(self) -> list[dict[str, Any]]:
         """Aggregated runtime health for the admin Runtimes section.
 
@@ -179,7 +198,17 @@ class IngestionSupervisor:
         ``config_id`` / ``source_name`` / ``instance_label`` plus every key
         from the runtime's own ``health`` property.
         """
-        return [
+        blocked = [
+            {
+                "config_id": cid,
+                "source_name": source_name,
+                "instance_label": label,
+                "connected": False,
+                "connection_state": "needs_reauth",
+            }
+            for cid, (source_name, label) in self._needs_reauth.items()
+        ]
+        return blocked + [
             {
                 "config_id": cid,
                 "source_name": rt.source_name,

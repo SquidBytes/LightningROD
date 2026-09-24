@@ -16,6 +16,8 @@ For feature documentation, see the docs site at
 
 ### Changed
 
+- Saved Home Assistant token is now encrypted in the database
+
 ### Fixed
 
 - Trips and sessions recorded by early versions are now included in Data Repair

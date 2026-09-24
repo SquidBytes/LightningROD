@@ -30,6 +30,12 @@
             </div>
         </div>
 
+        {% if card.needs_reauth %}
+        <div class="alert alert-warning text-sm mt-3">
+            <span>Saved credentials can't be read — LightningROD's encryption key has changed. Re-enter them below.</span>
+        </div>
+        {% endif %}
+
         <form hx-post="/settings/data-sources/{{ card.source.source_name }}"
               hx-target="closest .card" hx-swap="outerHTML"
               class="space-y-4 mt-4">
@@ -38,7 +44,7 @@
             <label class="form-control w-full">
                 <div class="label"><span class="label-text font-semibold">URL</span></div>
                 <input type="url" name="ha_url"
-                       value="{{ card.config.ha_url if card.config else '' }}"
+                       value="{{ card.config.ha_url if card.config else (card.partial_config or {}).get('ha_url', '') }}"
                        placeholder="http://homeassistant.local:8123"
                        class="input input-bordered w-full" required>
                 <div class="label">

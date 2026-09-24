@@ -1,5 +1,6 @@
 """FastAPI application factory, routes, filters, and lifespan hooks."""
 
+import logging
 import os
 from collections.abc import MutableMapping
 from contextlib import asynccontextmanager
@@ -33,6 +34,7 @@ def _resolve_version() -> str:
 
 
 APP_VERSION = _resolve_version()
+logger = logging.getLogger("lightningrod.main")
 
 from db.engine import AsyncSessionLocal, engine
 from web import developer_mode
@@ -84,6 +86,17 @@ def localtime_filter(dt, tz_str: str = "UTC", fmt: str | None = None):
     return converted
 
 
+async def _seal_stored_credentials() -> None:
+    """Encrypt credentials still stored as plaintext; never blocks startup."""
+    from web.services.sources.config_secrets import seal_stored_configs
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await seal_stored_configs(session)
+    except Exception:
+        logger.exception("Could not encrypt stored credentials")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: seed charger templates (idempotent) + restore developer mode flag
@@ -91,6 +104,7 @@ async def lifespan(app: FastAPI):
         await seed_charger_templates(session)
         val = await get_app_setting(session, "developer_mode", "false")
         developer_mode.set_enabled(val == "true")
+    await _seal_stored_credentials()
     # Start ingestion runtimes (one per enabled data_source_configs row)
     from web.services.ingestion import supervisor
     await supervisor.start_all()

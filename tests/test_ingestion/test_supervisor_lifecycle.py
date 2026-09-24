@@ -92,7 +92,7 @@ class _FakeAsyncSessionLocal:
 def patched_supervisor_module(monkeypatch, db_session):
     """Patch the HA transport class and ``AsyncSessionLocal`` for the supervisor.
 
-    The real ``ha_fordpass`` builder stays in ``_RUNTIME_BUILDERS`` so these
+    The real ``ha_fordpass`` builder stays registered so these
     tests still exercise its config_json validation; only the transport it
     constructs is swapped for a fake that never opens a socket.
     """

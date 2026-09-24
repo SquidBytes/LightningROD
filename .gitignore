@@ -33,6 +33,9 @@ web/static/css/output.css
 .pi-lens/
 pii-tokens.txt
 
+# Generated credential encryption key
+data/secret.key
+
 # Seed data (CSV files)
 data/*.csv
 !data/charging_sessions_sample.csv

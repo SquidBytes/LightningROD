@@ -1,6 +1,6 @@
 """Runtime builder for the ha_fordpass source.
 
-The supervisor calls `build_runtime(row)` and stays free of per-source
+The supervisor calls `build_runtime(row, config)` and stays free of per-source
 construction knowledge: which transport this source speaks, and which
 `config_json` keys feed it, are decided here.
 """
@@ -16,17 +16,18 @@ if TYPE_CHECKING:
     from web.services.ingestion.base import IngestionRuntime
 
 
-def build_runtime(row: DataSourceConfig) -> IngestionRuntime:
+def build_runtime(row: DataSourceConfig, config: dict) -> IngestionRuntime:
     """Build the HA WebSocket runtime for one enabled ha_fordpass config row.
 
-    Raises on invalid `config_json`; the supervisor logs and skips the row.
-    Raise nothing that embeds config values — the caller logs the exception.
+    `config` is the row's decrypted config_json. Raises on an invalid config;
+    the supervisor logs and skips the row, so raise nothing that embeds
+    config values.
     """
     # Deferred: `web.services.ingestion` imports the supervisor, which imports
     # this module. Importing the transport at module scope would close the loop.
     from web.services.ingestion.ha_websocket import HAWebSocketRuntime
 
-    cfg = HAFordpassConfig.model_validate(row.config_json or {})
+    cfg = HAFordpassConfig.model_validate(config)
     return HAWebSocketRuntime(
         config_id=row.id,
         ha_url=cfg.ha_url,
