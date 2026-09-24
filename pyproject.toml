@@ -3,7 +3,7 @@ name = "lightningrod"
 version = "0.5.4"
 description = "Self-hosted charging and vehicle analytics"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "aiosqlite>=0.22.1",
     "alembic>=1.18.5",
@@ -14,7 +14,7 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     "python-dotenv>=1.2.2",
     "python-multipart>=0.0.32",
-    "sqlalchemy[asyncio]>=2.0.51,<2.1",
+    "sqlalchemy[asyncio]>=2.1",
     "uvicorn[standard]>=0.49.0",
     "plotly>=6.8.0",
     "pandas>=3.0.2",
@@ -51,7 +51,7 @@ filterwarnings = [
 
 [tool.ruff]
 # Match the Python version declared in [project].requires-python.
-target-version = "py311"
+target-version = "py314"
 # Skip generated/vendored directories.
 extend-exclude = [
     "alembic/versions",
@@ -69,7 +69,7 @@ select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
 ignore = ["B008"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 # Application code only — tests are unannotated by design and typing them

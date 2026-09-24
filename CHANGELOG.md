@@ -25,6 +25,7 @@ For feature documentation, see the docs site at
 
 ### Changed
 
+- Running from source now requires Python 3.14, the version the Docker image uses
 - Data Repair previews now show why each row was picked and every value the
   repair would change or delete, so you can check it before applying
 - Duplicate trip pairs are previewed side by side, with the distance ratio that
