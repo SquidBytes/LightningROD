@@ -150,7 +150,7 @@ jobs:
           ## Documentation
 
           Full documentation, setup guides, and feature reference:
-          <https://squidbytes.github.io/LightningROD/>
+          <https://docs.lightningrod.dev/>
 
           ## More info
 
@@ -216,7 +216,7 @@ jobs:
           ## Documentation
 
           Full documentation, setup guides, and feature reference:
-          <https://squidbytes.github.io/LightningROD/>
+          <https://docs.lightningrod.dev/>
           MARKER
 
           sed -i \
