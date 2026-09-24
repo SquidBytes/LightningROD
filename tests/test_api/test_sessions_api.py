@@ -86,6 +86,38 @@ async def test_bulk_update_sets_location_id(client, db_session):
 
 
 @pytest.mark.db
+async def test_bulk_delete_removes_only_selected_sessions(client, db_session):
+    """POST /charging/sessions/bulk-delete deletes the selected rows and nothing else."""
+    vehicle = await VehicleFactory.create(db_session)
+    doomed = [
+        await ChargingSessionFactory.create(db_session, device_id=vehicle.device_id)
+        for _ in range(2)
+    ]
+    kept = await ChargingSessionFactory.create(
+        db_session, device_id=vehicle.device_id, duplicate_of_id=doomed[0].id,
+    )
+    doomed_ids = [s.id for s in doomed]
+    kept_id = kept.id
+
+    response = await client.post(
+        "/charging/sessions/bulk-delete",
+        data={"session_ids": ",".join(str(i) for i in doomed_ids)},
+    )
+    assert response.status_code == 200
+    assert '"count": 2' in response.headers["HX-Trigger"]
+
+    db_session.expire_all()
+    remaining = (await db_session.execute(select(EVChargingSession.id))).scalars().all()
+    assert remaining == [kept_id]
+
+
+@pytest.mark.db
+async def test_bulk_delete_rejects_empty_selection(client, db_session):
+    response = await client.post("/charging/sessions/bulk-delete", data={"session_ids": ""})
+    assert response.status_code == 422
+
+
+@pytest.mark.db
 async def test_locations_by_network_returns_options(client, db_session):
     """GET /locations/by-network returns <option> fragment filtered by network."""
     net = await NetworkFactory.create(db_session)

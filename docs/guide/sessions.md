@@ -44,6 +44,8 @@ Use **Group Edit** above the table to update selected rows together. You can app
 
 When you change Network in the group editor, the Location list narrows to that network's locations so you do not end up with mismatched sessions.
 
+**Delete selected** removes every selected session at once, after a confirmation. It cannot be undone.
+
 To clean up the networks and locations themselves, use the [Review Queue](review-queue.md).
 
 ## Adding Sessions

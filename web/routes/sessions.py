@@ -313,6 +313,24 @@ async def export_sessions_csv(
     )
 
 
+async def _load_selected_sessions(
+    form, db: AsyncSession
+) -> list[EVChargingSession] | JSONResponse:
+    """Sessions named by the comma-separated `session_ids` field, or a 422."""
+    try:
+        session_ids = [
+            int(sid) for sid in str(form.get("session_ids", "")).split(",") if sid.strip()
+        ]
+    except ValueError:
+        return JSONResponse(status_code=422, content={"error": "Invalid session IDs"})
+    if not session_ids:
+        return JSONResponse(status_code=422, content={"error": "No sessions selected"})
+    result = await db.execute(
+        select(EVChargingSession).where(EVChargingSession.id.in_(session_ids))
+    )
+    return list(result.scalars().all())
+
+
 @router.put("/sessions/bulk", response_class=HTMLResponse)
 async def bulk_update_sessions(
     request: Request,
@@ -320,25 +338,10 @@ async def bulk_update_sessions(
 ):
     """Bulk update selected sessions with common field values."""
     form = await request.form()
-
-    # Parse session IDs from comma-separated hidden input
-    session_ids_str = str(form.get("session_ids", ""))
-    if not session_ids_str:
-        return JSONResponse(status_code=422, content={"error": "No sessions selected"})
-
-    try:
-        session_ids = [int(sid.strip()) for sid in session_ids_str.split(",") if sid.strip()]
-    except ValueError:
-        return JSONResponse(status_code=422, content={"error": "Invalid session IDs"})
-
-    if not session_ids:
-        return JSONResponse(status_code=422, content={"error": "No sessions selected"})
-
-    # Load sessions
-    result = await db.execute(
-        select(EVChargingSession).where(EVChargingSession.id.in_(session_ids))
-    )
-    bulk_sessions = result.scalars().all()
+    selected = await _load_selected_sessions(form, db)
+    if isinstance(selected, JSONResponse):
+        return selected
+    bulk_sessions = selected
 
     # Apply updates only for fields that were submitted (non-empty)
     bulk_network_id = str(form.get("bulk_network_id")) if form.get("bulk_network_id") is not None else None
@@ -384,6 +387,27 @@ async def bulk_update_sessions(
         status_code=200,
         headers={
             "HX-Trigger": json.dumps({"session-updated": {"bulk": True, "count": updated}}),
+        },
+    )
+
+
+@router.post("/sessions/bulk-delete")
+async def bulk_delete_sessions(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete every selected session."""
+    selected = await _load_selected_sessions(await request.form(), db)
+    if isinstance(selected, JSONResponse):
+        return selected
+    for s in selected:
+        await db.delete(s)
+    await db.commit()
+    return Response(
+        content="",
+        status_code=200,
+        headers={
+            "HX-Trigger": json.dumps({"session-deleted": {"bulk": True, "count": len(selected)}}),
         },
     )
 
