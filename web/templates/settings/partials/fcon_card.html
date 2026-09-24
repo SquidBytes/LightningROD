@@ -1,0 +1,121 @@
+{% set s = card.status %}
+<div class="card bg-base-200 max-w-2xl" id="fcon-card">
+    <div class="card-body">
+        <div class="flex items-baseline justify-between">
+            <div>
+                <h2 class="card-title text-base font-semibold">FordConnect</h2>
+                <p class="text-base-content/60 text-sm -mt-1">Read your vehicle straight from Ford's official API — no Home Assistant needed.</p>
+            </div>
+            <div class="flex items-baseline gap-2">
+                {% if s == 'connected' %}
+                    {% set state = card.health.connection_state or 'connected' %}
+                    <span class="badge {{ 'badge-success' if state in ('connected', 'polling') else 'badge-warning' }}">{{ state | replace('_', ' ') }}</span>
+                    {% if card.health.newest_reading_age %}
+                        <span class="text-xs text-base-content/60">newest reading {{ card.health.newest_reading_age }}</span>
+                    {% endif %}
+                {% elif s == 'ready' %}
+                    <span class="badge badge-ghost">not connected</span>
+                {% elif s in ('consent_expired', 'needs_reauth') %}
+                    <span class="badge badge-error">re-authorization required</span>
+                {% else %}
+                    <span class="badge badge-ghost">not set up</span>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if s == 'needs_reauth' %}
+        <div class="alert alert-warning text-sm mt-3">
+            <span>Saved credentials can't be read — LightningROD's encryption key has changed. Re-enter your Client Secret, save, then click Connect Vehicle.</span>
+        </div>
+        {% elif s == 'consent_expired' %}
+        <div class="alert alert-warning text-sm mt-3">
+            <span>Ford's permission has ended (it lasts 90 days). Click Connect Vehicle to renew it. Your history is kept.</span>
+        </div>
+        {% endif %}
+
+        {% if card.health.last_error %}
+        <div class="text-xs text-error mt-2">{{ card.health.last_error }}</div>
+        {% endif %}
+
+        {# 1. Credentials from the Ford developer portal #}
+        <form hx-post="/settings/fcon/credentials" hx-target="#fcon-card" hx-swap="outerHTML" class="space-y-4 mt-4">
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Redirect address to register with Ford</span></div>
+                <div class="join w-full">
+                    <input type="text" name="redirect_uri" id="fcon-redirect-uri"
+                           value="{{ card.redirect_uri }}"
+                           class="input input-bordered join-item w-full font-mono text-sm" required>
+                    <button type="button" class="btn join-item" title="Copy"
+                            onclick="(function(){var i=document.getElementById('fcon-redirect-uri');i.select();if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(i.value);}else{document.execCommand('copy');}})()">Copy</button>
+                </div>
+                <div class="label flex-col items-start gap-1">
+                    {% if card.redirect_guessed %}
+                    <span class="label-text-alt text-warning">Couldn't tell which port you're using — please confirm this is right.</span>
+                    {% endif %}
+                    <span class="label-text-alt text-base-content/50">Register it character for character. The number is LightningROD's <strong>web (UI) port</strong> — the one in your browser's address bar, not the database port.</span>
+                </div>
+            </label>
+
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Client ID</span></div>
+                <input type="text" name="client_id" value="{{ card.client_id }}"
+                       class="input input-bordered w-full font-mono text-sm" autocomplete="off" required>
+            </label>
+
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Client Secret</span></div>
+                <input type="password" name="client_secret" value="{{ card.masked_secret }}"
+                       class="input input-bordered w-full font-mono text-sm" autocomplete="off" required>
+                {% if card.masked_secret %}
+                <div class="label"><span class="label-text-alt text-success">Secret saved. Leave unchanged to keep it.</span></div>
+                {% endif %}
+            </label>
+
+            {% if card.error %}<div class="alert alert-error text-sm">{{ card.error }}</div>{% endif %}
+
+            <div class="flex gap-2">
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+
+        {# 2. Consent: one connection = one vehicle #}
+        {% if s != 'not_configured' and s != 'needs_reauth' %}
+        <div class="divider my-1"></div>
+        <div class="space-y-3">
+            <div class="flex gap-2 items-center">
+                <button class="btn {{ 'btn-outline' if s == 'connected' else 'btn-primary' }}"
+                        hx-post="/settings/fcon/connect" hx-target="#fcon-card" hx-swap="outerHTML">
+                    Connect Vehicle
+                </button>
+                {% if s == 'connected' %}
+                <button class="btn btn-ghost btn-sm"
+                        hx-post="/settings/fcon/disconnect" hx-target="#fcon-card" hx-swap="outerHTML">
+                    Disconnect
+                </button>
+                {% endif %}
+            </div>
+
+            {% if card.authorize_url or card.pasting %}
+            {% if card.authorize_url %}
+            <div class="text-sm space-y-1">
+                <p>1. <a href="{{ card.authorize_url }}" target="_blank" rel="noopener" class="link link-primary">Open Ford sign-in</a>, sign in, and pick the vehicle.</p>
+                <p>2. If you land back here, you're done. If you get an error page instead, that's expected — copy the <strong>whole</strong> address bar and paste it below.</p>
+                <p class="text-base-content/60">The code expires about five minutes after Ford issues it.</p>
+            </div>
+            {% endif %}
+            <form hx-post="/settings/fcon/finish" hx-target="#fcon-card" hx-swap="outerHTML" class="space-y-2">
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text font-semibold">Paste the address here</span></div>
+                    <textarea name="pasted" rows="3" class="textarea textarea-bordered w-full font-mono text-xs"
+                              placeholder="http://localhost:8000/auth/ford/callback?code=...&state=..."></textarea>
+                </label>
+                {% if card.paste_error %}<div class="alert alert-error text-sm">{{ card.paste_error }}</div>{% endif %}
+                <button type="submit" class="btn btn-primary btn-sm">Finish</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if card.message %}<div class="alert alert-success text-sm mt-2">{{ card.message }}</div>{% endif %}
+    </div>
+</div>

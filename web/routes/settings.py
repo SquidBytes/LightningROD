@@ -68,6 +68,7 @@ from web.queries.vehicles import (
     set_active_vehicle,
     update_vehicle,
 )
+from web.routes.fcon import fcon_card_context
 from web.services.csv_parser import get_db_field_options
 from web.services.ingestion import supervisor
 from web.services.ingestion.raw_archive import raw_archive
@@ -75,7 +76,7 @@ from web.services.repair.base import RepairResult
 from web.services.repair.registry import REPAIR_REGISTRY, get_operation
 from web.services.repair.skips import add_skips, clear_skips, count_skips
 from web.services.repair.snapshot import list_runs, purge_run, restore_run
-from web.services.secrets import SecretKeyUnavailable
+from web.services.secrets import SecretKeyUnavailable, mask_secret
 from web.services.sources.config_store import find_row, merge_into_row, read_row
 from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
@@ -1411,13 +1412,7 @@ _NO_KEY_MESSAGE = (
 )
 
 
-def _mask_token(token: str) -> str:
-    """Return a masked rendering of a stored token: asterisks + last 8 chars."""
-    if not token:
-        return ""
-    if len(token) > 8:
-        return "*" * (len(token) - 8) + token[-8:]
-    return token
+_mask_token = mask_secret
 
 
 def _last_event_timeago(adapter_module) -> str | None:
@@ -1488,7 +1483,10 @@ async def data_sources_tab(
     # the FordPass save handler, so we skip rendering it as its own card.
     cards = []
     for source in SOURCE_REGISTRY:
-        if source.source_name in ("ha_gas_price", "fcon"):
+        if source.source_name == "ha_gas_price":
+            continue
+        if source.source_name == "fcon":
+            cards.append(await fcon_card_context(request, db))
             continue
         row = await find_row(db, source.source_name)
         config = None

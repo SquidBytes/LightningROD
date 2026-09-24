@@ -26,6 +26,7 @@ async def client(db_session):
         csv_import,
         dashboard,
         driving_performance,
+        fcon,
         locations,
         performance,
         review,
@@ -50,11 +51,12 @@ async def client(db_session):
     app.include_router(trips.router, prefix="/driving")
     app.include_router(driving_performance.router, prefix="/driving")
     app.include_router(admin_data_sources.router)
+    app.include_router(fcon.router)
 
     # Register localtime filter on Jinja2 templates
     for route_module in [dashboard, sessions, costs, performance, settings,
                          csv_import, charging, review, battery, trips,
-                         driving_performance, admin_data_sources]:
+                         driving_performance, admin_data_sources, fcon]:
         if hasattr(route_module, "templates"):
             route_module.templates.env.filters["localtime"] = localtime_filter
 

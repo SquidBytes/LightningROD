@@ -39,6 +39,15 @@ def is_encrypted(value: object) -> TypeGuard[str]:
     return isinstance(value, str) and value.startswith(PREFIX)
 
 
+def mask_secret(value: str) -> str:
+    """Asterisks plus the last 8 characters — enough to tell two secrets apart."""
+    if not value:
+        return ""
+    if len(value) > 8:
+        return "*" * (len(value) - 8) + value[-8:]
+    return value
+
+
 class SecretBox:
     """Encrypts strings into `enc:v1:` values and back."""
 

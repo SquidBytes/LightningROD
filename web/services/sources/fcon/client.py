@@ -97,6 +97,12 @@ class FordClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
+    async def __aenter__(self) -> FordClient:
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        await self.aclose()
+
     async def token_request(self, form: dict[str, str]) -> dict[str, Any]:
         """POST to the token endpoint; returns Ford's token response."""
         try:
