@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 import uuid
@@ -217,16 +216,18 @@ class RecorderReplay(RepairOperation):
         return f"trip:{row_id}"
 
     @staticmethod
-    def insert_key(after_img: dict[str, Any], sources: list[tuple[str, datetime]]) -> str:
-        """Key a recovered trip by the states that produced it.
+    def insert_key(after_img: dict[str, Any]) -> str:
+        """Key a recovered trip by what its states say about the drive.
 
         Its row id and (when the payload lacks an update time) its trip_id are
         new on every run, so neither can match between preview and apply.
         """
-        if not sources:
+        if after_img.get("end_time") is None:
             return f"new:{after_img.get('trip_id')}"
-        evidence = "|".join(f"{entity_id}@{ts.isoformat()}" for entity_id, ts in sources)
-        return f"new:{hashlib.sha1(evidence.encode()).hexdigest()[:20]}"
+        return (
+            f"new:{after_img.get('device_id')}:{after_img['end_time']}"
+            f":{after_img.get('distance')}"
+        )
 
     async def census(self, db: AsyncSession) -> int:
         window = await self.recorder_window()
@@ -449,7 +450,7 @@ class RecorderReplay(RepairOperation):
             after_img = serialize_row(row)
             sources = attribution.sources_for(row)
             if before_img is None:
-                group_key = self.insert_key(after_img, sources)
+                group_key = self.insert_key(after_img)
                 if not selection.allows(group_key):
                     await db.delete(row)
                     dropped = True
