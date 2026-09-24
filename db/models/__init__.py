@@ -7,6 +7,7 @@ from db.models.base import Base
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.data_source_config import DataSourceConfig
+from db.models.fcon_raw_sample import FconRawSample
 from db.models.ice_vehicle import IceVehicle
 from db.models.location import EVLocation
 from db.models.raw_event import HARawEvent
@@ -28,6 +29,7 @@ from db.models.vehicle_status import EVVehicleStatus
 __all__ = [
     "Base",
     "DataSourceConfig",
+    "FconRawSample",
     "EVChargingSession",
     "EVBatteryStatus",
     "EVTripMetrics",
