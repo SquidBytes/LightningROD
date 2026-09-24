@@ -9,6 +9,16 @@ For feature documentation, see the docs site at
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.5.5] - 2026-09-24
+
+### Added
+
 - Charging sessions fill in EVSE voltage, amperage and rated power from the
   charging location's default stall, instead of leaving them blank until you
   edit the session
