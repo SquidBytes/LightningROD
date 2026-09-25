@@ -29,6 +29,7 @@ from web.queries.locations import (
     resolve_location,
 )
 from web.queries.sessions import find_matching_sessions
+from web.services.sources.fcon.history import telemetry_since_boundary
 from web.services.sources.fcon.identity import SOURCE_SYSTEM
 from web.services.sources.ford_metrics.parser import parse_time
 
@@ -42,9 +43,6 @@ DISCONNECTED = "DISCONNECTED"
 CHARGING_PLUG = frozenset({"CHARGING", "CHARGINGAC"})
 # The charger output reads 2-3 V with nothing plugged in; ~350 V when live.
 IDLE_CHARGER_VOLTS = 50.0
-# How far back an unplug looks for the plug-in it closes.
-MAX_LOOKBACK = timedelta(days=14)
-_BATCH = 200
 
 
 def _value(metrics: dict, name: str) -> Any:
@@ -216,43 +214,16 @@ def schedule_location_name(schedules: dict | None, lat: float, lon: float) -> st
     return None
 
 
+def _is_unplug(payload: dict) -> bool:
+    sample = ChargeSample.from_payload(payload)
+    return sample is not None and sample.unplugged
+
+
 async def _samples_since_last_unplug(
     db: AsyncSession, device_id: str, until: datetime
 ) -> list[ChargeSample]:
-    """Telemetry samples after the previous unplug, up to and including `until`."""
-    collected: list[ChargeSample] = []
-    floor = until - MAX_LOOKBACK
-    cursor = until
-    include_cursor = True
-    while True:
-        bound = (
-            FconRawSample.recorded_at <= cursor
-            if include_cursor
-            else FconRawSample.recorded_at < cursor
-        )
-        stmt = (
-            select(FconRawSample.payload)
-            .where(
-                FconRawSample.device_id == device_id,
-                FconRawSample.endpoint == "telemetry",
-                FconRawSample.recorded_at >= floor,
-                bound,
-            )
-            .order_by(FconRawSample.recorded_at.desc())
-            .limit(_BATCH)
-        )
-        payloads: list[dict] = list((await db.execute(stmt)).scalars().all())
-        for payload in payloads:
-            sample = ChargeSample.from_payload(payload)
-            if sample is None:
-                continue
-            if collected and sample.unplugged:
-                return list(reversed(collected))
-            collected.append(sample)
-            cursor = sample.at
-        if len(payloads) < _BATCH:
-            return list(reversed(collected))
-        include_cursor = False
+    payloads = await telemetry_since_boundary(db, device_id, until, _is_unplug)
+    return [s for p in payloads if (s := ChargeSample.from_payload(p)) is not None]
 
 
 async def _latest_schedules(db: AsyncSession, config_id: int | None) -> dict | None:
