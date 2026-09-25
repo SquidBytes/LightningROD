@@ -212,6 +212,25 @@ async def test_sessions_export_csv(client, db_session):
 
 
 @pytest.mark.db
+async def test_sessions_export_csv_includes_record_metadata(client, db_session):
+    """Each exported row carries its session id and provenance."""
+    import csv
+    import io
+
+    vehicle = await VehicleFactory.create(db_session)
+    session = await ChargingSessionFactory.create(
+        db_session, device_id=vehicle.device_id, source_system="ha_fordpass",
+    )
+    response = await client.get("/charging/sessions/export.csv")
+    rows = list(csv.DictReader(io.StringIO(response.text)))
+    assert len(rows) == 1
+    assert rows[0]["session_id"] == str(session.session_id)
+    assert rows[0]["source_system"] == "ha_fordpass"
+    assert any(k.startswith("ingested_at (") and rows[0][k] for k in rows[0])
+    assert any(k.startswith("original_timestamp (") for k in rows[0])
+
+
+@pytest.mark.db
 async def test_sessions_export_csv_exports_more_than_one_page(client, db_session):
     """Regression #82: export must return every row, not the 25-row page cap."""
     vehicle = await VehicleFactory.create(db_session)

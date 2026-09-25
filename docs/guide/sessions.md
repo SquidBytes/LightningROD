@@ -74,7 +74,7 @@ Open a session's edit modal and click **Delete**. A confirmation dialog helps pr
 
 ## Exporting Sessions
 
-Click **Export CSV** above the table to download the sessions matching the current filters (date range, charge type, network, and sort order). Distances export in your configured display unit, times in your configured timezone; energy, power, SOC, and cost columns use their stored units (kWh, kW, V, A, %).
+Click **Export CSV** above the table to download the sessions matching the current filters (date range, charge type, network, and sort order). Distances export in your configured display unit, times in your configured timezone; energy, power, SOC, and cost columns use their stored units (kWh, kW, V, A, %). The last columns identify each record — its session ID, which source recorded it, and when it was ingested — which helps when tracking down duplicates.
 
 ## Session Detail Drawer
 

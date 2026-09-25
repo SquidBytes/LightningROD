@@ -191,13 +191,13 @@ async def export_trips_csv(
     except Exception:
         tz = ZoneInfo("UTC")
 
-    def _local(dt) -> str:
+    def _local(dt, timespec: str = "minutes") -> str:
         if dt is None:
             return ""
         if dt.tzinfo is None:
             from datetime import UTC as _utc
             dt = dt.replace(tzinfo=_utc)
-        return dt.astimezone(tz).isoformat(sep=" ", timespec="minutes")
+        return dt.astimezone(tz).isoformat(sep=" ", timespec=timespec)
 
     def _num(v, dp: int) -> str:
         return "" if v is None else f"{float(v):.{dp}f}"
@@ -212,6 +212,7 @@ async def export_trips_csv(
         f"cabin_temp_{temp_label}", f"outside_air_temp_{temp_label}",
         "driving_score", "speed_score", "acceleration_score", "deceleration_score",
         f"range_regenerated_{distance_label}", "source_system",
+        "trip_id", f"ingested_at ({user_tz})", f"original_timestamp ({user_tz})",
     ])
     for t in trip_list:
         start_location, end_location = await resolve_trip_location_names(db, t)
@@ -241,6 +242,9 @@ async def export_trips_csv(
             _num(t.deceleration_score, 0),
             _num(convert_distance(t.range_regenerated, distance_unit), 1),
             t.source_system or "",
+            str(t.trip_id),
+            _local(t.ingested_at, "seconds"),
+            _local(t.original_timestamp, "seconds"),
         ])
 
     filename = f"trip-sessions-{date.today().isoformat()}.csv"

@@ -139,6 +139,9 @@ async def test_trips_export_csv(client, db_session):
     body = response.text
     assert body.splitlines()[0].startswith("start (")
     assert "export_test" in body
+    header = body.splitlines()[0].split(",")
+    assert "trip_id" in header
+    assert any(h.startswith("ingested_at (") for h in header)
 
 
 async def test_trips_export_csv_exports_more_than_one_page(client, db_session):
