@@ -17,7 +17,7 @@ For feature documentation, see the docs site at
 
 ### Changed
 
-- Saved Home Assistant token is now encrypted in the database
+- Stored credentials can now be encrypted by setting `LR_SECRET_KEY`
 
 ### Fixed
 

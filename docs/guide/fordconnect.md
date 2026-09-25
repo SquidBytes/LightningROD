@@ -167,8 +167,9 @@ Done. LightningROD stores an access token and starts reading data within a minut
 
 ### What LightningROD stores
 
-Your Client ID, Client Secret and Ford tokens are stored **encrypted** in your own
-database, on your own server. They are never sent anywhere except Ford.
+Your Client ID, Client Secret and Ford tokens are stored in your own database, on
+your own server, and are never sent anywhere except Ford. They are encrypted there
+when `LR_SECRET_KEY` is set — see [Configuration](../getting-started/configuration.md).
 
 ---
 
