@@ -9,6 +9,8 @@ For feature documentation, see the docs site at
 
 ### Added
 
+- Group Edit on the Charging Sessions page can delete all selected sessions at once
+
 ### Changed
 
 ### Fixed

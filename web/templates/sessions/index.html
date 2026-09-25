@@ -105,6 +105,12 @@
 
                 <button
                     type="button"
+                    onclick="openBulkDeleteModal()"
+                    class="btn btn-outline btn-error btn-sm whitespace-nowrap"
+                >Delete selected</button>
+
+                <button
+                    type="button"
                     onclick="toggleGroupEdit()"
                     class="btn btn-ghost btn-sm"
                 >Cancel</button>
@@ -160,6 +166,19 @@
             <form method="dialog"><button class="btn btn-ghost">Keep Session</button></form>
             <button id="confirm-delete-session"
                     class="btn btn-error">Delete</button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- Bulk delete confirmation modal -->
+<dialog id="bulk-delete-modal" class="modal">
+    <div class="modal-box max-w-sm">
+        <h3 class="font-bold text-lg">Delete <span id="bulk-delete-count">0</span> sessions</h3>
+        <p class="py-4 text-base-content/70">This action cannot be undone.</p>
+        <div class="modal-action">
+            <form method="dialog"><button class="btn btn-ghost">Keep Sessions</button></form>
+            <button type="button" onclick="confirmBulkDelete()" class="btn btn-error">Delete</button>
         </div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -301,8 +320,9 @@ document.body.addEventListener('session-updated', function(evt) {
         }, 200);
     }
 });
-document.body.addEventListener('session-deleted', function() {
-    showToast('Session deleted', 'success');
+document.body.addEventListener('session-deleted', function(evt) {
+    var bulk = evt.detail && evt.detail.bulk;
+    showToast(bulk ? 'Deleted ' + evt.detail.count + ' sessions' : 'Session deleted', 'success');
     closeDrawer();
     closeSessionModal();
     var delModal = document.getElementById('delete-session-modal');
@@ -389,13 +409,12 @@ document.addEventListener('change', function(e) {
 });
 
 function applyGroupEdit() {
-    var checked = document.querySelectorAll('.session-checkbox:checked');
-    if (checked.length === 0) {
+    var ids = selectedSessionIds();
+    if (ids.length === 0) {
         alert('No sessions selected');
         return;
     }
 
-    var ids = Array.from(checked).map(function(cb) { return cb.value; });
     var changes = [];
     var networkInput = document.getElementById('bulk-network');
     var networkIdInput = document.getElementById('bulk-network-id');
@@ -431,28 +450,55 @@ function applyGroupEdit() {
     if (locInput.value) formData.append('bulk_location_name', locInput.value);
     if (costInput.value) formData.append('bulk_cost', costInput.value);
 
-    fetch('/charging/sessions/bulk', {
-        method: 'PUT',
+    submitBulk('PUT', '/charging/sessions/bulk', formData, 'Bulk update failed', function() {
+        showToast('Updated ' + ids.length + ' sessions', 'success');
+    });
+}
+
+function selectedSessionIds() {
+    return Array.from(document.querySelectorAll('.session-checkbox:checked')).map(function(cb) { return cb.value; });
+}
+
+// Send a group action, replay its HX-Trigger events, then leave group edit.
+function submitBulk(method, url, formData, failMessage, onDone) {
+    fetch(url, {
+        method: method,
         body: formData,
         headers: { 'HX-Request': 'true' }
     }).then(function(resp) {
-        if (resp.ok) {
-            // Parse HX-Trigger header and dispatch events
-            var trigger = resp.headers.get('HX-Trigger');
-            if (trigger) {
-                try {
-                    var events = JSON.parse(trigger);
-                    for (var name in events) {
-                        document.body.dispatchEvent(new CustomEvent(name, { detail: events[name] }));
-                    }
-                } catch(e) {}
-            }
-            toggleGroupEdit();
-            showToast('Updated ' + ids.length + ' sessions', 'success');
-        } else {
-            showToast('Bulk update failed', 'error');
+        if (!resp.ok) {
+            showToast(failMessage, 'error');
+            return;
         }
+        var trigger = resp.headers.get('HX-Trigger');
+        if (trigger) {
+            try {
+                var events = JSON.parse(trigger);
+                for (var name in events) {
+                    document.body.dispatchEvent(new CustomEvent(name, { detail: events[name] }));
+                }
+            } catch(e) {}
+        }
+        toggleGroupEdit();
+        if (onDone) onDone();
     });
+}
+
+function openBulkDeleteModal() {
+    var ids = selectedSessionIds();
+    if (ids.length === 0) {
+        showToast('No sessions selected', 'error');
+        return;
+    }
+    document.getElementById('bulk-delete-count').textContent = ids.length;
+    document.getElementById('bulk-delete-modal').showModal();
+}
+
+function confirmBulkDelete() {
+    document.getElementById('bulk-delete-modal').close();
+    var formData = new FormData();
+    formData.append('session_ids', selectedSessionIds().join(','));
+    submitBulk('POST', '/charging/sessions/bulk-delete', formData, 'Bulk delete failed');
 }
 
 // Re-apply group edit visibility after HTMX table swap
