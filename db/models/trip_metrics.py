@@ -12,14 +12,19 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Uuid,
+    and_,
     func,
 )
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
 
 # PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
 TIMESTAMPTZ = DateTime(timezone=True)
+
+# Distances under this read as 0.0 in either unit: the vehicle was on but not driven.
+STATIONARY_MAX_KM = 0.05
 
 
 class EVTripMetrics(Base):
@@ -87,6 +92,16 @@ class EVTripMetrics(Base):
     # Pipeline schema version. NULL = older rows with uncertain unit provenance.
     # Value 2 = adapter-driven ingest with declared source units.
     ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+
+    @hybrid_property
+    def is_stationary(self) -> bool:
+        """Vehicle was switched on but not driven (distance recorded as ~0)."""
+        return self.distance is not None and float(self.distance) < STATIONARY_MAX_KM
+
+    @is_stationary.inplace.expression
+    @classmethod
+    def _is_stationary_expression(cls):
+        return and_(cls.distance.is_not(None), cls.distance < STATIONARY_MAX_KM)
 
     __table_args__ = (
         Index("idx_ev_trip_metrics_start_time", "start_time"),

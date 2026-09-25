@@ -70,10 +70,15 @@ TRIP_HIDE_DEFAULT_DISTANCE_KM = 4.8
 
 
 async def get_trip_hide_settings(db: AsyncSession) -> dict:
-    """Load hide-short-trips settings (canonical seconds / km) from app_settings."""
+    """Load trip-hiding settings (canonical seconds / km) from app_settings."""
     raw = await get_app_settings_dict(
         db,
-        ["trip_hide_enabled", "trip_hide_min_duration_s", "trip_hide_min_distance_km"],
+        [
+            "trip_hide_enabled",
+            "trip_hide_min_duration_s",
+            "trip_hide_min_distance_km",
+            "trip_hide_stationary",
+        ],
     )
 
     def _num(value: str, default: float) -> float:
@@ -86,28 +91,36 @@ async def get_trip_hide_settings(db: AsyncSession) -> dict:
         "enabled": raw["trip_hide_enabled"] == "true",
         "min_duration_s": _num(raw["trip_hide_min_duration_s"], TRIP_HIDE_DEFAULT_DURATION_S),
         "min_distance_km": _num(raw["trip_hide_min_distance_km"], TRIP_HIDE_DEFAULT_DISTANCE_KM),
+        "stationary": raw["trip_hide_stationary"] == "true",
     }
 
 
 def build_short_trip_filter(hide: dict, hidden: bool = False):
     """Where clause selecting visible trips (or, with hidden=True, the hidden ones).
 
-    A trip is hidden when duration AND distance are each NULL or under their
-    threshold — NULL counts as "under" so key-on rows with no data are hidden.
-    Clearing either threshold keeps a trip visible. Returns None when disabled.
+    A short trip has duration AND distance each NULL or under their threshold
+    (NULL counts as "under"). A stationary trip (vehicle on, not driven) hides
+    regardless of duration when that option is on. Returns None when neither is on.
     """
-    if not hide.get("enabled"):
+    clauses = []
+    if hide.get("enabled"):
+        clauses.append(
+            and_(
+                or_(
+                    EVTripMetrics.duration.is_(None),
+                    EVTripMetrics.duration < hide["min_duration_s"],
+                ),
+                or_(
+                    EVTripMetrics.distance.is_(None),
+                    EVTripMetrics.distance < hide["min_distance_km"],
+                ),
+            )
+        )
+    if hide.get("stationary"):
+        clauses.append(EVTripMetrics.is_stationary.expression)
+    if not clauses:
         return None
-    hidden_clause = and_(
-        or_(
-            EVTripMetrics.duration.is_(None),
-            EVTripMetrics.duration < hide["min_duration_s"],
-        ),
-        or_(
-            EVTripMetrics.distance.is_(None),
-            EVTripMetrics.distance < hide["min_distance_km"],
-        ),
-    )
+    hidden_clause = or_(*clauses)
     return hidden_clause if hidden else not_(hidden_clause)
 
 

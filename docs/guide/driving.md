@@ -31,7 +31,7 @@ Click any row to open a slide-out detail drawer with:
 
 Summary cards above the table - Total Trips, Avg Efficiency, Total Distance, Total Energy - respect the date range filter.
 
-If **Hide short trips** is enabled in [Settings → General](settings.md#trip-display), short key-on trips are left out of the list and summary cards, and a muted note above the table shows how many were hidden.
+If **Hide short trips** or **Hide vehicle-on trips** is enabled in [Settings → General](settings.md#trip-display), those trips are left out of the list and summary cards, and a muted note above the table shows how many were hidden.
 
 ### Exporting Trips
 

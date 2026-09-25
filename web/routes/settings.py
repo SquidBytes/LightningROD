@@ -164,6 +164,7 @@ SETTINGS_KEYS = [
     "trip_hide_enabled",
     "trip_hide_min_duration_s",
     "trip_hide_min_distance_km",
+    "trip_hide_stationary",
     "raw_archive_enabled",
     "raw_archive_retention_days",
 ]
@@ -186,6 +187,7 @@ async def _trip_display_ctx(db: AsyncSession) -> dict:
     return {
         **unit_ctx,
         "trip_hide_enabled": hide["enabled"],
+        "trip_hide_stationary": hide["stationary"],
         "trip_hide_min_duration_min": round(hide["min_duration_s"] / 60),
         "trip_hide_min_distance_display": convert_distance(
             hide["min_distance_km"], unit_ctx["distance_unit"]
@@ -2118,11 +2120,15 @@ async def update_trip_display_settings(
     trip_hide_enabled: str | None = Form(None),
     trip_hide_min_duration: float | None = Form(None),
     trip_hide_min_distance: float | None = Form(None),
+    trip_hide_stationary: str | None = Form(None),
 ):
-    """Save hide-short-trips settings. Inputs arrive in display units."""
+    """Save trip-hiding settings. Inputs arrive in display units."""
     unit_ctx = await get_unit_context(db)
     await set_app_setting(
         db, "trip_hide_enabled", "true" if trip_hide_enabled is not None else "false"
+    )
+    await set_app_setting(
+        db, "trip_hide_stationary", "true" if trip_hide_stationary is not None else "false"
     )
     if trip_hide_min_duration is not None:
         await set_app_setting(

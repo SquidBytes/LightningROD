@@ -53,7 +53,7 @@
 <!-- Trip List -->
 {% if hidden_count %}
 <p class="text-sm text-base-content/40 mb-2">
-    {{ hidden_count }} short trip{{ 's' if hidden_count != 1 }} hidden &mdash;
+    {{ hidden_count }} trip{{ 's' if hidden_count != 1 }} hidden &mdash;
     <a href="/settings" class="link link-hover">Settings &rarr; General</a>
 </p>
 {% endif %}
@@ -119,6 +119,7 @@
                         </p>
                         <p class="text-sm text-base-content/60">
                             {% if trip.distance is not none %}{{ "%.1f"|format(trip.distance|cvt_dist(distance_unit)) }} {{ units.distance_label }}{% endif %}
+                            {% include "driving/sessions/partials/stationary_badge.html" %}
                             {% if trip.duration is not none %}
                                 &middot; {{ (trip.duration | int) // 3600 }}h {{ ((trip.duration | int) % 3600) // 60 }}m
                             {% endif %}

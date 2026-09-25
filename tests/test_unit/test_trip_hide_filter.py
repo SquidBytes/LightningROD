@@ -22,6 +22,7 @@ async def test_defaults_when_settings_absent(db_session):
         "enabled": False,
         "min_duration_s": 300.0,
         "min_distance_km": 4.8,
+        "stationary": False,
     }
 
 
@@ -51,3 +52,27 @@ async def test_filter_hides_and_keeps_correct_trips(db_session):
 
     hidden = await _visible_distances(db_session, hidden=True)
     assert hidden == {None, 1.0}
+
+
+def test_stationary_property_reads_near_zero_distance():
+    assert EVTripMetrics(distance=0.0).is_stationary
+    assert EVTripMetrics(distance=0.04).is_stationary
+    assert not EVTripMetrics(distance=0.2).is_stationary
+    assert not EVTripMetrics(distance=None).is_stationary
+
+
+@pytest.mark.db
+async def test_stationary_option_hides_long_vehicle_on_trips(db_session):
+    """A long zero-distance trip clears the short-trip rule but hides as stationary."""
+    await TripFactory.create(db_session, duration=1800.0, distance=0.0)
+    await TripFactory.create(db_session, duration=1800.0, distance=25.0)
+    await TripFactory.create(db_session, duration=None, distance=None)
+
+    short_only = select(EVTripMetrics.distance).where(build_short_trip_filter(HIDE))
+    visible = {float(d) for d in (await db_session.execute(short_only)).scalars()}
+    assert visible == {0.0, 25.0}
+
+    stationary_only = {"enabled": False, "stationary": True}
+    stmt = select(EVTripMetrics.distance).where(build_short_trip_filter(stationary_only))
+    rows = (await db_session.execute(stmt)).scalars().all()
+    assert {float(d) if d is not None else None for d in rows} == {25.0, None}
