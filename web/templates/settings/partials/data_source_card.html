@@ -32,7 +32,7 @@
 
         {% if card.needs_reauth %}
         <div class="alert alert-warning text-sm mt-3">
-            <span>Saved credentials can't be read — LightningROD's encryption key has changed. Re-enter them below.</span>
+            <span>The saved token is encrypted, but LightningROD's encryption key is missing or has changed. Restore the original <code>LR_SECRET_KEY</code>, or re-enter the token below.</span>
         </div>
         {% endif %}
 

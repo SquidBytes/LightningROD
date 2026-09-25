@@ -25,7 +25,7 @@
 
         {% if s == 'needs_reauth' %}
         <div class="alert alert-warning text-sm mt-3">
-            <span>Saved credentials can't be read — LightningROD's encryption key has changed. Re-enter your Client Secret, save, then click Connect Vehicle.</span>
+            <span>Saved credentials are encrypted, but LightningROD's encryption key is missing or has changed. Restore the original <code>LR_SECRET_KEY</code>, or re-enter your Client Secret, save, then click Connect Vehicle.</span>
         </div>
         {% elif s == 'consent_expired' %}
         <div class="alert alert-warning text-sm mt-3">

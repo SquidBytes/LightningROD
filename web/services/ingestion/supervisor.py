@@ -28,7 +28,6 @@ from sqlalchemy import select
 from db.engine import AsyncSessionLocal
 from db.models.data_source_config import DataSourceConfig
 from web.services.ingestion.base import IngestionRuntime
-from web.services.secrets import SecretKeyUnavailable
 from web.services.sources.base import RuntimeBuilder
 from web.services.sources.config_secrets import open_config
 from web.services.sources.registry import REGISTRY
@@ -127,18 +126,12 @@ class IngestionSupervisor:
             )
             return
 
-        try:
-            opened = open_config(row.source_name, row.config_json)
-        except SecretKeyUnavailable:
-            logger.exception(
-                "No secret key available; config_id=%d not started", row.id
-            )
-            return
+        opened = open_config(row.source_name, row.config_json)
         if opened.unreadable:
             # Never retry with garbage: the user re-enters the credentials.
             logger.warning(
-                "Stored credentials for config_id=%d (source=%s) cannot be "
-                "decrypted with the current key - re-authorization required",
+                "Stored credentials for config_id=%d (source=%s) are encrypted "
+                "but the key is missing or changed - re-authorization required",
                 row.id,
                 row.source_name,
             )

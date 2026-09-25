@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -15,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings as app_settings
 from web.dependencies import get_db
 from web.services.ingestion import supervisor
-from web.services.secrets import SecretKeyUnavailable, mask_secret
+from web.services.secrets import mask_secret
 from web.services.sources.config_store import find_row, merge_into_row, read_row
 from web.services.sources.fcon import DATA_SOURCE
 from web.services.sources.fcon.client import FordClient
@@ -33,18 +32,11 @@ from web.services.sources.fcon.retention import (
 )
 from web.services.sources.fcon.tokens import TOKEN_FIELDS
 
-logger = logging.getLogger("lightningrod.routes.fcon")
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
 
 CARD = "settings/partials/fcon_card.html"
 ESTIMATE = "settings/partials/fcon_retention_estimate.html"
-_NO_KEY = (
-    "Not saved: LightningROD has no encryption key. Set LR_SECRET_KEY, "
-    "or make the key file location writable."
-)
-
-
 async def get_ford_client() -> AsyncIterator[FordClient]:
     async with FordClient() as client:
         yield client
@@ -140,11 +132,7 @@ async def save_credentials(
         # Tokens belong to the Ford app that issued them.
         updates.update({k: None for k in TOKEN_FIELDS})
         updates["needs_consent"] = False
-    try:
-        await merge_into_row(db, SOURCE_NAME, updates)
-    except SecretKeyUnavailable:
-        logger.exception("Cannot encrypt FordConnect credentials")
-        return await _card(request, db, status_code=500, error=_NO_KEY)
+    await merge_into_row(db, SOURCE_NAME, updates)
     await _restart(db)
     return await _card(request, db, message="Saved.")
 

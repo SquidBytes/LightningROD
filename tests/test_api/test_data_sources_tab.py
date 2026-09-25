@@ -9,6 +9,7 @@ from db.models.data_source_config import DataSourceConfig
 from web.routes.settings import _mask_token
 from web.services.secrets import is_encrypted
 from web.services.sources.config_secrets import open_config
+from web.services.sources.config_store import find_row
 
 
 def _stored_token(row: DataSourceConfig) -> str:
@@ -66,8 +67,25 @@ async def test_get_data_sources_tab_renders_one_card(client, db_session):
     assert "abcdefgh12345678" not in body
 
 
+async def test_post_data_source_without_key_stores_plain_token(client, db_session, no_secret_key):
+    """No LR_SECRET_KEY: the token is stored exactly as entered, as before."""
+    response = await client.post(
+        "/settings/data-sources/ha_fordpass",
+        data={
+            "ha_url": "http://homeassistant.local:8123",
+            "ha_token": "plaintoken12345678",
+            "ha_unit_system": "auto",
+            "ha_auto_connect": "true",
+        },
+    )
+    assert response.status_code == 200
+    row = await find_row(db_session, "ha_fordpass")
+    await db_session.refresh(row)
+    assert row.config_json["ha_token"] == "plaintoken12345678"
+
+
 async def test_post_data_source_saves_real_token(client, db_session):
-    """POST with a real (non-masked) token persists ha_url, ha_token, options."""
+    """Key set: a real (non-masked) token is persisted as ciphertext."""
     response = await client.post(
         "/settings/data-sources/ha_fordpass",
         data={
@@ -225,5 +243,5 @@ async def test_unreadable_token_asks_for_reentry(client, db_session):
 
     response = await client.get("/settings/data-sources")
     assert response.status_code == 200
-    assert "encryption key has changed" in response.text
+    assert "encryption key is missing or has changed" in response.text
     assert "http://kept.example" in response.text

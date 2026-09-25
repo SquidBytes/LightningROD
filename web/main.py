@@ -88,9 +88,17 @@ def localtime_filter(dt, tz_str: str = "UTC", fmt: str | None = None):
 
 
 async def _seal_stored_credentials() -> None:
-    """Encrypt credentials still stored as plaintext; never blocks startup."""
+    """Encrypt plaintext credentials when a key is set; never blocks startup."""
+    from web.services.secrets import encryption_enabled
     from web.services.sources.config_secrets import seal_stored_configs
 
+    if not encryption_enabled():
+        logger.warning(
+            "Stored credentials are not encrypted. Set LR_SECRET_KEY (or "
+            "LR_SECRET_KEY_FILE) to encrypt them; keep that key, since losing "
+            "it means re-entering tokens."
+        )
+        return
     try:
         async with AsyncSessionLocal() as session:
             await seal_stored_configs(session)

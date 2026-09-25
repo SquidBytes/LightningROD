@@ -16,8 +16,9 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("APP_DEBUG", "LIGHTNINGROD_DEBUG"),
     )
-    # Key for stored credentials. Unset: a generated key file is used instead.
+    # Optional key that encrypts stored credentials; unset means plain text.
     secret_key: str | None = Field(default=None, validation_alias="LR_SECRET_KEY")
+    # Alternative to secret_key: a file holding it, e.g. a Docker secret.
     secret_key_file: Path | None = Field(
         default=None, validation_alias="LR_SECRET_KEY_FILE"
     )

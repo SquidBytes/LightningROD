@@ -1,8 +1,9 @@
 """Encrypt and decrypt the secret keys of a `data_source_configs.config_json`.
 
 Every read and write of `config_json` goes through here, so a source runtime
-only ever sees plaintext and the row only ever holds ciphertext. Which keys
-are secret is each source's own `DataSource.secret_fields` declaration.
+only ever sees plaintext. With a key configured the row holds ciphertext;
+without one it holds plain text, and plain text always reads back as-is.
+Which keys are secret is each source's own `DataSource.secret_fields`.
 """
 
 from __future__ import annotations
@@ -36,12 +37,12 @@ class OpenedConfig:
 
 
 def seal_config(source_name: str, config: dict | None) -> dict:
-    """Copy of `config` with every declared secret encrypted."""
+    """Copy of `config` with every declared secret encrypted, when a key is set."""
     sealed = dict(config or {})
     fields = secret_fields_for(source_name)
-    if not fields:
-        return sealed
     box = secret_box()
+    if not fields or box is None:
+        return sealed
     for key in fields:
         value = sealed.get(key)
         if isinstance(value, str) and value:
@@ -62,6 +63,8 @@ def open_config(source_name: str, config: dict | None) -> OpenedConfig:
         if not is_encrypted(value):
             continue
         try:
+            if box is None:
+                raise SecretUnreadable("no key configured")
             opened[key] = box.decrypt(value)
         except SecretUnreadable:
             opened.pop(key)
@@ -70,6 +73,8 @@ def open_config(source_name: str, config: dict | None) -> OpenedConfig:
 
 
 def needs_sealing(source_name: str, config: dict | None) -> bool:
+    if secret_box() is None:
+        return False
     fields = secret_fields_for(source_name)
     return any(
         isinstance(v, str) and v and not is_encrypted(v)
@@ -81,7 +86,7 @@ async def seal_stored_configs(db: AsyncSession) -> int:
     """Encrypt any plaintext secret left in a config row; returns rows changed.
 
     Runs on every start rather than as a migration because migrations have no
-    access to the key. Idempotent: already-sealed values are left alone.
+    access to the key. Idempotent, and a no-op when no key is configured.
     """
     rows = (await db.execute(select(DataSourceConfig))).scalars().all()
     changed = 0

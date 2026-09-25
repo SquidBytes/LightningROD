@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import stat
-
 import pytest
 
 from config import settings
@@ -45,19 +43,43 @@ def test_wrong_key_raises_unreadable():
         SecretBox("b").decrypt(sealed)
 
 
-def test_key_file_created_private_and_reused(tmp_path, monkeypatch):
+def test_no_key_configured_means_no_key_and_no_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(settings, "secret_key", None)
-    path = tmp_path / "sub" / "secret.key"
-    first = load_key_material(path)
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    assert load_key_material(path) == first
+    monkeypatch.setattr(settings, "secret_key_file", None)
+    assert load_key_material() is None
+    assert list(tmp_path.rglob("*")) == []
+
+
+def test_key_file_is_read_never_created(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "secret_key", None)
+    path = tmp_path / "secret"
+    monkeypatch.setattr(settings, "secret_key_file", path)
+    assert load_key_material() is None
+    assert not path.exists()
+    path.write_text("from-file\n")
+    assert load_key_material() == "from-file"
 
 
 def test_env_key_wins_over_file(tmp_path, monkeypatch):
+    path = tmp_path / "secret"
+    path.write_text("from-file")
     monkeypatch.setattr(settings, "secret_key", "from-env")
-    path = tmp_path / "secret.key"
-    assert load_key_material(path) == "from-env"
-    assert not path.exists()
+    monkeypatch.setattr(settings, "secret_key_file", path)
+    assert load_key_material() == "from-env"
+
+
+def test_without_key_secrets_stay_plain(no_secret_key):
+    config = {"ha_url": "u", "ha_token": "t0k"}
+    assert seal_config("ha_fordpass", config) == config
+    assert not needs_sealing("ha_fordpass", config)
+    assert open_config("ha_fordpass", config).values == config
+
+
+def test_without_key_ciphertext_is_unreadable(no_secret_key):
+    sealed = SecretBox("test-secret-key").encrypt("t")
+    opened = open_config("ha_fordpass", {"ha_token": sealed})
+    assert opened.unreadable == frozenset({"ha_token"})
 
 
 def test_seal_encrypts_only_declared_fields():

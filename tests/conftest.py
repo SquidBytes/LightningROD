@@ -192,3 +192,28 @@ class FixedSessionFactory:
 
     async def __aexit__(self, *_):
         return False
+
+
+@pytest.fixture
+def no_secret_key(monkeypatch):
+    """Run with encryption off, as an install without LR_SECRET_KEY does."""
+    from config import settings
+    from web.services.secrets import reset_secret_box
+
+    monkeypatch.setattr(settings, "secret_key", None)
+    monkeypatch.setattr(settings, "secret_key_file", None)
+    reset_secret_box()
+    yield
+    reset_secret_box()
+
+
+@pytest.fixture
+def other_secret_key(monkeypatch):
+    """Run with a different key than the one the suite normally uses."""
+    from config import settings
+    from web.services.secrets import reset_secret_box
+
+    monkeypatch.setattr(settings, "secret_key", "some-other-key")
+    reset_secret_box()
+    yield
+    reset_secret_box()

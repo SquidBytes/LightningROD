@@ -1,7 +1,6 @@
 """Settings routes for app options, vehicles, networks, and data sources."""
 
 import json
-import logging
 import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -76,7 +75,7 @@ from web.services.repair.base import RepairResult
 from web.services.repair.registry import REPAIR_REGISTRY, get_operation
 from web.services.repair.skips import add_skips, clear_skips, count_skips
 from web.services.repair.snapshot import list_runs, purge_run, restore_run
-from web.services.secrets import SecretKeyUnavailable, mask_secret
+from web.services.secrets import mask_secret
 from web.services.sources.config_store import find_row, merge_into_row, read_row
 from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
@@ -103,7 +102,6 @@ def _vehicle_presets_for_template() -> list[dict]:
     return [asdict(r) for r in profile.presets()] if profile else []
 
 router = APIRouter()
-logger = logging.getLogger("lightningrod.routes.settings")
 templates = Jinja2Templates(directory="web/templates")
 
 
@@ -1406,12 +1404,6 @@ HASS_SETTINGS_KEYS = [
 # ---------------------------------------------------------------------------
 
 
-_NO_KEY_MESSAGE = (
-    "Credentials were not saved: LightningROD has no encryption key. "
-    "Set LR_SECRET_KEY, or make the key file location writable."
-)
-
-
 _mask_token = mask_secret
 
 
@@ -1599,29 +1591,7 @@ async def save_data_source(
             status_code=422,
         )
 
-    try:
-        await _upsert_data_source_config(db, source, config)
-    except SecretKeyUnavailable:
-        logger.exception("Cannot encrypt %s credentials", source_name)
-        health, last_seen = _card_health_inputs(source)
-        return templates.TemplateResponse(
-            request,
-            "settings/partials/data_source_card.html",
-            {
-                "card": {
-                    "source": source,
-                    "config": None,
-                    "partial_config": form,
-                    "masked_token": "",
-                    "health": health,
-                    "last_seen": last_seen,
-                    "gas_sensor_station_entity_id": gas_station_entity,
-                    "gas_sensor_average_entity_id": gas_average_entity,
-                },
-                "errors": [{"loc": ["secret key"], "msg": _NO_KEY_MESSAGE}],
-            },
-            status_code=500,
-        )
+    await _upsert_data_source_config(db, source, config)
 
     if source_name == "ha_fordpass":
         await set_app_setting(db, "gas_sensor_station_entity_id", gas_station_entity)

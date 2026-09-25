@@ -83,6 +83,7 @@ async def test_redirect_derived_from_request_port(client):
 
 
 async def test_credentials_sealed_and_secret_never_rendered(client, db_session):
+    """Key set (the suite default): the secret is ciphertext at rest."""
     resp = await _save(client)
     assert resp.status_code == 200
     stored = await _stored(db_session)
@@ -208,3 +209,14 @@ async def test_retention_saved_and_estimated(client):
     assert 'value="7"' in resp.text
     est = await client.get("/settings/fcon/retention-estimate?days=365")
     assert "MB" in est.text or "GB" in est.text
+
+
+async def test_connect_without_key_stores_plain_tokens(client, db_session, monkeypatch, no_secret_key):
+    await _save(client)
+    state = await _connect(client)
+    _ford(monkeypatch, lambda r: httpx.Response(200, json=TOKEN))
+    resp = await client.get(f"/auth/ford/callback?code=c&state={state}")
+    assert resp.status_code == 303
+    stored = await _stored(db_session)
+    assert stored["client_secret"] == SECRET
+    assert stored["refresh_token"] == "ref-token-value"
