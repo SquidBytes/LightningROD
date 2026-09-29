@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.engine import AsyncSessionLocal
 from db.models.fcon_raw_sample import FconRawSample
 from db.portable_insert import portable_insert
-from web.queries.settings import get_app_setting
+from web.queries.settings import RAW_ARCHIVE_DEFAULT_RETENTION_DAYS
 from web.services.ingestion.raw_archive import RetentionPruner
 from web.services.sources.fcon.identity import SOURCE_SYSTEM, device_id_of
 from web.services.sources.ford_metrics.parser import parse_time
@@ -27,7 +27,9 @@ logger = logging.getLogger("lightningrod.sources.fcon.raw_store")
 
 INGEST_SCHEMA_VERSION = 2
 RETENTION_SETTING = "fcon_raw_retention_days"
-DEFAULT_RETENTION_DAYS = 30
+# Same default as the Home Assistant event archive: ~250 MB on SQLite (~115 MB
+# on Postgres) at a typical 100 distinct responses a day, fine for a home server.
+DEFAULT_RETENTION_DAYS = RAW_ARCHIVE_DEFAULT_RETENTION_DAYS
 
 
 def _stamps(entry: Any) -> Any:
@@ -93,12 +95,10 @@ class FconRawArchive(RetentionPruner):
         return bool(getattr(result, "rowcount", 1))
 
     async def prune(self) -> None:
-        try:
-            async with AsyncSessionLocal() as db:
-                raw = await get_app_setting(db, RETENTION_SETTING, str(DEFAULT_RETENTION_DAYS))
-            days = int(raw or DEFAULT_RETENTION_DAYS)
-        except (TypeError, ValueError):
-            days = DEFAULT_RETENTION_DAYS
+        from web.services.sources.fcon.retention import get_retention_days
+
+        async with AsyncSessionLocal() as db:
+            days = await get_retention_days(db)
         await self._maybe_prune(days)
 
     def reset(self) -> None:

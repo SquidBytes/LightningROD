@@ -204,7 +204,7 @@ async def test_disconnect_clears_tokens(client, db_session, monkeypatch):
 
 async def test_retention_saved_and_estimated(client):
     body = (await client.get("/settings/fcon")).text
-    assert 'name="days"' in body and 'value="30"' in body
+    assert 'name="days"' in body and 'value="90"' in body
     resp = await client.post("/settings/fcon/retention", data={"days": "7"})
     assert 'value="7"' in resp.text
     est = await client.get("/settings/fcon/retention-estimate?days=365")
