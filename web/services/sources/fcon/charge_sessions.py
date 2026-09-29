@@ -30,6 +30,7 @@ from web.queries.locations import (
 )
 from web.queries.sessions import find_matching_sessions
 from web.services.charge_types import normalize_charge_type
+from web.services.session_merge import FCON, HA, apply_session_merge, refresh_own_row
 from web.services.sources.fcon.history import telemetry_since_boundary
 from web.services.sources.fcon.identity import SOURCE_SYSTEM
 from web.services.sources.ford_metrics.parser import parse_time
@@ -234,20 +235,10 @@ async def _latest_schedules(db: AsyncSession, config_id: int | None) -> dict | N
     return await db.scalar(stmt.order_by(FconRawSample.last_seen_at.desc()).limit(1))
 
 
-async def record_session_if_ended(
-    db: AsyncSession, device_id: str, payload: dict, config_id: int | None = None
-) -> EVChargingSession | None:
-    """If this telemetry sample is an unplug that closes a charge, write the session."""
-    current = ChargeSample.from_payload(payload)
-    if current is None or not current.unplugged:
-        return None
-    samples = await _samples_since_last_unplug(db, device_id, current.at)
-    if not samples or samples[-1].at != current.at:
-        samples.append(current)
-    fields = derive_session(samples)
-    if fields is None:
-        return None
-
+async def _location_fields(
+    db: AsyncSession, fields: dict[str, Any], config_id: int | None
+) -> dict[str, Any]:
+    """Location columns for a session, named from the user's charge schedules if they match."""
     location_name = None
     if fields["latitude"] is not None:
         location_name = schedule_location_name(
@@ -261,18 +252,37 @@ async def record_session_if_ended(
         source_system=SOURCE_SYSTEM,
     )
     defaults = await get_location_defaults(db, location_id)
-    fields.update(
-        location_id=location_id,
-        location_name=defaults.location_name or location_name,
-        location_type=defaults.location_type,
-        network_id=defaults.network_id,
-        charge_type=fields["charge_type"] or defaults.charge_type,
-        stall_id=defaults.stall_id,
-        evse_voltage=defaults.evse_voltage,
-        evse_amperage=defaults.evse_amperage,
-        charger_rated_kw=defaults.charger_rated_kw,
-        evse_source="stall_default" if defaults.stall_id else None,
-    )
+    return {
+        "location_id": location_id,
+        "location_name": defaults.location_name or location_name,
+        "location_type": defaults.location_type,
+        "network_id": defaults.network_id,
+        "charge_type": fields["charge_type"] or defaults.charge_type,
+        "stall_id": defaults.stall_id,
+        "evse_voltage": defaults.evse_voltage,
+        "evse_amperage": defaults.evse_amperage,
+        "charger_rated_kw": defaults.charger_rated_kw,
+        "evse_source": "stall_default" if defaults.stall_id else None,
+    }
+
+
+async def record_session_if_ended(
+    db: AsyncSession, device_id: str, payload: dict, config_id: int | None = None
+) -> EVChargingSession | None:
+    """If this telemetry sample is an unplug that closes a charge, write the session.
+
+    HA's record of the same charge is merged into, never duplicated; a
+    matching manual or imported session means nothing is written.
+    """
+    current = ChargeSample.from_payload(payload)
+    if current is None or not current.unplugged:
+        return None
+    samples = await _samples_since_last_unplug(db, device_id, current.at)
+    if not samples or samples[-1].at != current.at:
+        samples.append(current)
+    fields = derive_session(samples)
+    if fields is None:
+        return None
 
     existing = await db.scalar(
         select(EVChargingSession).where(
@@ -281,28 +291,39 @@ async def record_session_if_ended(
             EVChargingSession.session_start_utc == fields["session_start_utc"],
         )
     )
-    if existing is not None:
-        # Re-deriving the same charge (a replay or re-parse) refreshes it.
-        for column, value in fields.items():
-            setattr(existing, column, value)
-        return existing
+    target = existing
+    if target is None:
+        others = [
+            m for m in await find_matching_sessions(
+                db, device_id, fields["session_start_utc"], fields["energy_kwh"]
+            )
+            if m[1] != SOURCE_SYSTEM
+        ]
+        ha_id = next((mid for mid, source in others if source == HA), None)
+        if ha_id is not None:
+            target = await db.get(EVChargingSession, ha_id)
+        elif others:
+            logger.info("fcon session matches protected session %s; not written", others[0][0])
+            return None
 
-    others = [
-        m for m in await find_matching_sessions(
-            db, device_id, fields["session_start_utc"], fields["energy_kwh"]
-        )
-        if m[1] != SOURCE_SYSTEM
-    ]
-    duplicate_of_id = others[0][0] if others else None
+    # Resolve a place only when the row does not already have one, so a merge
+    # or re-parse never creates a stray unverified location.
+    if target is None or target.location_id is None:
+        fields.update(await _location_fields(db, fields, config_id))
+
+    if existing is not None:
+        refresh_own_row(existing, fields)
+        return existing
+    if target is not None:
+        apply_session_merge(target, {**fields, "source_system": SOURCE_SYSTEM}, FCON)
+        return target
+
     session = EVChargingSession(
         device_id=device_id,
         source_system=SOURCE_SYSTEM,
         is_complete=True,
         recorded_at=current.at,
         original_timestamp=fields["session_start_utc"],
-        duplicate_of_id=duplicate_of_id,
-        needs_review=duplicate_of_id is not None,
-        review_type="duplicate" if duplicate_of_id is not None else None,
         ingest_schema_version=INGEST_SCHEMA_VERSION,
         **fields,
     )

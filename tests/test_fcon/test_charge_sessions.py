@@ -185,19 +185,3 @@ async def test_reparse_does_not_duplicate(db_session):
         select(EVChargingSession.id).where(EVChargingSession.device_id == DEVICE)
     )).all())
     assert count == 1
-
-
-@pytest.mark.db
-async def test_matching_session_from_another_source_is_flagged(db_session):
-    other = EVChargingSession(
-        device_id=DEVICE, source_system="ha_fordpass", is_complete=True,
-        session_start_utc=T0 + timedelta(minutes=2), energy_kwh=5.1,
-    )
-    db_session.add(other)
-    await db_session.commit()
-    await _feed(db_session, _charge_payloads())
-    s = await db_session.scalar(
-        select(EVChargingSession).where(EVChargingSession.source_system == "fcon")
-    )
-    assert s.duplicate_of_id == other.id
-    assert s.needs_review

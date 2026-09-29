@@ -1051,21 +1051,23 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # Duplicate detection: fuzzy match +-30min + +-10% energy
     # -----------------------------------------------------------------------
     duplicate_of_id = None
+    merge_into = None
     if session_start_utc is not None:
         from web.queries.sessions import find_matching_sessions
 
         matches = await find_matching_sessions(db, device_id, session_start_utc, energy_kwh)
-        if matches:
-            match_id, match_source = matches[0]
-            if match_source == "ha_fordpass":
-                # Same source duplicate -- skip silently (existing behavior)
-                logger.info(
-                    "Duplicate HA session detected (start=%s, energy=%s kWh), skipping",
-                    session_start_utc, energy_kwh,
-                )
-                return
+        if any(source == "ha_fordpass" for _, source in matches):
+            # Same source duplicate -- skip silently (existing behavior)
+            logger.info(
+                "Duplicate HA session detected (start=%s, energy=%s kWh), skipping",
+                session_start_utc, energy_kwh,
+            )
+            return
+        # FordConnect's record of the same charge is merged, not duplicated.
+        merge_into = next((mid for mid, source in matches if source == "fcon"), None)
+        if matches and merge_into is None:
             # Cross-source duplicate -- create but flag for review
-            duplicate_of_id = match_id
+            duplicate_of_id = matches[0][0]
 
     # -----------------------------------------------------------------------
     # Network resolution
@@ -1149,6 +1151,14 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         review_type="duplicate" if duplicate_of_id is not None else None,
         ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
     )
+    if merge_into is not None:
+        from web.services.session_merge import HA, apply_session_merge, session_values
+
+        target = await db.get(EVChargingSession, merge_into)
+        if target is not None:
+            apply_session_merge(target, session_values(session), HA)
+            logger.info("Merged HA charging session into FordConnect row %s", merge_into)
+            return
     db.add(session)
 
     logger.info(
