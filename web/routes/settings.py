@@ -2182,6 +2182,7 @@ async def _repair_card_ctx(op, db: AsyncSession) -> dict:
         "is_replay": is_replay,
         "window": window,
         "ha_connected": op.ha_connected() if is_replay else False,
+        "unavailable": await op.unavailable_reason(db),
     }
 
 

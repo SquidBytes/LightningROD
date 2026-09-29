@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from web.services.repair.base import RepairOperation
 from web.services.repair.ops.archive_replay import ArchiveReplay
+from web.services.repair.ops.fcon_reparse import FconArchiveReparse
 from web.services.repair.ops.telemetry_derive import TelemetryDerive
 from web.services.repair.ops.trip_distance_double_conversion import (
     TripDistanceDoubleConversion,
@@ -12,7 +13,8 @@ from web.services.repair.ops.trip_duplicates import TripDuplicateConsolidation
 from web.services.repair.recorder_replay import RecorderReplay
 
 # Registry order is execution/render order: consolidation must run before
-# double-conversion so surviving rows are the ones ratio-checked; telemetry
+# double-conversion so surviving rows are the ones ratio-checked; the
+# FordConnect re-parse next, so derivation reads refreshed status rows; telemetry
 # derive next so it enriches the cleaned rows from local data; then the two
 # replays, which fill what local telemetry can't (scores, regen) and recover
 # missed trips — archive replay first because it needs no Home Assistant.
@@ -21,6 +23,7 @@ from web.services.repair.recorder_replay import RecorderReplay
 REPAIR_REGISTRY: list[RepairOperation] = [
     TripDuplicateConsolidation(),
     TripDistanceDoubleConversion(),
+    FconArchiveReparse(),
     TelemetryDerive(),
     ArchiveReplay(),
     RecorderReplay(),

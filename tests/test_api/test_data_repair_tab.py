@@ -602,3 +602,15 @@ async def test_apply_ignores_keys_that_were_not_on_the_page(client, db_session):
 async def test_clear_skips_unknown_slug_404(client):
     response = await client.post("/settings/data-repair/not-a-repair/skips/clear")
     assert response.status_code == 404
+
+
+async def test_fordconnect_reparse_card_explains_why_it_is_disabled(client, db_session):
+    from db.models.data_source_config import DataSourceConfig
+
+    await db_session.execute(
+        DataSourceConfig.__table__.delete().where(DataSourceConfig.source_name == "fcon")
+    )
+    await db_session.flush()
+    body = (await client.get("/settings/data-repair")).text
+    assert "FordConnect archive re-parse" in body
+    assert "FordConnect is not set up" in body

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, TypeVar, overload
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 # Preservation invariant: repairs only ever mutate rows ingested by these
 # source systems — manual/manual_entry/csv_import rows are untouchable.
@@ -208,6 +208,10 @@ class RepairOperation(ABC):
     # Source systems apply() lets this operation mutate.
     guarded_source_systems: tuple[str, ...] = MUTABLE_SOURCE_SYSTEMS
 
+    async def unavailable_reason(self, db: AsyncSession) -> str | None:
+        """Why this operation cannot run here, or None when it can."""
+        return None
+
     @abstractmethod
     async def census(self, db: AsyncSession) -> int:
         """Count groups this operation would currently affect."""
@@ -289,3 +293,26 @@ async def rollback_session(engine=None):
         finally:
             await session.close()
             await trans.rollback()
+
+
+@asynccontextmanager
+async def scratch_session(db: AsyncSession):
+    """A session on `db`'s own bind whose writes all roll back on exit.
+
+    Unlike `rollback_session`, it sees what `db` sees even when `db` is itself
+    inside an open transaction (a test, or a caller that has not committed).
+    """
+    bind = db.bind
+    if not isinstance(bind, AsyncConnection):
+        async with rollback_session(engine=bind) as session:
+            yield session
+        return
+    nested = await bind.begin_nested()
+    session = AsyncSession(
+        bind=bind, expire_on_commit=False, join_transaction_mode="create_savepoint"
+    )
+    try:
+        yield session
+    finally:
+        await session.close()
+        await nested.rollback()

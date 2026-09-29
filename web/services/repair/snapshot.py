@@ -10,11 +10,17 @@ from typing import Any
 from sqlalchemy import DateTime, Numeric, Uuid, delete, func, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.battery_status import EVBatteryStatus
+from db.models.charging_session import EVChargingSession
 from db.models.repair_backup import RepairBackup
 from db.models.trip_metrics import EVTripMetrics
+from db.models.vehicle_status import EVVehicleStatus
 
-# v1 restore scope: only these tables can be restored from snapshots.
-RESTORABLE_MODELS: dict[str, type[EVTripMetrics]] = {"ev_trip_metrics": EVTripMetrics}
+# Restore scope: only these tables can be restored from snapshots.
+RESTORABLE_MODELS: dict[str, Any] = {
+    model.__tablename__: model
+    for model in (EVTripMetrics, EVChargingSession, EVBatteryStatus, EVVehicleStatus)
+}
 
 
 def serialize_row(obj: Any) -> dict[str, Any]:
