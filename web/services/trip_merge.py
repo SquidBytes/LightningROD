@@ -1,14 +1,12 @@
 """One trip row per drive when Home Assistant and FordConnect both record it.
 
 Whichever source arrives second merges into the first source's row instead of
-inserting. A field NULL on one side is filled from the other; where both hold
-a value, `PRECEDENCE` names the winner, the same table in both directions, so
-the final row does not depend on arrival order.
+inserting, through `PRECEDENCE` (see `source_merge`).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -16,17 +14,47 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
+from web.services.source_merge import FCON, HA, MERGEABLE_SOURCES, Rule, merge_values
 
-HA = "ha_fordpass"
-FCON = "fcon"
-# Ingested rows a same-drive merge may enrich; manual and imported rows never.
-MERGEABLE_SOURCES = (HA, FCON)
+__all__ = ["FCON", "HA", "MERGEABLE_SOURCES", "PRECEDENCE", "apply_merge", "find_same_drive"]
+
+logger = logging.getLogger("lightningrod.trip_merge")
+
+# Each odometer end is a whole km (±0.5), so a delta is good to ±1 km; the
+# captures show no key-on/off lag in the odometer, so nothing is added for timing.
+DISTANCE_TOLERANCE_KM = 1.0
 
 
-@dataclass(frozen=True)
-class Rule:
-    winner: str
-    why: str
+def _odometer_delta(row: dict) -> float | None:
+    start, end = row.get("odometer_start"), row.get("odometer_end")
+    if start is None or end is None:
+        return None
+    return float(end) - float(start)
+
+
+def checked_distance(current: dict, incoming: dict, incoming_source: str) -> Any:
+    """HA's precise distance when FordConnect's odometer confirms it, else FordConnect's.
+
+    HA has converted distances twice before (the x1.609 twins); the odometer
+    cannot be converted, so it is the referee. Only an FCON row reaches here
+    with HA incoming, and HA rows with FCON incoming, so each side is known.
+    """
+    fcon_side, ha_side = (incoming, current) if incoming_source == FCON else (current, incoming)
+    reference = _odometer_delta(fcon_side)
+    if reference is None:
+        reference = float(fcon_side["distance"])
+    ha_distance = float(ha_side["distance"])
+    if abs(ha_distance - reference) <= DISTANCE_TOLERANCE_KM:
+        return ha_side["distance"]
+    logger.warning(
+        "Trip distance disagreement for %s ending %s: Home Assistant %.3f km, "
+        "FordConnect odometer %.3f km; storing FordConnect's",
+        current.get("device_id") or incoming.get("device_id"),
+        current.get("end_time") or incoming.get("end_time"),
+        ha_distance,
+        reference,
+    )
+    return fcon_side["distance"]
 
 
 PRECEDENCE: dict[str, Rule] = {
@@ -34,7 +62,9 @@ PRECEDENCE: dict[str, Rule] = {
     "start_time": Rule(FCON, "ignition-on time from the TCU; HA's is end minus duration"),
     "end_time": Rule(FCON, "ignition-off time from the TCU; HA's is event receipt time"),
     "duration": Rule(FCON, "kept consistent with the start/end it is derived from"),
-    "distance": Rule(HA, "trip meter has decimals; the FCON odometer is whole km"),
+    "distance": Rule(
+        HA, "HA's decimals if the FCON odometer agrees, else FCON", resolve=checked_distance
+    ),
     "odometer_start": Rule(FCON, "read at the boundary; HA picks the nearest status row"),
     "odometer_end": Rule(FCON, "read at the boundary; HA picks the nearest status row"),
     "energy_consumed": Rule(HA, "measured by the vehicle; FCON's is a pack-estimate delta"),
@@ -51,7 +81,7 @@ PRECEDENCE: dict[str, Rule] = {
     "end_location_id": Rule(FCON, "resolved from a measured GPS fix"),
     "brake_torque": Rule(FCON, "only FordConnect reports it"),
     # Deterministic so both arrival orders label the row the same way.
-    "source_system": Rule(HA, "a merged row is labelled by the distance winner"),
+    "source_system": Rule(HA, "one label whichever source arrived first"),
 }
 
 # Recomputed from the merged inputs, never taken from either side.
@@ -65,32 +95,9 @@ def is_mergeable(row: EVTripMetrics) -> bool:
     return row.source_system in MERGEABLE_SOURCES
 
 
-def _is_twin_pair(a: Any, b: Any) -> bool:
-    from web.services.repair.ops.trip_duplicates import RATIO_BAND
-
-    if a is None or b is None:
-        return False
-    small, large = sorted((float(a), float(b)))
-    return small > 0 and RATIO_BAND[0] <= large / small <= RATIO_BAND[1]
-
-
 def merge_changes(current: dict, incoming: dict, incoming_source: str) -> dict[str, Any]:
     """Columns to change on `current` after merging in `incoming`."""
-    changes: dict[str, Any] = {}
-    for field, rule in PRECEDENCE.items():
-        new = incoming.get(field)
-        if new is None:
-            continue
-        old = current.get(field)
-        if old is None or (rule.winner == incoming_source and old != new):
-            changes[field] = new
-    # Of an x1.609 twin pair the smaller distance is the correct one.
-    old_d, new_d = current.get("distance"), incoming.get("distance")
-    if old_d is not None and new_d is not None and _is_twin_pair(old_d, new_d):
-        if float(old_d) <= float(new_d):
-            changes.pop("distance", None)
-        else:
-            changes["distance"] = new_d
+    changes = merge_values(PRECEDENCE, current, incoming, incoming_source)
     merged = {**current, **changes}
     distance, energy = merged.get("distance"), merged.get("energy_consumed")
     if distance is not None and energy:

@@ -219,6 +219,54 @@ def test_merge_fills_nulls_and_applies_winner():
 
 
 @pytest.mark.unit
-def test_twin_keeps_the_smaller_distance_either_way():
-    assert merge_changes({"distance": 16.09}, {"distance": 10.0}, FCON)["distance"] == 10.0
-    assert "distance" not in merge_changes({"distance": 10.0}, {"distance": 16.09}, HA)
+@pytest.mark.parametrize(
+    ("ha_km", "stored", "warns"),
+    [
+        (12.6, 12.6, False),  # within the ±1 km odometer rounding: HA's decimals kept
+        (13.0 * 1.609344, 13.0, True),  # km/miles twin: never stored
+        (15.5, 13.0, True),  # any other disagreement
+    ],
+)
+@pytest.mark.parametrize("fcon_first", [True, False])
+def test_fcon_odometer_checks_ha_distance(ha_km, stored, warns, fcon_first, caplog):
+    fcon = {"distance": 13.0, "odometer_start": 1000.0, "odometer_end": 1013.0,
+            "energy_consumed": 2.6, "device_id": DEVICE}
+    ha = {"distance": ha_km, "energy_consumed": 2.4, "device_id": DEVICE}
+    with caplog.at_level("WARNING", logger="lightningrod.trip_merge"):
+        if fcon_first:
+            merged = {**fcon, **merge_changes(fcon, ha, HA)}
+        else:
+            merged = {**ha, **merge_changes(ha, fcon, FCON)}
+    assert merged["distance"] == pytest.approx(stored)
+    assert merged["efficiency"] == round(stored / 2.4, 3)
+    warnings = [r for r in caplog.records if "disagreement" in r.getMessage()]
+    assert bool(warnings) is warns
+    if warns:
+        assert f"{ha_km:.3f}" in warnings[0].getMessage()
+
+
+def _twin_events() -> tuple[str, dict]:
+    """HA's events trip with its km distance converted a second time."""
+    entity, state = _events_state()
+    seg = state["attributes"]["customEvents"]["xev-key-off-trip-segment-data"]
+    trip = json.loads(seg["oemData"]["trip_data"]["stringArrayValue"][0])
+    trip["distance_traveled"] = 13.0 * 1.609344
+    seg["oemData"]["trip_data"]["stringArrayValue"] = [json.dumps(trip)]
+    return entity, state
+
+
+@pytest.mark.db
+@pytest.mark.parametrize("ha_first", [True, False])
+async def test_ha_twin_distance_is_never_stored(db_session, ha_first):
+    async def ha():
+        fp_handlers._last_trip_values.clear()
+        entity, events = _twin_events()
+        await ha_process(entity, events, db_session, HA_CONFIG)
+        await db_session.flush()
+
+    steps = (ha, lambda: _feed_fcon(db_session))
+    for step in steps if ha_first else reversed(steps):
+        await step()
+    [row] = await _trips(db_session)
+    assert float(row.distance) == 13.0
+    assert float(row.efficiency) == round(13.0 / 2.4, 3)
