@@ -29,6 +29,7 @@ from web.queries.locations import (
     resolve_location,
 )
 from web.queries.sessions import find_matching_sessions
+from web.services.charge_types import normalize_charge_type
 from web.services.sources.fcon.history import telemetry_since_boundary
 from web.services.sources.fcon.identity import SOURCE_SYSTEM
 from web.services.sources.ford_metrics.parser import parse_time
@@ -175,7 +176,7 @@ def derive_session(samples: list[ChargeSample]) -> dict[str, Any] | None:
     estimate = next((s.estimated_end for s in reversed(window) if s.estimated_end), None)
 
     return {
-        "charge_type": start.power_type,
+        "charge_type": normalize_charge_type(start.power_type),
         "plug_status": end.plug,
         "charging_status": last_live.display,
         "station_status": last_live.station,

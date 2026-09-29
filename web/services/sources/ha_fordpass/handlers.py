@@ -23,6 +23,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from web.services.charge_types import normalize_charge_type as _normalize_charge_type
 from web.services.ingestion._helpers import (
     _convert_with_uom,
     _get_attributes,
@@ -299,48 +300,6 @@ async def _find_matching_trip(
 # ---------------------------------------------------------------------------
 # Pure helpers (FordPass-specific data shaping)
 # ---------------------------------------------------------------------------
-
-
-# Charger type normalization mapping — collapse all variants to AC/DC codes
-# matching csv_parser._normalize_charge_type. Level 1/2 granularity is
-# intentionally discarded: callers that need it can derive it from the EVSE
-# power/voltage columns.
-_CHARGER_TYPE_MAP = {
-    "AC": "AC",
-    "AC_BASIC": "AC",
-    "AC_LEVEL_1": "AC",
-    "AC_LEVEL_2": "AC",
-    "AC LEVEL 1": "AC",
-    "AC LEVEL 2": "AC",
-    "LEVEL_1": "AC",
-    "LEVEL_2": "AC",
-    "LEVEL 1": "AC",
-    "LEVEL 2": "AC",
-    "L1": "AC",
-    "L2": "AC",
-    "DC": "DC",
-    "DC_FAST": "DC",
-    "DC_DCFAST": "DC",
-    "DC_COMBO": "DC",
-    "DC FAST": "DC",
-    "DCFC": "DC",
-    "L3": "DC",
-    "LEVEL 3": "DC",
-}
-
-
-def _normalize_charge_type(raw: str | None) -> str | None:
-    """Normalize charger type string to 'AC' or 'DC'.
-
-    Returns None for empty input. Unrecognized values fall back to the raw
-    string (uppercased) so debugging still surfaces the unknown code.
-    """
-    if not raw:
-        return None
-    key = raw.strip().upper()
-    if not key:
-        return None
-    return _CHARGER_TYPE_MAP.get(key, key)
 
 
 def _format_address(addr: dict | None) -> str | None:
