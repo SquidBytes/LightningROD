@@ -26,7 +26,7 @@ Quirks of the upstream integration that this adapter exists to absorb:
 import json
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1047,9 +1047,24 @@ async def _handle_events_entity(
     # Match-and-enrich fallback: legacy predicate match for trips whose source
     # didn't carry tripUpdateTime (no deterministic id available).
     from web.services.sources.ha_fordpass.handlers import _find_matching_trip
+    from web.services.trip_merge import HA, apply_merge, is_mergeable
 
-    existing = await _find_matching_trip(db, device_id, distance, energy, around=recorded_at)
+    start_time = recorded_at - timedelta(seconds=duration) if duration else None
+    existing = await _find_matching_trip(
+        db, device_id, distance, energy, around=recorded_at,
+        start_time=start_time, duration=duration,
+    )
+    if existing is not None and not is_mergeable(existing):
+        logger.info("ha_fordpass: trip matches protected row %s; not written", existing.id)
+        return
     if existing is not None:
+        if existing.source_system != HA:
+            apply_merge(existing, {
+                "trip_id": deterministic_id, "start_time": start_time,
+                "end_time": recorded_at, "duration": duration, "distance": distance,
+                "energy_consumed": energy, "ambient_temp": ambient, "cabin_temp": cabin,
+                "outside_air_temp": outside_air, "source_system": HA,
+            }, HA)
         # events values are canonical °C — always overwrite temps.
         if ambient is not None:
             existing.ambient_temp = ambient
@@ -1067,12 +1082,8 @@ async def _handle_events_entity(
 
     odometer_end = await _closest_odometer(db, device_id, recorded_at)
 
-    start_time = None
     odometer_start = None
-    if duration:
-        from datetime import timedelta
-
-        start_time = recorded_at - timedelta(seconds=duration)
+    if start_time is not None:
         odometer_start = await _closest_odometer(db, device_id, start_time)
 
     record = EVTripMetrics(

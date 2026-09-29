@@ -240,6 +240,8 @@ async def _find_matching_trip(
     distance: float | None,
     energy_consumed: float | None,
     around: datetime | None = None,
+    start_time: datetime | None = None,
+    duration: float | None = None,
 ):
     """Query for an existing EVTripMetrics row matching this trip.
 
@@ -253,6 +255,9 @@ async def _find_matching_trip(
     handler enriches the existing row instead of duplicating it. Centering the
     window on the event timestamp (not wall-clock now) keeps dedup working
     when historical payloads are replayed.
+
+    Falls back to `find_same_drive`, which also finds the same drive recorded
+    by another source (FordConnect) at slightly different values.
     """
     if distance is None or energy_consumed is None:
         return None
@@ -280,7 +285,15 @@ async def _find_matching_trip(
         .order_by(EVTripMetrics.end_time.desc())
         .limit(1)
     )
-    return result.scalar_one_or_none()
+    match = result.scalar_one_or_none()
+    if match is not None or around is None:
+        return match
+    from web.services.trip_merge import find_same_drive
+
+    return await find_same_drive(db, {
+        "device_id": device_id, "end_time": around, "start_time": start_time,
+        "duration": duration, "distance": distance, "energy_consumed": energy_consumed,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -731,9 +744,20 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         trip_fields.get("distance"),
                         trip_fields.get("energy_consumed"),
                         around=end_time,
+                        start_time=start_time,
+                        duration=trip_fields.get("duration"),
                     )
 
-                if existing is not None:
+                from web.services.trip_merge import HA, apply_merge, is_mergeable
+
+                if existing is not None and not is_mergeable(existing):
+                    logger.info("Trip matches protected row %s; not written", existing.id)
+                elif existing is not None:
+                    if existing.source_system != HA:
+                        apply_merge(existing, {
+                            **trip_fields, "start_time": start_time, "end_time": end_time,
+                            "trip_id": deterministic_id, "source_system": HA,
+                        }, HA)
                     # Enrich the existing row with elveh-owned fields.
                     # Scores and regen always overwrite (elveh is canonical).
                     # efficiency and duration only fill NULLs.

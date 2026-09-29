@@ -14,6 +14,7 @@ For feature documentation, see the docs site at
   badge, and a new Trip Display setting hides them
 - Charging and trip CSV exports include each record's ID, source and ingest time
 - Added FordConnect as a data source: connect a Ford vehicle through Ford's own API, no Home Assistant needed
+- Trips recorded by both Home Assistant and FordConnect are combined into one
 
 ### Changed
 

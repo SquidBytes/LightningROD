@@ -25,6 +25,7 @@ from web.queries.trips import detect_trip_location_ids
 from web.services.sources.fcon.history import telemetry_since_boundary
 from web.services.sources.fcon.identity import SOURCE_SYSTEM
 from web.services.sources.ford_metrics.parser import parse_time
+from web.services.trip_merge import apply_merge, find_same_drive, is_mergeable
 
 logger = logging.getLogger("lightningrod.sources.fcon.trips")
 
@@ -148,10 +149,18 @@ async def record_trip_if_ended(
 
     trip_id = trip_uuid(device_id, fields["start_time"])
     existing = await db.scalar(select(EVTripMetrics).where(EVTripMetrics.trip_id == trip_id))
-    if existing is not None:
+    if existing is not None and existing.source_system == SOURCE_SYSTEM:
+        # Re-deriving an unmerged drive (a replay or re-parse) refreshes it.
         for column, value in fields.items():
             setattr(existing, column, value)
         return existing
+    existing = existing or await find_same_drive(db, {"device_id": device_id, **fields})
+    if existing is not None:
+        if is_mergeable(existing):
+            apply_merge(existing, {**fields, "source_system": SOURCE_SYSTEM}, SOURCE_SYSTEM)
+            return existing
+        logger.info("fcon trip matches protected trip %s; not written", existing.id)
+        return None
     trip = EVTripMetrics(
         trip_id=trip_id,
         device_id=device_id,
