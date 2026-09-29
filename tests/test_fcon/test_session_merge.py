@@ -202,3 +202,52 @@ async def test_ha_against_protected_session_still_goes_to_review(db_session):
 def test_every_rule_documents_its_reason():
     assert all(rule.why for rule in SESSION_PRECEDENCE.values())
     assert SESSION_PRECEDENCE["cost"].winner == KEEP
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("ha_km", "stored", "warns"),
+    [
+        (12.5, 12.5, False),  # range added vs range-estimate change: close enough, HA wins
+        (13.0 * 1.609344, 13.0, True),  # HA converted km as miles
+        (13.0 / 1.609344, 13.0, True),  # ...or miles as km
+    ],
+)
+@pytest.mark.parametrize("fcon_first", [True, False])
+def test_distance_added_rejects_unit_conversion(ha_km, stored, warns, fcon_first, caplog):
+    from web.services.session_merge import FCON, merge_values
+
+    fcon = {"distance_added": 13.0, "device_id": DEVICE}
+    ha = {"distance_added": ha_km, "device_id": DEVICE}
+    with caplog.at_level("WARNING", logger="lightningrod.session_merge"):
+        if fcon_first:
+            merged = {**fcon, **merge_values(SESSION_PRECEDENCE, fcon, ha, HA)}
+        else:
+            merged = {**ha, **merge_values(SESSION_PRECEDENCE, ha, fcon, FCON)}
+    assert merged["distance_added"] == pytest.approx(stored)
+    hits = [r for r in caplog.records if "unit-converted" in r.getMessage()]
+    assert bool(hits) is warns
+    if warns:
+        assert f"{ha_km:.3f}" in hits[0].getMessage()
+
+
+@pytest.mark.parametrize("ha_first", [True, False])
+async def test_converted_distance_added_never_stored(db_session, ha_first):
+    # FordConnect sees 13 km of range added; HA reports it converted a second time.
+    FCON_CHARGE[1]["metrics"]["xevBatteryRange"]["value"] = 200.0
+    FCON_CHARGE[3]["metrics"]["xevBatteryRange"]["value"] = 213.0
+    state = _ha_state()
+    state["attributes"]["plugDetails"]["totalDistanceAdded"] = 13.0 * 1.609344
+
+    async def ha(db):
+        await handle_energy_transfer("energytransferlogentry", state, {}, DEVICE, db)
+        await db.flush()
+
+    try:
+        for step in (ha, _feed_fcon) if ha_first else (_feed_fcon, ha):
+            await step(db_session)
+    finally:
+        for sample in (FCON_CHARGE[1], FCON_CHARGE[3]):
+            sample["metrics"]["xevBatteryRange"]["value"] = 272.5
+    [row] = await _sessions(db_session)
+    assert float(row.distance_added) == 13.0

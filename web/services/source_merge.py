@@ -46,3 +46,11 @@ def merge_values(
         if old is None or (rule.winner == incoming_source and old != new):
             changes[field] = new
     return changes
+
+
+def is_km_mile_twin(a: float, b: float) -> bool:
+    """Whether one value is the other converted between km and miles by mistake."""
+    from web.services.repair.ops.trip_duplicates import RATIO_BAND
+
+    small, large = sorted((abs(a), abs(b)))
+    return small > 0 and RATIO_BAND[0] <= large / small <= RATIO_BAND[1]

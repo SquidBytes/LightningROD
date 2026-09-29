@@ -8,10 +8,42 @@ location, are fill-only: a merge never overwrites them.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from db.models.charging_session import EVChargingSession
-from web.services.source_merge import FCON, HA, MERGEABLE_SOURCES, Rule, merge_values
+from web.services.source_merge import (
+    FCON,
+    HA,
+    MERGEABLE_SOURCES,
+    Rule,
+    is_km_mile_twin,
+    merge_values,
+)
+
+logger = logging.getLogger("lightningrod.session_merge")
+
+def checked_distance_added(current: dict, incoming: dict, incoming_source: str) -> Any:
+    """HA's range added, unless it is FordConnect's converted between km and miles.
+
+    HA localizes totalDistanceAdded, the class of bug that double-converted
+    trip distances. Range added and a range-estimate change measure slightly
+    different things, so only the x1.609 signature overrules HA.
+    """
+    fcon_side, ha_side = (incoming, current) if incoming_source == FCON else (current, incoming)
+    ha_value, fcon_value = float(ha_side["distance_added"]), float(fcon_side["distance_added"])
+    if not is_km_mile_twin(ha_value, fcon_value):
+        return ha_side["distance_added"]
+    logger.warning(
+        "Charge distance_added looks unit-converted for %s starting %s: Home Assistant "
+        "%.3f km, FordConnect range gain %.3f km; storing FordConnect's",
+        current.get("device_id") or incoming.get("device_id"),
+        current.get("session_start_utc") or incoming.get("session_start_utc"),
+        ha_value,
+        fcon_value,
+    )
+    return fcon_side["distance_added"]
+
 
 # Winner name for columns neither source may overwrite once set.
 KEEP = "keep"
@@ -28,7 +60,9 @@ SESSION_PRECEDENCE: dict[str, Rule] = {
     "max_power": Rule(HA, "log covers every second; FCON samples once a minute"),
     "min_power": Rule(HA, "log covers every second; FCON samples once a minute"),
     "charging_kw": Rule(HA, "log's weighted average; FCON's is the last live sample"),
-    "distance_added": Rule(HA, "log's range added; FCON's is a range-estimate delta"),
+    "distance_added": Rule(
+        HA, "log's range added, unless it is FCON's x1.609", resolve=checked_distance_added
+    ),
     "charge_type": Rule(HA, "the log names the charger type directly"),
     "address": Rule(HA, "only the log carries a street address"),
     "latitude": Rule(HA, "the log's location is where Ford recorded the charge"),
@@ -69,7 +103,7 @@ def is_mergeable(row: EVChargingSession) -> bool:
 
 
 def session_values(row: EVChargingSession) -> dict[str, Any]:
-    return {f: getattr(row, f) for f in SESSION_PRECEDENCE}
+    return {f: getattr(row, f) for f in (*SESSION_PRECEDENCE, "device_id")}
 
 
 def apply_session_merge(
