@@ -54,6 +54,7 @@ class TripSample:
     energy: float | None
     outside_temp: float | None
     brake_torque: float | None
+    brake_torque_at: datetime | None
     range_regenerated: float | None
 
     @classmethod
@@ -70,6 +71,7 @@ class TripSample:
             energy=_float(m, "xevBatteryEnergyRemaining"),
             outside_temp=_float(m, "outsideTemperature"),
             brake_torque=_float(m, "brakeTorque"),
+            brake_torque_at=parse_time(_entry(m, "brakeTorque").get("updateTime")),
             range_regenerated=_float(m, "tripXevBatteryRangeRegenerated"),
         )
 
@@ -101,7 +103,16 @@ def derive_trip(samples: list[TripSample]) -> dict[str, Any] | None:
         if first_energy is not None and last_energy is not None
         else None
     )
-    torques = [s.brake_torque for s in driving if s.brake_torque is not None]
+    # Peak of the instantaneous Nm readings the vehicle refreshed during this
+    # drive; at one snapshot a minute it is a sampled lower bound, not braking
+    # behaviour (that needs the per-sample ev_vehicle_status series).
+    torques = [
+        s.brake_torque
+        for s in samples
+        if s.brake_torque is not None
+        and s.brake_torque_at is not None
+        and start.at <= s.brake_torque_at <= end.at
+    ]
     return {
         "start_time": start.at,
         "end_time": end.at,

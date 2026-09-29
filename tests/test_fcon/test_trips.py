@@ -140,3 +140,26 @@ async def test_reparse_updates_rather_than_duplicates(db_session):
         select(EVTripMetrics.id).where(EVTripMetrics.device_id == DEVICE)
     )).all())
     assert count == 1
+
+
+@pytest.mark.unit
+def test_brake_torque_ignores_readings_not_refreshed_during_the_drive():
+    # A parked vehicle carries its last brake reading into the next drive.
+    stale = _payload(0, "ON", 1000.0, brakeTorque=1200.0)
+    stale["metrics"]["brakeTorque"]["updateTime"] = (T0 - timedelta(hours=3)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    samples = _samples(
+        stale,
+        _payload(5, "ON", 1003.0, brakeTorque=300.0),
+        _payload(6, "OFF", 1004.0, brakeTorque=0.0),
+    )
+    assert derive_trip(samples)["brake_torque"] == 300.0
+
+
+@pytest.mark.unit
+def test_brake_torque_is_null_when_nothing_was_refreshed():
+    samples = _samples(_payload(0, "ON", 1000.0), _payload(6, "OFF", 1004.0))
+    for s in samples:
+        object.__setattr__(s, "brake_torque_at", T0 - timedelta(days=1))
+    assert derive_trip(samples)["brake_torque"] is None
