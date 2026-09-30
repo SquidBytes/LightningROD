@@ -126,6 +126,12 @@ def explain_token_error(err: FordError) -> str:
             "That code was already used or is malformed. Click Connect Vehicle "
             "for a fresh one."
         )
+    if "redirect" in body or "aadb2c90006" in body:
+        return (
+            "Ford says the redirect address doesn't match your Ford app. Put the exact "
+            "address registered in the Ford portal into the redirect field, save, and "
+            "click Connect Vehicle again."
+        )
     if "invalid_client" in body:
         return "Your Client Secret doesn't match that Client ID. Re-check both in Settings."
     if err.status is None:

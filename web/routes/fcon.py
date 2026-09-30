@@ -79,12 +79,10 @@ async def fcon_card_context(request: Request, db: AsyncSession, **extra: Any) ->
     }
 
 
-async def _card(request: Request, db: AsyncSession, status_code: int = 200, **extra: Any):
+async def _card(request: Request, db: AsyncSession, **extra: Any):
+    # Always 200: htmx discards 4xx bodies, which would hide the card's error message.
     return templates.TemplateResponse(
-        request,
-        CARD,
-        {"card": await fcon_card_context(request, db, **extra)},
-        status_code=status_code,
+        request, CARD, {"card": await fcon_card_context(request, db, **extra)}
     )
 
 
@@ -122,7 +120,6 @@ async def save_credentials(
         return await _card(
             request,
             db,
-            status_code=422,
             error="Client ID, Client Secret and the redirect address are all required.",
         )
     updates: dict[str, Any] = candidate.model_dump(
@@ -142,7 +139,7 @@ async def connect_vehicle(request: Request, db: AsyncSession = Depends(get_db)):
     url = await start_consent(db)
     if url is None:
         return await _card(
-            request, db, status_code=422, error="Save your Client ID and Client Secret first."
+            request, db, error="Save your Client ID and Client Secret first."
         )
     return await _card(request, db, authorize_url=url)
 
@@ -156,7 +153,7 @@ async def finish_connect(
 ):
     result = await finish_consent(db, pasted, client)
     if not result.ok:
-        return await _card(request, db, status_code=422, paste_error=result.message, pasting=True)
+        return await _card(request, db, paste_error=result.message, pasting=True)
     await _restart(db)
     return await _card(request, db, message=result.message)
 

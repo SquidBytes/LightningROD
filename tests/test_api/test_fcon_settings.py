@@ -103,7 +103,7 @@ async def test_masked_resave_keeps_secret(client, db_session):
 
 async def test_missing_fields_rejected(client):
     resp = await _save(client, client_id="")
-    assert resp.status_code == 422
+    assert resp.status_code == 200  # htmx only swaps 2xx
     assert "required" in resp.text
 
 
@@ -117,7 +117,7 @@ async def _connect(client) -> str:
 
 async def test_connect_needs_credentials(client):
     resp = await client.post("/settings/fcon/connect")
-    assert resp.status_code == 422
+    assert resp.status_code == 200  # htmx only swaps 2xx
 
 
 async def test_paste_flow_stores_sealed_tokens(client, db_session, monkeypatch, _clean):
@@ -150,7 +150,7 @@ async def test_paste_errors_are_explained(client, monkeypatch):
     await _save(client)
     state = await _connect(client)
     resp = await client.post("/settings/fcon/finish", data={"pasted": "nonsense"})
-    assert resp.status_code == 422
+    assert resp.status_code == 200  # htmx only swaps 2xx
     assert "doesn't look like a URL" in html.unescape(resp.text)
 
     _ford(monkeypatch, lambda r: httpx.Response(400, json={"error": "invalid_grant"}))
@@ -158,8 +158,22 @@ async def test_paste_errors_are_explained(client, monkeypatch):
         "/settings/fcon/finish",
         data={"pasted": f"http://localhost:8000/auth/ford/callback?code=x&state={state}"},
     )
-    assert resp.status_code == 422
+    assert resp.status_code == 200  # htmx only swaps 2xx
     assert "already used" in resp.text
+
+
+async def test_redirect_mismatch_is_explained(client, monkeypatch):
+    await _save(client)
+    state = await _connect(client)
+    _ford(monkeypatch, lambda r: httpx.Response(
+        400, json={"error": "invalid_request", "error_description": "AADB2C90006: redirect URI not registered"}
+    ))
+    resp = await client.post(
+        "/settings/fcon/finish",
+        data={"pasted": f"http://localhost:8000/auth/ford/callback?code=x&state={state}"},
+    )
+    assert resp.status_code == 200
+    assert "redirect address doesn" in html.unescape(resp.text)
 
 
 async def test_callback_on_same_machine_finishes(client, db_session, monkeypatch):

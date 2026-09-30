@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -21,6 +22,8 @@ from web.services.sources.fcon.tokens import exchange_code, token_fields
 
 SOURCE_NAME = "fcon"
 _NO_CREDENTIALS = "Save your Client ID and Client Secret first."
+
+logger = logging.getLogger("lightningrod.sources.fcon.consent")
 
 
 @dataclass(frozen=True)
@@ -66,8 +69,12 @@ async def finish_consent(db: AsyncSession, returned: str, client: FordClient) ->
         )
         connected = await exchange_code(client, config, code.code)
     except PasteRejected as exc:
+        logger.warning("FordConnect connect rejected the pasted address: %s", exc)
         return ConsentResult(False, str(exc))
     except FordError as exc:
+        logger.warning(
+            "FordConnect token exchange failed (%s): %s", exc.status, (exc.body or "")[:300]
+        )
         return ConsentResult(False, explain_token_error(exc))
     row = await merge_into_row(db, SOURCE_NAME, token_fields(connected), row=row)
     return ConsentResult(True, "Vehicle connected.", config_id=row.id)
