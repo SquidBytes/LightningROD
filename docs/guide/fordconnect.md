@@ -35,6 +35,9 @@ You never enter your Ford password into LightningROD.
    - It must match exactly: no trailing slash, no `https`.
    - Ford rejects private addresses such as `192.168.x.x`, which is why it uses
      `localhost`.
+   - Already registered an app for another LightningROD install? Reuse it: put that
+     app's registered address in LightningROD's redirect field instead. The port
+     doesn't need to match this install.
 7. Tick **All Available Data Categories**, complete the captcha and submit.
 8. Copy the **Client ID** and **Client Secret**. The secret is shown **only once**.
 
@@ -66,6 +69,7 @@ Data starts arriving within a minute.
 | Message or symptom | Fix |
 |---|---|
 | `404 credential not found` | Credentials not live yet, or registered on the wrong regional portal. Wait, then check the portal. |
+| "AADB2C90006: The redirect URI … is not registered" | LightningROD's redirect field doesn't match your Ford app. Paste the exact registered address into it, save, and connect again. |
 | No Client ID / Secret after submitting | Ford rejected the redirect URI. Re-copy it from LightningROD: no trailing slash, no private IP. |
 | "That's the sign-in link, not the address you landed on" | Copy the address you ended up on **after** approving, not the Ford link. |
 | "That code was already used" or "code expired" | Click **Connect Vehicle** again. |
