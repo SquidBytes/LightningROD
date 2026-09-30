@@ -149,13 +149,13 @@ async def test_plausibility_gate_blocks_implausible_timing(db_session):
     assert float(trip.efficiency) == pytest.approx(150.0 / 30.0)
 
 
-async def test_legacy_homeassistant_repaired_manual_never_selected(db_session):
-    device = "DERIVE_LEGACY_VIN"
+async def test_ha_row_repaired_manual_never_selected(db_session):
+    device = "DERIVE_HA_VIN"
     await VehicleFactory.create(db_session, device_id=device)
     legacy = await TripFactory.create(
         db_session,
         device_id=device,
-        source_system="homeassistant",
+        source_system="ha_fordpass",
         distance=30.0,
         duration=None,
         start_time=None,

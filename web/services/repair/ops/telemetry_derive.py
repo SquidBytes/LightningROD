@@ -19,12 +19,8 @@ from web.services.repair.base import (
     RepairOperation,
     RepairPreview,
     _aware,
+    mutable_only,
 )
-
-# Legacy pre-abstraction ingestion wrote source_system='homeassistant'; this
-# op may enrich those rows, but the global MUTABLE_SOURCE_SYSTEMS stays
-# narrow so other operations keep their smaller blast radius.
-DERIVABLE_SOURCE_SYSTEMS = ("ha_fordpass", "homeassistant")
 
 ODO_END_LOOKBACK = timedelta(minutes=30)
 ODO_END_LOOKAHEAD = timedelta(minutes=5)
@@ -54,7 +50,6 @@ class TelemetryDerive(RepairOperation):
         "stored in the database — no Home Assistant connection needed."
     )
     model = EVTripMetrics
-    guarded_source_systems = DERIVABLE_SOURCE_SYSTEMS
 
     def __init__(self):
         # Detail counts from the most recent execute(), for route rendering.
@@ -68,7 +63,7 @@ class TelemetryDerive(RepairOperation):
         stmt = (
             select(EVTripMetrics)
             .where(
-                EVTripMetrics.source_system.in_(DERIVABLE_SOURCE_SYSTEMS),
+                mutable_only(EVTripMetrics),
                 EVTripMetrics.end_time.is_not(None),
                 or_(
                     EVTripMetrics.start_time.is_(None),

@@ -18,6 +18,7 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Trips and sessions recorded by early versions are now included in Data Repair
 ### Removed
 
 ## [0.5.5] - 2026-09-24
