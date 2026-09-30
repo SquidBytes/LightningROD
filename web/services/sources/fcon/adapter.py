@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from web.services.sources.fcon.charge_sessions import record_session_if_ended
+from web.services.sources.fcon.garage import fill_battery, garage_facts
 from web.services.sources.fcon.identity import SOURCE_SYSTEM, device_id_of
 from web.services.sources.fcon.positions import record_position
 from web.services.sources.fcon.trips import record_trip_if_ended
@@ -40,14 +41,6 @@ def _record_last_seen(metric: str, entry: Any, converted: Any) -> None:
     }
 
 
-def _display_name(garage: dict) -> str | None:
-    nickname = (garage.get("nickName") or "").strip()
-    if nickname:
-        return nickname
-    model = " ".join(str(garage[k]) for k in ("modelYear", "modelName") if garage.get(k))
-    return model or None
-
-
 async def process_sample(
     source_ref: str,
     payload: dict,
@@ -58,12 +51,15 @@ async def process_sample(
     device_id = device_id_of(payload)
     if source_ref == "garage":
         if device_id:
+            garage = garage_facts(payload)
             await ensure_vehicle(
                 db,
                 device_id,
                 source_system=SOURCE_SYSTEM,
                 vin=payload.get("vin"),
-                display_name=_display_name(payload),
+                display_name=garage.display_name,
+                auto_names=garage.auto_names,
+                **garage.facts,
             )
         return
     if source_ref != "telemetry":
@@ -71,8 +67,16 @@ async def process_sample(
     if device_id is None:
         logger.warning("fcon telemetry without a vin; skipped")
         return
-    await ensure_vehicle(db, device_id, source_system=SOURCE_SYSTEM, vin=payload.get("vin"))
+    vehicle = await ensure_vehicle(
+        db, device_id, source_system=SOURCE_SYSTEM, vin=payload.get("vin")
+    )
     rows = parse_metrics(payload.get("metrics") or {})
+    capacity = next(
+        (r.values.get("hv_battery_capacity") for r in rows if "hv_battery_capacity" in r.values),
+        None,
+    )
+    if vehicle is not None and capacity:
+        fill_battery(vehicle, float(capacity))
     for row in rows:
         for metric, entry in row.raw.items():
             column = _BY_FIELD[metric].db_column

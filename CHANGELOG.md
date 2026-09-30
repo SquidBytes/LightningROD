@@ -16,6 +16,7 @@ For feature documentation, see the docs site at
 - Added FordConnect as a data source: connect a Ford vehicle through Ford's own API, no Home Assistant needed
 - Trips and charging sessions recorded by both Home Assistant and FordConnect are combined into one
 - Added a Data Repair operation that re-reads archived FordConnect data after a fix
+- Vehicles connected through FordConnect fill in their model, year, battery and nickname automatically
 
 ### Changed
 
