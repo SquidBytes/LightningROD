@@ -86,6 +86,37 @@ def test_odometer_backslide_is_clamped():
     assert f["distance"] == 4.0
 
 
+def _late_first_poll() -> list[dict]:
+    """Parked reading, then the first ON poll arrives after the drive has begun."""
+    return [
+        _payload(-5, "OFF", 1000.0, xevBatteryEnergyRemaining=80.5),
+        _payload(0, "ON", 1002.0, xevBatteryEnergyRemaining=80.0),
+        _payload(10, "ON", 1008.0, xevBatteryEnergyRemaining=78.5),
+        _payload(20, "OFF", 1010.0, xevBatteryEnergyRemaining=78.0),
+    ]
+
+
+@pytest.mark.unit
+def test_distance_counts_from_the_reading_before_switch_on():
+    f = derive_trip(_samples(*_late_first_poll()))
+    assert f["start_time"] == T0
+    assert (f["odometer_start"], f["odometer_end"]) == (1000.0, 1010.0)
+    assert f["distance"] == 10.0
+    # Parked drain before the drive is not trip energy.
+    assert f["energy_consumed"] == 2.0
+
+
+@pytest.mark.unit
+def test_short_drive_seen_only_after_it_moved_is_still_a_trip():
+    samples = _samples(
+        _payload(-5, "OFF", 1000.0),
+        _payload(0, "ON", 1001.0),
+        _payload(4, "OFF", 1001.0),
+    )
+    f = derive_trip(samples)
+    assert f is not None and f["distance"] == 1.0
+
+
 async def _feed(db, payloads: list[dict]):
     archive = FconRawArchive()
     for p in payloads:
@@ -128,6 +159,17 @@ async def test_switching_off_mid_journey_splits(db_session):
         select(EVTripMetrics.distance).where(EVTripMetrics.device_id == DEVICE)
     )).scalars().all())
     assert distances == [6.0, 7.0]
+
+
+@pytest.mark.db
+async def test_stored_trip_counts_from_the_reading_before_switch_on(db_session):
+    await _feed(db_session, _late_first_poll())
+    trip = (await db_session.execute(
+        select(EVTripMetrics).where(EVTripMetrics.device_id == DEVICE)
+    )).scalar_one()
+    assert float(trip.odometer_start) == 1000.0
+    assert float(trip.distance) == 10.0
+    assert float(trip.energy_consumed) == 2.0
 
 
 @pytest.mark.db

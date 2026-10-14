@@ -20,11 +20,13 @@ async def telemetry_since_boundary(
     device_id: str,
     until: datetime,
     is_boundary: Callable[[dict], bool],
+    include_boundary: bool = False,
 ) -> list[dict]:
     """Payloads after the previous boundary sample, up to and including `until`, oldest first.
 
     The sample at `until` is included even when it is itself a boundary; the
-    walk stops at the next boundary before it.
+    walk stops at the next boundary before it, which leads the list only
+    when `include_boundary` is set.
     """
     collected: list[dict] = []
     floor = until - MAX_LOOKBACK
@@ -50,6 +52,8 @@ async def telemetry_since_boundary(
         rows = (await db.execute(stmt)).all()
         for payload, recorded_at in rows:
             if collected and is_boundary(payload):
+                if include_boundary:
+                    collected.append(payload)
                 return list(reversed(collected))
             collected.append(payload)
             cursor = recorded_at

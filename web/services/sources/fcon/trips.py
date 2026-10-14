@@ -81,11 +81,16 @@ def _last(values: list[float | None]) -> float | None:
 
 
 def derive_trip(samples: list[TripSample]) -> dict[str, Any] | None:
-    """Trip columns for samples ending at ignition-off; None when it never moved."""
+    """Trip columns for samples ending at ignition-off; None when it never moved.
+
+    Samples may lead with the parked reading before switch-on: the first ON
+    poll can arrive after the vehicle has already moved.
+    """
     driving = [s for s in samples if s.ignition_on]
     if not driving or samples[-1].ignition_on:
         return None
     start, end = driving[0], samples[-1]
+    from_start = samples[samples.index(start):]
     odometers = [s.odometer for s in samples if s.odometer is not None]
     odo_start = next((s.odometer for s in samples if s.odometer is not None), None)
     if odo_start is None:
@@ -95,7 +100,8 @@ def derive_trip(samples: list[TripSample]) -> dict[str, Any] | None:
     distance = round(odo_end - odo_start, 3)
     if distance <= 0:
         return None
-    energies = [s.energy for s in samples]
+    # Parked drain before switch-on is not trip energy.
+    energies = [s.energy for s in from_start]
     first_energy = next((e for e in energies if e is not None), None)
     last_energy = _last(energies)
     energy = (
@@ -146,7 +152,9 @@ async def record_trip_if_ended(
     if current is None or current.ignition_on:
         return None
     until = parse_time(payload.get("updateTime")) or current.at
-    payloads = await telemetry_since_boundary(db, device_id, until, _is_ignition_off)
+    payloads = await telemetry_since_boundary(
+        db, device_id, until, _is_ignition_off, include_boundary=True
+    )
     samples = [s for p in payloads if (s := TripSample.from_payload(p)) is not None]
     if not samples or samples[-1] != current:
         samples.append(current)
