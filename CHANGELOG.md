@@ -20,6 +20,7 @@ For feature documentation, see the docs site at
 
 - Trips and sessions recorded by early versions are now included in Data Repair
 - Home Assistant trips no longer get an end time days in the past or appear twice (#99)
+- Battery and range readings from Home Assistant are no longer all stamped with the same old time (#99)
 ### Removed
 
 ## [0.5.5] - 2026-09-24
