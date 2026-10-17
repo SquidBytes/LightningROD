@@ -1167,11 +1167,9 @@ async def _handle_events_entity(
     # duration (s) is SI-passthrough; no contract conversion needed
     duration = _safe_float(trip.get("trip_duration"))
 
-    # The event's own updateTime is the key-off. HA's last_changed only moves
-    # when the sensor state changes, so it can be days stale here.
+    # The event's own updateTime is the key-off.
     recorded_at = (
         _parse_iso(update_time_iso)
-        or _parse_iso(new_state.get("last_updated"))
         or _parse_event_ts(new_state)
         or datetime.now(UTC)
     )
@@ -1370,7 +1368,9 @@ def _fill_trip_duration(existing: Any, duration: float | None) -> None:
 
 
 def _parse_event_ts(new_state: dict) -> datetime | None:
-    for key in ("last_changed", "last_updated"):
+    # HA only moves last_changed when the state changes; attribute-only
+    # updates (most FordPass sensors) move last_updated alone.
+    for key in ("last_updated", "last_changed"):
         val = new_state.get(key)
         if not val:
             continue
