@@ -1167,7 +1167,14 @@ async def _handle_events_entity(
     # duration (s) is SI-passthrough; no contract conversion needed
     duration = _safe_float(trip.get("trip_duration"))
 
-    recorded_at = _parse_event_ts(new_state) or datetime.now(UTC)
+    # The event's own updateTime is the key-off. HA's last_changed only moves
+    # when the sensor state changes, so it can be days stale here.
+    recorded_at = (
+        _parse_iso(update_time_iso)
+        or _parse_iso(new_state.get("last_updated"))
+        or _parse_event_ts(new_state)
+        or datetime.now(UTC)
+    )
 
     # Deterministic-id lookup first: if a row exists with the same uuid5(NS,
     # device_id|tripUpdateTime) the events payload is the second delivery for

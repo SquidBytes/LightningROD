@@ -19,6 +19,7 @@ For feature documentation, see the docs site at
 ### Fixed
 
 - Trips and sessions recorded by early versions are now included in Data Repair
+- Home Assistant trips no longer get an end time days in the past or appear twice (#99)
 ### Removed
 
 ## [0.5.5] - 2026-09-24

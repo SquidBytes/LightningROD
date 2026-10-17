@@ -8,6 +8,8 @@ Covers:
   - `_events` event -> ev_trip_metrics row (via adapter)
 """
 
+import uuid
+
 import pytest
 from sqlalchemy import select
 
@@ -119,6 +121,67 @@ def _make_events_event(device_id: str) -> tuple[str, dict]:
         },
     }
     return entity_id, new_state
+
+
+def _make_stale_events_event(device_id: str) -> tuple[str, dict]:
+    """A key-off event on an events sensor whose state hasn't changed for days.
+
+    HA only moves `last_changed` when the state changes, so it is frozen while
+    `last_updated` and the event's own `updateTime` track the key-off.
+    """
+    entity_id, new_state = _make_events_event(device_id)
+    new_state["last_changed"] = "2026-10-15T00:22:11+00:00"
+    new_state["last_updated"] = "2026-10-16T21:34:01+00:00"
+    xev = new_state["attributes"]["customEvents"]["xev-key-off-trip-segment-data"]
+    xev["updateTime"] = "2026-10-16T21:33:59Z"
+    return entity_id, new_state
+
+
+@pytest.mark.asyncio
+async def test_trip_ends_at_key_off_when_last_changed_is_stale(db_session):
+    from datetime import UTC, datetime, timedelta
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    entity_id, new_state = _make_stale_events_event(_TEST_DEVICE_ID)
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    trip = (await db_session.execute(
+        select(EVTripMetrics).where(EVTripMetrics.device_id == _TEST_DEVICE_ID)
+    )).scalar_one()
+    key_off = datetime(2026, 10, 16, 21, 33, 59, tzinfo=UTC)
+    # SQLite drops tzinfo; the stored value is UTC either way.
+    assert trip.end_time.replace(tzinfo=UTC) == key_off
+    assert trip.start_time.replace(tzinfo=UTC) == key_off - timedelta(seconds=1800)
+
+
+@pytest.mark.asyncio
+async def test_stale_last_changed_enriches_the_existing_trip(db_session):
+    from datetime import UTC, datetime, timedelta
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    key_off = datetime(2026, 10, 16, 21, 33, 59, tzinfo=UTC)
+    db_session.add(EVTripMetrics(
+        trip_id=uuid.uuid4(),
+        device_id=_TEST_DEVICE_ID,
+        start_time=key_off - timedelta(seconds=1800),
+        end_time=key_off - timedelta(minutes=3),
+        distance=19.0,
+        energy_consumed=7.6,
+        is_complete=True,
+        source_system="ha_fordpass",
+    ))
+    await db_session.flush()
+
+    entity_id, new_state = _make_stale_events_event(_TEST_DEVICE_ID)
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    trips = (await db_session.execute(
+        select(EVTripMetrics).where(EVTripMetrics.device_id == _TEST_DEVICE_ID)
+    )).scalars().all()
+    assert len(trips) == 1
+    assert float(trips[0].cabin_temp) == pytest.approx(20.0)
 
 
 @pytest.mark.asyncio
