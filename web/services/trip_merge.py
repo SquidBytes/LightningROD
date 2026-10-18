@@ -59,9 +59,9 @@ def checked_distance(current: dict, incoming: dict, incoming_source: str) -> Any
 
 PRECEDENCE: dict[str, Rule] = {
     "trip_id": Rule(HA, "HA's id is derived from the vehicle's own trip timestamp"),
-    "start_time": Rule(FCON, "ignition-on time from the TCU; HA's is end minus duration"),
-    "end_time": Rule(FCON, "ignition-off time from the TCU; HA's is event receipt time"),
-    "duration": Rule(FCON, "kept consistent with the start/end it is derived from"),
+    "start_time": Rule(FCON, "recomputed as end_time minus duration once both are merged"),
+    "end_time": Rule(FCON, "ignition-off from the TCU; HA's elveh path stamps receipt time"),
+    "duration": Rule(HA, "the vehicle's own count; FCON's starts at its first ON poll"),
     "distance": Rule(
         HA, "HA's decimals if the FCON odometer agrees, else FCON", resolve=checked_distance
     ),
@@ -99,6 +99,15 @@ def merge_changes(current: dict, incoming: dict, incoming_source: str) -> dict[s
     """Columns to change on `current` after merging in `incoming`."""
     changes = merge_values(PRECEDENCE, current, incoming, incoming_source)
     merged = {**current, **changes}
+    # FCON's first ON poll can trail the real start by minutes; the vehicle's
+    # duration back from ignition-off does not.
+    end, duration = _aware(merged.get("end_time")), merged.get("duration")
+    if end is not None and duration is not None:
+        start = end - timedelta(seconds=float(duration))
+        if _aware(current.get("start_time")) != start:
+            changes["start_time"] = start
+        else:
+            changes.pop("start_time", None)
     distance, energy = merged.get("distance"), merged.get("energy_consumed")
     if distance is not None and energy:
         efficiency = round(float(distance) / float(energy), 3)

@@ -131,7 +131,10 @@ def _snapshot(row: EVTripMetrics) -> dict:
 
 
 EXPECTED = {
-    "start_time": T0, "end_time": T0 + timedelta(minutes=25), "duration": 1500.0,
+    # The vehicle's own duration back from FCON's ignition-off; FCON's first ON
+    # poll can be minutes after the drive began.
+    "start_time": T0 + timedelta(minutes=25) - timedelta(seconds=1510),
+    "end_time": T0 + timedelta(minutes=25), "duration": 1510.0,
     "distance": 12.6, "energy_consumed": 2.4, "efficiency": 5.25,
     "odometer_start": 1000.0, "odometer_end": 1013.0,
     "ambient_temp": 22.0, "cabin_temp": 21.0, "outside_air_temp": 20.0,
@@ -210,10 +213,10 @@ def test_precedence_table_documents_every_field():
 def test_merge_fills_nulls_and_applies_winner():
     current = {"distance": 13.0, "energy_consumed": None, "cabin_temp": None, "duration": 1510.0}
     incoming = {"distance": 12.6, "energy_consumed": 2.4, "cabin_temp": 21.0, "duration": 1500.0}
-    # FCON arriving onto an HA row: HA keeps distance, FCON wins duration.
+    # FCON arriving onto an HA row: HA keeps distance and duration.
     changes = merge_changes({**current, "distance": 12.6}, {**incoming, "distance": 13.0}, FCON)
     assert "distance" not in changes
-    assert changes["duration"] == 1500.0
+    assert "duration" not in changes
     assert changes["energy_consumed"] == 2.4
     assert changes["efficiency"] == 5.25
 
