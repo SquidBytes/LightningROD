@@ -8,6 +8,8 @@ Covers:
   - `_events` event -> ev_trip_metrics row (via adapter)
 """
 
+import uuid
+
 import pytest
 from sqlalchemy import select
 
@@ -121,6 +123,67 @@ def _make_events_event(device_id: str) -> tuple[str, dict]:
     return entity_id, new_state
 
 
+def _make_stale_events_event(device_id: str) -> tuple[str, dict]:
+    """A key-off event on an events sensor whose state hasn't changed for days.
+
+    HA only moves `last_changed` when the state changes, so it is frozen while
+    `last_updated` and the event's own `updateTime` track the key-off.
+    """
+    entity_id, new_state = _make_events_event(device_id)
+    new_state["last_changed"] = "2026-10-15T00:22:11+00:00"
+    new_state["last_updated"] = "2026-10-16T21:34:01+00:00"
+    xev = new_state["attributes"]["customEvents"]["xev-key-off-trip-segment-data"]
+    xev["updateTime"] = "2026-10-16T21:33:59Z"
+    return entity_id, new_state
+
+
+@pytest.mark.asyncio
+async def test_trip_ends_at_key_off_when_last_changed_is_stale(db_session):
+    from datetime import UTC, datetime, timedelta
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    entity_id, new_state = _make_stale_events_event(_TEST_DEVICE_ID)
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    trip = (await db_session.execute(
+        select(EVTripMetrics).where(EVTripMetrics.device_id == _TEST_DEVICE_ID)
+    )).scalar_one()
+    key_off = datetime(2026, 10, 16, 21, 33, 59, tzinfo=UTC)
+    # SQLite drops tzinfo; the stored value is UTC either way.
+    assert trip.end_time.replace(tzinfo=UTC) == key_off
+    assert trip.start_time.replace(tzinfo=UTC) == key_off - timedelta(seconds=1800)
+
+
+@pytest.mark.asyncio
+async def test_stale_last_changed_enriches_the_existing_trip(db_session):
+    from datetime import UTC, datetime, timedelta
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    key_off = datetime(2026, 10, 16, 21, 33, 59, tzinfo=UTC)
+    db_session.add(EVTripMetrics(
+        trip_id=uuid.uuid4(),
+        device_id=_TEST_DEVICE_ID,
+        start_time=key_off - timedelta(seconds=1800),
+        end_time=key_off - timedelta(minutes=3),
+        distance=19.0,
+        energy_consumed=7.6,
+        is_complete=True,
+        source_system="ha_fordpass",
+    ))
+    await db_session.flush()
+
+    entity_id, new_state = _make_stale_events_event(_TEST_DEVICE_ID)
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    trips = (await db_session.execute(
+        select(EVTripMetrics).where(EVTripMetrics.device_id == _TEST_DEVICE_ID)
+    )).scalars().all()
+    assert len(trips) == 1
+    assert float(trips[0].cabin_temp) == pytest.approx(20.0)
+
+
 @pytest.mark.asyncio
 async def test_metrics_event_writes_battery_status(db_session):
     """A `_metrics` event must write a metric-canonical ev_battery_status row."""
@@ -141,6 +204,68 @@ async def test_metrics_event_writes_battery_status(db_session):
     assert float(battery.hv_battery_range) == pytest.approx(260.0, abs=0.5)
     assert float(battery.hv_battery_max_range) == pytest.approx(418.0, abs=0.5)
     assert battery.ingest_schema_version == 2
+
+
+_STALE_CHANGED = "2026-10-15T00:22:11+00:00"
+
+
+def _with_stale_last_changed(new_state: dict, last_updated: str) -> dict:
+    """An attribute-only update: HA moved last_updated but froze last_changed."""
+    return {**new_state, "last_changed": _STALE_CHANGED, "last_updated": last_updated}
+
+
+async def _battery_rows(db_session) -> list[EVBatteryStatus]:
+    return list((await db_session.execute(
+        select(EVBatteryStatus)
+        .where(EVBatteryStatus.device_id == _TEST_DEVICE_ID)
+        .order_by(EVBatteryStatus.id)
+    )).scalars().all())
+
+
+@pytest.mark.asyncio
+async def test_metrics_snapshot_uses_last_updated_when_last_changed_is_stale(db_session):
+    from datetime import UTC, datetime
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    entity_id, new_state = _make_metrics_event(_TEST_DEVICE_ID)
+    new_state = _with_stale_last_changed(new_state, "2026-10-17T21:34:01+00:00")
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    (row,) = await _battery_rows(db_session)
+    # SQLite drops tzinfo; the stored value is UTC either way.
+    assert row.recorded_at.replace(tzinfo=UTC) == datetime(2026, 10, 17, 21, 34, 1, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_metrics_snapshots_30s_apart_get_distinct_times(db_session):
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    entity_id, base = _make_metrics_event(_TEST_DEVICE_ID)
+    for ts in ("2026-10-17T21:34:01+00:00", "2026-10-17T21:34:31+00:00"):
+        await _dispatch_event(entity_id, _with_stale_last_changed(base, ts), db_session)
+    await db_session.flush()
+
+    rows = await _battery_rows(db_session)
+    assert len(rows) == 2
+    assert rows[0].recorded_at != rows[1].recorded_at
+
+
+@pytest.mark.asyncio
+async def test_elvehcharging_temp_uses_last_updated_when_last_changed_is_stale(db_session):
+    from datetime import UTC, datetime
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    entity_id = f"sensor.fordpass_{_TEST_DEVICE_ID}_elvehcharging"
+    new_state = _with_stale_last_changed(
+        {"entity_id": entity_id, "state": "CHARGING", "attributes": {"batteryTemperature": 77.0}},
+        "2026-10-17T21:34:01+00:00",
+    )
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    (row,) = await _battery_rows(db_session)
+    assert row.hv_battery_temperature is not None
+    assert row.recorded_at.replace(tzinfo=UTC) == datetime(2026, 10, 17, 21, 34, 1, tzinfo=UTC)
 
 
 @pytest.mark.asyncio

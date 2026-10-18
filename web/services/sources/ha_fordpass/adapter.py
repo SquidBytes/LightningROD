@@ -1010,7 +1010,12 @@ async def _handle_events_entity(
     # duration (s) is SI-passthrough; no mapping conversion needed
     duration = _safe_float(trip.get("trip_duration"))
 
-    recorded_at = _parse_event_ts(new_state) or datetime.now(UTC)
+    # The event's own updateTime is the key-off.
+    recorded_at = (
+        _parse_iso(update_time_iso)
+        or _parse_event_ts(new_state)
+        or datetime.now(UTC)
+    )
 
     # Deterministic-id lookup first: if a row exists with the same uuid5(NS,
     # device_id|tripUpdateTime) the events payload is the second delivery for
@@ -1217,7 +1222,9 @@ def _fill_trip_duration(existing: Any, duration: float | None) -> None:
 
 
 def _parse_event_ts(new_state: dict) -> datetime | None:
-    for key in ("last_changed", "last_updated"):
+    # HA only moves last_changed when the state changes; attribute-only
+    # updates (most FordPass sensors) move last_updated alone.
+    for key in ("last_updated", "last_changed"):
         val = new_state.get(key)
         if not val:
             continue
