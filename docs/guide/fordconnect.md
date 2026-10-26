@@ -55,7 +55,7 @@ You never enter your Ford password into LightningROD.
    - **Browser on the same machine as LightningROD:** it says connected. You're done.
    - **Browser on another device:** you land on an error page ("can't reach this
      site"). This is expected. Copy the **whole** address from the address bar and
-     paste it into **Paste the address here** in LightningROD, then click **Finish**.
+     paste it into **Address after sign-in** in LightningROD, then click **Finish**.
 
 Do this within **5 minutes**. The code in that address expires after that; if it does,
 click **Connect Vehicle** again.
@@ -75,7 +75,7 @@ Data starts arriving within a minute.
 | "That code was already used" or "code expired" | Click **Connect Vehicle** again. |
 | "Ford doesn't recognise your Client ID yet" | Credentials still going live. Wait a couple of hours. |
 | "Your Client Secret doesn't match" | Re-check both values. If the secret is lost, generate a new one in the Ford portal. |
-| "…encryption key is missing or has changed" | Restore the `LR_SECRET_KEY` you used before, or re-enter the credentials. |
+| "…encryption key is missing or changed" | Restore the `LR_SECRET_KEY` you used before, or re-enter the credentials. |
 | Connected, but no new data for hours | Normal while parked: the vehicle stops reporting. The card shows the age of the newest reading. |
 | "Re-authorization required" | Ford's permission lasts 90 days. Click **Connect Vehicle** again. Your history is kept. |
 

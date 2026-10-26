@@ -7,8 +7,7 @@
                     {% if is_ha %}Home Assistant{% else %}{{ card.source.display_name }}{% endif %}
                 </h2>
                 <p class="text-base-content/60 text-sm -mt-1">
-                    {% if is_ha %}Configure the connection to your Home Assistant instance and the integrations LightningROD reads from it.
-                    {% else %}Configure the connection to your {{ card.source.display_name }} instance.{% endif %}
+                    {% if is_ha %}Connection to Home Assistant.{% else %}Connection to {{ card.source.display_name }}.{% endif %}
                 </p>
             </div>
             <div class="flex items-baseline">
@@ -32,7 +31,7 @@
 
         {% if card.needs_reauth %}
         <div class="alert alert-warning text-sm mt-3">
-            <span>The saved token is encrypted, but LightningROD's encryption key is missing or has changed. Restore the original <code>LR_SECRET_KEY</code>, or re-enter the token below.</span>
+            <span>Saved token can't be read: the encryption key is missing or changed. Restore <code>LR_SECRET_KEY</code>, or re-enter the token.</span>
         </div>
         {% endif %}
 
@@ -48,7 +47,7 @@
                        placeholder="http://homeassistant.local:8123"
                        class="input input-bordered w-full" required>
                 <div class="label">
-                    <span class="label-text-alt text-base-content/40">Full URL including port (e.g. http://192.168.1.100:8123)</span>
+                    <span class="label-text-alt text-base-content/40">Home Assistant address, including the port.</span>
                 </div>
             </label>
             <br>
@@ -70,11 +69,11 @@
                 </div>
                 {% if card.masked_token %}
                 <div class="label">
-                    <span class="label-text-alt text-success">Token saved. Leave unchanged to keep current token.</span>
+                    <span class="label-text-alt text-success">Saved. Leave as is to keep it.</span>
                 </div>
                 {% else %}
                 <div class="label">
-                    <span class="label-text-alt text-base-content/40">Generate in HA: Profile &gt; Long-Lived Access Tokens &gt; Create Token</span>
+                    <span class="label-text-alt text-base-content/40">Created in Home Assistant under Profile &gt; Security &gt; Long-lived access tokens.</span>
                 </div>
                 {% endif %}
             </label>
@@ -93,7 +92,7 @@
             <div class="divider my-1"></div>
             <div>
                 <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/70">FordPass</h3>
-                <p class="text-base-content/50 text-xs mt-0.5">Vehicle data ingested from the FordPass HA integration.</p>
+                <p class="text-base-content/50 text-xs mt-0.5">From the FordPass integration.</p>
             </div>
 
             <label class="form-control w-full">
@@ -103,7 +102,7 @@
                        placeholder="Auto-detected from entity IDs"
                        class="input input-bordered w-full">
                 <div class="label">
-                    <span class="label-text-alt text-base-content/40">Leave blank to auto-detect from HA entity names</span>
+                    <span class="label-text-alt text-base-content/40">Leave blank to detect it from entity names.</span>
                 </div>
             </label>
             <br>
@@ -115,14 +114,14 @@
                     <option value="imperial" {{ 'selected' if card.config and card.config.ha_unit_system == 'imperial' }}>Imperial</option>
                 </select>
                 <div class="label">
-                    <span class="label-text-alt text-base-content/40">Auto-detect reads HA configuration on connect</span>
+                    <span class="label-text-alt text-base-content/40">Auto uses Home Assistant's unit setting.</span>
                 </div>
             </label>
 
             <div class="divider my-1"></div>
             <div>
                 <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/70">Gas Price Sensors</h3>
-                <p class="text-base-content/50 text-xs mt-0.5">HA entities feeding the gas price tracker. Leave blank to skip.</p>
+                <p class="text-base-content/50 text-xs mt-0.5">Optional. Used to compare charging cost with gas.</p>
             </div>
 
             <label class="form-control w-full">
@@ -132,7 +131,7 @@
                        placeholder="sensor.gasbuddy_station_price"
                        class="input input-bordered w-full">
                 <div class="label">
-                    <span class="label-text-alt text-base-content/40">Your regular station (e.g. Costco).</span>
+                    <span class="label-text-alt text-base-content/40">Price at your usual station.</span>
                 </div>
             </label>
             <br>
@@ -143,7 +142,7 @@
                        placeholder="sensor.gasbuddy_state_average"
                        class="input input-bordered w-full">
                 <div class="label">
-                    <span class="label-text-alt text-base-content/40">Regional / state average for savings comparison.</span>
+                    <span class="label-text-alt text-base-content/40">Regional or state average price.</span>
                 </div>
             </label>
             {% endif %}

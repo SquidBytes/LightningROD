@@ -1,8 +1,3 @@
 <span id="fcon-retention-estimate">
-    About <strong>{{ estimate.size }}</strong>{% if estimate.per_year %} per year{% endif %}
-    {% if estimate.observed %}
-        at your vehicle's rate (~{{ estimate.samples_per_day | round | int }} new readings a day).
-    {% else %}
-        — a typical estimate until LightningROD has a day of your vehicle's data.
-    {% endif %}
+    About <strong>{{ estimate.size }}</strong>{% if estimate.per_year %} per year{% endif %}{% if estimate.observed %}.{% else %} (typical; updates after a day of data).{% endif %}
 </span>

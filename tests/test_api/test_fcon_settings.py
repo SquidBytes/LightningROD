@@ -72,14 +72,13 @@ async def test_tab_shows_card_with_guessed_redirect(client):
     body = (await client.get("/settings/data-sources")).text
     assert "FordConnect" in body
     assert "http://localhost:8000/auth/ford/callback" in body
-    assert "please confirm this is right" in body
-    assert "web (UI) port" in body
+    assert "Port not detected" in body
 
 
 async def test_redirect_derived_from_request_port(client):
     body = (await client.get("http://test:8123/settings/fcon")).text
     assert "http://localhost:8123/auth/ford/callback" in body
-    assert "please confirm" not in body
+    assert "Port not detected" not in body
 
 
 async def test_credentials_sealed_and_secret_never_rendered(client, db_session):

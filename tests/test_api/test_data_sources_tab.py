@@ -243,5 +243,5 @@ async def test_unreadable_token_asks_for_reentry(client, db_session):
 
     response = await client.get("/settings/data-sources")
     assert response.status_code == 200
-    assert "encryption key is missing or has changed" in response.text
+    assert "encryption key is missing or changed" in response.text
     assert "http://kept.example" in response.text
