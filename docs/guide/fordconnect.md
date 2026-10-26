@@ -81,16 +81,24 @@ Data starts arriving within a minute.
 
 ---
 
+## FordConnect vs Home Assistant
+
+| | FordConnect | Home Assistant |
+|---|---|---|
+| History before you connect | None | Recorder history, via Data Repair replay |
+| Update rate | Every minute driving or charging, every 5 minutes parked | When the vehicle reports |
+| Trip start time | Up to 5 minutes late (parked polling) | From the vehicle |
+| Trip energy | Whole trip, ignition on to off, including time in Park. Matches the dash. | Driving only, so lower than the dash |
+| Driving scores, cabin and outside-air temperature | No | Yes |
+| Brake torque, charging voltage and amperage | Yes | No |
+
+**Using both:** the same drive or charge is combined into one record. Home Assistant's
+energy, scores and temperatures are kept; FordConnect checks Home Assistant's distance
+and is used instead if they disagree.
+
 ## Good to know
 
-- **No history before you connect.** Ford's API only reports the vehicle's current
-  state.
-- **No driving scores or cabin temperature.** Ford's API doesn't provide them. If you
-  also run Home Assistant, the same drive or charge from both sources is combined into
-  one record.
 - **Charging locations arrive as coordinates.** Name them once in the review queue.
   Locations with a saved charge schedule in the vehicle arrive with that name.
-- **Updates come about once a minute while driving or charging**, and every 5 minutes
-  when parked.
 - **Credentials are stored in your database.** Set `LR_SECRET_KEY` to encrypt them;
   see [Configuration](../getting-started/configuration.md).
