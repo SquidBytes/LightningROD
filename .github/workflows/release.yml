@@ -1,16 +1,55 @@
 name: Release
 
+# Publishes when a push to main carries a version (pyproject.toml) that has
+# no vX.Y.Z tag yet. Any other main push skips. The tag is created last, so
+# a failed run can be re-run without cleanup.
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
-  contents: write       # create release + upload assets
+  contents: write       # create tag + release, upload assets
   packages: write       # push to ghcr.io
   id-token: write       # sign SLSA provenance attestations
 
 jobs:
+  check:
+    name: Check for new version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Read version and look for its tag
+        id: version
+        run: |
+          VERSION="$(grep -E '^version\s*=' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null; then
+            echo "v${VERSION} already tagged, nothing to release."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Releasing v${VERSION}"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Confirm CHANGELOG.md has release notes
+        if: steps.version.outputs.publish == 'true'
+        run: python3 scripts/extract-changelog.py "${{ steps.version.outputs.version }}" > /dev/null
+
+  test:
+    name: Tests
+    needs: check
+    if: needs.check.outputs.publish == 'true'
+    uses: ./.github/workflows/test.yml
+
   # ---------------------------------------------------------------------
   # Job 1: build + push the single web image. Matrix is preserved as a
   # one-entry list so the step block stays untouched if a second variant
@@ -18,6 +57,7 @@ jobs:
   # ---------------------------------------------------------------------
   build-images:
     name: Build ${{ matrix.variant }} image
+    needs: [check, test]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -32,12 +72,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Derive version from tag
+      - name: Version
         id: version
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Building LightningROD ${VERSION} (${{ matrix.variant }})"
+        run: echo "version=${{ needs.check.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       # GHCR rejects mixed-case repo names — lowercase the owner segment.
       - name: Lowercase repo owner
@@ -79,12 +116,12 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
   # ---------------------------------------------------------------------
-  # Job 2: after both images are pushed, build the compose bundle and
-  # create the GitHub Release with notes pulled from CHANGELOG.md.
+  # Job 2: after the image is pushed, build the compose bundle, tag the
+  # commit, and create the GitHub Release with notes from CHANGELOG.md.
   # ---------------------------------------------------------------------
   release:
     name: Create GitHub Release
-    needs: build-images
+    needs: [check, build-images]
     runs-on: ubuntu-latest
 
     steps:
@@ -93,11 +130,9 @@ jobs:
         with:
           fetch-depth: 0     # needed for auto-generated release notes
 
-      - name: Derive version from tag
+      - name: Version
         id: version
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        run: echo "version=${{ needs.check.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       # Package the compose files + .env.example + a README into a tiny
       # tarball so users can deploy with `curl && tar && compose up`
@@ -171,7 +206,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
+          TAG: v${{ steps.version.outputs.version }}
         run: |
           # GHCR image paths must be lowercase — pre-compute the lowercase
           # owner so install snippets show a working `docker pull`.
@@ -230,11 +265,19 @@ jobs:
           cat release_body.md
           echo "--- end ---"
 
+      - name: Tag the release commit
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "LightningROD ${TAG}" "${GITHUB_SHA}"
+          git push origin "${TAG}"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: LightningROD ${{ steps.version.outputs.version }}
-          tag_name: ${{ github.ref_name }}
+          tag_name: v${{ steps.version.outputs.version }}
           # Auto-appends a PR-level list below the composed body.
           generate_release_notes: true
           body_path: release_body.md

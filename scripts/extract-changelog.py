@@ -10,7 +10,7 @@ markers (TBD / TODO / XXX / FIXME / HTML comments).
 
 Used by:
     - .github/workflows/release.yml  (hard gate on publishing)
-    - scripts/tag-release.sh         (local sanity check before tagging)
+    - scripts/prep-release.sh        (local sanity check before release)
 """
 import re
 import sys
@@ -46,7 +46,7 @@ def main() -> int:
         print(
             f"ERROR: CHANGELOG.md has no section for version {version}.\n"
             f"Add a '## [{version}] - YYYY-MM-DD' heading with entries, or\n"
-            f"run scripts/tag-release.sh {version} to promote [Unreleased] for you.",
+            f"run scripts/prep-release.sh {version} to promote [Unreleased] for you.",
             file=sys.stderr,
         )
         return 1

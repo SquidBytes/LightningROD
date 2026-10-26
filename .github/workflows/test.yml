@@ -8,6 +8,8 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  # release.yml calls this to gate publishing on a green run.
+  workflow_call:
 
 jobs:
   pytest:

@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# tag-release.sh — prepare a LightningROD release in one command.
+# prep-release.sh — prepare a LightningROD release on dev in one command.
 #
 # Promotes [Unreleased] in CHANGELOG.md to [X.Y.Z] - <today>, bumps the
-# version across pyproject.toml / package.json / .env, commits, and creates an
-# annotated tag.
+# version across pyproject.toml / package.json / .env, and commits. No tag:
+# merging dev into main fires .github/workflows/release.yml, which tags
+# vX.Y.Z and publishes once tests pass.
 #
 # Usage:
-#   scripts/tag-release.sh 0.3.1
+#   scripts/prep-release.sh 0.3.1
 #
 # Preconditions (all hard-fail):
-#   - Working tree is clean (no uncommitted changes)
+#   - On the dev branch with a clean working tree
 #   - CHANGELOG.md has a non-empty [Unreleased] section with no
 #     placeholder markers (TBD / TODO / XXX / FIXME / <!-- ... -->)
-#   - The target version does not already exist in CHANGELOG.md
+#   - The target version does not already exist in CHANGELOG.md or as a tag
 #
 # Undo-before-push is cheap:
-#   git tag -d v0.3.1
 #   git reset --hard HEAD~1
 
 set -euo pipefail
@@ -38,7 +38,17 @@ fi
 TAG="v${VERSION}"
 TODAY="$(date +%Y-%m-%d)"
 
-# --- 1. Working tree must be clean --------------------------------------
+# --- 1. On dev, clean tree, tag not taken -------------------------------
+if [[ "$(git branch --show-current)" != "dev" ]]; then
+    echo "Error: run this on dev. Releases publish when dev merges into main." >&2
+    exit 1
+fi
+
+if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+    echo "Error: tag ${TAG} already exists." >&2
+    exit 1
+fi
+
 if [[ -n "$(git status --porcelain)" ]]; then
     echo "Error: working tree not clean. Commit or stash changes first." >&2
     git status --short >&2
@@ -47,7 +57,7 @@ fi
 
 # --- 2. CHANGELOG.md must exist -----------------------------------------
 if [[ ! -f CHANGELOG.md ]]; then
-    echo "Error: CHANGELOG.md not found. Create it first (see DEV_CI_README.md)." >&2
+    echo "Error: CHANGELOG.md not found. Create it first." >&2
     exit 1
 fi
 
@@ -132,27 +142,23 @@ git reset .env 2>/dev/null || true
 # --- 6. Commit ----------------------------------------------------------
 git commit -m "release: v${VERSION}"
 
-# --- 7. Tag -------------------------------------------------------------
-git tag -a "${TAG}" -m "LightningROD ${TAG}"
-
-# --- 8. Print push instructions (do NOT push automatically) --------------
-BRANCH="$(git branch --show-current)"
+# --- 7. Print next steps (do NOT push automatically) --------------------
 cat <<EOF
 
-✓ Release prepared: ${TAG}
+✓ Release prepared on dev: ${TAG}
 
 Review before pushing:
-    git show HEAD                    # the release commit
-    git show ${TAG}                  # the annotated tag
+    git show HEAD
     sed -n '/## \[${VERSION}\]/,/## \[/p' CHANGELOG.md   # the notes that will publish
 
-When you are ready, push with:
-    git push origin ${BRANCH}
-    git push origin ${TAG}
+Then:
+    git push origin dev                  # CI tests run on dev
+    gh pr create --base main --head dev --title "Release ${TAG}"
+    # or: git checkout main && git merge --ff-only dev && git push origin main
 
-The second push (the tag) is what triggers .github/workflows/release.yml.
+The main push fires .github/workflows/release.yml: tests, then tag ${TAG},
+images, and the GitHub Release.
 
 To undo without pushing:
-    git tag -d ${TAG}
     git reset --hard HEAD~1
 EOF
