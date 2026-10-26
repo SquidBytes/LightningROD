@@ -9,10 +9,10 @@ For feature documentation, see the docs site at
 
 ### Added
 
-- Group Edit on the Charging Sessions page can delete all selected sessions at once
+- Group Edit on the Charging Sessions page can delete all selected sessions at once (#77)
 - Trips where the vehicle was switched on but not driven carry a "Vehicle on"
-  badge, and a new Trip Display setting hides them
-- Charging and trip CSV exports include each record's ID, source and ingest time
+  badge, and a new Trip Display setting hides them (#79)
+- Charging and trip CSV exports include each record's ID, source and ingest time (#83)
 - Added FordConnect as a data source: connect a Ford vehicle through Ford's own API, no Home Assistant needed
 - Trips and charging sessions recorded by both Home Assistant and FordConnect are combined into one
 - Added a Data Repair operation that re-reads archived FordConnect data after a fix
@@ -27,6 +27,7 @@ For feature documentation, see the docs site at
 - Trips and sessions recorded by early versions are now included in Data Repair
 - Home Assistant trips no longer get an end time days in the past or appear twice (#99)
 - Battery and range readings from Home Assistant are no longer all stamped with the same old time (#99)
+
 ### Removed
 
 ## [0.5.5] - 2026-09-24
