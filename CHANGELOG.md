@@ -9,6 +9,16 @@ For feature documentation, see the docs site at
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.6.0] - 2026-10-26
+
+### Added
+
 - Group Edit on the Charging Sessions page can delete all selected sessions at once (#77)
 - Trips where the vehicle was switched on but not driven carry a "Vehicle on"
   badge, and a new Trip Display setting hides them (#79)

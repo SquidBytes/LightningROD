@@ -1,6 +1,6 @@
 {
   "name": "lightningrod",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "description": "Self-hosted charging and vehicle analytics",
   "private": true,
   "scripts": {
