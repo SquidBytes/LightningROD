@@ -1,5 +1,5 @@
 {% set is_ha = card.source.source_name == 'ha_fordpass' %}
-<div class="card bg-base-200 max-w-2xl">
+<div class="card bg-base-200">
     <div class="card-body">
         <div class="flex items-baseline justify-between">
             <div>
@@ -37,7 +37,7 @@
 
         <form hx-post="/settings/data-sources/{{ card.source.source_name }}"
               hx-target="closest .card" hx-swap="outerHTML"
-              class="space-y-4 mt-4">
+              class="space-y-4 mt-4 max-w-2xl">
 
             {# Connection: URL + Token (shared across all HA integrations) #}
             <label class="form-control w-full">
