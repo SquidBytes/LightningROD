@@ -668,7 +668,11 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             )
             if is_new:
                 _last_trip_values[key] = trip_fields.copy()
-                event_ts = _get_event_timestamp(new_state)
+                # last_changed freezes while only attributes update, so prefer
+                # the vehicle's key-off time, then last_updated.
+                event_ts = _parse_iso_datetime(attrs.get("tripUpdateTime")) or _get_event_timestamp(
+                    new_state, ("last_updated", "last_changed")
+                )
                 end_time = event_ts or datetime.now(UTC)
                 start_time = None
                 if trip_fields.get("duration") and end_time:
