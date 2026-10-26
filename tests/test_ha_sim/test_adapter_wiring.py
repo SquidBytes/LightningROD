@@ -1,7 +1,7 @@
 """Tests for `_metrics` / `_events` dispatcher wiring.
 
 These tests exercise the dispatcher path: `_metrics` and `_events` entities
-must route through `ha_fordpass.process_event`.
+must route through `ha_fordpass.process_sample`.
 
 Covers:
   - `_metrics` event -> ev_battery_status row (via adapter)
@@ -373,3 +373,29 @@ async def test_odometer_at_trip_boundaries(db_session):
     # be populated since end_time is the recorded event timestamp.
     assert trip.odometer_end is not None, "odometer_end must be populated from closest reading"
     assert float(trip.odometer_end) == pytest.approx(12368.0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("update_time", "expected"),
+    [
+        (None, "2026-10-16T21:34:01+00:00"),  # falls back to last_updated
+        ("2026-10-16T21:33:59Z", "2026-10-16T21:33:59+00:00"),  # vehicle key-off time
+    ],
+)
+async def test_elveh_trip_ignores_stale_last_changed(db_session, update_time, expected):
+    from datetime import UTC, datetime
+
+    from tests.test_ha_sim.simulator import make_trip_event
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    entity_id, new_state = make_trip_event(device_id=_TEST_DEVICE_ID, update_time_iso=update_time)
+    new_state["last_changed"] = "2026-10-15T00:22:11+00:00"
+    new_state["last_updated"] = "2026-10-16T21:34:01+00:00"
+    await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
+    trip = (await db_session.execute(
+        select(EVTripMetrics).where(EVTripMetrics.device_id == _TEST_DEVICE_ID)
+    )).scalar_one()
+    assert trip.end_time.replace(tzinfo=UTC) == datetime.fromisoformat(expected)

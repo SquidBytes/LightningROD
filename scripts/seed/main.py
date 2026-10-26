@@ -41,20 +41,20 @@ async def run_all(
 
     Returns a dict keyed by module name -> rows inserted/affected.
 
-    If *gap_report* is provided, a markdown report of FieldContract gaps is
+    If *gap_report* is provided, a markdown report of DataMapping gaps is
     written to that path (resolved relative to the current working directory).
     Otherwise gaps are summarized in the log only.
     """
     from db.engine import AsyncSessionLocal
     from scripts.seed.base import (
         TIMESTAMP_SOURCES,
-        ContractDrivenSeeder,
+        DataMapSeeder,
         apply_offset_to_table,
         compute_global_offset,
-        load_declared_contracts,
-        write_contracts_gap_report,
+        load_declared_mappings,
+        write_data_map_gap_report,
     )
-    from scripts.seed.vehicle_status import EXPECTED_CONTRACTS as VS_EXPECTED
+    from scripts.seed.vehicle_status import EXPECTED_MAPPINGS as VS_EXPECTED
 
     counts = {}
     async with AsyncSessionLocal() as db:
@@ -96,19 +96,19 @@ async def run_all(
             await db.rollback()
             raise
 
-    # 4) Detect FieldContract gaps (outside the txn — file IO only)
-    declared = load_declared_contracts()
-    seeder = ContractDrivenSeeder(declared=declared, expected=VS_EXPECTED)
+    # 4) Detect DataMapping gaps (outside the txn — file IO only)
+    declared = load_declared_mappings()
+    seeder = DataMapSeeder(declared=declared, expected=VS_EXPECTED)
     for c in VS_EXPECTED:
-        seeder.value_for(c.target_db_table, c.target_db_column)
+        seeder.value_for(c.db_table, c.db_column)
     gaps = seeder.gaps_report()
 
     if gap_report is not None:
-        write_contracts_gap_report(gaps, gap_report)
-        logger.info("Wrote contracts-gap report (%d gap(s)) -> %s", len(gaps), gap_report)
+        write_data_map_gap_report(gaps, gap_report)
+        logger.info("Wrote mappings-gap report (%d gap(s)) -> %s", len(gaps), gap_report)
     elif gaps:
         logger.info(
-            "%d FieldContract gap(s) detected — pass --gap-report PATH to write report",
+            "%d DataMapping gap(s) detected — pass --gap-report PATH to write report",
             len(gaps),
         )
 
@@ -192,7 +192,7 @@ def main() -> None:
         default=None,
         metavar="PATH",
         help=(
-            "Write a markdown FieldContract gap report to PATH (resolved "
+            "Write a markdown DataMapping gap report to PATH (resolved "
             "relative to the current working directory). If omitted, gaps "
             "are summarized in the log only."
         ),

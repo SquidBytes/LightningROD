@@ -396,7 +396,8 @@ async def test_replay_does_not_recover_a_drive_already_stored(op, db_session):
     drive = serialize_row(recovered)
 
     # What consolidation leaves: the drive under another trip_id, with readings
-    # just far enough apart that ingestion's own match misses it.
+    # just far enough apart that ingestion's exact match misses it. Its
+    # same-drive fallback now enriches that row, so nothing is re-inserted.
     await db_session.delete(recovered)
     await db_session.flush()
     await TripFactory.create(
@@ -413,7 +414,6 @@ async def test_replay_does_not_recover_a_drive_already_stored(op, db_session):
     await op.execute(db_session)
 
     assert await _trip_count(db_session) == 1
-    assert op.last_details["duplicates_skipped"] == 1
     assert op.last_details["trips_recovered"] == 0
 
 

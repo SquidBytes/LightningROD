@@ -19,6 +19,8 @@ dependencies = [
     "plotly>=6.8.0",
     "pandas>=3.0.2",
     "websockets>=15.0",
+    "cryptography>=50.0.1",
+    "httpx>=0.28.1",
 ]
 
 [dependency-groups]

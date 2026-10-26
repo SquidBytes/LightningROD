@@ -1,0 +1,242 @@
+{
+ "updateTime": "2026-08-24T16:59:31Z",
+ "vehicleId": "vehicle-id-0001",
+ "vin": "YOUR_VIN_000000001",
+ "metrics": {
+  "xevBatteryStateOfCharge": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 76.5
+  },
+  "xevBatteryActualStateOfCharge": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 72.79
+  },
+  "xevBatteryVoltage": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 353.0
+  },
+  "xevBatteryIoCurrent": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 0.080078125
+  },
+  "xevBatteryCapacity": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 106.75
+  },
+  "xevBatteryRange": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 272.5
+  },
+  "xevBatteryMaximumRange": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 373.1
+  },
+  "xevBatteryTemperature": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 30.0
+  },
+  "xevBatteryEnergyRemaining": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 75.3
+  },
+  "xevBatteryPerformanceStatus": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": "NORMAL"
+  },
+  "xevBatteryTimeToFullCharge": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 237.0
+  },
+  "batteryStateOfCharge": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 83.0,
+   "vehicleBattery": "PRIMARY_BATTERY"
+  },
+  "batteryVoltage": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 12.8125,
+   "vehicleBattery": "PRIMARY_BATTERY"
+  },
+  "batteryLoadStatus": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": "NORMAL_OPERATION",
+   "vehicleBattery": "PRIMARY_BATTERY"
+  },
+  "xevTractionMotorVoltage": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 1.0
+  },
+  "xevTractionMotorCurrent": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 0.0
+  },
+  "odometer": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 30549.0
+  },
+  "speed": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 0.0
+  },
+  "acceleratorPedalPosition": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 0.0
+  },
+  "gearLeverPosition": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": "PARK"
+  },
+  "ignitionStatus": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": "OFF"
+  },
+  "torqueAtTransmission": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 4.0
+  },
+  "brakeTorque": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 0.0
+  },
+  "wheelTorqueStatus": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": "OFF"
+  },
+  "yawRate": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 0.018241882
+  },
+  "acceleration": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": {
+    "x": -0.19,
+    "y": 0.27,
+    "z": 0.0,
+    "sensorType": "ACCELEROMETER_DATA"
+   }
+  },
+  "outsideTemperature": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 33.5
+  },
+  "ambientTemp": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 0.0
+  },
+  "seatBeltStatus": [
+   {
+    "updateTime": "2026-08-24T16:59:31Z",
+    "oemCorrelationId": "1",
+    "value": "UNBUCKLED",
+    "vehicleOccupantRole": "PASSENGER"
+   }
+  ],
+  "doorLockStatus": [
+   {
+    "updateTime": "2026-08-24T16:59:31Z",
+    "oemCorrelationId": "1",
+    "value": "UNLOCKED",
+    "vehicleDoor": "ALL_DOORS"
+   }
+  ],
+  "tirePressure": [
+   {
+    "updateTime": "2026-08-24T16:59:31Z",
+    "oemCorrelationId": "1",
+    "value": 284.0,
+    "vehicleWheel": "FRONT_LEFT",
+    "wheelPlacardFront": 289.58
+   },
+   {
+    "updateTime": "2026-08-24T16:59:31Z",
+    "oemCorrelationId": "1",
+    "value": 282.0,
+    "vehicleWheel": "FRONT_RIGHT",
+    "wheelPlacardFront": 289.58
+   }
+  ],
+  "xevPlugChargerStatus": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": "DISCONNECTED"
+  },
+  "xevBatteryChargeDisplayStatus": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": "NOT_READY"
+  },
+  "xevChargeStationCommunicationStatus": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": "NOT_DETECTED"
+  },
+  "xevChargeStationPowerType": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": "AC_BASIC"
+  },
+  "xevBatteryChargerVoltageOutput": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 2.0
+  },
+  "xevBatteryChargerCurrentOutput": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 0.0
+  },
+  "position": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": {
+    "location": {
+     "lat": 0.0,
+     "lon": 0.0,
+     "alt": 0.0
+    },
+    "gpsDimension": "NONE",
+    "gpsCoordinateMethod": "INFERRED"
+   }
+  },
+  "tripXevBatteryDistanceAccumulated": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 0.0,
+   "tripProgress": "TRIP_IN_PROGRESS"
+  },
+  "tripXevBatteryRangeRegenerated": {
+   "updateTime": "2026-08-24T16:59:31Z",
+   "oemCorrelationId": "1",
+   "value": 4.4,
+   "tripProgress": "TRIP_IN_PROGRESS"
+  }
+ }
+}

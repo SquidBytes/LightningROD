@@ -7,6 +7,15 @@ from sqlalchemy import select
 
 from db.models.data_source_config import DataSourceConfig
 from web.routes.settings import _mask_token
+from web.services.secrets import is_encrypted
+from web.services.sources.config_secrets import open_config
+from web.services.sources.config_store import find_row
+
+
+def _stored_token(row: DataSourceConfig) -> str:
+    """The row's token must be ciphertext; return what it decrypts to."""
+    assert is_encrypted(row.config_json["ha_token"])
+    return open_config("ha_fordpass", row.config_json).values["ha_token"]
 
 pytestmark = pytest.mark.db
 
@@ -58,8 +67,25 @@ async def test_get_data_sources_tab_renders_one_card(client, db_session):
     assert "abcdefgh12345678" not in body
 
 
+async def test_post_data_source_without_key_stores_plain_token(client, db_session, no_secret_key):
+    """No LR_SECRET_KEY: the token is stored exactly as entered, as before."""
+    response = await client.post(
+        "/settings/data-sources/ha_fordpass",
+        data={
+            "ha_url": "http://homeassistant.local:8123",
+            "ha_token": "plaintoken12345678",
+            "ha_unit_system": "auto",
+            "ha_auto_connect": "true",
+        },
+    )
+    assert response.status_code == 200
+    row = await find_row(db_session, "ha_fordpass")
+    await db_session.refresh(row)
+    assert row.config_json["ha_token"] == "plaintoken12345678"
+
+
 async def test_post_data_source_saves_real_token(client, db_session):
-    """POST with a real (non-masked) token persists ha_url, ha_token, options."""
+    """Key set: a real (non-masked) token is persisted as ciphertext."""
     response = await client.post(
         "/settings/data-sources/ha_fordpass",
         data={
@@ -78,7 +104,7 @@ async def test_post_data_source_saves_real_token(client, db_session):
     )
     row = result.scalar_one()
     await db_session.refresh(row)
-    assert row.config_json["ha_token"] == "newrealtoken9999"
+    assert _stored_token(row) == "newrealtoken9999"
     assert row.config_json["ha_url"] == "http://homeassistant.local:8123"
     assert row.config_json["ha_unit_system"] == "metric"
     assert row.config_json["ha_auto_connect"] is True
@@ -104,7 +130,7 @@ async def test_post_data_source_masked_token_preserves_existing(client, db_sessi
     )
     assert response.status_code == 200
     await db_session.refresh(row)
-    assert row.config_json["ha_token"] == original_token
+    assert _stored_token(row) == original_token
 
 
 async def test_post_data_source_validation_error(client, db_session):
@@ -156,7 +182,7 @@ async def test_post_data_source_inserts_row_on_fresh_install(client, db_session)
         )
     )
     row = result.scalar_one()
-    assert row.config_json["ha_token"] == "freshinstalltoken"
+    assert _stored_token(row) == "freshinstalltoken"
     assert row.config_json["ha_url"] == "http://homeassistant.local:8123"
     assert row.enabled is True
 
@@ -178,3 +204,44 @@ async def test_settings_index_no_longer_has_hass_tab(client):
     assert 'aria-label="Data Sources"' in body
     assert 'aria-label="Home Assistant"' not in body
     assert "/settings/hass" not in body
+
+
+async def test_masked_resave_of_encrypted_token_keeps_ciphertext(client, db_session):
+    """A settings round-trip must never write plaintext back over ciphertext."""
+    from web.services.sources.config_secrets import seal_config
+
+    row = await _seed_default(db_session, ha_url="http://x", ha_token="placeholder")
+    row.config_json = seal_config(
+        "ha_fordpass", {"ha_url": "http://x", "ha_token": "sealedtoken12345678"}
+    )
+    await db_session.commit()
+
+    page = await client.get("/settings/data-sources")
+    assert "sealedtoken12345678" not in page.text
+    assert "enc:v1:" not in page.text
+
+    response = await client.post(
+        "/settings/data-sources/ha_fordpass",
+        data={
+            "ha_url": "http://x",
+            "ha_token": _mask_token("sealedtoken12345678"),
+            "ha_unit_system": "auto",
+            "ha_auto_connect": "true",
+        },
+    )
+    assert response.status_code == 200
+    await db_session.refresh(row)
+    assert _stored_token(row) == "sealedtoken12345678"
+
+
+async def test_unreadable_token_asks_for_reentry(client, db_session):
+    """Ciphertext from another key renders a re-entry warning, never a crash."""
+    from web.services.secrets import SecretBox
+
+    foreign = SecretBox("some-other-key").encrypt("lostforever1234")
+    await _seed_default(db_session, ha_url="http://kept.example", ha_token=foreign)
+
+    response = await client.get("/settings/data-sources")
+    assert response.status_code == 200
+    assert "encryption key is missing or changed" in response.text
+    assert "http://kept.example" in response.text

@@ -13,8 +13,8 @@ being filled, and — at the end — the high-value FordPass data that is **not*
 captured today.
 
 !!! note "Related pages"
-    - [Data Sources](../data-sources.md) is the auto-generated unit contract —
-      the exact `entity.attribute → column` mappings with source and target
+    - [Data Sources](../data-sources.md) is the auto-generated data map —
+      the exact `entity.attribute → column` mappings with their source and DB
       units. This page complements it with the handler-written columns (GPS,
       tire pressure, charging session), plain-English meaning, and honest
       capture status.

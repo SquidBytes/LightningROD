@@ -443,7 +443,7 @@ def make_events_trip_event(
     """Generate a sensor.fordpass_{vin}_events event with trip segment data.
 
     Returns (entity_id, new_state) matching adapter._handle_events_entity.
-    distance_km and energy_wh use the canonical units that the FIELD_CONTRACTS
+    distance_km and energy_wh use the canonical units that the DATA_MAP
     specify (km passthrough, Wh -> kWh conversion).
 
     `update_time_iso` is emitted as a sibling to `oemData` inside the

@@ -1,6 +1,10 @@
 <div class="space-y-4">
     {% for card in cards %}
-        {% include "settings/partials/data_source_card.html" with context %}
+        {% if card.source.source_name == 'fcon' %}
+            {% include "settings/partials/fcon_card.html" with context %}
+        {% else %}
+            {% include "settings/partials/data_source_card.html" with context %}
+        {% endif %}
     {% endfor %}
 </div>
 

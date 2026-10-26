@@ -13,7 +13,7 @@ from sqlalchemy import select
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
-from web.services.sources.ha_fordpass.adapter import process_event
+from web.services.sources.ha_fordpass.adapter import process_sample
 from web.unit_system import convert_distance
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
@@ -32,7 +32,7 @@ REGRESSION_MESSAGE = (
 async def _run_fixture(payload: dict, db_session, ha_config: dict | None = None) -> None:
     """Feed every entity in the payload through the adapter."""
     for entity_id, state_dict in payload.items():
-        await process_event(entity_id, state_dict, db_session, ha_config)
+        await process_sample(entity_id, state_dict, db_session, ha_config)
     await db_session.flush()
 
 
@@ -101,7 +101,7 @@ async def test_reporter_no_duplicate_trip_from_elveh_and_events(db_session):
     2026-06 reporter scenario (imperial FordPass display + metric HA): every
     trip appeared twice — 122 km (correct, events) and 196.34 km (elveh
     tripDistanceTraveled, already km, re-converted mi->km via the elveh state
-    uom). With the ha_unit_system_converted contract both paths agree and the
+    uom). With the ha_unit_system_converted mapping both paths agree and the
     predicate match dedups them into a single enriched row.
     """
     from web.services.sources.ha_fordpass import handlers as fp_handlers
@@ -119,7 +119,7 @@ async def test_reporter_no_duplicate_trip_from_elveh_and_events(db_session):
     )
     # ... then the events entity fires for the same physical trip.
     events_entity = "sensor.fordpass_YOUR_VIN_events"
-    await process_event(events_entity, payload[events_entity], db_session, ha_config)
+    await process_sample(events_entity, payload[events_entity], db_session, ha_config)
     await db_session.flush()
 
     trips = (
@@ -157,7 +157,7 @@ async def test_elveh_trip_distance_canonical_km_across_unit_matrix(
     """Lock: elveh-only trip ingestion stores ~19 km on every HA/vehicle combo.
 
     ha-fordpass localizes elveh trip attrs to the HA unit system (metric HA
-    -> 19 km, imperial HA -> 11.81 mi); the ha_unit_system_converted contract
+    -> 19 km, imperial HA -> 11.81 mi); the ha_unit_system_converted mapping
     must convert every combo back to canonical km. The elveh STATE uom (which
     tracks the vehicle display system) must play no part.
     """
@@ -196,7 +196,7 @@ async def test_battery_capacity_stored_as_kwh(db_session):
     vehicle setting ('user-set gross capacity not being used').
     """
     payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
-    await process_event(
+    await process_sample(
         "sensor.fordpass_YOUR_VIN_metrics", payload["sensor.fordpass_YOUR_VIN_metrics"],
         db_session, {"unit_system": "metric"},
     )
@@ -228,7 +228,7 @@ async def test_battery_capacity_already_kwh_not_divided(db_session):
         "updateTime": "2026-04-19T12:00:00Z",
         "value": 141.2,
     }
-    await process_event(
+    await process_sample(
         "sensor.fordpass_YOUR_VIN_metrics", metrics, db_session, {"unit_system": "metric"},
     )
     await db_session.flush()
@@ -283,12 +283,12 @@ async def test_metrics_backfills_trip_regen_and_score(db_session):
     ha_config = {"unit_system": "metric"}
 
     # Events entity creates the trip row (no regen fields on that payload)...
-    await process_event(
+    await process_sample(
         "sensor.fordpass_YOUR_VIN_events", payload["sensor.fordpass_YOUR_VIN_events"],
         db_session, ha_config,
     )
     # ...then the metrics entity fires on the same poll cycle.
-    await process_event(
+    await process_sample(
         "sensor.fordpass_YOUR_VIN_metrics", payload["sensor.fordpass_YOUR_VIN_metrics"],
         db_session, ha_config,
     )
@@ -325,7 +325,7 @@ async def test_metrics_backfill_does_not_overwrite_elveh_regen(db_session):
     trip.range_regenerated = 9.9  # pretend elveh delivered a distinct value
     await db_session.flush()
 
-    await process_event(
+    await process_sample(
         "sensor.fordpass_YOUR_VIN_metrics", payload["sensor.fordpass_YOUR_VIN_metrics"],
         db_session, ha_config,
     )

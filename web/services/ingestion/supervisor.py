@@ -10,7 +10,11 @@ servers adds a second config row and gets a second runtime; no code change.
 
 The ``ha_gas_price`` source name does not spawn a transport runtime — it
 contributes a handler that ``HAWebSocketRuntime._dispatch`` fans out to.
-``_RUNTIME_CLASSES`` defines which source names get a transport runtime.
+A source gets a runtime when its ``DataSource.build_runtime`` is set.
+
+Secrets are decrypted here, once, before a builder sees the config. A row
+whose secrets the current key cannot read is not started; it is reported as
+needing re-authorization instead.
 """
 
 from __future__ import annotations
@@ -24,18 +28,15 @@ from sqlalchemy import select
 from db.engine import AsyncSessionLocal
 from db.models.data_source_config import DataSourceConfig
 from web.services.ingestion.base import IngestionRuntime
-from web.services.ingestion.ha_websocket import HAWebSocketRuntime
-from web.services.sources.ha_fordpass.config import HAFordpassConfig
+from web.services.sources.base import RuntimeBuilder
+from web.services.sources.config_secrets import open_config
+from web.services.sources.registry import REGISTRY
 
 logger = logging.getLogger("lightningrod.ingestion.supervisor")
 
-# source_name -> runtime class mapping. Right-sized for v1's two source names;
-# adding a third source with its own transport (FCON polling, MQTT) means one
-# new entry here. ha_gas_price is intentionally absent — it has no transport
-# runtime, only a handler that HAWebSocketRuntime._dispatch fans out to.
-_RUNTIME_CLASSES: dict[str, type] = {
-    "ha_fordpass": HAWebSocketRuntime,
-}
+
+def _builders() -> dict[str, RuntimeBuilder]:
+    return {s.source_name: s.build_runtime for s in REGISTRY if s.build_runtime}
 
 
 class IngestionSupervisor:
@@ -44,6 +45,9 @@ class IngestionSupervisor:
     def __init__(self) -> None:
         self._runtimes: dict[int, IngestionRuntime] = {}
         self._tasks: dict[int, asyncio.Task] = {}
+        # config_id -> (source_name, instance_label) for rows whose stored
+        # secrets are unreadable with the current key.
+        self._needs_reauth: dict[int, tuple[str, str]] = {}
 
     # ----- Lifecycle -----
 
@@ -87,6 +91,7 @@ class IngestionSupervisor:
 
     async def stop_runtime(self, config_id: int) -> None:
         """Stop a single runtime, cancel its task, drop from the registry."""
+        self._needs_reauth.pop(config_id, None)
         rt = self._runtimes.pop(config_id, None)
         task = self._tasks.pop(config_id, None)
         if rt is None:
@@ -105,17 +110,14 @@ class IngestionSupervisor:
     # ----- Internal -----
 
     async def _start_one(self, row: DataSourceConfig) -> None:
-        """Validate config_json, build the runtime, schedule its start coroutine.
+        """Ask the source to build its runtime, then schedule its start coroutine.
 
-        Membership in ``_RUNTIME_CLASSES`` is the single source of truth for
-        "this supervisor knows how to spawn this source_name". Adding a new
-        source means adding a row to ``_RUNTIME_CLASSES`` AND a matching
-        per-source construction branch below — there is no defensive
-        fall-through that silently skips unrecognized source_names while
-        leaving them in the registry.
+        A source_name with no builder is logged and skipped explicitly — never
+        a silent pass.
         """
-        runtime_cls = _RUNTIME_CLASSES.get(row.source_name)
-        if runtime_cls is None:
+        self._needs_reauth.pop(row.id, None)
+        builder = _builders().get(row.source_name)
+        if builder is None:
             logger.info(
                 "No transport runtime registered for source_name=%s "
                 "(config_id=%d) - skipping",
@@ -124,36 +126,31 @@ class IngestionSupervisor:
             )
             return
 
-        if row.source_name == "ha_fordpass":
-            try:
-                cfg = HAFordpassConfig.model_validate(row.config_json or {})
-            except Exception:
-                # Never log raw config_json — it carries the HA token. Pydantic's
-                # default exception repr does not include field values, so the
-                # exception itself is safe to log.
-                logger.exception(
-                    "config_json validation failed for config_id=%d (source=%s) "
-                    "- skipping",
-                    row.id,
-                    row.source_name,
-                )
-                return
-            rt: IngestionRuntime = runtime_cls(
-                config_id=row.id,
-                ha_url=cfg.ha_url,
-                ha_token=cfg.ha_token,
-                source_name=row.source_name,
-                instance_label=row.instance_label,
+        opened = open_config(row.source_name, row.config_json)
+        if opened.unreadable:
+            # Never retry with garbage: the user re-enters the credentials.
+            logger.warning(
+                "Stored credentials for config_id=%d (source=%s) are encrypted "
+                "but the key is missing or changed - re-authorization required",
+                row.id,
+                row.source_name,
             )
-        else:
-            # _RUNTIME_CLASSES has an entry for row.source_name but _start_one
-            # has no per-source construction branch — a contributor added the
-            # registry entry without wiring up the build step. Fail loudly.
-            raise RuntimeError(
-                f"_RUNTIME_CLASSES contains source_name={row.source_name!r} "
-                "but _start_one has no construction branch for it. Add an "
-                "elif branch above next to the matching registry entry."
+            self._needs_reauth[row.id] = (row.source_name, row.instance_label)
+            return
+
+        try:
+            rt = builder(row, opened.values)
+        except Exception:
+            # Never log raw config_json — it carries credentials. Pydantic's
+            # default exception repr does not include field values, so the
+            # exception itself is safe to log; builders must keep it that way.
+            logger.exception(
+                "Runtime construction failed for config_id=%d (source=%s) "
+                "- skipping",
+                row.id,
+                row.source_name,
             )
+            return
 
         self._runtimes[row.id] = rt
         self._tasks[row.id] = asyncio.create_task(
@@ -177,15 +174,15 @@ class IngestionSupervisor:
         same accessor works for multi-instance lookups in v2.
         """
         for rt in self._runtimes.values():
-            if (
-                getattr(rt, "source_name", None) == source_name
-                and getattr(rt, "instance_label", None) == instance_label
-            ):
+            if rt.source_name == source_name and rt.instance_label == instance_label:
                 return rt
         return None
 
     def get_runtime_by_config_id(self, config_id: int) -> IngestionRuntime | None:
         return self._runtimes.get(config_id)
+
+    def needs_reauth(self, config_id: int) -> bool:
+        return config_id in self._needs_reauth
 
     def health(self) -> list[dict[str, Any]]:
         """Aggregated runtime health for the admin Runtimes section.
@@ -194,11 +191,21 @@ class IngestionSupervisor:
         ``config_id`` / ``source_name`` / ``instance_label`` plus every key
         from the runtime's own ``health`` property.
         """
-        return [
+        blocked = [
             {
                 "config_id": cid,
-                "source_name": getattr(rt, "source_name", "unknown"),
-                "instance_label": getattr(rt, "instance_label", "default"),
+                "source_name": source_name,
+                "instance_label": label,
+                "connected": False,
+                "connection_state": "needs_reauth",
+            }
+            for cid, (source_name, label) in self._needs_reauth.items()
+        ]
+        return blocked + [
+            {
+                "config_id": cid,
+                "source_name": rt.source_name,
+                "instance_label": rt.instance_label,
                 **rt.health,
             }
             for cid, rt in self._runtimes.items()

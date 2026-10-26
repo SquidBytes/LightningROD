@@ -1,105 +1,38 @@
 """ha-fordpass source adapter.
 
-Ingestion adapter for the home-assistant-fordpass (ha-fordpass) HA integration.
-Owns the FIELD_CONTRACTS registry mapping HA entity attributes to DB columns,
-and routes every conversion through web.services.units.to_metric so unit
-handling is explicit and testable.
+Maps home-assistant-fordpass entity attributes to DB columns via DATA_MAP,
+routing every conversion through web.services.units.to_metric.
 
-### No runtime unit auto-detection
-This module does NOT import or reference the legacy FordPass preferred-unit
-flags (previously carried on ha_config and the legacy value-normalizer
-helper now superseded by `web.services.units.to_metric`). Every conversion
-here flows through a FIELD_CONTRACTS entry with a declared `source_unit`.
+Quirks of the upstream integration that this adapter exists to absorb:
 
-### Prefer documented-metric entities
-Reads from:
-  - sensor.fordpass_{vin}_metrics  (attributes always metric per integration author)
-  - sensor.fordpass_{vin}_events   (xev-key-off-trip-segment-data always metric)
-
-Both entities are opt-in: ha-fordpass ships them with
-`entity_registry_enabled_default=False`, so a fresh install must enable them
-before battery-status and trip ingestion see anything.
-
-### metrics attributes are value-wrapped
-ha-fordpass hands Ford's raw metrics dict to HA verbatim, so every attribute
-on that entity is `{"updateTime": ..., "value": <scalar>}`. Read them through
-`_metric_value`, never `attrs.get(key)` — a raw `attrs.get` yields the wrapper
-dict, which every numeric conversion silently turns into None.
-
-### Read-time UoM fallback for main-state-only fields
-When a field exists only on an elveh-shaped main sensor (e.g. the elveh state
-value itself), the adapter reads
-`new_state["attributes"]["unit_of_measurement"]` at event-processing time and
-uses it as the declared source_unit for THAT SINGLE EVENT. Never a
-process-global flag. Unknown/missing UoM short-circuits the field with a
-warning log. The adapter never silently assumes metric.
-
-### Elveh trip attributes are HA-unit-system localized
-The events entity (`customEvents`) is the canonical raw-metric trip source.
-The elveh trip attributes (`tripDistanceTraveled`, `tripEfficiency`,
-`tripRangeRegenerated`, `maximumBatteryRange`, temps) are built by ha-fordpass
-via `localize_distance` / `localize_temperature` — i.e. converted from raw
-metric into **HA's configured unit system** (metric HA -> km/°C, imperial HA
--> mi/°F). Their contracts carry `ha_unit_system_converted=True`. The elveh
-STATE's `unit_of_measurement` tracks the vehicle's display system, NOT the HA
-unit system, so it must never be used to resolve trip-attribute units (doing
-so double-converted distances for imperial-display vehicles on metric HA).
-Battery-related attributes (voltage/amperage/kW) are SI-already (V, A, kW)
-and carry no FIELD_CONTRACTS entry (see `tests/test_unit/test_contract_coverage.py`
-`_EXEMPTIONS`); capacity is mixed Wh/kWh across installs and carries a
-`wh_autoscale` contract.
-
-### elvehcharging and outsidetemp used for thermal caching
-`sensor.fordpass_{vin}_elvehcharging.batteryTemperature` is cached per-device
-in `_last_charging_battery_temp` and written to ev_battery_status on each
-charging-state event. The `sensor.fordpass_{vin}_outsidetemp` STATE is cached
-in `_last_outsidetemp`. Both caches are consumed by `_handle_energy_transfer_entity`
-to populate ev_charging_session thermal fields at session-write time.
-
-The outsidetemp entity also carries an `ambientTemp` attribute. It is NOT the
-outside temperature: it mirrors Ford's `ambientTemp` metric, which goes stale
-and sat frozen for weeks on a live vehicle while the state tracked reality.
-The state is the only trustworthy reading, and HA stamps its display unit on
-the event — hence `read_time_uom=True` on both contracts.
-
-### Canonical source for ev_charging_session.distance_added
-Evidence (from `tests/fixtures/ha_payloads/*.json` — matches real ha-fordpass
-behavior):
-
-  | Fixture                            | plugDetails.totalDistanceAdded |
-  |------------------------------------|--------------------------------|
-  | metric_ha_metric_vehicle.json      | 103 (km)                       |
-  | metric_ha_imperial_vehicle.json    | 103 (km)                       |
-  | imperial_ha_metric_vehicle.json    | 64 (mi)                        |
-  | imperial_ha_imperial_vehicle.json  | 64 (mi)                        |
-
-ha-fordpass calls `localize_distance` on this field inside
-`fordpass_handler.get_energy_transfer_log_attrs`, so the emitted value
-reflects HA's configured unit system: metric HA -> km, imperial HA -> mi.
-The contract below carries `ha_unit_system_converted=True`; `_resolve_source_unit`
-derives the per-event source unit from `ha_config.unit_system` and routes
-through `to_metric` to convert mi -> km back to canonical storage.
-
-There is NO distance-added-shaped attribute on sensor.fordpass_{vin}_metrics
-or sensor.fordpass_{vin}_events. The elveh.totalDistanceAdded attribute was a
-fixture fabrication (ha-fordpass does not emit it on elveh) — not used.
-
-**Decision: source = sensor.fordpass_{vin}_energytransferlogentry /
-plugDetails.totalDistanceAdded, source_unit resolved per-event from
-ha_config.unit_system.** This kills the 2026-03-21 double-conversion bug
-which assumed the field was always km and produced 165.8 on imperial-HA events.
+- The metrics and events entities ship with
+  `entity_registry_enabled_default=False`, so a fresh install ingests nothing
+  from them until the user enables them.
+- Every attribute on the metrics entity is `{"updateTime": ..., "value": x}`.
+  Read them through `_metric_value` — a raw `attrs.get` yields the wrapper
+  dict, which every numeric conversion silently turns into None.
+- ha-fordpass builds the elveh trip attributes with `localize_distance` /
+  `localize_temperature`, so they arrive in HA's unit system, not raw metric.
+  The elveh STATE's `unit_of_measurement` tracks the *vehicle's* display
+  system rather than HA's, so it must never resolve those attributes' units —
+  that double-converted distances for imperial-display vehicles on metric HA.
+- The outsidetemp entity's `ambientTemp` attribute is NOT the outside
+  temperature: it mirrors a Ford metric that sat frozen for weeks on a live
+  vehicle. Only the entity state is trustworthy.
+- `energytransferlogentry.plugDetails.totalDistanceAdded` is the only source
+  of charging distance_added; no metrics or events attribute carries it.
 """
 
 import json
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.services.units import detection
-from web.services.units.contracts import FieldContract, SourceLocator, SourceLocatorKind
+from web.services.units.data_map import DataMapping, SourceKind, SourceRef
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
 
 logger = logging.getLogger("lightningrod.sources.ha_fordpass")
@@ -117,250 +50,227 @@ LIGHTNINGROD_TRIP_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-4a5b-9c8d-7e6f5a4b3c20")
 def compute_trip_id(device_id: str | None, trip_update_time: str | None) -> uuid.UUID | None:
     """Deterministic trip_id for cross-source dedup.
 
-    Hash inputs: device_id + tripUpdateTime. Returns None when either input
-    is missing; callers fall back to the legacy `_find_matching_trip`
-    predicate match in that case.
+    Returns None when either input is missing; callers fall back to the
+    `_find_matching_trip` predicate match in that case.
     """
     if not device_id or not trip_update_time:
         return None
     canonical = f"{device_id}|{trip_update_time}"
     return uuid.uuid5(LIGHTNINGROD_TRIP_NAMESPACE, canonical)
 
-# Dedicated logger for per-field unit-conversion traces. Separate from the
-# module logger so it can be toggled independently at runtime:
-#   logging.getLogger("lightningrod.units.trace").setLevel(logging.INFO)
-# Default level stays WARNING so normal deployments are quiet; flip to INFO
-# (or DEBUG) to see every (field, raw, method, effective_unit, converted).
+# Separate from the module logger so per-field conversion traces can be
+# switched on alone: getLogger("lightningrod.units.trace").setLevel(INFO).
 _trace = logging.getLogger("lightningrod.units.trace")
 
 
 # ---------------------------------------------------------------------------
-# FIELD_CONTRACTS registry
+# DATA_MAP registry
 # ---------------------------------------------------------------------------
-# Every unit-ful DB column handled by this adapter appears here. The
-# tests/test_unit/test_contract_coverage.py invariant test asserts that every
-# (table, column) in its _UNIT_FUL_COLUMNS set appears in a FIELD_CONTRACTS
-# entry below (with exemptions for dimensionless / SI-already fields).
-#
-# Source-unit strings MUST be recognized by web.services.units.to_metric.
-# Today that means: km, mi, kmh, mph, degC, degF, F, kWh, Wh, s, seconds.
+# Every unit-ful DB column handled by this adapter appears here;
+# tests/test_unit/test_data_map_coverage.py locks that invariant.
+# `source_unit` strings must be ones web.services.units.to_metric recognizes.
 
-FIELD_CONTRACTS: list[FieldContract] = [
+DATA_MAP: list[DataMapping] = [
     # --- ev_battery_status (from sensor.{vin}_metrics) -------------------
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="xevBatteryRange",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="xevBatteryRange",
         source_unit="km",
-        target_db_table="ev_battery_status",
-        target_db_column="hv_battery_range",
-        target_unit="km",
+        db_table="ev_battery_status",
+        db_column="hv_battery_range",
+        db_unit="km",
         notes="Canonical metric source; replaces elveh state reading",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="xevBatteryMaximumRange",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="xevBatteryMaximumRange",
         source_unit="km",
-        target_db_table="ev_battery_status",
-        target_db_column="hv_battery_max_range",
-        target_unit="km",
+        db_table="ev_battery_status",
+        db_column="hv_battery_max_range",
+        db_unit="km",
         notes="Canonical metric source; replaces elveh.maximumBatteryRange",
     ),
-    # Pack capacity: ha-fordpass installs disagree on scale — some report raw
-    # Wh (131 kWh pack -> 131000), others already-kWh (141.2). wh_autoscale
-    # disambiguates by magnitude: real packs are ~10-300 kWh, so |value| < 1000
-    # means kWh; >= 1000 means Wh. A blind Wh/1000 corrupted kWh-reporting
-    # installs (141.2 -> 0.1412).
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="xevBatteryCapacity",
+    # ha-fordpass installs disagree on pack-capacity scale — some report raw Wh
+    # (131000), others already-kWh (141.2). A blind Wh/1000 corrupted the
+    # kWh-reporting installs, so wh_autoscale disambiguates by magnitude.
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="xevBatteryCapacity",
         source_unit="Wh",
         wh_autoscale=True,
-        target_db_table="ev_battery_status",
-        target_db_column="hv_battery_capacity",
-        target_unit="kWh",
+        db_table="ev_battery_status",
+        db_column="hv_battery_capacity",
+        db_unit="kWh",
         notes="Mixed Wh/kWh across ha-fordpass versions; magnitude-autoscaled to kWh",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="maximumBatteryCapacity",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
+        source_field="maximumBatteryCapacity",
         source_unit="Wh",
         wh_autoscale=True,
-        target_db_table="ev_battery_status",
-        target_db_column="hv_battery_capacity",
-        target_unit="kWh",
+        db_table="ev_battery_status",
+        db_column="hv_battery_capacity",
+        db_unit="kWh",
         notes="Elveh mirror of xevBatteryCapacity; same mixed Wh/kWh autoscale",
     ),
 
     # --- ev_battery_status: hv_battery_temperature --------------------------
-    # Source is sensor.fordpass_{vin}_elvehcharging.batteryTemperature.
-    # ha-fordpass calls localize_temperature on this value, so it is emitted
-    # in the HA-configured unit system (°F for imperial, °C for metric).
-    # ha_unit_system_converted=True tells _resolve_source_unit to read
-    # ha_config.unit_system at event-processing time.
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elvehcharging", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="batteryTemperature",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elvehcharging", SourceKind.HA_ENTITY),
+        source_field="batteryTemperature",
         source_unit="degC",
         ha_unit_system_converted=True,
-        target_db_table="ev_battery_status",
-        target_db_column="hv_battery_temperature",
-        target_unit="degC",
+        db_table="ev_battery_status",
+        db_column="hv_battery_temperature",
+        db_unit="degC",
         notes="Live charging battery temp; ha-fordpass localizes per unit_system",
     ),
 
     # --- ev_trip_metrics (from sensor.{vin}_events xev-key-off-trip-segment-data) ---
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_events", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="xev-key-off-trip-segment-data.distance_traveled",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_events", SourceKind.HA_ENTITY),
+        source_field="xev-key-off-trip-segment-data.distance_traveled",
         source_unit="km",
-        target_db_table="ev_trip_metrics",
-        target_db_column="distance",
-        target_unit="km",
+        db_table="ev_trip_metrics",
+        db_column="distance",
+        db_unit="km",
         notes="Canonical source; replaces elveh.tripDistanceTraveled",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_events", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="xev-key-off-trip-segment-data.energy_consumed",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_events", SourceKind.HA_ENTITY),
+        source_field="xev-key-off-trip-segment-data.energy_consumed",
         source_unit="Wh",
-        target_db_table="ev_trip_metrics",
-        target_db_column="energy_consumed",
-        target_unit="kWh",
+        db_table="ev_trip_metrics",
+        db_column="energy_consumed",
+        db_unit="kWh",
         notes="Canonical source; Wh -> kWh via to_metric",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_events", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="xev-key-off-trip-segment-data.ambient_temperature",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_events", SourceKind.HA_ENTITY),
+        source_field="xev-key-off-trip-segment-data.ambient_temperature",
         source_unit="degC",
-        target_db_table="ev_trip_metrics",
-        target_db_column="ambient_temp",
-        target_unit="degC",
+        db_table="ev_trip_metrics",
+        db_column="ambient_temp",
+        db_unit="degC",
         notes="Canonical metric source; Ford API key is ambient_temperature (raw °C)",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_events", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="xev-key-off-trip-segment-data.cabin_temperature",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_events", SourceKind.HA_ENTITY),
+        source_field="xev-key-off-trip-segment-data.cabin_temperature",
         source_unit="degC",
-        target_db_table="ev_trip_metrics",
-        target_db_column="cabin_temp",
-        target_unit="degC",
+        db_table="ev_trip_metrics",
+        db_column="cabin_temp",
+        db_unit="degC",
         notes="Canonical metric source; Ford API key is cabin_temperature (raw °C)",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_events", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="xev-key-off-trip-segment-data.outside_air_ambient_temperature",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_events", SourceKind.HA_ENTITY),
+        source_field="xev-key-off-trip-segment-data.outside_air_ambient_temperature",
         source_unit="degC",
-        target_db_table="ev_trip_metrics",
-        target_db_column="outside_air_temp",
-        target_unit="degC",
+        db_table="ev_trip_metrics",
+        db_column="outside_air_temp",
+        db_unit="degC",
         notes="Canonical metric source; Ford API key is outside_air_ambient_temperature (raw °C)",
     ),
-    # Elveh trip distance/efficiency/regen attributes: ha-fordpass builds them
-    # via localize_distance (fordpass_handler.py), i.e. raw metric converted to
-    # HA's configured unit system. ha_unit_system_converted=True resolves the
-    # per-event source unit from ha_config.unit_system. The elveh STATE uom
-    # tracks the vehicle display system and MUST NOT be used for these — that
-    # was the duplicate-trip double-conversion bug (imperial vehicle+metric HA).
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tripDistanceTraveled",
+    # Elveh trip attributes: never resolve these from the elveh state's uom.
+    # It tracks the vehicle display system, which is where the duplicate-trip
+    # double-conversion bug came from (imperial vehicle on metric HA).
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
+        source_field="tripDistanceTraveled",
         source_unit="km",
         ha_unit_system_converted=True,
-        target_db_table="ev_trip_metrics",
-        target_db_column="distance",
-        target_unit="km",
+        db_table="ev_trip_metrics",
+        db_column="distance",
+        db_unit="km",
         notes="Legacy-fallback trip distance; ha-fordpass localizes per HA unit_system",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tripEfficiency",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
+        source_field="tripEfficiency",
         source_unit="km",
         ha_unit_system_converted=True,
-        target_db_table="ev_trip_metrics",
-        target_db_column="efficiency",
-        target_unit="km",
+        db_table="ev_trip_metrics",
+        db_column="efficiency",
+        db_unit="km",
         notes=(
             "tripDistanceTraveled / tripEnergyConsumed as computed by "
             "ha-fordpass, so km/kWh on metric HA and mi/kWh on imperial HA; "
             "the km<->mi factor converts it to canonical km/kWh."
         ),
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tripRangeRegenerated",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
+        source_field="tripRangeRegenerated",
         source_unit="km",
         ha_unit_system_converted=True,
-        target_db_table="ev_trip_metrics",
-        target_db_column="range_regenerated",
-        target_unit="km",
+        db_table="ev_trip_metrics",
+        db_column="range_regenerated",
+        db_unit="km",
         notes="From metrics tripXevBatteryRangeRegenerated via localize_distance",
     ),
-    # Primary regen source: the metrics entity carries the raw-metric value,
-    # is always enabled, and backfills the newest trip row directly — the
-    # elveh contract above stays as the localized fallback for installs
-    # where metrics lacks the attribute.
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tripXevBatteryRangeRegenerated",
+    # Primary regen source; the elveh mapping above is the localized fallback
+    # for installs whose metrics entity lacks the attribute.
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="tripXevBatteryRangeRegenerated",
         source_unit="km",
-        target_db_table="ev_trip_metrics",
-        target_db_column="range_regenerated",
-        target_unit="km",
+        db_table="ev_trip_metrics",
+        db_column="range_regenerated",
+        db_unit="km",
         notes="Raw API passthrough (km); backfills the newest trip row",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="maximumBatteryRange",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
+        source_field="maximumBatteryRange",
         source_unit="km",
         ha_unit_system_converted=True,
-        target_db_table="ev_battery_status",
-        target_db_column="hv_battery_max_range",
-        target_unit="km",
+        db_table="ev_battery_status",
+        db_column="hv_battery_max_range",
+        db_unit="km",
         notes="Elveh fallback for metrics xevBatteryMaximumRange; localize_distance",
     ),
-    # Temperature attributes on elveh are localized by ha-fordpass to the HA
-    # unit system (°F for imperial, °C for metric). ha_unit_system_converted=True
-    # tells _resolve_source_unit to read ha_config.unit_system at event time
-    # rather than using the state's unit_of_measurement (which is a distance
-    # unit — "mi"/"km" — because the elveh entity's primary state is a range).
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tripCabinTemp",
+    # The elveh entity's primary state is a range, so its unit_of_measurement
+    # is a distance unit and is useless for these temperature attributes.
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
+        source_field="tripCabinTemp",
         source_unit="degC",
         ha_unit_system_converted=True,
-        target_db_table="ev_trip_metrics",
-        target_db_column="cabin_temp",
-        target_unit="degC",
+        db_table="ev_trip_metrics",
+        db_column="cabin_temp",
+        db_unit="degC",
         notes="elveh temp attr: HA localizes per unit_system (imperial->degF, metric->degC)",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tripAmbientTemp",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
+        source_field="tripAmbientTemp",
         source_unit="degC",
         ha_unit_system_converted=True,
-        target_db_table="ev_trip_metrics",
-        target_db_column="ambient_temp",
-        target_unit="degC",
+        db_table="ev_trip_metrics",
+        db_column="ambient_temp",
+        db_unit="degC",
         notes="elveh temp attr: HA localizes per unit_system",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elveh", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tripOutsideAirAmbientTemp",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
+        source_field="tripOutsideAirAmbientTemp",
         source_unit="degC",
         ha_unit_system_converted=True,
-        target_db_table="ev_trip_metrics",
-        target_db_column="outside_air_temp",
-        target_unit="degC",
+        db_table="ev_trip_metrics",
+        db_column="outside_air_temp",
+        db_unit="degC",
         notes="elveh temp attr: HA localizes per unit_system",
     ),
 
     # --- ev_charging_session (from sensor.{vin}_energytransferlogentry) ----------
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_energytransferlogentry", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="plugDetails.totalDistanceAdded",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_energytransferlogentry", SourceKind.HA_ENTITY),
+        source_field="plugDetails.totalDistanceAdded",
         source_unit="km",
-        target_db_table="ev_charging_session",
-        target_db_column="distance_added",
-        target_unit="km",
+        db_table="ev_charging_session",
+        db_column="distance_added",
+        db_unit="km",
         ha_unit_system_converted=True,
         notes=(
             "HA-converted per ha-fordpass source "
@@ -371,78 +281,74 @@ FIELD_CONTRACTS: list[FieldContract] = [
             "back to canonical."
         ),
     ),
-    # Charging session battery temp: sourced from elvehcharging (live during
-    # charging). The most recent elvehcharging reading is cached and applied
-    # when the energytransferlogentry session record is written.
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elvehcharging", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="batteryTemperature",
+    # Cached from the live elvehcharging reading and applied when the
+    # energytransferlogentry session record is written.
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elvehcharging", SourceKind.HA_ENTITY),
+        source_field="batteryTemperature",
         source_unit="degC",
         ha_unit_system_converted=True,
-        target_db_table="ev_charging_session",
-        target_db_column="battery_temp_start",
-        target_unit="degC",
+        db_table="ev_charging_session",
+        db_column="battery_temp_start",
+        db_unit="degC",
         notes="Cached from elvehcharging; applied at session-write time",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_elvehcharging", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="batteryTemperature",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_elvehcharging", SourceKind.HA_ENTITY),
+        source_field="batteryTemperature",
         source_unit="degC",
         ha_unit_system_converted=True,
-        target_db_table="ev_charging_session",
-        target_db_column="battery_temp_end",
-        target_unit="degC",
+        db_table="ev_charging_session",
+        db_column="battery_temp_end",
+        db_unit="degC",
         notes="Cached from elvehcharging; mirrored to start/end (single snapshot)",
     ),
-    # Charging session ambient temp: the outsidetemp entity STATE. Its
-    # `ambientTemp` attribute mirrors a Ford metric that stops updating, so it
-    # is never read (see the outsidetemp note in the module docstring).
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_outsidetemp", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="state",
+    # The entity state, never its stale `ambientTemp` attribute.
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_outsidetemp", SourceKind.HA_ENTITY),
+        source_field="state",
         source_unit="degC",
         read_time_uom=True,
-        target_db_table="ev_charging_session",
-        target_db_column="ambient_temp_start",
-        target_unit="degC",
+        db_table="ev_charging_session",
+        db_column="ambient_temp_start",
+        db_unit="degC",
         notes="Cached from the outsidetemp state; applied at session-write time",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_outsidetemp", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="state",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_outsidetemp", SourceKind.HA_ENTITY),
+        source_field="state",
         source_unit="degC",
         read_time_uom=True,
-        target_db_table="ev_charging_session",
-        target_db_column="ambient_temp_end",
-        target_unit="degC",
+        db_table="ev_charging_session",
+        db_column="ambient_temp_end",
+        db_unit="degC",
         notes="Cached from the outsidetemp state; mirrored to start/end",
     ),
     # --- ev_vehicle_status (from the per-slug temperature sensors) ----------
-    # Vehicle telemetry (odometer, speed, brakeTorque, yawRate, acceleration)
-    # arrives on its own per-slug entities, not on the metrics entity, and is
-    # written by handlers.handle_vehicle_status without a contract.
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_outsidetemp", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="state",
+    # The rest of vehicle telemetry (odometer, speed, yaw, acceleration) has no
+    # mapping: it arrives on per-slug entities that handlers write directly.
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_outsidetemp", SourceKind.HA_ENTITY),
+        source_field="state",
         source_unit="degC",
         read_time_uom=True,
-        target_db_table="ev_vehicle_status",
-        target_db_column="outside_temperature",
-        target_unit="degC",
+        db_table="ev_vehicle_status",
+        db_column="outside_temperature",
+        db_unit="degC",
         notes=(
             "Time-series ambient temp from the outsidetemp entity state. "
             "Shares its source with ev_charging_session.ambient_temp_start/end "
             "(different cache discipline — vehicle_status writes per snapshot)."
         ),
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_cabintemperature", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="state",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_cabintemperature", SourceKind.HA_ENTITY),
+        source_field="state",
         source_unit="degC",
         read_time_uom=True,
-        target_db_table="ev_vehicle_status",
-        target_db_column="cabin_temperature",
-        target_unit="degC",
+        db_table="ev_vehicle_status",
+        db_column="cabin_temperature",
+        db_unit="degC",
         notes=(
             "Time-series cabin temp from the cabintemperature entity state; "
             "the entity carries no cabinTemperature attribute."
@@ -454,9 +360,7 @@ FIELD_CONTRACTS: list[FieldContract] = [
 # ---------------------------------------------------------------------------
 # _last_seen_raw cache
 # ---------------------------------------------------------------------------
-# Keyed by f"{source_locator.pattern}|{source_attribute}". Stores a dict of
-# {"value": <raw>, "unit": <source_unit>, "seen_at": <iso8601 UTC>, "converted": <metric>}.
-# Consumed by /admin/data-sources diagnostic page.
+# Keyed by DataMapping.key, which /admin/data-sources reads back.
 
 _last_seen_raw: dict[str, dict[str, Any]] = {}
 _last_charging_battery_temp: dict[str, float | None] = {}
@@ -464,7 +368,7 @@ _last_outsidetemp: dict[str, float | None] = {}
 
 
 def _record_last_seen(
-    contract: FieldContract,
+    mapping: DataMapping,
     raw_value: Any,
     converted: Any,
     effective_unit: str | None = None,
@@ -472,16 +376,13 @@ def _record_last_seen(
 ) -> None:
     """Record the last-seen raw value for diagnostic display.
 
-    `effective_unit` overrides `contract.source_unit` when the HA-unit-system
-    path resolved a different unit. `method` captures how the unit was
-    resolved (declared / ha_unit_system_converted / declared_fallback /
-    wh_autoscale) so the data-sources page can show the reason per field.
+    `effective_unit` overrides `mapping.source_unit` when per-event resolution
+    produced a different one; `method` names which path resolved it.
     """
-    key = f"{contract.source_locator.pattern}|{contract.source_attribute}"
-    _last_seen_raw[key] = {
+    _last_seen_raw[mapping.key] = {
         "value": raw_value,
-        "unit": effective_unit or contract.source_unit,
-        "declared_unit": contract.source_unit,
+        "unit": effective_unit or mapping.source_unit,
+        "declared_unit": mapping.source_unit,
         "method": method or "declared",
         "seen_at": datetime.now(UTC).isoformat(),
         "converted": converted,
@@ -500,13 +401,8 @@ _ENTITY_SUFFIX_PREFIX = "sensor.fordpass_"
 def _entity_suffix(entity_id: str | None) -> str | None:
     """Return the trailing slug of a fordpass entity_id, or None.
 
-    Example: sensor.fordpass_ABC123_elveh -> "elveh"
-    Example: sensor.fordpass_YOUR_VIN_metrics -> "metrics"
-
-    Uses rsplit so VINs containing underscores (e.g., the PII-free fixture
-    placeholder `YOUR_VIN`) still parse correctly. Fordpass slugs are always
-    single tokens (elveh, metrics, events, energytransferlogentry, outsidetemp,
-    soc, odometer, etc.) so the trailing segment is unambiguous.
+    sensor.fordpass_ABC123_elveh -> "elveh". Splits from the right because
+    VINs can contain underscores; fordpass slugs never do.
     """
     if not entity_id or not isinstance(entity_id, str):
         return None
@@ -520,7 +416,7 @@ def _entity_suffix(entity_id: str | None) -> str | None:
 
 
 def _entity_pattern(entity_id: str) -> str:
-    """Convert a concrete entity_id into its FIELD_CONTRACTS pattern form.
+    """Convert a concrete entity_id into its DATA_MAP pattern form.
 
     sensor.fordpass_ABC123_metrics -> sensor.fordpass_{vin}_metrics
     """
@@ -530,34 +426,29 @@ def _entity_pattern(entity_id: str) -> str:
     return f"sensor.fordpass_{{vin}}_{suffix}"
 
 
-def lookup_contract(
-    entity_pattern: str, source_attribute: str
-) -> FieldContract | None:
-    """Look up the FIELD_CONTRACTS entry for a given (pattern, attribute).
+def lookup_mapping(
+    entity_pattern: str, source_field: str
+) -> DataMapping | None:
+    """Look up the DATA_MAP entry for a given (pattern, attribute).
 
-    Returns the FIRST matching contract; callers needing all matches (e.g.
+    Returns the FIRST matching mapping; callers needing all matches (e.g.
     energytransferlogentry.batteryTemperature maps to both start + end)
-    should iterate FIELD_CONTRACTS directly.
+    should iterate DATA_MAP directly.
     """
-    for contract in FIELD_CONTRACTS:
+    for mapping in DATA_MAP:
         if (
-            contract.source_locator.pattern == entity_pattern
-            and contract.source_attribute == source_attribute
+            mapping.source.pattern == entity_pattern
+            and mapping.source_field == source_field
         ):
-            return contract
+            return mapping
     return None
 
 
-def _field_type_for_contract(contract: FieldContract) -> str | None:
-    """Classify a contract's source/target unit as distance/temperature/etc.
-
-    Returns None when the contract's units are dimensionless or unsupported
-    for HA-unit-system resolution. Used by _resolve_source_unit when the
-    contract carries `ha_unit_system_converted=True`.
-    """
-    # Same semantics as web.services.units.detection._UNIT_FIELD_TYPES
+def _field_type_for_mapping(mapping: DataMapping) -> str | None:
+    """Classify a mapping's unit as distance/speed/temperature, else None."""
+    # Same semantics as web.services.units.detection._UNIT_FIELD_TYPES,
     # duplicated locally to avoid widening the import graph.
-    unit = contract.target_unit or contract.source_unit
+    unit = mapping.db_unit or mapping.source_unit
     if unit in ("km", "mi"):
         return "distance"
     if unit in ("kmh", "mph"):
@@ -572,12 +463,7 @@ def _unit_for_ha_system(
 ) -> str | None:
     """Return the source-unit string HA would emit for `field_type`.
 
-    Reads `ha_config.unit_system` (either the flat-string or nested-dict
-    shape) and returns the matching to_metric unit key for `field_type`:
-      metric + distance -> km ; imperial + distance -> mi
-      metric + temperature -> degC ; imperial + temperature -> degF
-      metric + speed -> kmh ; imperial + speed -> mph
-    Returns None when the unit system cannot be resolved.
+    None when `ha_config.unit_system` cannot be resolved.
     """
     # Delegate to detection._coerce_unit_system_family so the two resolvers
     # stay in sync and both accept the same unit_system shapes.
@@ -599,54 +485,35 @@ def _unit_for_ha_system(
 
 
 def _resolve_source_unit(
-    contract: FieldContract,
+    mapping: DataMapping,
     new_state: dict | None,
     ha_config: dict | None = None,
 ) -> tuple[str | None, str]:
-    """Resolve the effective source unit for one contract + event.
+    """Resolve the effective source unit for one mapping + event.
 
-    Returns (unit, method). `method` is one of:
-      - "declared"                    — contract.source_unit used verbatim
-      - "read_time_uom"               — from this event's unit_of_measurement
-      - "ha_unit_system_converted"    — derived from ha_config.unit_system
-      - "declared_fallback"           — signal requested but not available;
-                                        fell back to contract.source_unit
-      - "unresolved_uom"              — state field whose event carried no
-                                        usable unit; unit is None and the
-                                        caller must drop the field
-
-    The read-time path (method="read_time_uom") fires when
-    `contract.read_time_uom=True` — i.e. the contract reads the entity's own
-    state, which HA has already converted into the display unit it stamps on
-    the event. Never assume a unit for those: an unreadable UoM drops the
-    field rather than guessing.
-
-    The HA-unit-system path (method="ha_unit_system_converted") fires when
-    `contract.ha_unit_system_converted=True` — i.e. ha-fordpass calls
-    `localize_distance` / `localize_temperature` on this field.
-
-    ATTRIBUTE contracts never resolve from an entity state's read-time
-    unit_of_measurement: the elveh state uom tracks the vehicle display
-    system, not the unit of nested attributes, and using it double-converted
-    trip distances (imperial-display vehicle + metric HA).
+    Returns (unit, method); /admin/data-sources displays `method`, which is
+    one of declared, read_time_uom, ha_unit_system_converted,
+    declared_fallback, or unresolved_uom. On unresolved_uom the unit is None
+    and the caller must drop the field — never guess a unit for an event that
+    did not stamp one.
     """
     # --- 1. Read-time unit_of_measurement path (state-sourced fields) ---
-    if contract.read_time_uom:
+    if mapping.read_time_uom:
         attrs = (new_state or {}).get("attributes") or {}
         resolved = _normalize_uom_string(attrs.get("unit_of_measurement"))
         if resolved:
             return resolved, "read_time_uom"
         logger.warning(
-            "read_time_uom contract %s.%s received no usable "
+            "read_time_uom mapping %s.%s received no usable "
             "unit_of_measurement; dropping the field for this event",
-            contract.source_locator.pattern,
-            contract.source_attribute,
+            mapping.source.pattern,
+            mapping.source_field,
         )
         return None, "unresolved_uom"
 
     # --- 2. HA-unit-system conversion path ---
-    if contract.ha_unit_system_converted:
-        field_type = _field_type_for_contract(contract)
+    if mapping.ha_unit_system_converted:
+        field_type = _field_type_for_mapping(mapping)
         if field_type is not None:
             resolved = _unit_for_ha_system(field_type, ha_config)
             if resolved:
@@ -655,23 +522,22 @@ def _resolve_source_unit(
         # Fall back to declared so we at least produce a value; the
         # detection layer will flag this as degraded via unknown_reason.
         logger.warning(
-            "ha_unit_system_converted contract %s.%s received no usable "
+            "ha_unit_system_converted mapping %s.%s received no usable "
             "ha_config.unit_system; falling back to declared %r",
-            contract.source_locator.pattern,
-            contract.source_attribute,
-            contract.source_unit,
+            mapping.source.pattern,
+            mapping.source_field,
+            mapping.source_unit,
         )
-        return contract.source_unit, "declared_fallback"
+        return mapping.source_unit, "declared_fallback"
 
-    # --- 3. Declared (contract literal) ---
-    return contract.source_unit, "declared"
+    # --- 3. Declared (mapping literal) ---
+    return mapping.source_unit, "declared"
 
 
 def _normalize_uom_string(raw: Any) -> str | None:
     """Normalize an HA `unit_of_measurement` string to a to_metric key.
-    Maps the common HA UoM spellings (with/without degree sign, case
-    variations) to the canonical strings recognized by to_metric.
-    Returns None for unrecognized inputs so callers can fall back.
+
+    None for spellings to_metric would not recognize, so callers can fall back.
     """
     if not isinstance(raw, str):
         return None
@@ -699,36 +565,24 @@ def _normalize_uom_string(raw: Any) -> str | None:
 
 
 def convert(
-    contract: FieldContract,
+    mapping: DataMapping,
     raw_value: Any,
     new_state: dict | None = None,
     ha_config: dict | None = None,
 ) -> float | None:
-    """Convert `raw_value` to metric via `contract` + per-event resolution.
+    """Convert `raw_value` to metric via `mapping` + per-event resolution.
 
-    Resolution order (inside `_resolve_source_unit`):
-      1. `read_time_uom=True` -> this event's unit_of_measurement
-      2. `ha_unit_system_converted=True` -> ha_config.unit_system
-      3. contract.source_unit (declared)
-
-    Logs and returns None on UnknownSourceUnit so the adapter boundary absorbs
-    unit failures rather than propagating them to the caller. Records the
-    conversion in `_last_seen_raw` AND in the unit-detection layer so the
-    /admin/data-sources diagnostic page surfaces the resolution path.
-
-    Also emits a per-field trace on `lightningrod.units.trace` logger (INFO
-    level) so you can follow: field, raw, method, source_unit, converted,
-    target column.
+    Returns None on an unknown source unit so the adapter boundary absorbs
+    unit failures instead of propagating them to the caller.
     """
     if raw_value is None:
         return None
-    source_unit, method = _resolve_source_unit(contract, new_state, ha_config)
+    source_unit, method = _resolve_source_unit(mapping, new_state, ha_config)
     if source_unit is None:
         # The event carried no readable unit; the adapter never guesses.
         return None
-    if contract.wh_autoscale and source_unit == "Wh":
-        # Mixed-scale sources: packs are ~10-300 kWh, so |value| < 1000 can
-        # only be already-kWh; >= 1000 is Wh.
+    if mapping.wh_autoscale and source_unit == "Wh":
+        # Real packs are ~10-300 kWh, so |value| < 1000 can only be kWh already.
         numeric = _safe_float(raw_value)
         if numeric is not None and abs(numeric) < 1000:
             source_unit, method = "kWh", "wh_autoscale"
@@ -738,8 +592,8 @@ def convert(
         logger.warning(
             "UnknownSourceUnit on %s.%s: value=%r source_unit=%r method=%s (%s); "
             "skipping field, continuing event",
-            contract.source_locator.pattern,
-            contract.source_attribute,
+            mapping.source.pattern,
+            mapping.source_field,
             raw_value,
             source_unit,
             method,
@@ -747,27 +601,27 @@ def convert(
         )
         return None
     _record_last_seen(
-        contract, raw_value, converted, effective_unit=source_unit, method=method
+        mapping, raw_value, converted, effective_unit=source_unit, method=method
     )
     detection.record_declared(
-        contract.source_locator.pattern,
-        contract.source_attribute,
+        mapping.source.pattern,
+        mapping.source_field,
         source_unit,
         raw_value,
     )
     if _trace.isEnabledFor(logging.INFO):
         _trace.info(
-            "convert %s.%s | raw=%r | method=%s | source_unit=%s -> target_unit=%s | "
+            "convert %s.%s | raw=%r | method=%s | source_unit=%s -> db_unit=%s | "
             "converted=%r | -> %s.%s",
-            contract.source_locator.pattern,
-            contract.source_attribute,
+            mapping.source.pattern,
+            mapping.source_field,
             raw_value,
             method,
             source_unit,
-            contract.target_unit,
+            mapping.db_unit,
             converted,
-            contract.target_db_table,
-            contract.target_db_column,
+            mapping.db_table,
+            mapping.db_column,
         )
     return converted
 
@@ -786,15 +640,11 @@ def _safe_float(val: Any) -> float | None:
 
 
 def _metric_value(attrs: dict, key: str) -> Any:
-    """Unwrap one attribute of the metrics entity.
+    """Unwrap one `{"updateTime": ..., "value": x}` metrics attribute.
 
-    ha-fordpass hands Ford's raw metrics dict to HA verbatim, so every
-    attribute arrives as `{"updateTime": ..., "value": <scalar>}`. Bare
-    scalars pass through unchanged for payloads shaped any other way.
-
-    Unwraps exactly one level: a metric whose `value` is itself structured
-    (Ford sends a few, e.g. an x/y/z vector) comes back as that dict, not a
-    number.
+    Unwraps exactly one level, so a metric whose `value` is itself structured
+    (Ford sends a few) comes back as that dict rather than a number. Bare
+    scalars pass through unchanged.
     """
     raw = attrs.get(key)
     if isinstance(raw, dict):
@@ -809,9 +659,7 @@ def _metric_value(attrs: dict, key: str) -> Any:
 def _device_id_from_entity(entity_id: str) -> str | None:
     """Extract the VIN segment from sensor.fordpass_{vin}_{slug}.
 
-    Uses rsplit so that VIN placeholders containing underscores (e.g. the
-    PII-free fixture placeholder `YOUR_VIN`) return as the full VIN rather
-    than being truncated at the first underscore.
+    Splits from the right so VINs containing underscores survive intact.
     """
     if not entity_id or not entity_id.startswith(_ENTITY_SUFFIX_PREFIX):
         return None
@@ -823,30 +671,25 @@ def _device_id_from_entity(entity_id: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# process_event — main entry point
+# process_sample — main entry point (SourceAdapter Protocol)
 # ---------------------------------------------------------------------------
 
-async def process_event(
-    entity_id: str,
-    new_state: dict,
+async def process_sample(
+    source_ref: str,
+    payload: dict,
     db: AsyncSession,
-    ha_config: dict | None = None,
+    source_config: dict | None = None,
 ) -> None:
     """Route an HA state_changed event to the appropriate write path.
-    Guarantee: zero runtime unit auto-detection; every conversion goes
-    through a FIELD_CONTRACTS entry via `convert`.
-    Dispatches by entity suffix:
-    _metrics -> writes ev_battery_status row (range / max_range)
-    _events -> writes ev_trip_metrics row (from xev-key-off-trip-segment-data)
-    _energytransferlogentry -> writes ev_charging_session row
-    everything else -> no-op (handled by the ha_fordpass slug handlers, or
-    explicitly ignored)
-    `ha_config` is forwarded to `convert()` so contracts flagged
-    `ha_unit_system_converted` can resolve the effective source unit
-    per-event from HA's configured unit_system.
-    Unknown entity or missing attribute: log debug + return. No exception
-    propagates to the caller (the HA WebSocket event loop).
+
+    Never raises: the caller is the HA WebSocket event loop. `source_config`
+    is HA's own config, forwarded so per-event unit resolution can read its
+    unit_system.
     """
+    # This source's reading of the transport-neutral SourceAdapter Protocol:
+    # the source_ref is an HA entity_id and the payload is the new_state.
+    entity_id, new_state, ha_config = source_ref, payload, source_config
+
     if not entity_id or not isinstance(new_state, dict):
         return
 
@@ -881,7 +724,7 @@ async def process_event(
         )
     except Exception:
         # The adapter must never raise into the WebSocket loop.
-        logger.exception("ha_fordpass.process_event failed for %s", entity_id)
+        logger.exception("ha_fordpass.process_sample failed for %s", entity_id)
 
 
 # ---------------------------------------------------------------------------
@@ -906,19 +749,19 @@ async def _handle_metrics_entity(
     attrs = new_state.get("attributes") or {}
     pattern = _entity_pattern(entity_id)
 
-    range_contract = lookup_contract(pattern, "xevBatteryRange")
-    max_range_contract = lookup_contract(pattern, "xevBatteryMaximumRange")
+    range_mapping = lookup_mapping(pattern, "xevBatteryRange")
+    max_range_mapping = lookup_mapping(pattern, "xevBatteryMaximumRange")
 
     raw_range = _metric_value(attrs, "xevBatteryRange")
     raw_max_range = _metric_value(attrs, "xevBatteryMaximumRange")
     hv_range = (
-        convert(range_contract, raw_range, new_state, ha_config)
-        if range_contract
+        convert(range_mapping, raw_range, new_state, ha_config)
+        if range_mapping
         else None
     )
     hv_max_range = (
-        convert(max_range_contract, raw_max_range, new_state, ha_config)
-        if max_range_contract
+        convert(max_range_mapping, raw_max_range, new_state, ha_config)
+        if max_range_mapping
         else None
     )
 
@@ -945,10 +788,10 @@ async def _handle_metrics_entity(
     # SI-already scalar attributes pass through without conversion
     hv_soc = _safe_float(_metric_value(attrs, "xevBatteryStateOfCharge"))
     hv_actual_soc = _safe_float(_metric_value(attrs, "xevBatteryActualStateOfCharge"))
-    cap_contract = lookup_contract(pattern, "xevBatteryCapacity")
+    cap_mapping = lookup_mapping(pattern, "xevBatteryCapacity")
     hv_capacity = (
-        convert(cap_contract, _metric_value(attrs, "xevBatteryCapacity"), new_state, ha_config)
-        if cap_contract
+        convert(cap_mapping, _metric_value(attrs, "xevBatteryCapacity"), new_state, ha_config)
+        if cap_mapping
         else None
     )
     hv_voltage = _safe_float(_metric_value(attrs, "xevBatteryVoltage"))
@@ -1025,11 +868,11 @@ async def _backfill_trip_regen(
         raw_score = None
     regen = None
     if raw_regen is not None:
-        regen_contract = lookup_contract(
+        regen_mapping = lookup_mapping(
             _entity_pattern(entity_id), "tripXevBatteryRangeRegenerated"
         )
-        if regen_contract is not None:
-            regen = convert(regen_contract, raw_regen, None, ha_config)
+        if regen_mapping is not None:
+            regen = convert(regen_mapping, raw_regen, None, ha_config)
     if regen == 0:
         regen = None
     if regen is None and raw_score is None:
@@ -1112,8 +955,8 @@ async def _handle_events_entity(
 
     pattern = _entity_pattern(entity_id)
 
-    def _lookup(attr_suffix: str) -> FieldContract | None:
-        return lookup_contract(
+    def _lookup(attr_suffix: str) -> DataMapping | None:
+        return lookup_mapping(
             pattern, f"xev-key-off-trip-segment-data.{attr_suffix}"
         )
 
@@ -1164,7 +1007,7 @@ async def _handle_events_entity(
             "degC",
         )
 
-    # duration (s) is SI-passthrough; no contract conversion needed
+    # duration (s) is SI-passthrough; no mapping conversion needed
     duration = _safe_float(trip.get("trip_duration"))
 
     # The event's own updateTime is the key-off.
@@ -1209,9 +1052,24 @@ async def _handle_events_entity(
     # Match-and-enrich fallback: legacy predicate match for trips whose source
     # didn't carry tripUpdateTime (no deterministic id available).
     from web.services.sources.ha_fordpass.handlers import _find_matching_trip
+    from web.services.trip_merge import HA, apply_merge, is_mergeable
 
-    existing = await _find_matching_trip(db, device_id, distance, energy, around=recorded_at)
+    start_time = recorded_at - timedelta(seconds=duration) if duration else None
+    existing = await _find_matching_trip(
+        db, device_id, distance, energy, around=recorded_at,
+        start_time=start_time, duration=duration,
+    )
+    if existing is not None and not is_mergeable(existing):
+        logger.info("ha_fordpass: trip matches protected row %s; not written", existing.id)
+        return
     if existing is not None:
+        if existing.source_system != HA:
+            apply_merge(existing, {
+                "trip_id": deterministic_id, "start_time": start_time,
+                "end_time": recorded_at, "duration": duration, "distance": distance,
+                "energy_consumed": energy, "ambient_temp": ambient, "cabin_temp": cabin,
+                "outside_air_temp": outside_air, "source_system": HA,
+            }, HA)
         # events values are canonical °C — always overwrite temps.
         if ambient is not None:
             existing.ambient_temp = ambient
@@ -1229,12 +1087,8 @@ async def _handle_events_entity(
 
     odometer_end = await _closest_odometer(db, device_id, recorded_at)
 
-    start_time = None
     odometer_start = None
-    if duration:
-        from datetime import timedelta
-
-        start_time = recorded_at - timedelta(seconds=duration)
+    if start_time is not None:
         odometer_start = await _closest_odometer(db, device_id, start_time)
 
     record = EVTripMetrics(
@@ -1282,7 +1136,7 @@ async def _handle_elvehcharging_entity(
     attrs = new_state.get("attributes") or {}
     pattern = _entity_pattern(entity_id)
 
-    batt_c = lookup_contract(pattern, "batteryTemperature")
+    batt_c = lookup_mapping(pattern, "batteryTemperature")
     battery_temp = (
         convert(batt_c, attrs.get("batteryTemperature"), new_state, ha_config)
         if batt_c
@@ -1318,7 +1172,7 @@ async def _handle_outsidetemp_entity(
     """sensor.fordpass_{vin}_outsidetemp -> cache ambient temp (no DB write)."""
     pattern = _entity_pattern(entity_id)
 
-    amb_c = lookup_contract(pattern, "state")
+    amb_c = lookup_mapping(pattern, "state")
     ambient_temp = (
         convert(amb_c, new_state.get("state"), new_state, ha_config)
         if amb_c

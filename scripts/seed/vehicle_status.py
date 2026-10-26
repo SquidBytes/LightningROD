@@ -4,27 +4,9 @@ Sampling strategy:
   * During known trips (queried from ev_trip_metrics): one snapshot every 10 min.
   * Outside of trips (parked): one snapshot every 6 h across the 90-day window.
 
-This module declares its OWN ``EXPECTED_CONTRACTS`` because
-``ev_vehicle_status`` currently has ZERO entries in
-``web/services/sources/ha_fordpass/adapter.py::FIELD_CONTRACTS``. Every
-column populated via ``ContractDrivenSeeder.value_for(...)`` here will be
-recorded as a gap, and T19's gap-report step will turn ``EXPECTED_CONTRACTS``
-into copy-pasteable ``FieldContract(...)`` blocks for the adapter.
-
-EXPECTED_CONTRACTS (target_db_column → target_unit):
-  * acceleration            → m/s²
-  * accelerator_position    → %
-  * brake_status            → str
-  * brake_torque            → Nm
-  * cabin_temperature       → degC
-  * gear_position           → str
-  * ignition_status         → str
-  * odometer                → km
-  * outside_temperature     → degC
-  * parking_brake           → str
-  * speed                   → km/h
-  * tire_pressure           → kPa  (JSONB; one contract per corner)
-  * yaw_rate                → deg/s
+``ev_vehicle_status`` has no entries in the adapter's DATA_MAP, so this
+module declares its own ``EXPECTED_MAPPINGS``; every column it seeds is
+reported as a gap, ready to paste into the adapter.
 
 Idempotent: if ≥500 status rows exist for the demo vehicle, returns 0.
 Determinism: ``random.Random(42)``.
@@ -43,8 +25,8 @@ from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle import EVVehicle
 from db.models.vehicle_status import EVVehicleStatus
-from scripts.seed.base import ContractDrivenSeeder, load_declared_contracts
-from web.services.units.contracts import FieldContract, SourceLocator, SourceLocatorKind
+from scripts.seed.base import DataMapSeeder, load_declared_mappings
+from web.services.units.data_map import DataMapping, SourceKind, SourceRef
 
 logger = logging.getLogger(__name__)
 
@@ -64,167 +46,166 @@ _IGNITION_PARKED = "off"
 
 
 # ---------------------------------------------------------------------------
-# Expected contracts — these become the gap report content for T19.
+# Expected mappings — the gap report's content.
 # ---------------------------------------------------------------------------
 
-EXPECTED_CONTRACTS: list[FieldContract] = [
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="odometer",
+EXPECTED_MAPPINGS: list[DataMapping] = [
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="odometer",
         source_unit="km",
-        target_db_table=_TABLE,
-        target_db_column="odometer",
-        target_unit="km",
+        db_table=_TABLE,
+        db_column="odometer",
+        db_unit="km",
         notes="Cumulative odometer reading (km). Monotonically increasing.",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="vehicleSpeed",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="vehicleSpeed",
         source_unit="km/h",
-        target_db_table=_TABLE,
-        target_db_column="speed",
-        target_unit="km/h",
+        db_table=_TABLE,
+        db_column="speed",
+        db_unit="km/h",
         notes="Instantaneous vehicle speed (km/h). Zero when parked.",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="acceleratorPedalPosition",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="acceleratorPedalPosition",
         source_unit="%",
-        target_db_table=_TABLE,
-        target_db_column="accelerator_position",
-        target_unit="%",
+        db_table=_TABLE,
+        db_column="accelerator_position",
+        db_unit="%",
         notes="Accelerator pedal position (0–100%). Localized by ha-fordpass.",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="brakeStatus",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="brakeStatus",
         source_unit="str",
-        target_db_table=_TABLE,
-        target_db_column="brake_status",
-        target_unit="str",
+        db_table=_TABLE,
+        db_column="brake_status",
+        db_unit="str",
         notes='Brake pedal state: "applied" or "released".',
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="gearLeverPosition",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="gearLeverPosition",
         source_unit="str",
-        target_db_table=_TABLE,
-        target_db_column="gear_position",
-        target_unit="str",
+        db_table=_TABLE,
+        db_column="gear_position",
+        db_unit="str",
         notes='Gear lever: "P" / "R" / "N" / "D".',
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="ignitionStatus",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="ignitionStatus",
         source_unit="str",
-        target_db_table=_TABLE,
-        target_db_column="ignition_status",
-        target_unit="str",
+        db_table=_TABLE,
+        db_column="ignition_status",
+        db_unit="str",
         notes='Ignition: "on" / "off" / "accessory".',
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="parkingBrakeStatus",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="parkingBrakeStatus",
         source_unit="str",
-        target_db_table=_TABLE,
-        target_db_column="parking_brake",
-        target_unit="str",
+        db_table=_TABLE,
+        db_column="parking_brake",
+        db_unit="str",
         notes='Parking brake: "applied" / "released".',
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_outsidetemp", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="state",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_outsidetemp", SourceKind.HA_ENTITY),
+        source_field="state",
         source_unit="degC",
         read_time_uom=True,
-        target_db_table=_TABLE,
-        target_db_column="outside_temperature",
-        target_unit="degC",
+        db_table=_TABLE,
+        db_column="outside_temperature",
+        db_unit="degC",
         notes=(
             "Outside ambient temperature, time-series from the outsidetemp "
             "entity state. HA stamps its display unit on the event."
         ),
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_cabintemperature", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="state",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_cabintemperature", SourceKind.HA_ENTITY),
+        source_field="state",
         source_unit="degC",
         read_time_uom=True,
-        target_db_table=_TABLE,
-        target_db_column="cabin_temperature",
-        target_unit="degC",
+        db_table=_TABLE,
+        db_column="cabin_temperature",
+        db_unit="degC",
         notes=(
             "Cabin temperature from the cabintemperature entity state; the "
             "entity exposes no cabinTemperature attribute."
         ),
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="brakeTorque",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="brakeTorque",
         source_unit="Nm",
-        target_db_table=_TABLE,
-        target_db_column="brake_torque",
-        target_unit="Nm",
+        db_table=_TABLE,
+        db_column="brake_torque",
+        db_unit="Nm",
         notes="Brake torque. SI passthrough; no localization in ha-fordpass.",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="yawRate",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="yawRate",
         source_unit="deg/s",
-        target_db_table=_TABLE,
-        target_db_column="yaw_rate",
-        target_unit="deg/s",
+        db_table=_TABLE,
+        db_column="yaw_rate",
+        db_unit="deg/s",
         notes="Yaw rate. Passthrough; no localization.",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="acceleration",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="acceleration",
         source_unit="m/s2",
-        target_db_table=_TABLE,
-        target_db_column="acceleration",
-        target_unit="m/s2",
+        db_table=_TABLE,
+        db_column="acceleration",
+        db_unit="m/s2",
         notes="Longitudinal acceleration. SI passthrough.",
     ),
-    # Tire pressures: HA emits four corner-specific attributes; we pack them
-    # into the single JSONB ``tire_pressure`` column. Four contracts, one per
-    # corner, share the same target column so the gap report shows all four.
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tirePressure.frontLeft",
+    # HA emits one attribute per corner; all four pack into the single JSONB
+    # ``tire_pressure`` column, so all four share a db_column.
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="tirePressure.frontLeft",
         source_unit="kPa",
         ha_unit_system_converted=True,
-        target_db_table=_TABLE,
-        target_db_column="tire_pressure",
-        target_unit="kPa",
+        db_table=_TABLE,
+        db_column="tire_pressure",
+        db_unit="kPa",
         notes="Front-left tire pressure; ha-fordpass localizes via units.pressure().",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tirePressure.frontRight",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="tirePressure.frontRight",
         source_unit="kPa",
         ha_unit_system_converted=True,
-        target_db_table=_TABLE,
-        target_db_column="tire_pressure",
-        target_unit="kPa",
+        db_table=_TABLE,
+        db_column="tire_pressure",
+        db_unit="kPa",
         notes="Front-right tire pressure; ha-fordpass localizes via units.pressure().",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tirePressure.rearLeft",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="tirePressure.rearLeft",
         source_unit="kPa",
         ha_unit_system_converted=True,
-        target_db_table=_TABLE,
-        target_db_column="tire_pressure",
-        target_unit="kPa",
+        db_table=_TABLE,
+        db_column="tire_pressure",
+        db_unit="kPa",
         notes="Rear-left tire pressure; ha-fordpass localizes via units.pressure().",
     ),
-    FieldContract(
-        source_locator=SourceLocator("sensor.fordpass_{vin}_metrics", SourceLocatorKind.HA_ENTITY_ID),
-        source_attribute="tirePressure.rearRight",
+    DataMapping(
+        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
+        source_field="tirePressure.rearRight",
         source_unit="kPa",
         ha_unit_system_converted=True,
-        target_db_table=_TABLE,
-        target_db_column="tire_pressure",
-        target_unit="kPa",
+        db_table=_TABLE,
+        db_column="tire_pressure",
+        db_unit="kPa",
         notes="Rear-right tire pressure; ha-fordpass localizes via units.pressure().",
     ),
 ]
@@ -319,9 +300,9 @@ async def seed(db: AsyncSession) -> int:
         return 0
 
     rng = random.Random(42)
-    seeder = ContractDrivenSeeder(
-        declared=load_declared_contracts(),
-        expected=EXPECTED_CONTRACTS,
+    seeder = DataMapSeeder(
+        declared=load_declared_mappings(),
+        expected=EXPECTED_MAPPINGS,
         rng=rng,
     )
 
@@ -404,9 +385,8 @@ async def seed(db: AsyncSession) -> int:
         else:
             dt_hours = 0.0
 
-        # --- Always call seeder.value_for(...) so EVERY contract is recorded ---
-        # ContractDrivenSeeder logs the gap once per (table,column) — repeat
-        # calls are cheap and ensure all 13 expected contracts are flagged.
+        # Call value_for for every column even when the value is overridden
+        # below, so each one shows up in the gap report.
         _ = seeder.value_for(_TABLE, "odometer")  # km — overridden below
         speed_random = seeder.value_for(_TABLE, "speed")
         accel_random = seeder.value_for(_TABLE, "accelerator_position")

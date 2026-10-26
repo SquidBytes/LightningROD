@@ -15,17 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.trip_metrics import EVTripMetrics
 from web.services.repair.base import (
     DEFAULT_PREVIEW_LIMIT,
-    MUTABLE_SOURCE_SYSTEMS,
     RepairDiff,
     RepairGroup,
     RepairOperation,
     RepairPreview,
     RepairResult,
-    mutable_only,
     rollback_session,
 )
 from web.services.repair.ops.trip_duplicates import is_same_drive
 from web.services.repair.snapshot import deserialize_row, serialize_row
+from web.services.trip_merge import MERGEABLE_SOURCES
 
 logger = logging.getLogger("lightningrod.repair.recorder_replay")
 
@@ -112,6 +111,10 @@ class RecorderReplay(RepairOperation):
     plus the `around=event-ts` predicate match mean replayed states enrich
     existing rows rather than duplicating them.
     """
+
+    # FordConnect trips are in scope too: a replayed HA trip merges into the
+    # FordConnect row for the same drive rather than being dropped.
+    guarded_source_systems = MERGEABLE_SOURCES
 
     slug = "recorder-replay"
     display_name = "Recorder history replay"
@@ -207,7 +210,7 @@ class RecorderReplay(RepairOperation):
 
     def _census_filters(self, window: datetime):
         return (
-            mutable_only(EVTripMetrics),
+            EVTripMetrics.source_system.in_(self.guarded_source_systems),
             EVTripMetrics.end_time >= window,
             or_(*(getattr(EVTripMetrics, f).is_(None) for f in self.ENRICHABLE_FIELDS)),
         )
@@ -426,7 +429,7 @@ class RecorderReplay(RepairOperation):
             before_img = before.get(row.id)
             if before_img is None:
                 continue
-            if before_img.get("source_system") in MUTABLE_SOURCE_SYSTEMS:
+            if before_img.get("source_system") in self.guarded_source_systems:
                 continue
             after_img = serialize_row(row)
             changed_fields = [
@@ -481,7 +484,7 @@ class RecorderReplay(RepairOperation):
                     )
                 )
                 continue
-            if after_img.get("source_system") not in MUTABLE_SOURCE_SYSTEMS:
+            if after_img.get("source_system") not in self.guarded_source_systems:
                 continue
             changed = {
                 f: after_img[f] for f in after_img if before_img.get(f) != after_img[f]

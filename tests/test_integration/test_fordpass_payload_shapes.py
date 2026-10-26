@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import select
 
 from db.models.battery_status import EVBatteryStatus
-from web.services.sources.ha_fordpass.adapter import process_event
+from web.services.sources.ha_fordpass.adapter import process_sample
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
@@ -54,7 +54,7 @@ async def test_metrics_value_wrappers_populate_battery_columns(db_session):
     Reading the wrapper as a number yields None, which used to write an
     all-NULL ev_battery_status row on every metrics event.
     """
-    await process_event(
+    await process_sample(
         _METRICS_ENTITY,
         _metrics_state(
             xevBatteryRange=343.9,
@@ -81,7 +81,7 @@ async def test_metrics_value_wrappers_populate_battery_columns(db_session):
 
 async def test_metrics_event_without_battery_values_writes_no_row(db_session):
     """A metrics event carrying no battery keys must not insert an empty row."""
-    await process_event(
+    await process_sample(
         _METRICS_ENTITY,
         _metrics_state(odometer=42000.0, speed=0.0),
         db_session,
@@ -113,7 +113,7 @@ async def test_metrics_regen_backfill_reads_the_value_wrapper(db_session):
     )
     await db_session.flush()
 
-    await process_event(
+    await process_sample(
         _METRICS_ENTITY,
         _metrics_state(
             xevBatteryRange=343.9,
@@ -144,7 +144,7 @@ async def test_pack_current_comes_from_xev_battery_io_current(db_session):
     payload or in the integration, so pack power is derived from voltage x
     current exactly as ha-fordpass derives its elveh `batterykW` attribute.
     """
-    await process_event(
+    await process_sample(
         _METRICS_ENTITY,
         _metrics_state(xevBatteryVoltage=390.0, xevBatteryIoCurrent=-52.4),
         db_session,
@@ -160,7 +160,7 @@ async def test_pack_current_comes_from_xev_battery_io_current(db_session):
 
 async def test_invented_amperage_and_power_keys_are_ignored(db_session):
     """A payload carrying only the fictional keys must produce no row."""
-    await process_event(
+    await process_sample(
         _METRICS_ENTITY,
         _metrics_state(xevBatteryAmperage=5.0, xevBatteryPower=1950),
         db_session,
@@ -237,7 +237,7 @@ async def test_outside_temperature_comes_from_the_entity_state(db_session):
             "ambientTemp": 32.0,  # stale mirror of a Ford metric
         },
     }
-    await process_event(
+    await process_sample(
         f"sensor.fordpass_{_DEVICE_ID}_outsidetemp",
         outsidetemp_state,
         db_session,
@@ -284,12 +284,12 @@ async def test_outside_temperature_comes_from_the_entity_state(db_session):
     assert float(session.ambient_temp_end) == pytest.approx(30.0, abs=0.01)
 
 
-async def test_state_contract_without_a_unit_drops_the_value(db_session):
-    """A state-sourced contract never guesses a unit for an unstamped event."""
+async def test_state_mapping_without_a_unit_drops_the_value(db_session):
+    """A state-sourced mapping never guesses a unit for an unstamped event."""
     from web.services.sources.ha_fordpass import adapter as fp_adapter
 
     fp_adapter._last_outsidetemp.pop(_DEVICE_ID, None)
-    await process_event(
+    await process_sample(
         f"sensor.fordpass_{_DEVICE_ID}_outsidetemp",
         {
             "entity_id": f"sensor.fordpass_{_DEVICE_ID}_outsidetemp",

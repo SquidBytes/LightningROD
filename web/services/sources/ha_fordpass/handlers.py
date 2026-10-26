@@ -23,6 +23,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from web.services.charge_types import normalize_charge_type as _normalize_charge_type
 from web.services.ingestion._helpers import (
     _convert_with_uom,
     _get_attributes,
@@ -177,47 +178,10 @@ def get_device_id(entity_id: str, ha_config: dict) -> str:
 
 
 async def _ensure_vehicle_exists(device_id: str, entity_id: str, db) -> None:
-    """Ensure an EVVehicle record exists for this device_id.
+    """Create the vehicle for this device_id on first sight; FordPass device_id is the VIN."""
+    from web.services.vehicles.auto_create import ensure_vehicle
 
-    If no vehicle record exists, creates one with display_name=device_id,
-    source_system='ha_fordpass'. Auto-activates only when no active vehicle
-    is currently set.
-    """
-    from sqlalchemy import select
-    from sqlalchemy.exc import IntegrityError
-
-    from db.models.vehicle import EVVehicle
-    from web.queries.settings import get_app_setting, set_app_setting
-
-    # Check if vehicle already exists
-    result = await db.execute(
-        select(EVVehicle.id).where(EVVehicle.device_id == device_id).limit(1)
-    )
-    if result.scalar_one_or_none() is not None:
-        return  # Already exists
-
-    # Create new vehicle record
-    vehicle = EVVehicle(
-        display_name=device_id,
-        device_id=device_id,
-        vin=device_id,  # For FordPass, device_id IS the VIN
-        source_system="ha_fordpass",
-    )
-    db.add(vehicle)
-    try:
-        await db.flush()
-    except IntegrityError:
-        # Another concurrent request already created it
-        await db.rollback()
-        return
-
-    logger.info("Auto-created vehicle record for device_id=%s", device_id)
-
-    # Auto-activate only if no active vehicle is set
-    active_vid = await get_app_setting(db, "active_vehicle_id", "")
-    if not active_vid:
-        await set_app_setting(db, "active_vehicle_id", str(vehicle.id))
-        logger.info("Auto-activated vehicle %s (id=%d) -- no prior active vehicle", device_id, vehicle.id)
+    await ensure_vehicle(db, device_id, source_system="ha_fordpass", vin=device_id)
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +241,8 @@ async def _find_matching_trip(
     distance: float | None,
     energy_consumed: float | None,
     around: datetime | None = None,
+    start_time: datetime | None = None,
+    duration: float | None = None,
 ):
     """Query for an existing EVTripMetrics row matching this trip.
 
@@ -290,6 +256,9 @@ async def _find_matching_trip(
     handler enriches the existing row instead of duplicating it. Centering the
     window on the event timestamp (not wall-clock now) keeps dedup working
     when historical payloads are replayed.
+
+    Falls back to `find_same_drive`, which also finds the same drive recorded
+    by another source (FordConnect) at slightly different values.
     """
     if distance is None or energy_consumed is None:
         return None
@@ -317,54 +286,20 @@ async def _find_matching_trip(
         .order_by(EVTripMetrics.end_time.desc())
         .limit(1)
     )
-    return result.scalar_one_or_none()
+    match = result.scalar_one_or_none()
+    if match is not None or around is None:
+        return match
+    from web.services.trip_merge import find_same_drive
+
+    return await find_same_drive(db, {
+        "device_id": device_id, "end_time": around, "start_time": start_time,
+        "duration": duration, "distance": distance, "energy_consumed": energy_consumed,
+    })
 
 
 # ---------------------------------------------------------------------------
 # Pure helpers (FordPass-specific data shaping)
 # ---------------------------------------------------------------------------
-
-
-# Charger type normalization mapping — collapse all variants to AC/DC codes
-# matching csv_parser._normalize_charge_type. Level 1/2 granularity is
-# intentionally discarded: callers that need it can derive it from the EVSE
-# power/voltage columns.
-_CHARGER_TYPE_MAP = {
-    "AC": "AC",
-    "AC_BASIC": "AC",
-    "AC_LEVEL_1": "AC",
-    "AC_LEVEL_2": "AC",
-    "AC LEVEL 1": "AC",
-    "AC LEVEL 2": "AC",
-    "LEVEL_1": "AC",
-    "LEVEL_2": "AC",
-    "LEVEL 1": "AC",
-    "LEVEL 2": "AC",
-    "L1": "AC",
-    "L2": "AC",
-    "DC": "DC",
-    "DC_FAST": "DC",
-    "DC_DCFAST": "DC",
-    "DC_COMBO": "DC",
-    "DC FAST": "DC",
-    "DCFC": "DC",
-    "L3": "DC",
-    "LEVEL 3": "DC",
-}
-
-
-def _normalize_charge_type(raw: str | None) -> str | None:
-    """Normalize charger type string to 'AC' or 'DC'.
-
-    Returns None for empty input. Unrecognized values fall back to the raw
-    string (uppercased) so debugging still surfaces the unknown code.
-    """
-    if not raw:
-        return None
-    key = raw.strip().upper()
-    if not key:
-        return None
-    return _CHARGER_TYPE_MAP.get(key, key)
 
 
 def _format_address(addr: dict | None) -> str | None:
@@ -402,15 +337,9 @@ def _parse_iso_datetime(val: str | None) -> datetime | None:
 
 @handles("metrics", "events")
 async def handle_via_adapter(slug, new_state, ha_config, device_id, db):
-    """Delegate _metrics and _events entities to ha_fordpass.process_event.
-
-    These slugs are the metric-canonical sources for battery status
-    (xevBatteryRange / xevBatteryMaximumRange) and trip metrics
-    (xev-key-off-trip-segment-data). The adapter owns the FIELD_CONTRACTS
-    routing; this dispatcher simply hands off.
-    """
+    """Delegate _metrics and _events entities to ha_fordpass.process_sample."""
     entity_id = f"sensor.fordpass_{device_id}_{slug}"
-    await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
+    await ha_fordpass.process_sample(entity_id, new_state, db, ha_config)
 
 
 # ---------------------------------------------------------------------------
@@ -521,7 +450,7 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
             pending[field_name] = converter(state_val)
 
     if slug == "outsidetemp":
-        await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
+        await ha_fordpass.process_sample(entity_id, new_state, db, ha_config)
 
     # Check timeout-based flush
     _pending_vehicle_status_ts.setdefault(key, time.time())
@@ -542,7 +471,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
 
     In the legacy adapter path this handler also ingested trip data from
     `elveh.trip*` attributes. Production ingestion now prefers events-entity
-    trip data through `ha_fordpass.adapter.process_event`. This handler keeps
+    trip data through `ha_fordpass.adapter.process_sample`. This handler keeps
     an elveh fallback for installations without that entity.
 
     Unit resolution for every unit-bearing field goes through
@@ -603,22 +532,20 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             )
             if converted is not None:
                 pending["hv_battery_range"] = converted
-        # Rich battery attributes (SI-already — no conversion needed, no
-        # FIELD_CONTRACTS entry per _EXEMPTIONS in test_contract_coverage).
+        # SI-already, so no conversion and no DATA_MAP entry.
         hv_voltage = _safe_float(attrs.get("batteryVoltage"))
         hv_amperage = _safe_float(attrs.get("batteryAmperage"))
         hv_kw = _safe_float(attrs.get("batterykW"))
-        # `maximumBatteryCapacity` mirrors xevBatteryCapacity (mixed Wh/kWh
-        # across ha-fordpass versions); the wh_autoscale contract lands it in
-        # kWh so /battery health math compares against the rated-kWh setting.
-        _cap_contract = ha_fordpass.lookup_contract(
+        # Mirrors xevBatteryCapacity, so it inherits the same mixed Wh/kWh
+        # problem; the wh_autoscale mapping lands it in kWh.
+        _cap_mapping = ha_fordpass.lookup_mapping(
             "sensor.fordpass_{vin}_elveh", "maximumBatteryCapacity"
         )
         hv_capacity = (
             ha_fordpass.convert(
-                _cap_contract, attrs.get("maximumBatteryCapacity"), new_state, ha_config
+                _cap_mapping, attrs.get("maximumBatteryCapacity"), new_state, ha_config
             )
-            if _cap_contract
+            if _cap_mapping
             else None
         )
         hv_actual_soc = _safe_float(attrs.get("batteryActualCharge"))
@@ -684,25 +611,21 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 device_id=device_id,
             )
 
-        # Adapter-routed converters for elveh-sourced fields that DO have a
-        # FIELD_CONTRACTS entry. Routing through ha_fordpass.convert records
-        # the conversion in adapter._last_seen_raw so /admin/data-sources
-        # shows elveh observations alongside metrics/events ones. Contracts
-        # for elveh state-unit distance fields use read-time UoM resolution
-        # internally via adapter._resolve_source_unit.
+        # Route these through ha_fordpass.convert rather than converting
+        # locally, so /admin/data-sources sees the elveh observations too.
         _elveh_pattern = "sensor.fordpass_{vin}_elveh"
-        _efficiency_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripEfficiency")
-        _range_regen_contract = ha_fordpass.lookup_contract(_elveh_pattern, "tripRangeRegenerated")
+        _efficiency_mapping = ha_fordpass.lookup_mapping(_elveh_pattern, "tripEfficiency")
+        _range_regen_mapping = ha_fordpass.lookup_mapping(_elveh_pattern, "tripRangeRegenerated")
 
         def _efficiency_conv(v):
-            if _efficiency_contract is None:
+            if _efficiency_mapping is None:
                 return _d(v)
-            return ha_fordpass.convert(_efficiency_contract, v, new_state, ha_config)
+            return ha_fordpass.convert(_efficiency_mapping, v, new_state, ha_config)
 
         def _range_regen_conv(v):
-            if _range_regen_contract is None:
+            if _range_regen_mapping is None:
                 return _d(v)
-            return ha_fordpass.convert(_range_regen_contract, v, new_state, ha_config)
+            return ha_fordpass.convert(_range_regen_mapping, v, new_state, ha_config)
 
         trip_attr_map: dict[str, tuple[str, Callable[..., Any]]] = {
             "tripDistanceTraveled": ("distance", _d),
@@ -745,7 +668,11 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             )
             if is_new:
                 _last_trip_values[key] = trip_fields.copy()
-                event_ts = _get_event_timestamp(new_state)
+                # last_changed freezes while only attributes update, so prefer
+                # the vehicle's key-off time, then last_updated.
+                event_ts = _parse_iso_datetime(attrs.get("tripUpdateTime")) or _get_event_timestamp(
+                    new_state, ("last_updated", "last_changed")
+                )
                 end_time = event_ts or datetime.now(UTC)
                 start_time = None
                 if trip_fields.get("duration") and end_time:
@@ -780,9 +707,20 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         trip_fields.get("distance"),
                         trip_fields.get("energy_consumed"),
                         around=end_time,
+                        start_time=start_time,
+                        duration=trip_fields.get("duration"),
                     )
 
-                if existing is not None:
+                from web.services.trip_merge import HA, apply_merge, is_mergeable
+
+                if existing is not None and not is_mergeable(existing):
+                    logger.info("Trip matches protected row %s; not written", existing.id)
+                elif existing is not None:
+                    if existing.source_system != HA:
+                        apply_merge(existing, {
+                            **trip_fields, "start_time": start_time, "end_time": end_time,
+                            "trip_id": deterministic_id, "source_system": HA,
+                        }, HA)
                     # Enrich the existing row with elveh-owned fields.
                     # Scores and regen always overwrite (elveh is canonical).
                     # efficiency and duration only fill NULLs.
@@ -900,7 +838,7 @@ async def handle_charging_live(slug, new_state, ha_config, device_id, db):
             attrs.get("chargingkW"),
         )
         entity_id = f"sensor.fordpass_{device_id}_{slug}"
-        await ha_fordpass.process_event(entity_id, new_state, db, ha_config)
+        await ha_fordpass.process_sample(entity_id, new_state, db, ha_config)
     elif slug == "elvehplug":
         logger.info(
             "Plug state changed: %s (station=%s, type=%s)",
@@ -1022,7 +960,6 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     duration, power stats, location, and plug times. Performs duplicate detection
     and network resolution.
     """
-    from sqlalchemy import select
 
     from db.models.charging_session import EVChargingSession
 
@@ -1052,21 +989,18 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     plug_data = attrs.get("plugDetails", {}) or {}
     plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
     raw_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
-    # plugDetails.totalDistanceAdded is HA-unit-system-converted by ha-fordpass
-    # (localize_distance in get_energy_transfer_log_attrs). The contract
-    # carries ha_unit_system_converted=True; the adapter resolves the
-    # effective source unit per-event from ha_config.unit_system before
-    # routing through to_metric.
-    dist_contract = ha_fordpass.lookup_contract(
+    # ha-fordpass localizes this field, so its unit is HA's unit system, not
+    # necessarily km — the mapping resolves it per event.
+    dist_mapping = ha_fordpass.lookup_mapping(
         "sensor.fordpass_{vin}_energytransferlogentry",
         "plugDetails.totalDistanceAdded",
     )
-    if dist_contract is not None:
+    if dist_mapping is not None:
         distance_added = ha_fordpass.convert(
-            dist_contract, raw_distance_added, new_state, ha_config
+            dist_mapping, raw_distance_added, new_state, ha_config
         )
     else:
-        # Should never happen — contract is registered unconditionally.
+        # Should never happen — mapping is registered unconditionally.
         distance_added = _convert_with_uom(
             raw_distance_added, "km", "distance_added", slug,
         )
@@ -1099,15 +1033,9 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # Timestamp
     original_timestamp = _parse_iso_datetime(attrs.get("timeStamp"))
 
-    # Thermal context.
-    # FIELD_CONTRACTS for batteryTemperature / outsidetemp live on the
-    # elvehcharging / outsidetemp entity patterns, not energytransferlogentry,
-    # so contract-lookup against this payload returns None by design. The
-    # adapter's per-device caches (_last_charging_battery_temp, _last_outsidetemp)
-    # are populated by the elvehcharging / outsidetemp handlers prior to this
-    # event firing and are the canonical source for charging-session thermals.
-    # Fall back to the energytransferlogentry payload when caches are empty
-    # (e.g. fixture-driven tests that only inject the charging-session event).
+    # Thermal context comes from the elvehcharging / outsidetemp caches the
+    # earlier handlers filled — this payload's own values are the fallback for
+    # tests that inject the charging-session event alone.
     battery_temp = ha_fordpass._last_charging_battery_temp.get(device_id)
     ambient_temp = ha_fordpass._last_outsidetemp.get(device_id)
     if battery_temp is None:
@@ -1127,42 +1055,23 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # Duplicate detection: fuzzy match +-30min + +-10% energy
     # -----------------------------------------------------------------------
     duplicate_of_id = None
+    merge_into = None
     if session_start_utc is not None:
-        from datetime import timedelta
-        window_start = session_start_utc - timedelta(minutes=30)
-        window_end = session_start_utc + timedelta(minutes=30)
+        from web.queries.sessions import find_matching_sessions
 
-        fuzzy_result = await db.execute(
-            select(
-                EVChargingSession.id,
-                EVChargingSession.energy_kwh,
-                EVChargingSession.source_system,
+        matches = await find_matching_sessions(db, device_id, session_start_utc, energy_kwh)
+        if any(source == "ha_fordpass" for _, source in matches):
+            # Same source duplicate -- skip silently (existing behavior)
+            logger.info(
+                "Duplicate HA session detected (start=%s, energy=%s kWh), skipping",
+                session_start_utc, energy_kwh,
             )
-            .where(EVChargingSession.session_start_utc.between(window_start, window_end))
-            .where(EVChargingSession.device_id == device_id)
-        )
-        for match_id, match_energy, match_source in fuzzy_result.all():
-            if energy_kwh is not None and match_energy is not None:
-                tolerance = abs(float(match_energy)) * 0.1 if float(match_energy) != 0 else 0.5
-                if abs(float(energy_kwh) - float(match_energy)) <= tolerance:
-                    if match_source == "ha_fordpass":
-                        # Same source duplicate -- skip silently (existing behavior)
-                        logger.info(
-                            "Duplicate HA session detected (start=%s, energy=%.3f kWh), skipping",
-                            session_start_utc, energy_kwh,
-                        )
-                        return
-                    else:
-                        # Cross-source duplicate -- create but flag for review
-                        duplicate_of_id = match_id
-                        break
-            elif energy_kwh is None and match_energy is None:
-                if match_source == "ha_fordpass":
-                    logger.info("Duplicate HA session detected (start=%s, no energy), skipping", session_start_utc)
-                    return
-                else:
-                    duplicate_of_id = match_id
-                    break
+            return
+        # FordConnect's record of the same charge is merged, not duplicated.
+        merge_into = next((mid for mid, source in matches if source == "fcon"), None)
+        if matches and merge_into is None:
+            # Cross-source duplicate -- create but flag for review
+            duplicate_of_id = matches[0][0]
 
     # -----------------------------------------------------------------------
     # Network resolution
@@ -1246,6 +1155,14 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         review_type="duplicate" if duplicate_of_id is not None else None,
         ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
     )
+    if merge_into is not None:
+        from web.services.session_merge import HA, apply_session_merge, session_values
+
+        target = await db.get(EVChargingSession, merge_into)
+        if target is not None:
+            apply_session_merge(target, session_values(session), HA)
+            logger.info("Merged HA charging session into FordConnect row %s", merge_into)
+            return
     db.add(session)
 
     logger.info(

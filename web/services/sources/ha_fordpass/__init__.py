@@ -1,6 +1,15 @@
-"""ha-fordpass source adapter package.
+"""ha-fordpass source adapter package. See `adapter.py`."""
 
-Contains the FIELD_CONTRACTS registry and process_event entry point for the
-home-assistant-fordpass HA integration. See `adapter.py` for the full
-implementation details.
-"""
+from web.services.sources.base import DataSource
+from web.services.sources.ha_fordpass.config import HAFordpassConfig
+from web.services.sources.ha_fordpass.runtime import build_runtime
+
+DATA_SOURCE = DataSource(
+    source_name="ha_fordpass",
+    display_name="Home Assistant (FordPass)",
+    adapter_module="web.services.sources.ha_fordpass.adapter",
+    config_schema=HAFordpassConfig,
+    setup_flow="ha_websocket",
+    secret_fields=frozenset({"ha_token"}),
+    build_runtime=build_runtime,
+)

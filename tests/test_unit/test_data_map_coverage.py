@@ -1,10 +1,10 @@
-"""Ensure every unit-aware DB column has a matching field contract, and that
-every contract names something Home Assistant actually emits.
+"""Ensure every unit-aware DB column has a matching field mapping, and that
+every mapping names something Home Assistant actually emits.
 
 Columns are discovered from SQLAlchemy metadata so new ones are checked
 without editing a hard-coded list. Attribute names are checked against the
 recorded payload fixtures, which are the only ha-fordpass ground truth
-available at test time — a contract that names an attribute the integration
+available at test time — a mapping that names an attribute the integration
 never emits has no fixture to resolve against and fails.
 """
 
@@ -23,7 +23,7 @@ from db.models import Base  # re-exported from db.models.__init__
 
 pytestmark = pytest.mark.unit
 
-# Tables this contract-coverage invariant applies to.
+# Tables this mapping-coverage invariant applies to.
 # Other tables (ev_vehicles, ev_location, reference data, etc.) are out of
 # scope because they are not populated through the ha_fordpass adapter.
 _WATCHED_TABLES: set[str] = {
@@ -62,7 +62,7 @@ _EXEMPTIONS: set[tuple[str, str]] = {
     # ha-fordpass; matches 'efficiency' token but is NOT a unit-ful quantity.
     ("ev_trip_metrics", "electrical_efficiency"),
     # odometer_start/end derived at write-time from ev_vehicle_status.odometer
-    # (closest-reading lookup); not a direct HA-source field, so no FieldContract.
+    # (closest-reading lookup); not a direct HA-source field, so no DataMapping.
     ("ev_trip_metrics", "odometer_start"),
     ("ev_trip_metrics", "odometer_end"),
     # Already-SI scalar columns that don't match any token would not need
@@ -151,47 +151,47 @@ def test_watched_tables_are_present_in_metadata():
     assert not missing, f"Watched tables missing from metadata: {missing}"
 
 
-def test_all_unit_ful_columns_have_contracts():
-    from web.services.sources.ha_fordpass.adapter import FIELD_CONTRACTS
+def test_all_unit_ful_columns_have_mappings():
+    from web.services.sources.ha_fordpass.adapter import DATA_MAP
     discovered = _discover_unit_ful_columns()
-    covered = {(c.target_db_table, c.target_db_column) for c in FIELD_CONTRACTS}
+    covered = {(c.db_table, c.db_column) for c in DATA_MAP}
     missing = discovered - covered - _EXEMPTIONS
     assert not missing, (
-        f"Unit-ful columns without a FIELD_CONTRACT entry: {missing}\n"
+        f"Unit-ful columns without a DATA_MAP entry: {missing}\n"
         f"Discovered {len(discovered)} unit-ful columns across "
-        f"{_WATCHED_TABLES}, {len(covered)} have contracts, "
+        f"{_WATCHED_TABLES}, {len(covered)} have mappings, "
         f"{len(_EXEMPTIONS)} exempt.\n"
-        "Fix: add the contract in web/services/sources/ha_fordpass/adapter.py, "
+        "Fix: add the mapping in web/services/sources/ha_fordpass/adapter.py, "
         "OR add the column to _EXEMPTIONS here with a justification comment."
     )
 
 
-def test_every_contract_attribute_appears_in_a_recorded_payload():
-    """A contract may only name an attribute ha-fordpass actually emits.
+def test_every_mapping_field_appears_in_a_recorded_payload():
+    """A mapping may only name an attribute ha-fordpass actually emits.
 
     This is what kept a `cabinTemperature` attribute that does not exist, an
     `xevBatteryAmperage`/`xevBatteryPower` pair Ford never sends, and an
     `ambientTemp` reading of the wrong field alive through a green suite.
     """
-    from web.services.sources.ha_fordpass.adapter import FIELD_CONTRACTS
+    from web.services.sources.ha_fordpass.adapter import DATA_MAP
 
     fixtures = _load_fixtures()
     unresolved: list[str] = []
-    for contract in FIELD_CONTRACTS:
-        entity_id = contract.source_locator.pattern.replace("{vin}", _FIXTURE_VIN)
+    for mapping in DATA_MAP:
+        entity_id = mapping.source.pattern.replace("{vin}", _FIXTURE_VIN)
         found_in = [
             name
             for name, payload in fixtures
             if entity_id in payload
-            and _resolves(entity_id, payload[entity_id], contract.source_attribute)
+            and _resolves(entity_id, payload[entity_id], mapping.source_field)
         ]
         if not found_in:
-            unresolved.append(f"{entity_id}.{contract.source_attribute}")
+            unresolved.append(f"{entity_id}.{mapping.source_field}")
 
     assert not unresolved, (
-        "Contracts naming attributes no recorded payload carries:\n  "
+        "Mappings naming attributes no recorded payload carries:\n  "
         + "\n  ".join(sorted(unresolved))
-        + "\nFix: correct the contract in "
+        + "\nFix: correct the mapping in "
         "web/services/sources/ha_fordpass/adapter.py to the attribute the "
         "integration emits, OR add a captured payload under "
         "tests/fixtures/ha_payloads/ that proves the attribute is real."
@@ -217,7 +217,7 @@ def test_attribute_resolver_rejects_attributes_that_are_absent():
     )
 
 
-def test_metrics_contract_attribute_must_be_value_wrapped():
+def test_metrics_mapping_field_must_be_value_wrapped():
     """An unwrapped metrics attribute must not satisfy the invariant."""
     metrics_id = f"sensor.fordpass_{_FIXTURE_VIN}_metrics"
     flat = {"state": 1, "attributes": {"xevBatteryRange": 343.9}}

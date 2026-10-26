@@ -37,6 +37,8 @@ class EVBatteryStatus(Base):
     # LV (12V) battery
     lv_battery_level: Mapped[float | None] = mapped_column(Numeric)
     lv_battery_voltage: Mapped[float | None] = mapped_column(Numeric)
+    # Ford's batteryLoadStatus, e.g. NORMAL_OPERATION.
+    lv_load_status: Mapped[str | None] = mapped_column(String)
 
     # Motor metrics
     motor_voltage: Mapped[float | None] = mapped_column(Numeric)

@@ -1,5 +1,7 @@
 """Charging-session list, detail, and mutation queries."""
 
+from datetime import datetime, timedelta
+
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -144,3 +146,42 @@ async def query_sessions(
     sessions = list(data_result.scalars().all())
 
     return sessions, total, summary
+
+
+DUPLICATE_WINDOW = timedelta(minutes=30)
+
+
+async def find_matching_sessions(
+    db: AsyncSession,
+    device_id: str,
+    start: datetime,
+    energy_kwh: float | None,
+) -> list[tuple[int, str | None]]:
+    """(id, source_system) of sessions that look like the same charge.
+
+    Same device, start within 30 minutes, and energy within 10% (0.5 kWh
+    when the other side reads zero) — or both without energy.
+    """
+    rows = await db.execute(
+        select(
+            EVChargingSession.id,
+            EVChargingSession.energy_kwh,
+            EVChargingSession.source_system,
+        )
+        .where(
+            EVChargingSession.session_start_utc.between(
+                start - DUPLICATE_WINDOW, start + DUPLICATE_WINDOW
+            )
+        )
+        .where(EVChargingSession.device_id == device_id)
+    )
+    matches: list[tuple[int, str | None]] = []
+    for match_id, match_energy, match_source in rows.all():
+        if energy_kwh is not None and match_energy is not None:
+            other = float(match_energy)
+            tolerance = abs(other) * 0.1 if other != 0 else 0.5
+            if abs(float(energy_kwh) - other) <= tolerance:
+                matches.append((match_id, match_source))
+        elif energy_kwh is None and match_energy is None:
+            matches.append((match_id, match_source))
+    return matches

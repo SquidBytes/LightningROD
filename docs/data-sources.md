@@ -3,12 +3,44 @@
 **AUTO-GENERATED — DO NOT EDIT.** Run `uv run python scripts/gen_data_sources_doc.py` to refresh.
 
 Every field ingested by LightningROD is declared in a source adapter's
-`FIELD_CONTRACTS` registry. This page is a reflection of that registry at
-commit time and serves as the observable unit contract.
+`DATA_MAP` registry. This page reflects that registry at commit time and is
+the observable record of how each value is mapped and converted.
+
+## fcon
+
+| Source Entity | Source Field | Source Unit | DB Table | DB Column | DB Unit | Notes |
+|---|---|---|---|---|---|---|
+| `telemetry` | `acceleratorPedalPosition` | `%` | `ev_vehicle_status` | `accelerator_position` | `%` |  |
+| `telemetry` | `batteryLoadStatus` | `enum` | `ev_battery_status` | `lv_load_status` | `enum` | 12V |
+| `telemetry` | `batteryStateOfCharge` | `%` | `ev_battery_status` | `lv_battery_level` | `%` | 12V |
+| `telemetry` | `batteryVoltage` | `V` | `ev_battery_status` | `lv_battery_voltage` | `V` | 12V |
+| `telemetry` | `brakeTorque` | `Nm` | `ev_vehicle_status` | `brake_torque` | `Nm` |  |
+| `telemetry` | `doorLockStatus` | `list` | `ev_vehicle_status` | `door_lock_status` | `list` |  |
+| `telemetry` | `gearLeverPosition` | `enum` | `ev_vehicle_status` | `gear_position` | `enum` |  |
+| `telemetry` | `ignitionStatus` | `enum` | `ev_vehicle_status` | `ignition_status` | `enum` |  |
+| `telemetry` | `odometer` | `km` | `ev_vehicle_status` | `odometer` | `km` | Clamped so it never runs backwards |
+| `telemetry` | `outsideTemperature` | `degC` | `ev_vehicle_status` | `outside_temperature` | `degC` | Not ambientTemp, which is unreliable |
+| `telemetry` | `seatBeltStatus` | `list` | `ev_vehicle_status` | `seatbelt_status` | `list` |  |
+| `telemetry` | `speed` | `kmh` | `ev_vehicle_status` | `speed` | `km/h` |  |
+| `telemetry` | `tirePressure` | `list` | `ev_vehicle_status` | `tire_pressure` | `list` | kPa per wheel |
+| `telemetry` | `torqueAtTransmission` | `Nm` | `ev_vehicle_status` | `torque_at_transmission` | `Nm` |  |
+| `telemetry` | `wheelTorqueStatus` | `enum` | `ev_vehicle_status` | `wheel_torque_status` | `enum` |  |
+| `telemetry` | `xevBatteryActualStateOfCharge` | `%` | `ev_battery_status` | `hv_battery_actual_soc` | `%` |  |
+| `telemetry` | `xevBatteryCapacity` | `kWh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` |  |
+| `telemetry` | `xevBatteryIoCurrent` | `A` | `ev_battery_status` | `hv_battery_amperage` | `A` | Negative while charging |
+| `telemetry` | `xevBatteryMaximumRange` | `km` | `ev_battery_status` | `hv_battery_max_range` | `km` |  |
+| `telemetry` | `xevBatteryPerformanceStatus` | `enum` | `ev_battery_status` | `performance_status` | `enum` |  |
+| `telemetry` | `xevBatteryRange` | `km` | `ev_battery_status` | `hv_battery_range` | `km` |  |
+| `telemetry` | `xevBatteryStateOfCharge` | `%` | `ev_battery_status` | `hv_battery_soc` | `%` |  |
+| `telemetry` | `xevBatteryTemperature` | `degC` | `ev_battery_status` | `hv_battery_temperature` | `degC` |  |
+| `telemetry` | `xevBatteryVoltage` | `V` | `ev_battery_status` | `hv_battery_voltage` | `V` |  |
+| `telemetry` | `xevTractionMotorCurrent` | `A` | `ev_battery_status` | `motor_amperage` | `A` |  |
+| `telemetry` | `xevTractionMotorVoltage` | `V` | `ev_battery_status` | `motor_voltage` | `V` |  |
+| `telemetry` | `yawRate` | `deg/s` | `ev_vehicle_status` | `yaw_rate` | `deg/s` |  |
 
 ## ha_fordpass
 
-| Source Entity | Source Attribute | Source Unit | DB Table | DB Column | Target Unit | Notes |
+| Source Entity | Source Field | Source Unit | DB Table | DB Column | DB Unit | Notes |
 |---|---|---|---|---|---|---|
 | `sensor.fordpass_{vin}_cabintemperature` | `state` | `degC` | `ev_vehicle_status` | `cabin_temperature` | `degC` | Time-series cabin temp from the cabintemperature entity state; the entity carries no cabinTemperature attribute. |
 | `sensor.fordpass_{vin}_elveh` | `maximumBatteryCapacity` | `Wh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` | Elveh mirror of xevBatteryCapacity; same mixed Wh/kWh autoscale |
@@ -38,4 +70,4 @@ commit time and serves as the observable unit contract.
 
 ## ha_gas_price
 
-_No contracts registered._
+_No mappings registered._

@@ -40,6 +40,10 @@ An earlier unit-conversion bug could record the same trip twice: one row with th
 
 Some trips were stored with a distance converted to kilometers twice without leaving a duplicate behind. These are detected by contradiction: the stored distance is about 1.609 times the difference between the trip's start and end odometer readings. The fix divides the distance by 1.609344 and recomputes efficiency.
 
+### FordConnect archive re-parse
+
+Re-reads every FordConnect response LightningROD archived through today's parser, then re-derives charging sessions and trips from them. Use it after an update that fixes how FordConnect data is read: the card's badge counts responses read by an older version. Trips and charges Home Assistant also recorded are merged into one row, never duplicated. The card is disabled until FordConnect is set up and has archived something. Re-parsing reaches back as far as the FordConnect retention setting keeps raw responses.
+
 ### Derive trip fields from telemetry
 
 Some trips are stored with their headline numbers but no start time, duration, or odometer readings. This operation fills those gaps from vehicle telemetry already in the database — no Home Assistant connection needed. It anchors each trip to the odometer timeline around its end to reconstruct the missing odometer readings, start time, and duration (anything implying an implausible duration or average speed is left alone), recomputes missing efficiency from distance and energy, and averages stored temperature readings over the trip window. It also fills the start and end location from stored GPS history — matching the trip's endpoints to your known locations (an endpoint with no nearby known place is left blank rather than guessed). It only fills empty fields — existing values are never changed. Driving scores and regenerated range cannot be derived from telemetry; those need one of the two replay operations below.

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card bg-base-200 max-w-xl">
+    <div class="card-body">
+        <h2 class="card-title">FordConnect wasn't connected</h2>
+        <p>{{ message }}</p>
+        <div class="card-actions">
+            <a href="/settings?tab=data_sources" class="btn btn-primary">Back to Data Sources</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

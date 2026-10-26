@@ -1,4 +1,4 @@
-"""Shared seeding facilities: time-shift helper, contract-driven generator, gap reporter."""
+"""Shared seeding facilities: time-shift helper, mapping-driven generator, gap reporter."""
 from __future__ import annotations
 
 import logging
@@ -18,7 +18,7 @@ from db.models.charging_session import EVChargingSession
 from db.models.location import EVLocation
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle_status import EVVehicleStatus
-from web.services.units.contracts import FieldContract
+from web.services.units.data_map import DataMapping
 
 # (table, timestamp_column_attr) tuples that define the universe of "demo data time"
 # Note: EVTripMetrics uses `end_time` (not `trip_end_utc` — that column does not exist)
@@ -122,7 +122,7 @@ async def apply_offset_to_table(
 
 
 # ---------------------------------------------------------------------------
-# Contract-driven value generation
+# Mapping-driven value generation
 # ---------------------------------------------------------------------------
 
 _log = logging.getLogger(__name__)
@@ -165,17 +165,16 @@ def _normalise_unit(raw: str) -> str:
 
 
 def realistic_value(
-    target_unit: str,
+    db_unit: str,
     context: dict | None = None,
     rng: random.Random | None = None,
 ) -> object:
-    """Return a plausible seed value for *target_unit*.
+    """Return a plausible seed value for *db_unit*.
 
-    Uses a seeded ``random.Random(42)`` instance by default for determinism.
-    Pass *rng* to supply your own instance.
+    Defaults to a seeded ``random.Random(42)`` so seed runs are reproducible.
     """
     r = rng or _DEFAULT_RNG
-    tag = _UNIT_ALIASES.get(_normalise_unit(target_unit))
+    tag = _UNIT_ALIASES.get(_normalise_unit(db_unit))
 
     if tag == "kWh":
         return round(r.uniform(5, 80), 2)
@@ -209,37 +208,30 @@ def realistic_value(
     if tag == "str":
         return (context or {}).get("value", "unknown")
 
-    _log.warning("realistic_value: unknown target_unit %r — returning None", target_unit)
+    _log.warning("realistic_value: unknown db_unit %r — returning None", db_unit)
     return None
 
 
-class ContractDrivenSeeder:
-    """Generate realistic seed values driven by ``FIELD_CONTRACTS`` declarations.
+class DataMapSeeder:
+    """Generate realistic seed values driven by ``DATA_MAP`` declarations.
 
-    Parameters
-    ----------
-    declared:
-        The adapter's ``FIELD_CONTRACTS`` list (fields the adapter already
-        declares).
-    expected:
-        Contracts that THIS seed module needs but which may not yet be in
-        ``FIELD_CONTRACTS``.  Hits here are recorded in ``self.gaps`` so a
-        gap report can be emitted after the seed run.
+    `expected` holds mappings a seed module needs that the adapter has not
+    declared yet; using one records a gap for the post-run report.
     """
 
     def __init__(
         self,
-        declared: list[FieldContract],
-        expected: list[FieldContract] | None = None,
+        declared: list[DataMapping],
+        expected: list[DataMapping] | None = None,
         rng: random.Random | None = None,
     ) -> None:
-        self._declared: dict[tuple[str, str], FieldContract] = {
-            (fc.target_db_table, fc.target_db_column): fc for fc in declared
+        self._declared: dict[tuple[str, str], DataMapping] = {
+            (fc.db_table, fc.db_column): fc for fc in declared
         }
-        self._expected: dict[tuple[str, str], FieldContract] = {
-            (fc.target_db_table, fc.target_db_column): fc for fc in (expected or [])
+        self._expected: dict[tuple[str, str], DataMapping] = {
+            (fc.db_table, fc.db_column): fc for fc in (expected or [])
         }
-        self._gaps: dict[tuple[str, str], FieldContract] = {}
+        self._gaps: dict[tuple[str, str], DataMapping] = {}
         self._rng = rng or random.Random(42)
 
     # ------------------------------------------------------------------
@@ -248,26 +240,24 @@ class ContractDrivenSeeder:
     ) -> object:
         """Return a realistic value for the given *(table, column)* pair.
 
-        Looks up *declared* contracts first.  Falls back to *expected*,
-        recording the contract in ``gaps`` (deduped).  Raises ``KeyError``
-        if neither list knows the pair.
+        Raises ``KeyError`` when neither declared nor expected knows the pair.
         """
         key = (table, column)
 
         fc = self._declared.get(key)
         if fc is not None:
-            return realistic_value(fc.target_unit, context=context, rng=self._rng)
+            return realistic_value(fc.db_unit, context=context, rng=self._rng)
 
         fc = self._expected.get(key)
         if fc is not None:
             self._gaps[key] = fc
-            return realistic_value(fc.target_unit, context=context, rng=self._rng)
+            return realistic_value(fc.db_unit, context=context, rng=self._rng)
 
-        raise KeyError(f"No contract for {table}.{column}")
+        raise KeyError(f"No mapping for {table}.{column}")
 
-    def gaps_report(self) -> list[FieldContract]:
-        """Return deduped gap contracts sorted by (table, column)."""
-        return sorted(self._gaps.values(), key=lambda fc: (fc.target_db_table, fc.target_db_column))
+    def gaps_report(self) -> list[DataMapping]:
+        """Return deduped gap mappings sorted by (table, column)."""
+        return sorted(self._gaps.values(), key=lambda fc: (fc.db_table, fc.db_column))
 
 
 # ---------------------------------------------------------------------------
@@ -275,29 +265,25 @@ class ContractDrivenSeeder:
 # ---------------------------------------------------------------------------
 
 
-def write_contracts_gap_report(gaps: list[FieldContract], path: Path) -> None:
-    """Write a Markdown gap report to *path*.
-
-    If *gaps* is empty the file notes that no gaps were detected.
-    Parent directories are created automatically.
-    """
+def write_data_map_gap_report(gaps: list[DataMapping], path: Path) -> None:
+    """Write a Markdown gap report to *path*, creating parent directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     if not gaps:
         path.write_text(
-            "# Contracts Gap Report\n\n"
+            "# Data Map Gap Report\n\n"
             f"Generated {now_iso}.\n\n"
-            "No gaps detected — all seeded fields have declared contracts.\n",
+            "No gaps detected — all seeded fields have declared mappings.\n",
             encoding="utf-8",
         )
         return
 
     lines: list[str] = [
-        "# Contracts Gap Report",
+        "# Data Map Gap Report",
         "",
         f"Generated by the demo seed run on {now_iso}. The seed populated values for the",
-        "following `(table, column)` pairs that are NOT yet declared in `FIELD_CONTRACTS` inside",
+        "following `(table, column)` pairs that are NOT yet declared in `DATA_MAP` inside",
         "`web/services/sources/ha_fordpass/adapter.py`. Add the blocks below to that file",
         "to close the gap, then re-run `uv run python -m scripts.seed.main --all` and confirm this",
         "report comes back empty.",
@@ -308,20 +294,20 @@ def write_contracts_gap_report(gaps: list[FieldContract], path: Path) -> None:
     # Group by table
     from itertools import groupby
 
-    for table, group in groupby(gaps, key=lambda fc: fc.target_db_table):
+    for table, group in groupby(gaps, key=lambda fc: fc.db_table):
         lines.append("")
         lines.append(f"## {table}")
         lines.append("")
         for fc in group:
             notes_val = repr(fc.notes) if fc.notes else '"<fill in>"'
             lines.append("```python")
-            lines.append("FieldContract(")
-            lines.append('    source_locator=SourceLocator("<fill in>", SourceLocatorKind.HA_ENTITY_ID),')
-            lines.append('    source_attribute="<fill in>",')
+            lines.append("DataMapping(")
+            lines.append('    source=SourceRef("<fill in>", SourceKind.HA_ENTITY),')
+            lines.append('    source_field="<fill in>",')
             lines.append('    source_unit="<fill in>",')
-            lines.append(f'    target_db_table="{fc.target_db_table}",')
-            lines.append(f'    target_db_column="{fc.target_db_column}",')
-            lines.append(f'    target_unit="{fc.target_unit}",')
+            lines.append(f'    db_table="{fc.db_table}",')
+            lines.append(f'    db_column="{fc.db_column}",')
+            lines.append(f'    db_unit="{fc.db_unit}",')
             lines.append(f"    notes={notes_val},")
             lines.append("),")
             lines.append("```")
@@ -334,8 +320,8 @@ def write_contracts_gap_report(gaps: list[FieldContract], path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def load_declared_contracts() -> list[FieldContract]:
-    """Import and return ``FIELD_CONTRACTS`` from the HA Fordpass adapter."""
-    from web.services.sources.ha_fordpass.adapter import FIELD_CONTRACTS
+def load_declared_mappings() -> list[DataMapping]:
+    """Import and return ``DATA_MAP`` from the HA Fordpass adapter."""
+    from web.services.sources.ha_fordpass.adapter import DATA_MAP
 
-    return list(FIELD_CONTRACTS)
+    return list(DATA_MAP)

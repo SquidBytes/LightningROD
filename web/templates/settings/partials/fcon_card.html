@@ -1,0 +1,144 @@
+{% set s = card.status %}
+<div class="card bg-base-200" id="fcon-card">
+    <div class="card-body">
+        <div class="flex items-baseline justify-between">
+            <div>
+                <h2 class="card-title text-base font-semibold">FordConnect</h2>
+                <p class="text-base-content/60 text-sm -mt-1">Vehicle data from Ford's API.</p>
+            </div>
+            <div class="flex items-baseline gap-2">
+                <span id="fcon-busy" class="htmx-indicator text-xs text-base-content/60 flex items-center gap-1">
+                    <span class="loading loading-spinner loading-xs"></span>Working…
+                </span>
+                {% if s == 'connected' %}
+                    {% set state = card.health.connection_state or 'connected' %}
+                    <span class="badge {{ 'badge-success' if state in ('connected', 'polling') else 'badge-warning' }}">{{ state | replace('_', ' ') }}</span>
+                    {% if card.health.newest_reading_age %}
+                        <span class="text-xs text-base-content/60">newest reading {{ card.health.newest_reading_age }}</span>
+                    {% endif %}
+                {% elif s == 'ready' %}
+                    <span class="badge badge-ghost">not connected</span>
+                {% elif s in ('consent_expired', 'needs_reauth') %}
+                    <span class="badge badge-error">re-authorization required</span>
+                {% else %}
+                    <span class="badge badge-ghost">not set up</span>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if s == 'needs_reauth' %}
+        <div class="alert alert-warning text-sm mt-3">
+            <span>Saved credentials can't be read: the encryption key is missing or changed. Restore <code>LR_SECRET_KEY</code>, or re-enter the Client Secret.</span>
+        </div>
+        {% elif s == 'consent_expired' %}
+        <div class="alert alert-warning text-sm mt-3">
+            <span>Ford access has expired. Click Connect Vehicle to renew it.</span>
+        </div>
+        {% endif %}
+
+        {% if card.health.last_error %}
+        <div class="text-xs text-error mt-2 break-all">Last error: {{ card.health.last_error }}</div>
+        {% endif %}
+
+        <form hx-post="/settings/fcon/credentials" hx-target="#fcon-card" hx-swap="outerHTML" hx-indicator="#fcon-busy" hx-disabled-elt="find button, this" class="space-y-4 mt-4 max-w-2xl">
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Redirect URI</span></div>
+                <div class="join w-full">
+                    <input type="text" name="redirect_uri" id="fcon-redirect-uri"
+                           value="{{ card.redirect_uri }}"
+                           class="input input-bordered join-item w-full font-mono text-sm" required>
+                    <button type="button" class="btn join-item" title="Copy"
+                            onclick="(function(){var i=document.getElementById('fcon-redirect-uri');i.select();if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(i.value);}else{document.execCommand('copy');}})()">Copy</button>
+                </div>
+                <div class="label flex-col items-start gap-1">
+                    {% if card.redirect_guessed %}
+                    <span class="label-text-alt text-warning">Port not detected. Check it matches LightningROD's web port.</span>
+                    {% endif %}
+                    <span class="label-text-alt text-base-content/50">Must match a redirect URI registered on your Ford app.</span>
+                </div>
+            </label>
+
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Client ID</span></div>
+                <input type="text" name="client_id" value="{{ card.client_id }}"
+                       class="input input-bordered w-full font-mono text-sm" autocomplete="off" required>
+                <div class="label"><span class="label-text-alt text-base-content/50">From your Ford app.</span></div>
+            </label>
+
+            <label class="form-control w-full">
+                <div class="label"><span class="label-text font-semibold">Client Secret</span></div>
+                <input type="password" name="client_secret" value="{{ card.masked_secret }}"
+                       class="input input-bordered w-full font-mono text-sm" autocomplete="off" required>
+                <div class="label">
+                    {% if card.masked_secret %}
+                    <span class="label-text-alt text-success">Saved. Leave as is to keep it.</span>
+                    {% else %}
+                    <span class="label-text-alt text-base-content/50">From your Ford app.</span>
+                    {% endif %}
+                </div>
+            </label>
+
+            {% if card.error %}<div class="alert alert-error text-sm">{{ card.error }}</div>{% endif %}
+
+            <div class="flex gap-2">
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+
+        {% if s != 'not_configured' and s != 'needs_reauth' %}
+        <div class="divider my-1"></div>
+        <div class="space-y-3 max-w-2xl">
+            <div class="flex gap-2 items-center">
+                <button class="btn {{ 'btn-outline' if s == 'connected' else 'btn-primary' }}"
+                        hx-post="/settings/fcon/connect" hx-target="#fcon-card" hx-swap="outerHTML" hx-indicator="#fcon-busy" hx-disabled-elt="find button, this">
+                    Connect Vehicle
+                </button>
+                {% if s == 'connected' %}
+                <button class="btn btn-ghost btn-sm"
+                        hx-post="/settings/fcon/disconnect" hx-target="#fcon-card" hx-swap="outerHTML" hx-indicator="#fcon-busy" hx-disabled-elt="find button, this">
+                    Disconnect
+                </button>
+                {% endif %}
+            </div>
+
+            {% if s == 'connected' and card.refresh_expires_at %}
+            <p class="text-xs text-base-content/50">Ford access expires {{ card.refresh_expires_at[:10] }}.</p>
+            {% endif %}
+
+            {% if card.authorize_url or card.pasting %}
+            {% if card.authorize_url %}
+            <p class="text-sm"><a href="{{ card.authorize_url }}" target="_blank" rel="noopener" class="link link-primary">Open Ford sign-in</a> and select your vehicle.</p>
+            {% endif %}
+            <form hx-post="/settings/fcon/finish" hx-target="#fcon-card" hx-swap="outerHTML" hx-indicator="#fcon-busy" hx-disabled-elt="find button, this" class="space-y-2">
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text font-semibold">Address after sign-in</span></div>
+                    <textarea name="pasted" rows="3" class="textarea textarea-bordered w-full font-mono text-xs"
+                              placeholder="http://localhost:8000/auth/ford/callback?code=...&state=..."></textarea>
+                    <div class="label"><span class="label-text-alt text-base-content/50">The full address of the page Ford opens after sign-in. Valid for 5 minutes.</span></div>
+                </label>
+                {% if card.paste_error %}<div class="alert alert-error text-sm">{{ card.paste_error }}</div>{% endif %}
+                <button type="submit" class="btn btn-primary btn-sm">Finish</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="divider my-1"></div>
+        <form hx-post="/settings/fcon/retention" hx-target="#fcon-card" hx-swap="outerHTML" hx-indicator="#fcon-busy" hx-disabled-elt="find button, this" class="space-y-2 max-w-2xl">
+            <label class="form-control w-full max-w-xs">
+                <div class="label"><span class="label-text font-semibold">Raw data retention (days)</span></div>
+                <input type="number" name="days" min="0" step="1" value="{{ card.retention_days }}"
+                       class="input input-bordered input-sm w-32"
+                       hx-get="/settings/fcon/retention-estimate" hx-trigger="input changed delay:300ms"
+                       hx-target="#fcon-retention-estimate" hx-swap="outerHTML" hx-include="this">
+            </label>
+            <p class="text-xs text-base-content/60">
+                {% with estimate = card.estimate %}{% include "settings/partials/fcon_retention_estimate.html" %}{% endwith %}
+                0 keeps everything. Trips, sessions and readings are kept regardless.
+            </p>
+            <button type="submit" class="btn btn-sm">Save</button>
+        </form>
+
+        {% if card.message %}<div class="alert alert-success text-sm mt-2">{{ card.message }}</div>{% endif %}
+    </div>
+</div>
