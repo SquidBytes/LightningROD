@@ -7,6 +7,15 @@ arrived under, so it can be replayed through the current ingestion code and
 the result compared with what the live tables hold. `scripts/replay_diff.py`
 does that against a scratch database and never writes to the live one.
 
+On a Docker install the script ships in the `web` image, so run it inside the running container and save the two reports next to your `.env`:
+
+```bash
+docker compose exec -T web uv run python scripts/replay_diff.py --since 7d > replay.txt
+docker compose exec -T web uv run python scripts/replay_diff.py --since 7d --json > replay.json
+```
+
+From a development checkout with `DATABASE_URL` pointing at the database to check:
+
 ```bash
 uv run python scripts/replay_diff.py --since 7d
 uv run python scripts/replay_diff.py --since 7d --device <device_id> --json
