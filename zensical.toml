@@ -36,6 +36,7 @@ nav = [
     "development/architecture.md",
     "development/database.md",
     "development/css.md",
+    "development/troubleshooting.md",
   ]},
   {"Changelog" = "changelog.md"},
 ]

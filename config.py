@@ -16,6 +16,8 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("APP_DEBUG", "LIGHTNINGROD_DEBUG"),
     )
+    # Root logging level for the app's own loggers (DEBUG, INFO, WARNING, ...).
+    log_level: str = Field(default="INFO", validation_alias="LR_LOG_LEVEL")
     # Optional key that encrypts stored credentials; unset means plain text.
     secret_key: str | None = Field(default=None, validation_alias="LR_SECRET_KEY")
     # Alternative to secret_key: a file holding it, e.g. a Docker secret.

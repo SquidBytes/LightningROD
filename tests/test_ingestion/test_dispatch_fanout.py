@@ -215,3 +215,92 @@ async def test_dispatch_continues_when_the_archive_write_fails():
 
     gas_mock.assert_awaited_once()
     slug_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_logs_one_info_line_with_device_suffix_only(
+    archive_store, caplog
+):
+    """The per-event line names the slug and branch but only 4 chars of the VIN."""
+    rt = HAWebSocketRuntime(config_id=1, ha_url="http://x", ha_token="t")
+    rt._ha_config = {}
+
+    with (
+        patch(
+            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            new=AsyncMock(return_value=False),
+        ),
+        patch(
+            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            new=AsyncMock(return_value=True),
+        ),
+        caplog.at_level("INFO", logger="lightningrod.hass"),
+    ):
+        await rt._dispatch(
+            "sensor.fordpass_TESTVIN0000001234_soc",
+            {"state": "85", "last_updated": "2026-11-07T10:00:00+00:00"},
+        )
+
+    lines = [r for r in caplog.records if r.getMessage().startswith("event ")]
+    assert len(lines) == 1
+    msg = lines[0].getMessage()
+    assert "slug=soc" in msg
+    assert "device=1234" in msg
+    assert "TESTVIN0000001234" not in msg
+    assert "last_updated=2026-11-07T10:00:00+00:00" in msg
+    assert "branch=fordpass raised=False" in msg
+
+
+@pytest.mark.asyncio
+async def test_dispatch_log_line_reports_gas_branch_and_errors(archive_store, caplog):
+    """branch=gas when the gas adapter takes the event; raised=True on a handler error."""
+    rt = HAWebSocketRuntime(config_id=1, ha_url="http://x", ha_token="t")
+    rt._ha_config = {}
+
+    with (
+        patch(
+            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            new=AsyncMock(return_value=True),
+        ),
+        caplog.at_level("INFO", logger="lightningrod.hass"),
+    ):
+        await rt._dispatch("sensor.gas_price_station", {"state": "3.50"})
+    assert "slug=sensor device=- last_updated=None branch=gas raised=False" in caplog.text
+
+    caplog.clear()
+    with (
+        patch(
+            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            new=AsyncMock(return_value=False),
+        ),
+        patch(
+            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            new=AsyncMock(side_effect=RuntimeError("slug-fail")),
+        ),
+        caplog.at_level("INFO", logger="lightningrod.hass"),
+    ):
+        await rt._dispatch("sensor.fordpass_X_y", {"state": "1"})
+    assert "branch=none raised=True" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_dispatch_logs_unrelated_entities_at_debug_only(archive_store, caplog):
+    """A non-vehicle entity nobody handles must not show up at INFO."""
+    rt = HAWebSocketRuntime(config_id=1, ha_url="http://x", ha_token="t")
+
+    with (
+        patch(
+            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            new=AsyncMock(return_value=False),
+        ),
+        patch(
+            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            new=AsyncMock(return_value=False),
+        ),
+        caplog.at_level("DEBUG", logger="lightningrod.hass"),
+    ):
+        await rt._dispatch("light.kitchen", {"state": "on"})
+
+    [rec] = [r for r in caplog.records if r.getMessage().startswith("event ")]
+    assert rec.levelname == "DEBUG"
+    assert "slug=light device=- last_updated=None branch=none raised=False" in rec.getMessage()

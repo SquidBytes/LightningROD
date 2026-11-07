@@ -38,8 +38,10 @@ async def dispatch_slug(
     db,
     *,
     config_id: int,
-) -> None:
+) -> bool:
     """Fan out a state_changed event to the slug-keyed handler.
+
+    Returns True when a handler ran, False when no handler owns the slug.
 
     `config_id` is propagated so handler-side pending-state dicts can rekey
     on `(config_id, device_id)` when N>1 ha_fordpass runtimes observe the
@@ -62,7 +64,7 @@ async def dispatch_slug(
 
     slug = extract_slug(entity_id)
     if slug is None or slug not in SENSOR_HANDLERS:
-        return
+        return False
 
     handler = SENSOR_HANDLERS[slug]
     device_id = get_device_id(entity_id, ha_config)
@@ -71,3 +73,4 @@ async def dispatch_slug(
     # Smuggle config_id through ha_config so handler signatures stay 5-arg.
     ha_config_with_cid = {**ha_config, "_config_id": config_id}
     await handler(slug, new_state, ha_config_with_cid, device_id, db)
+    return True

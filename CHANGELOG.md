@@ -9,6 +9,8 @@ For feature documentation, see the docs site at
 
 ### Added
 
+- Added `LR_LOG_LEVEL` to control log verbosity; logs now carry timestamps and one line per Home Assistant event
+
 ### Changed
 
 ### Fixed
