@@ -10,7 +10,7 @@ Every log line carries a timestamp, level and logger name:
 2026-11-07 10:00:01,234 INFO lightningrod.hass: event slug=soc device=5841 last_updated=2026-11-07T10:00:00+00:00 branch=fordpass raised=False
 ```
 
-`LR_LOG_LEVEL` (default `INFO`) sets the level for the app's own loggers. Set it in `.env` and restart:
+`LR_LOG_LEVEL` sets the level for the app's own loggers. The default, `INFO`, is what to send when something is wrong; you should not need to change it before collecting a log. Set it in `.env` and restart:
 
 ```sh
 LR_LOG_LEVEL=DEBUG docker compose up -d
@@ -18,8 +18,9 @@ LR_LOG_LEVEL=DEBUG docker compose up -d
 
 | Level | What you get |
 |---|---|
-| `INFO` | One line per Home Assistant event: entity slug, last 4 characters of the device id, the event's `last_updated`, which branch handled it (`gas`, `fordpass`, `none`) and whether a handler raised. Connection, reconnect and startup messages |
-| `DEBUG` | Everything above plus payloads and unit-conversion traces (`lightningrod.units.trace`). **DEBUG lines can contain raw sensor payloads and the full VIN.** Scrub before sharing |
+| `INFO` (default) | One line per Home Assistant vehicle event: entity slug, last 4 characters of the device id, the event's `last_updated`, which branch handled it (`gas`, `fordpass`, `none`) and whether a handler raised. Errors with their traceback. Connection, reconnect and startup messages. Enough to follow one event from arrival to the table it should have landed in |
+| `DEBUG` | Everything above plus every other Home Assistant entity, payloads and unit-conversion traces (`lightningrod.units.trace`). **DEBUG lines can contain raw sensor payloads and the full VIN.** Scrub before sharing. Only when asked for it |
+| `WARNING` | Quiet: problems only, no per-event lines. Use it on a stable instance you never need to troubleshoot |
 
 `APP_DEBUG=true` is separate: it echoes every SQL statement and is rarely what you want.
 

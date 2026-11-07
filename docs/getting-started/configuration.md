@@ -12,7 +12,7 @@ LightningROD is configured through environment variables and in-app settings.
 | `POSTGRES_HOST` | `localhost` | Database host. Set to `db` when using Docker Compose (handled automatically). |
 | `APP_PORT` | `8000` | Port the web UI is served on |
 | `APP_DEBUG` | `false` | Echo every SQL statement. Noisy; use `LR_LOG_LEVEL` for app logging |
-| `LR_LOG_LEVEL` | `INFO` | Log level for the app's own loggers: `DEBUG`, `INFO`, `WARNING`, `ERROR`. `INFO` shows one line per Home Assistant event; `DEBUG` adds payloads. See [Troubleshooting](../development/troubleshooting.md) |
+| `LR_LOG_LEVEL` | `INFO` | Log level for the app's own loggers. The default is what to send when troubleshooting: one line per Home Assistant vehicle event plus errors. `DEBUG` adds payloads; `WARNING` is problems only. See [Troubleshooting](../development/troubleshooting.md) |
 | `LR_SECRET_KEY` | *(unset)* | Optional. Encrypts stored credentials. Unset: they are stored as plain text |
 | `LR_SECRET_KEY_FILE` | *(unset)* | Optional. Path to an existing file holding the key, e.g. a Docker secret |
 
