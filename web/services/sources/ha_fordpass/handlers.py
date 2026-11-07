@@ -63,12 +63,9 @@ _FLUSH_TIMEOUT = 30  # seconds
 
 
 def _key(ha_config: dict, device_id: str) -> tuple[int, str]:
-    """Construct the (config_id, device_id) key from the smuggled config_id.
+    """Key for the pending-state dicts: (config_id, device_id).
 
-    The dispatcher injects `_config_id` into `ha_config`; this helper reads
-    it (defaulting to 0 when absent — direct test invocations that bypass
-    the dispatcher get the (0, device_id) key) and returns the tuple used
-    by every pending-state dict access in this module.
+    The dispatcher injects `_config_id` into `ha_config`; callers that bypass it get config_id 0.
     """
     return (int(ha_config.get("_config_id", 0)), device_id)
 
@@ -79,13 +76,9 @@ def _key(ha_config: dict, device_id: str) -> tuple[int, str]:
 
 
 def _score_or_null(val: Any) -> float | None:
-    """Convert a 0-100 driving-score-like field, treating 0 as 'unmeasured'.
+    """Convert a 0-100 score field, treating 0 as unmeasured.
 
-    ha-fordpass emits 0 when the underlying telemetry is missing rather than
-    omitting the attribute (its metrics_mapping carries `default=0`). Storing
-    that as a real low score paints empty trips red on the gauge UI; we
-    convert 0 → None at the adapter boundary so empty-state rendering stays
-    consistent.
+    ha-fordpass emits 0 when the telemetry is missing; storing it would paint empty trips red.
     """
     raw = _safe_float(val)
     if raw is None or raw == 0:
@@ -129,17 +122,14 @@ def _duration_to_seconds(val: Any) -> float | None:
 
 
 def extract_slug(entity_id: str | None) -> str | None:
-    """Extract sensor slug from entity_id pattern sensor.fordpass_{vin}_{slug}.
+    """Return the slug from `sensor.fordpass_{vin}_{slug}`, e.g. `soc`.
 
-    Example: sensor.fordpass_1ftvw1el6pwg05841_soc -> soc
+    None when the entity id does not match.
     """
-    # entity_id format: sensor.fordpass_{vin}_{slug}
-    # Split on "." first, then split the sensor part
     if not entity_id or not entity_id.startswith("sensor.fordpass_"):
         return None
-    # Remove "sensor.fordpass_" prefix, then split on "_"
     remainder = entity_id[len("sensor.fordpass_"):]
-    # VIN is next, then slug (slug may contain underscores -- unlikely but safe)
+    # The slug itself may contain underscores, so split once.
     parts = remainder.split("_", 1)
     if len(parts) >= 2:
         return parts[1]
@@ -152,17 +142,14 @@ def extract_slug(entity_id: str | None) -> str | None:
 
 
 def get_device_id(entity_id: str, ha_config: dict) -> str:
-    """Resolve device_id (VIN) from entity_id pattern or config override.
+    """Return the device id from `sensor.fordpass_{vin}_{slug}`.
 
-    Extracts VIN from sensor.fordpass_{vin}_{slug} pattern.
-    Falls back to ha_config override or 'unknown'.
+    A `_vin_override` in ha_config wins; unknown ids yield "unknown".
     """
-    # Check for VIN override in ha_config
     vin_override = ha_config.get("_vin_override")
     if vin_override:
         return vin_override
 
-    # Extract from entity_id
     if entity_id and entity_id.startswith("sensor.fordpass_"):
         remainder = entity_id[len("sensor.fordpass_"):]
         parts = remainder.split("_", 1)
