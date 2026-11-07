@@ -1,6 +1,7 @@
 """FastAPI application factory, routes, filters, and lifespan hooks."""
 
 import logging
+import logging.config
 import os
 from collections.abc import MutableMapping
 from contextlib import asynccontextmanager
@@ -35,6 +36,34 @@ def _resolve_version() -> str:
 
 APP_VERSION = _resolve_version()
 logger = logging.getLogger("lightningrod.main")
+
+
+def _configure_logging() -> None:
+    """One stderr handler for the app's loggers; uvicorn keeps its own."""
+    from config import settings
+
+    level = settings.log_level.upper()
+    if level not in logging.getLevelNamesMapping():
+        level = "INFO"
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "app": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"}
+            },
+            "handlers": {
+                "stderr": {
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                    "formatter": "app",
+                }
+            },
+            "root": {"level": level, "handlers": ["stderr"]},
+        }
+    )
+    if level != settings.log_level.upper():
+        logger.warning("Unknown LR_LOG_LEVEL %r, using INFO", settings.log_level)
 
 from db.engine import AsyncSessionLocal, engine
 from web import developer_mode
@@ -108,6 +137,7 @@ async def _seal_stored_credentials() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _configure_logging()
     # Startup: seed charger templates (idempotent) + restore developer mode flag
     async with AsyncSessionLocal() as session:
         await seed_charger_templates(session)
