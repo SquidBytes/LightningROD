@@ -337,14 +337,17 @@ class HAWebSocketRuntime:
         except Exception as e:
             logger.error("Raw archive error for %s: %s", entity_id, e, exc_info=True)
 
+        branch = "none"
+        raised = False
+
         # Gas-price branch — match by configured entity_id, not slug pattern.
         async with AsyncSessionLocal() as db:
             try:
-                handled = await try_handle_event(entity_id, new_state, db)
-                if handled:
+                if await try_handle_event(entity_id, new_state, db):
                     await db.commit()
-                    return
+                    branch = "gas"
             except Exception as e:
+                raised = True
                 await db.rollback()
                 logger.error(
                     "Gas-price dispatch error for %s: %s",
@@ -354,24 +357,52 @@ class HAWebSocketRuntime:
                 )
 
         # Slug-based ha_fordpass dispatch.
-        async with AsyncSessionLocal() as db:
-            try:
-                await dispatch_slug(
-                    entity_id,
-                    new_state,
-                    self._ha_config or {},
-                    db,
-                    config_id=self.config_id,
-                )
-                await db.commit()
-            except Exception as e:
-                await db.rollback()
-                logger.error(
-                    "ha_fordpass dispatch error for %s: %s",
-                    entity_id,
-                    e,
-                    exc_info=True,
-                )
+        if branch == "none":
+            async with AsyncSessionLocal() as db:
+                try:
+                    if await dispatch_slug(
+                        entity_id,
+                        new_state,
+                        self._ha_config or {},
+                        db,
+                        config_id=self.config_id,
+                    ):
+                        branch = "fordpass"
+                    await db.commit()
+                except Exception as e:
+                    raised = True
+                    await db.rollback()
+                    logger.error(
+                        "ha_fordpass dispatch error for %s: %s",
+                        entity_id,
+                        e,
+                        exc_info=True,
+                    )
+
+        self._log_event(entity_id, new_state, branch, raised)
+
+    def _log_event(
+        self, entity_id: str, new_state: dict, branch: str, raised: bool
+    ) -> None:
+        """One line per event. Never the payload; the device id as its last 4 chars.
+
+        Vehicle entities and handled events log at INFO. Everything else HA
+        emits (every light and thermostat on the server) stays at DEBUG.
+        """
+        from web.services.ingestion.raw_archive import archive_scope
+
+        scope = archive_scope(entity_id)
+        device_id, slug = scope if scope else (None, None)
+        level = logging.INFO if scope or branch != "none" else logging.DEBUG
+        logger.log(
+            level,
+            "event slug=%s device=%s last_updated=%s branch=%s raised=%s",
+            slug or entity_id.partition(".")[0],
+            device_id[-4:] if device_id else "-",
+            new_state.get("last_updated"),
+            branch,
+            raised,
+        )
 
     async def _reconnect_loop(self, ha_url: str, ha_token: str) -> None:
         """Exponential backoff reconnection: 1s, 2s, 4s, ... max 60s."""
