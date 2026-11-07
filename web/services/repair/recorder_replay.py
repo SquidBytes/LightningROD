@@ -23,15 +23,17 @@ from web.services.repair.base import (
     rollback_session,
 )
 from web.services.repair.ops.trip_duplicates import is_same_drive
+from web.services.repair.replay_core import (
+    SENTINEL_CONFIG_ID,
+    UNIT_SENSITIVE_SUFFIXES,
+    ArchivedEvent,
+    purge_pending_state,
+    replay_events,
+)
 from web.services.repair.snapshot import deserialize_row, serialize_row
 from web.services.trip_merge import MERGEABLE_SOURCES
 
 logger = logging.getLogger("lightningrod.repair.recorder_replay")
-
-# Pending-state caches in handlers.py are keyed (config_id, device_id).
-# Replay uses a sentinel config_id so its pending entries can never collide
-# with (or bleed into) the live runtime's keys; leftovers are purged post-run.
-SENTINEL_CONFIG_ID = -1
 
 _WINDOW_CACHE_TTL = 300.0  # seconds
 # Contributing states listed per row before the rest are summarized as a count.
@@ -130,10 +132,7 @@ class RecorderReplay(RepairOperation):
     TRIP_ENTITY_SUFFIXES = ("events", "metrics", "elveh")
     # What makes a replayed trip recognisable when only a few fields changed.
     IDENTITY_FIELDS = ("trip_id", "start_time", "end_time", "distance")
-    # ha-fordpass localizes these entities' trip attributes into Home
-    # Assistant's unit system before emitting them, so their numbers cannot be
-    # read without knowing it. The events payload is always raw metric.
-    UNIT_SENSITIVE_SUFFIXES = ("metrics", "elveh")
+    UNIT_SENSITIVE_SUFFIXES = UNIT_SENSITIVE_SUFFIXES
     ENRICHABLE_FIELDS = (
         "duration",
         "start_time",
@@ -326,7 +325,6 @@ class RecorderReplay(RepairOperation):
         (recovered inserts) after the fact.
         """
         from web.services.sources.ha_fordpass import adapter
-        from web.services.sources.ha_fordpass import handlers as fp_handlers
         from web.services.sources.ha_fordpass.dispatch import dispatch_slug
 
         details: dict[str, Any] = {
@@ -345,7 +343,6 @@ class RecorderReplay(RepairOperation):
             return details, []
 
         runtime_config = dict(runtime._ha_config or {})
-        unit_sensitive = tuple(f"_{s}" for s in self.UNIT_SENSITIVE_SUFFIXES)
         states = await self._fetch_states()
 
         window_stmt = select(EVTripMetrics).where(EVTripMetrics.end_time >= window)
@@ -355,69 +352,46 @@ class RecorderReplay(RepairOperation):
         # invariant is enforced here by reverting protected rows afterward.
         before = {row.id: serialize_row(row) for row in before_rows}
 
+        async def _dispatch(event: ArchivedEvent, ha_config: dict, session) -> None:
+            if event.entity_id.endswith("_metrics"):
+                # Dispatching metrics would write an EVBatteryStatus row per
+                # state; the trip regen backfill is its only trip-relevant
+                # effect, so call it directly.
+                attrs = event.payload.get("attributes") or {}
+                device_id = adapter._device_id_from_entity(event.entity_id) or "unknown"
+                recorded_at = adapter._parse_event_ts(event.payload) or datetime.now(
+                    UTC
+                )
+                await adapter._backfill_trip_regen(
+                    event.entity_id, attrs, device_id, session, recorded_at, ha_config
+                )
+            else:
+                await dispatch_slug(
+                    event.entity_id,
+                    event.payload,
+                    ha_config,
+                    session,
+                    config_id=SENTINEL_CONFIG_ID,
+                )
+
         attribution = _StateAttribution(db)
         with attribution:
-            for ts, entity_id, state, state_config in states:
-                attribution.dispatching(entity_id, ts)
-                try:
-                    # A state that recorded its own config is read under it; the
-                    # runtime's is only the fallback for states that carry none.
-                    ha_config = state_config or runtime_config
-                    if not ha_config.get("unit_system") and entity_id.endswith(
-                        unit_sensitive
-                    ):
-                        # Guessing metric here silently stores miles as kilometres
-                        # and °F as °C, and the wrong distance spawns a duplicate
-                        # trip alongside the correct one. Skipping loses nothing
-                        # the events payload does not already carry.
-                        if not details["skipped_unknown_units"]:
-                            logger.warning(
-                                "%s: no unit system for %s — skipping states whose "
-                                "values depend on it",
-                                self.slug,
-                                entity_id,
-                            )
-                        details["skipped_unknown_units"] += 1
-                        continue
-                    if entity_id.endswith("_metrics"):
-                        # Dispatching metrics would write an EVBatteryStatus row
-                        # per state; the trip regen backfill is its only
-                        # trip-relevant effect, so call it directly.
-                        attrs = state.get("attributes") or {}
-                        device_id = (
-                            adapter._device_id_from_entity(entity_id) or "unknown"
-                        )
-                        recorded_at = adapter._parse_event_ts(state) or datetime.now(
-                            UTC
-                        )
-                        await adapter._backfill_trip_regen(
-                            entity_id, attrs, device_id, db, recorded_at, ha_config
-                        )
-                    else:
-                        await dispatch_slug(
-                            entity_id,
-                            state,
-                            ha_config,
-                            db,
-                            config_id=SENTINEL_CONFIG_ID,
-                        )
-                    details["states_replayed"] += 1
-                except Exception:
-                    logger.exception(
-                        "recorder-replay: dispatch failed for %s", entity_id
-                    )
-                    details["errors"] += 1
+            stats = await replay_events(
+                (ArchivedEvent(ts, eid, state, cfg) for ts, eid, state, cfg in states),
+                db,
+                fallback_config=runtime_config,
+                dispatch=_dispatch,
+                before_each=lambda e: attribution.dispatching(
+                    e.entity_id, e.recorded_at
+                ),
+                log_prefix=self.slug,
+            )
+        details["states_replayed"] = stats.replayed
+        details["errors"] = stats.errors
+        details["skipped_unknown_units"] = stats.skipped_unknown_units
         # Purge sentinel pending state WITHOUT flushing: replay must never
         # write EVVehicleStatus/EVBatteryStatus rows (trips-only scope).
-        for cache in (
-            fp_handlers._pending_vehicle_status,
-            fp_handlers._pending_vehicle_status_ts,
-            fp_handlers._pending_battery_status,
-            fp_handlers._pending_battery_status_ts,
-            fp_handlers._last_trip_values,
-        ):
-            for key in [k for k in cache if k[0] == SENTINEL_CONFIG_ID]:
-                cache.pop(key, None)
+        purge_pending_state(SENTINEL_CONFIG_ID)
 
         await db.flush()
 

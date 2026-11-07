@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from db.models.raw_event import HARawEvent
 from web.services.repair.base import _aware
 from web.services.repair.recorder_replay import _WINDOW_CACHE_TTL, RecorderReplay
+from web.services.repair.replay_core import fetch_archive
 
 
 class _ArchiveSource:
@@ -109,21 +110,9 @@ class ArchiveReplay(RecorderReplay):
         if window is None:
             return []
         async with self._sessions()() as db:
-            stmt = (
-                select(HARawEvent)
-                .where(
-                    HARawEvent.slug.in_(self.TRIP_ENTITY_SUFFIXES),
-                    HARawEvent.recorded_at >= window,
+            return [
+                (e.recorded_at, e.entity_id, e.payload, e.ha_config)
+                async for e in fetch_archive(
+                    db, since=window, slugs=self.TRIP_ENTITY_SUFFIXES
                 )
-                .order_by(HARawEvent.recorded_at, HARawEvent.id)
-            )
-            rows = list((await db.execute(stmt)).scalars().all())
-        return [
-            (
-                _aware(row.recorded_at),
-                row.entity_id,
-                row.payload,
-                {"unit_system": row.ha_unit_system} if row.ha_unit_system else None,
-            )
-            for row in rows
-        ]
+            ]
