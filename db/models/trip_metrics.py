@@ -7,7 +7,6 @@ from sqlalchemy import (
     Boolean,
     Index,
     Integer,
-    Numeric,
     String,
     Uuid,
     and_,
@@ -42,36 +41,36 @@ class EVTripMetrics(IngestMetaMixin, IngestVersionMixin, Base):
     recorded_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
     # Distance and time
-    distance: Mapped[float | None] = mapped_column(Numeric)
-    duration: Mapped[float | None] = mapped_column(Numeric)
-    odometer_start: Mapped[float | None] = mapped_column(Numeric)
-    odometer_end: Mapped[float | None] = mapped_column(Numeric)
+    distance: Mapped[float | None] = mapped_column()
+    duration: Mapped[float | None] = mapped_column()
+    odometer_start: Mapped[float | None] = mapped_column()
+    odometer_end: Mapped[float | None] = mapped_column()
 
     # Energy
-    energy_consumed: Mapped[float | None] = mapped_column(Numeric)
-    efficiency: Mapped[float | None] = mapped_column(Numeric)
-    range_regenerated: Mapped[float | None] = mapped_column(Numeric)
+    energy_consumed: Mapped[float | None] = mapped_column()
+    efficiency: Mapped[float | None] = mapped_column()
+    range_regenerated: Mapped[float | None] = mapped_column()
 
     # Environmental conditions
-    ambient_temp: Mapped[float | None] = mapped_column(Numeric)
-    cabin_temp: Mapped[float | None] = mapped_column(Numeric)
-    outside_air_temp: Mapped[float | None] = mapped_column(Numeric)
+    ambient_temp: Mapped[float | None] = mapped_column()
+    cabin_temp: Mapped[float | None] = mapped_column()
+    outside_air_temp: Mapped[float | None] = mapped_column()
 
     # Driving scores
-    driving_score: Mapped[float | None] = mapped_column(Numeric)
-    speed_score: Mapped[float | None] = mapped_column(Numeric)
-    acceleration_score: Mapped[float | None] = mapped_column(Numeric)
-    deceleration_score: Mapped[float | None] = mapped_column(Numeric)
+    driving_score: Mapped[float | None] = mapped_column()
+    speed_score: Mapped[float | None] = mapped_column()
+    acceleration_score: Mapped[float | None] = mapped_column()
+    deceleration_score: Mapped[float | None] = mapped_column()
 
     # Location references
     start_location_id: Mapped[int | None] = mapped_column(Integer)
     end_location_id: Mapped[int | None] = mapped_column(Integer)
 
     # Efficiency
-    electrical_efficiency: Mapped[float | None] = mapped_column(Numeric)
+    electrical_efficiency: Mapped[float | None] = mapped_column()
 
     # Mechanical
-    brake_torque: Mapped[float | None] = mapped_column(Numeric)
+    brake_torque: Mapped[float | None] = mapped_column()
 
     # Session flags
     is_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

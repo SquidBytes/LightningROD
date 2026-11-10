@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, SmallInteger, String, func
+from sqlalchemy import DateTime, Numeric, SmallInteger, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # All timestamps carry timezone info.
@@ -14,7 +14,8 @@ FCON_INGEST_SCHEMA_VERSION = 2
 
 
 class Base(DeclarativeBase):
-    pass
+    # float columns return Python floats; money columns are annotated Decimal.
+    type_annotation_map = {float: Numeric(asdecimal=False)}
 
 
 class IngestMetaMixin:

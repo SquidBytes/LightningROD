@@ -17,6 +17,7 @@ from db.models.reference import (
     EVNetworkSubscription,
 )
 from web.dependencies import DbSession
+from web.money import to_money
 from web.queries.settings import get_all_networks
 from web.queries.vehicles import get_active_vehicle, get_all_vehicles
 from web.services.source_system import SourceSystem
@@ -533,7 +534,7 @@ async def review_edit_network(
     net = result.scalar_one_or_none()
     if net is not None:
         net.network_name = network_name
-        net.cost_per_kwh = cost_per_kwh
+        net.cost_per_kwh = to_money(cost_per_kwh)
         net.color = color.strip() if color and color.strip() else None
         net.is_free = is_free is not None
         if notes is not None:
@@ -729,7 +730,7 @@ async def edit_location(
         loc.network_id = int(network_id) if network_id.strip() else None
         loc.latitude = float(latitude) if latitude.strip() else None
         loc.longitude = float(longitude) if longitude.strip() else None
-        loc.cost_per_kwh = float(cost_per_kwh) if cost_per_kwh.strip() else None
+        loc.cost_per_kwh = to_money(float(cost_per_kwh)) if cost_per_kwh.strip() else None
     # Refresh the partial that matches the caller tab.
     if return_to == "approved":
         ctx = await _approved_tree_context(db)

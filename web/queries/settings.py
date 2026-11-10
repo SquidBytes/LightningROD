@@ -15,6 +15,7 @@ from db.models.reference import (
     EVNetworkSubscription,
 )
 from db.portable_insert import portable_insert
+from web.money import to_money
 
 # Predefined EV charging networks with brand-accurate colors
 PREDEFINED_NETWORKS: list[dict[str, Any]] = [
@@ -148,7 +149,7 @@ async def update_network(
         return None
     known = _PREDEFINED_BY_NAME.get(name.lower().strip()) if name else None
     network.network_name = name
-    network.cost_per_kwh = cost_per_kwh
+    network.cost_per_kwh = to_money(cost_per_kwh)
     network.is_free = is_free
     network.color = color if color else (known["color"] if known else DEFAULT_COLOR)
     await db.flush()
@@ -286,7 +287,7 @@ async def update_location(
     loc.address = address
     loc.latitude = latitude
     loc.longitude = longitude
-    loc.cost_per_kwh = cost_per_kwh
+    loc.cost_per_kwh = to_money(cost_per_kwh)
     await db.flush()
     await db.refresh(loc)
     return loc
@@ -423,8 +424,8 @@ async def update_subscription(
     if not await validate_no_overlap(db, sub.network_id, start_date, end_date, exclude_id=subscription_id):
         raise ValueError("Subscription period overlaps with an existing period for this network")
 
-    sub.member_rate = member_rate
-    sub.monthly_fee = monthly_fee
+    sub.member_rate = to_money(member_rate)
+    sub.monthly_fee = to_money(monthly_fee)
     sub.start_date = start_date
     sub.end_date = end_date
     sub.notes = notes

@@ -18,6 +18,7 @@ from db.models.data_source_config import DataSourceConfig
 from db.models.reference import EVChargerStall, EVChargingNetwork, EVLocationLookup
 from web import developer_mode as dev_mode_module
 from web.dependencies import DbSession
+from web.money import to_money
 from web.queries.gas_prices import (
     delete_gas_price,
     get_all_gas_prices,
@@ -801,11 +802,11 @@ async def recalculate_network_costs(
 
         if s.location_id and s.location_id in location_cost_map:
             # Location cost override
-            s.estimated_cost = location_cost_map[s.location_id] * energy
+            s.estimated_cost = to_money(location_cost_map[s.location_id] * energy)
             updated += 1
         elif network.cost_per_kwh:
             # Network cost (only for sessions WITHOUT location cost override)
-            s.estimated_cost = float(network.cost_per_kwh) * energy
+            s.estimated_cost = to_money(float(network.cost_per_kwh) * energy)
             updated += 1
 
     return HTMLResponse(f'<span class="text-success text-sm">{updated} sessions recalculated</span>')
@@ -873,7 +874,7 @@ async def convert_network_to_location(
         network_id=target_network_id,
         name=location_name,
         location_type=location_type or "public",
-        cost_per_kwh=source.cost_per_kwh,
+        cost_per_kwh=None if source.cost_per_kwh is None else float(source.cost_per_kwh),
     )
 
     # Reassign all sessions from source network to target network + new location
