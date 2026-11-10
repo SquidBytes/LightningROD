@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "partials/plotly_script.html" import plotly_script with context %}
+{% block scripts %}{{ plotly_script(defer=true) }}{% endblock %}
 {% block content %}
 <div class="max-w-6xl">
     <div class="flex items-center justify-between mb-6">

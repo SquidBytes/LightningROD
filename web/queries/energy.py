@@ -14,6 +14,9 @@ from db.dialect import date_trunc_compat
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
+from web.queries.charts import HOVER_LABEL as _HOVER_LABEL
+from web.queries.charts import PLOTLY_CONFIG as _PLOTLY_CONFIG
+from web.queries.charts import wrap_chart as _wrap_chart
 from web.queries.costs import build_time_filter
 from web.queries.time_window import resolve_time_window, window_clause
 
@@ -32,19 +35,6 @@ SYNTHETIC_CURVE_PLATEAU_SOC = 80.0
 SYNTHETIC_CURVE_TAIL_FRACTION = 0.20  # kW at 100% SOC = max_kw * 0.20
 SYNTHETIC_CURVE_SAMPLE_STEP = 2       # SOC step (%) — yields 51 points
 
-# Shared Plotly modebar config — show minimal controls, hide logo
-_PLOTLY_CONFIG = {
-    "displayModeBar": "hover",
-    "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
-    "displaylogo": False,
-}
-
-_HOVER_LABEL = dict(bgcolor="#1f2937", font_color="#e5e7eb", bordercolor="#374151")
-
-
-def _wrap_chart(html: str) -> str:
-    """Wrap Plotly HTML in a container for modebar positioning."""
-    return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
 def build_time_filter_trip(

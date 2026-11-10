@@ -187,7 +187,9 @@ async def build_fuel_price_trend_chart(
 
     import plotly.graph_objects as go
 
-    from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
+    from web.queries.charts import HOVER_LABEL as _HOVER_LABEL
+    from web.queries.charts import PLOTLY_CONFIG as _PLOTLY_CONFIG
+    from web.queries.charts import wrap_chart as _wrap_chart
     from web.unit_system import convert_price_per_volume, get_units
 
     rows = await get_all_gas_prices(db)

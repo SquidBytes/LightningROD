@@ -17,19 +17,6 @@ from web.queries.time_window import resolve_time_window, window_clause
 # km -> miles factor; distance_added is stored in km.
 _KM_TO_MI = 0.621371
 
-# Shared Plotly modebar config — show minimal controls, hide logo
-_PLOTLY_CONFIG = {
-    "displayModeBar": "hover",
-    "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
-    "displaylogo": False,
-}
-
-_HOVER_LABEL = dict(bgcolor="#1f2937", font_color="#e5e7eb", bordercolor="#374151")
-
-
-def _wrap_chart(html: str) -> str:
-    """Wrap Plotly HTML in a container for modebar positioning."""
-    return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
 def build_time_filter(

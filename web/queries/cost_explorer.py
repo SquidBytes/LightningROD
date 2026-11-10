@@ -10,10 +10,10 @@ from sqlalchemy.orm import load_only
 
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVNetworkSubscription
+from web.queries.charts import HOVER_LABEL as _HOVER_LABEL
+from web.queries.charts import PLOTLY_CONFIG as _PLOTLY_CONFIG
+from web.queries.charts import wrap_chart as _wrap_chart
 from web.queries.costs import (
-    _HOVER_LABEL,
-    _PLOTLY_CONFIG,
-    _wrap_chart,
     build_time_filter,
     calculate_monthly_fees_in_range,  # noqa: F401  (re-exported for callers wanting the legacy total)
     compute_session_cost,

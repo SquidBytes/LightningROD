@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "partials/plotly_script.html" import plotly_script with context %}
+{% block scripts %}{{ plotly_script() }}{% endblock %}
 {% block content %}
 <div class="max-w-6xl">
     <h1 class="text-3xl font-bold text-base-content mb-2">Cost Analytics</h1>

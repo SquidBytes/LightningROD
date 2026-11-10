@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if page_title %}LightningROD - {{ page_title }}{% else %}LightningROD{% endif %}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='css/output.css') }}">
-    <script src="{{ url_for('static', path='vendor/plotly/plotly.min.js') }}"></script>
+    {% block scripts %}{% endblock %}
 </head>
 <body class="bg-base-100 text-base-content min-h-screen">
     <div class="drawer lg:drawer-open">
