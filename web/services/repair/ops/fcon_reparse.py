@@ -30,6 +30,7 @@ from web.services.repair.base import (
     scratch_session,
 )
 from web.services.source_merge import MERGEABLE_SOURCES
+from web.services.source_system import SourceSystem
 
 # Tables the FordConnect adapter writes; anything else it touches is a bug.
 _SCOPE = (
@@ -144,7 +145,7 @@ class FconArchiveReparse(RepairOperation):
 
     async def unavailable_reason(self, db: AsyncSession) -> str | None:
         configured = await db.scalar(
-            select(func.count(DataSourceConfig.id)).where(DataSourceConfig.source_name == "fcon")
+            select(func.count(DataSourceConfig.id)).where(DataSourceConfig.source_name == SourceSystem.FCON)
         )
         archived = await db.scalar(select(func.count(FconRawSample.id)))
         if not configured and not archived:

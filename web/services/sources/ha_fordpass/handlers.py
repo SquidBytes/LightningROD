@@ -32,6 +32,7 @@ from web.services.ingestion._helpers import (
     _resolve_and_convert,
     _safe_float,
 )
+from web.services.source_system import SourceSystem
 from web.services.sources.ha_fordpass import adapter as ha_fordpass
 from web.services.sources.ha_fordpass.dispatch import handles
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
@@ -169,7 +170,7 @@ async def _ensure_vehicle_exists(device_id: str, entity_id: str, db) -> None:
     """Create the vehicle for this device_id on first sight; FordPass device_id is the VIN."""
     from web.services.vehicles.auto_create import ensure_vehicle
 
-    await ensure_vehicle(db, device_id, source_system="ha_fordpass", vin=device_id)
+    await ensure_vehicle(db, device_id, source_system=SourceSystem.HA_FORDPASS, vin=device_id)
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +191,7 @@ async def _flush_vehicle_status(device_id: str, db, *, config_id: int = 0) -> No
     record = EVVehicleStatus(
         device_id=device_id,
         recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         **fields,
     )
     db.add(record)
@@ -210,7 +211,7 @@ async def _flush_battery_status(device_id: str, db, *, config_id: int = 0) -> No
     record = EVBatteryStatus(
         device_id=device_id,
         recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
         **fields,
     )
@@ -749,7 +750,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         odometer_start=odometer_start,
                         odometer_end=odometer_end,
                         is_complete=True,
-                        source_system="ha_fordpass",
+                        source_system=SourceSystem.HA_FORDPASS,
                         original_timestamp=event_ts,
                         ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
                         **trip_fields,
@@ -882,7 +883,7 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
             latitude=lat,
             longitude=lon,
             gps_accuracy=gps_accuracy,
-            source_system="ha_fordpass",
+            source_system=SourceSystem.HA_FORDPASS,
         )
         db.add(new_loc)
         logger.debug("Stored GPS snapshot for %s", device_id)
@@ -1038,7 +1039,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         from web.queries.sessions import find_matching_sessions
 
         matches = await find_matching_sessions(db, device_id, session_start_utc, energy_kwh)
-        if any(source == "ha_fordpass" for _, source in matches):
+        if any(source == SourceSystem.HA_FORDPASS for _, source in matches):
             # Same source duplicate -- skip silently (existing behavior)
             logger.info(
                 "Duplicate HA session detected (start=%s, energy=%s kWh), skipping",
@@ -1046,7 +1047,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
             )
             return
         # FordConnect's record of the same charge is merged, not duplicated.
-        merge_into = next((mid for mid, source in matches if source == "fcon"), None)
+        merge_into = next((mid for mid, source in matches if source == SourceSystem.FCON), None)
         if matches and merge_into is None:
             # Cross-source duplicate -- create but flag for review
             duplicate_of_id = matches[0][0]
@@ -1057,7 +1058,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     network_id = None
     if network_name and network_name.upper() != "UNKNOWN":
         from web.queries.settings import resolve_network
-        network_id = await resolve_network(db, network_name=network_name, source_system="ha_fordpass")
+        network_id = await resolve_network(db, network_name=network_name, source_system=SourceSystem.HA_FORDPASS)
 
     # -----------------------------------------------------------------------
     # Location resolution
@@ -1073,7 +1074,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         network_id=network_id,
         location_name=location_name,
         address_dict=address_dict,
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         _location_data=location_data,
         _network_name_raw=network_name,
     )
@@ -1096,7 +1097,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # -----------------------------------------------------------------------
     session = EVChargingSession(
         device_id=device_id,
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         charge_type=charge_type,
         location_name=location_name,
         location_id=location_id,

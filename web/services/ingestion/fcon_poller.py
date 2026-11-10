@@ -15,6 +15,7 @@ from typing import Any
 
 from db.engine import AsyncSessionLocal
 from db.models.data_source_config import DataSourceConfig
+from web.services.source_system import SourceSystem
 from web.services.sources.config_store import merge_into_row
 from web.services.sources.fcon.client import (
     AuthExpired,
@@ -83,7 +84,7 @@ class FconPollingRuntime:
         config: FconConfig,
         sink: SampleSink,
         *,
-        source_name: str = "fcon",
+        source_name: str = SourceSystem.FCON,
         instance_label: str = "default",
         client_factory: Callable[[], FordClient] = FordClient,
         persist: Callable[[int, dict[str, Any]], Awaitable[None]] = persist_token_fields,

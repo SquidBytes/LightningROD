@@ -1,11 +1,12 @@
 """FordConnect (FCON) source: polls Ford's official vehicle API over OAuth."""
 
+from web.services.source_system import SourceSystem
 from web.services.sources.base import DataSource
 from web.services.sources.fcon.config import FconConfig
 from web.services.sources.fcon.runtime import build_runtime
 
 DATA_SOURCE = DataSource(
-    source_name="fcon",
+    source_name=SourceSystem.FCON,
     display_name="FordConnect",
     adapter_module="web.services.sources.fcon.adapter",
     config_schema=FconConfig,

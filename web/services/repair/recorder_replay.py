@@ -31,6 +31,7 @@ from web.services.repair.replay_core import (
     replay_events,
 )
 from web.services.repair.snapshot import deserialize_row, serialize_row
+from web.services.source_system import SourceSystem
 from web.services.trip_merge import MERGEABLE_SOURCES
 
 logger = logging.getLogger("lightningrod.repair.recorder_replay")
@@ -165,7 +166,7 @@ class RecorderReplay(RepairOperation):
         # Lazy import: registry import must never pull in the HA stack.
         from web.services.ingestion.supervisor import supervisor
 
-        return supervisor.get_runtime("ha_fordpass", "default")
+        return supervisor.get_runtime(SourceSystem.HA_FORDPASS, "default")
 
     def _entity_id(self, runtime, suffix: str) -> str:
         return f"sensor.fordpass_{runtime.detected_vin or 'unknown'}_{suffix}"

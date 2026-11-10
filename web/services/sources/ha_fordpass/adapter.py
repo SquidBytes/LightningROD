@@ -31,6 +31,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from web.services.source_system import SourceSystem
 from web.services.units import detection
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
@@ -812,7 +813,7 @@ async def _handle_metrics_entity(
         db.add(EVBatteryStatus(
             device_id=device_id,
             recorded_at=recorded_at,
-            source_system="ha_fordpass",
+            source_system=SourceSystem.HA_FORDPASS,
             original_timestamp=recorded_at,
             ingest_schema_version=INGEST_SCHEMA_VERSION,
             **values,
@@ -1099,7 +1100,7 @@ async def _handle_events_entity(
         odometer_start=odometer_start,
         odometer_end=odometer_end,
         is_complete=True,
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         original_timestamp=recorded_at,
         ingest_schema_version=INGEST_SCHEMA_VERSION,
     )
@@ -1139,7 +1140,7 @@ async def _handle_elvehcharging_entity(
     record = EVBatteryStatus(
         device_id=device_id,
         recorded_at=_parse_event_ts(new_state) or datetime.now(UTC),
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         hv_battery_temperature=battery_temp,
         ingest_schema_version=INGEST_SCHEMA_VERSION,
     )

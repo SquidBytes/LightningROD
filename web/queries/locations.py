@@ -20,6 +20,7 @@ from db.models.reference import (
     EVLocationLookup,
 )
 from web.queries.settings import resolve_network
+from web.services.source_system import SourceSystem
 
 # Maximum distance (meters) for geo-proximity matching
 LOCATION_MATCH_RADIUS_M = 100
@@ -200,7 +201,7 @@ async def resolve_location(
     location_name: str | None = None,
     location_type: str | None = None,
     address_dict: dict | None = None,
-    source_system: str = "ha_fordpass",
+    source_system: str = SourceSystem.HA_FORDPASS,
     _location_data: dict | None = None,
     _network_name_raw: str | None = None,
 ) -> int | None:
@@ -260,7 +261,7 @@ async def resolve_location(
     # 3. Handle match
     if matched is not None:
         # Protect user-edited locations
-        if matched.source_system == "manual":
+        if matched.source_system == SourceSystem.MANUAL:
             return matched.id
 
         # Enrich: fill NULL fields without overwriting existing values

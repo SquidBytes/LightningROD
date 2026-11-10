@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from web.services.source_system import SourceSystem
 from web.services.sources.config_store import find_row, merge_into_row, read_row
 from web.services.sources.fcon.client import FordClient, FordError, authorize_url
 from web.services.sources.fcon.config import FconConfig
@@ -20,7 +21,7 @@ from web.services.sources.fcon.oauth import (
 )
 from web.services.sources.fcon.tokens import exchange_code, token_fields
 
-SOURCE_NAME = "fcon"
+SOURCE_NAME = SourceSystem.FCON
 _NO_CREDENTIALS = "Save your Client ID and Client Secret first."
 
 logger = logging.getLogger("lightningrod.sources.fcon.consent")

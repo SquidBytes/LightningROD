@@ -35,6 +35,7 @@ from web.queries.vehicles import (
     get_active_vehicle,
     get_all_vehicles,
 )
+from web.services.source_system import SourceSystem
 from web.services.sources.ha_fordpass.adapter import LIGHTNINGROD_TRIP_NAMESPACE
 from web.unit_system import MI_PER_KM, parse_user_local_to_utc, to_metric_distance
 
@@ -507,7 +508,7 @@ async def create_trip(
         duration=duration_minutes * 60 if duration_minutes is not None else None,
         energy_consumed=energy_consumed,
         efficiency=calc_efficiency,
-        source_system="manual",
+        source_system=SourceSystem.MANUAL,
         is_complete=True,
     )
 

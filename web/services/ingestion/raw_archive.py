@@ -20,11 +20,12 @@ from db.models.raw_event import HARawEvent
 from db.portable_insert import portable_insert
 from web.queries.settings import get_raw_archive_settings
 from web.services.ingestion._helpers import _get_event_timestamp
+from web.services.source_system import SourceSystem
 from web.services.sources.ha_fordpass.adapter import INGEST_SCHEMA_VERSION
 
 logger = logging.getLogger("lightningrod.ingestion.raw_archive")
 
-SOURCE_SYSTEM = "ha_fordpass"
+SOURCE_SYSTEM = SourceSystem.HA_FORDPASS
 # Entity id prefixes the archive keeps. The device tracker is here because it
 # is the only source of GPS accuracy and altitude — the gps sensor carries
 # neither, and ev_location has columns for both.

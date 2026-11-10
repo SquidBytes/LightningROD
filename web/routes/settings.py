@@ -76,6 +76,7 @@ from web.services.repair.registry import REPAIR_REGISTRY, get_operation
 from web.services.repair.skips import add_skips, clear_skips, count_skips
 from web.services.repair.snapshot import list_runs, purge_run, restore_run
 from web.services.secrets import mask_secret
+from web.services.source_system import SourceSystem
 from web.services.sources.config_store import find_row, merge_into_row, read_row
 from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
@@ -1456,8 +1457,8 @@ async def _upsert_data_source_config(db: AsyncSession, source, config) -> None:
 
 def _card_health_inputs(source) -> tuple[dict, str | None]:
     """Return (health_dict, last_seen_str) for the badge — only ha_fordpass today."""
-    if source.source_name == "ha_fordpass":
-        rt = supervisor.get_runtime("ha_fordpass", "default")
+    if source.source_name == SourceSystem.HA_FORDPASS:
+        rt = supervisor.get_runtime(SourceSystem.HA_FORDPASS, "default")
         health = rt.health if rt is not None else {}
         return health, _last_event_timeago(ha_fordpass_adapter)
     return {}, None
@@ -1477,7 +1478,7 @@ async def data_sources_tab(
     for source in SOURCE_REGISTRY:
         if source.source_name == "ha_gas_price":
             continue
-        if source.source_name == "fcon":
+        if source.source_name == SourceSystem.FCON:
             cards.append(await fcon_card_context(request, db))
             continue
         row = await find_row(db, source.source_name)
@@ -1504,7 +1505,7 @@ async def data_sources_tab(
             "health": health,
             "last_seen": last_seen,
         }
-        if source.source_name == "ha_fordpass":
+        if source.source_name == SourceSystem.HA_FORDPASS:
             gas_settings = await get_app_settings_dict(
                 db,
                 ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"],
@@ -1593,7 +1594,7 @@ async def save_data_source(
 
     await _upsert_data_source_config(db, source, config)
 
-    if source_name == "ha_fordpass":
+    if source_name == SourceSystem.HA_FORDPASS:
         await set_app_setting(db, "gas_sensor_station_entity_id", gas_station_entity)
         await set_app_setting(db, "gas_sensor_average_entity_id", gas_average_entity)
         from web.services.sources.ha_gas_price.adapter import (
@@ -1624,7 +1625,7 @@ async def save_data_source(
 @router.get("/settings/hass/status", response_class=HTMLResponse)
 async def hass_status(request: Request):
     """Return HASS connection status partial for polling."""
-    runtime = supervisor.get_runtime("ha_fordpass", "default")
+    runtime = supervisor.get_runtime(SourceSystem.HA_FORDPASS, "default")
     health = runtime.health if runtime is not None else {}
     detected_vin = getattr(runtime, "detected_vin", None) if runtime is not None else None
     ha_config = getattr(runtime, "_ha_config", None) if runtime is not None else None
@@ -1656,14 +1657,14 @@ async def hass_reconnect(
     """
     result = await db.execute(
         select(DataSourceConfig).where(
-            DataSourceConfig.source_name == "ha_fordpass",
+            DataSourceConfig.source_name == SourceSystem.HA_FORDPASS,
             DataSourceConfig.instance_label == "default",
         )
     )
     row = result.scalar_one_or_none()
     if row is not None:
         await supervisor.restart_runtime(row.id)
-    runtime = supervisor.get_runtime("ha_fordpass", "default")
+    runtime = supervisor.get_runtime(SourceSystem.HA_FORDPASS, "default")
     health = runtime.health if runtime is not None else {}
     detected_vin = getattr(runtime, "detected_vin", None) if runtime is not None else None
     ha_config = getattr(runtime, "_ha_config", None) if runtime is not None else None
@@ -1689,7 +1690,7 @@ async def hass_backfill(request: Request):
     Pulls as much charging session and gas sensor history as HA will return
     (no artificial time cap). Duplicates are automatically skipped.
     """
-    runtime = supervisor.get_runtime("ha_fordpass", "default")
+    runtime = supervisor.get_runtime(SourceSystem.HA_FORDPASS, "default")
     if runtime is None or not runtime.health.get("connected"):
         return HTMLResponse(
             '<div class="alert alert-error text-sm">Must be connected to HA to backfill.</div>'
@@ -1740,7 +1741,7 @@ async def hass_disconnect(
     """Stop the HASS websocket runtime via the supervisor."""
     result = await db.execute(
         select(DataSourceConfig).where(
-            DataSourceConfig.source_name == "ha_fordpass",
+            DataSourceConfig.source_name == SourceSystem.HA_FORDPASS,
             DataSourceConfig.instance_label == "default",
         )
     )
@@ -1748,7 +1749,7 @@ async def hass_disconnect(
     if row is not None:
         await supervisor.stop_runtime(row.id)
     # Final health snapshot — the runtime may already be gone.
-    runtime = supervisor.get_runtime("ha_fordpass", "default")
+    runtime = supervisor.get_runtime(SourceSystem.HA_FORDPASS, "default")
     health = (
         runtime.health
         if runtime is not None
@@ -1893,7 +1894,7 @@ async def _hass_gas_sensors_context(
 
     sensor_states: dict = {"station": None, "average": None}
     if check_live:
-        runtime = supervisor.get_runtime("ha_fordpass", "default")
+        runtime = supervisor.get_runtime(SourceSystem.HA_FORDPASS, "default")
         for role, key in (
             ("station", "gas_sensor_station_entity_id"),
             ("average", "gas_sensor_average_entity_id"),

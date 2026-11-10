@@ -17,6 +17,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from web.services.source_system import SourceSystem
 from web.util.time import parse_iso, utc
 
 # ---------------------------------------------------------------------------
@@ -1031,7 +1032,7 @@ async def import_rows(
                                 address=addr,
                                 network_id=clean_row.get("network_id"),
                                 location_name=clean_row.get("location_name"),
-                                source_system="csv_import",
+                                source_system=SourceSystem.CSV_IMPORT,
                             )
                             if resolved_loc_id:
                                 clean_row["location_id"] = resolved_loc_id

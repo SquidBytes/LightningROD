@@ -19,6 +19,7 @@ from db.models.reference import (
 from web.dependencies import get_db
 from web.queries.settings import get_all_networks
 from web.queries.vehicles import get_active_vehicle, get_all_vehicles
+from web.services.source_system import SourceSystem
 
 router = APIRouter(prefix="/review")
 templates = Jinja2Templates(directory="web/templates")
@@ -399,7 +400,7 @@ async def verify_location(
     loc = result.scalar_one_or_none()
     if loc:
         loc.is_verified = True
-        loc.source_system = "manual"
+        loc.source_system = SourceSystem.MANUAL
         await db.commit()
     ctx = await _locations_context(db, filter="unverified")
     return templates.TemplateResponse(
@@ -422,7 +423,7 @@ async def verify_network(
     net = result.scalar_one_or_none()
     if net:
         net.is_verified = True
-        net.source_system = "manual"
+        net.source_system = SourceSystem.MANUAL
         await db.commit()
     ctx = await _networks_context(db, filter="unverified")
     return templates.TemplateResponse(
@@ -644,7 +645,7 @@ async def associate_location(
             new_net = EVChargingNetwork(
                 network_name=network_name.strip(),
                 is_verified=False,
-                source_system="manual",
+                source_system=SourceSystem.MANUAL,
             )
             db.add(new_net)
             await db.flush()
@@ -686,14 +687,14 @@ async def promote_location(
     new_net = EVChargingNetwork(
         network_name=loc.location_name,
         is_verified=True,
-        source_system="manual",
+        source_system=SourceSystem.MANUAL,
     )
     db.add(new_net)
     await db.flush()  # populate id before linking
 
     loc.network_id = new_net.id
     loc.is_verified = True
-    loc.source_system = "manual"
+    loc.source_system = SourceSystem.MANUAL
     await db.commit()
 
     ctx = await _locations_context(db, filter="unverified")
