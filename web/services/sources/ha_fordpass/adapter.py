@@ -35,6 +35,11 @@ from db.models.base import INGEST_SCHEMA_VERSION
 from web.services.source_system import SourceSystem
 from web.services.units import detection
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
+from web.services.units.families import (
+    FAMILY_OF_UNIT,
+    UNIT_FOR_FAMILY,
+    normalize_unit_string,
+)
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
 from web.util.numbers import safe_float
 from web.util.time import parse_iso, utc
@@ -447,17 +452,8 @@ def lookup_mapping(
 
 
 def _field_type_for_mapping(mapping: DataMapping) -> str | None:
-    """Classify a mapping's unit as distance/speed/temperature, else None."""
-    # Same semantics as web.services.units.detection._UNIT_FIELD_TYPES,
-    # duplicated locally to avoid widening the import graph.
-    unit = mapping.db_unit or mapping.source_unit
-    if unit in ("km", "mi"):
-        return "distance"
-    if unit in ("kmh", "mph"):
-        return "speed"
-    if unit in ("degC", "degF", "F"):
-        return "temperature"
-    return None
+    """Classify a mapping's unit by family, else None."""
+    return FAMILY_OF_UNIT.get(mapping.db_unit or mapping.source_unit)
 
 
 def _unit_for_ha_system(
@@ -477,13 +473,7 @@ def _unit_for_ha_system(
     family = _coerce_unit_system_family(unit_system, field_type)
     if family is None:
         return None
-    if field_type == "distance":
-        return "km" if family == "metric" else "mi"
-    if field_type == "temperature":
-        return "degC" if family == "metric" else "degF"
-    if field_type == "speed":
-        return "kmh" if family == "metric" else "mph"
-    return None
+    return UNIT_FOR_FAMILY.get((field_type, family))
 
 
 def _resolve_source_unit(
@@ -502,7 +492,7 @@ def _resolve_source_unit(
     # --- 1. Read-time unit_of_measurement path (state-sourced fields) ---
     if mapping.read_time_uom:
         attrs = (new_state or {}).get("attributes") or {}
-        resolved = _normalize_uom_string(attrs.get("unit_of_measurement"))
+        resolved = normalize_unit_string(attrs.get("unit_of_measurement"))
         if resolved:
             return resolved, "read_time_uom"
         logger.warning(
@@ -534,36 +524,6 @@ def _resolve_source_unit(
 
     # --- 3. Declared (mapping literal) ---
     return mapping.source_unit, "declared"
-
-
-def _normalize_uom_string(raw: Any) -> str | None:
-    """Normalize an HA `unit_of_measurement` string to a to_metric key.
-
-    None for spellings to_metric would not recognize, so callers can fall back.
-    """
-    if not isinstance(raw, str):
-        return None
-    u = raw.strip()
-    lowered = u.lower()
-    if lowered in ("mi", "mile", "miles"):
-        return "mi"
-    if lowered in ("km", "kilometer", "kilometers"):
-        return "km"
-    if lowered in ("mph", "mi/h"):
-        return "mph"
-    if lowered in ("kmh", "km/h"):
-        return "kmh"
-    if u in ("°C", "degC") or lowered in ("c", "°c"):
-        return "degC"
-    if u in ("°F", "degF") or lowered in ("f", "°f"):
-        return "degF"
-    if u == "kWh" or lowered == "kwh":
-        return "kWh"
-    if u == "Wh" or lowered == "wh":
-        return "Wh"
-    if lowered in ("s", "sec", "seconds"):
-        return "s"
-    return None
 
 
 def convert(

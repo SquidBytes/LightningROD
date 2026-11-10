@@ -478,7 +478,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         battery_range = attrs.get("batteryRange")
         if battery_range is not None:
             # The soc entity's unit_of_measurement is "%", which isn't a
-            # distance unit. _normalize_uom_string("%") returns None, so the
+            # distance unit. normalize_unit_string("%") returns None, so the
             # resolver falls through to device_class + ha_config -> cross-ref
             # against metrics.xevBatteryRange -> unknown. No silent "mi" default.
             converted = _resolve_and_convert(

@@ -6,10 +6,7 @@ two adapters stay thin.
 
 Functions in this module are HA-event-shape generic (no FordPass / gas-specific
 logic). The single edge case: `_read_time_uom` and `_convert_with_uom` import
-`_normalize_uom_string` from `web.services.sources.ha_fordpass.adapter` — that
-edge is preserved (FordPass owns the canonical UOM normalization table). Future
-adapters that need their own UOM normalizer can swap the import or pass the
-normalizer in.
+`normalize_unit_string` from `web.services.units.families`.
 """
 
 from __future__ import annotations
@@ -20,6 +17,7 @@ from typing import Any
 
 from web.services.sources.ha_fordpass import adapter as ha_fordpass
 from web.services.units import detection
+from web.services.units.families import normalize_unit_string
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
 from web.util.numbers import safe_float as _safe_float  # noqa: F401  (re-exported)
 from web.util.time import parse_iso
@@ -45,7 +43,7 @@ def _read_time_uom(new_state: dict) -> str | None:
     raw = attrs.get("unit_of_measurement")
     if raw is None:
         return None
-    return ha_fordpass._normalize_uom_string(raw)
+    return normalize_unit_string(raw)
 
 
 def _convert_with_uom(
