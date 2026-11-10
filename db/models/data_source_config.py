@@ -2,13 +2,11 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, UniqueConstraint, func, text
+from sqlalchemy import Boolean, String, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.models.base import Base
+from db.models.base import TIMESTAMPTZ, Base
 from db.types import JSONStorage
-
-TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class DataSourceConfig(Base):

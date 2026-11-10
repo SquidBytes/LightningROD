@@ -2,16 +2,13 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Numeric, SmallInteger, String, func
+from sqlalchemy import Index, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.models.base import Base
-
-# PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = DateTime(timezone=True)
+from db.models.base import TIMESTAMPTZ, Base, IngestMetaMixin, IngestVersionMixin
 
 
-class EVBatteryStatus(Base):
+class EVBatteryStatus(IngestMetaMixin, IngestVersionMixin, Base):
     """HV/LV battery telemetry captured over time."""
 
     __tablename__ = "ev_battery_status"
@@ -47,17 +44,6 @@ class EVBatteryStatus(Base):
 
     # Status
     performance_status: Mapped[str | None] = mapped_column(String)
-
-    # Pipeline metadata
-    source_system: Mapped[str | None] = mapped_column(String(100))
-    ingested_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=func.now()
-    )
-    original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
-
-    # Pipeline schema version. NULL = older rows with uncertain unit provenance.
-    # Value 2 = adapter-driven ingest with declared source units.
-    ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (
         Index("idx_ev_battery_status_recorded_at", "recorded_at"),

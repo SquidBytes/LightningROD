@@ -16,6 +16,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.engine import AsyncSessionLocal
+from db.models.base import INGEST_SCHEMA_VERSION
 from db.models.fcon_raw_sample import FconRawSample
 from db.portable_insert import portable_insert
 from web.queries.settings import RAW_ARCHIVE_DEFAULT_RETENTION_DAYS
@@ -25,7 +26,6 @@ from web.services.sources.ford_metrics.parser import parse_time
 
 logger = logging.getLogger("lightningrod.sources.fcon.raw_store")
 
-INGEST_SCHEMA_VERSION = 2
 RETENTION_SETTING = "fcon_raw_retention_days"
 # Same default as the Home Assistant event archive: ~250 MB on SQLite (~115 MB
 # on Postgres) at a typical 100 distinct responses a day, fine for a home server.

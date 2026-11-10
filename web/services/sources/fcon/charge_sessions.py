@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.base import INGEST_SCHEMA_VERSION
 from db.models.charging_session import EVChargingSession
 from db.models.fcon_raw_sample import FconRawSample
 from web.queries.locations import (
@@ -37,7 +38,6 @@ from web.services.sources.ford_metrics.parser import parse_time
 
 logger = logging.getLogger("lightningrod.sources.fcon.sessions")
 
-INGEST_SCHEMA_VERSION = 2
 IN_PROGRESS = "IN_PROGRESS"
 CONNECTED = "CONNECTED"
 DISCONNECTED = "DISCONNECTED"

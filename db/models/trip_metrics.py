@@ -5,29 +5,23 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
-    DateTime,
     Index,
     Integer,
     Numeric,
-    SmallInteger,
     String,
     Uuid,
     and_,
-    func,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.models.base import Base
-
-# PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = DateTime(timezone=True)
+from db.models.base import TIMESTAMPTZ, Base, IngestMetaMixin, IngestVersionMixin
 
 # Distances under this read as 0.0 in either unit: the vehicle was on but not driven.
 STATIONARY_MAX_KM = 0.05
 
 
-class EVTripMetrics(Base):
+class EVTripMetrics(IngestMetaMixin, IngestVersionMixin, Base):
     """EV trip efficiency, energy, location, and driving-score data."""
 
     __tablename__ = "ev_trip_metrics"
@@ -81,17 +75,6 @@ class EVTripMetrics(Base):
 
     # Session flags
     is_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
-    # Pipeline metadata
-    source_system: Mapped[str | None] = mapped_column(String(100))
-    ingested_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=func.now()
-    )
-    original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
-
-    # Pipeline schema version. NULL = older rows with uncertain unit provenance.
-    # Value 2 = adapter-driven ingest with declared source units.
-    ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     @hybrid_property
     def is_stationary(self) -> bool:

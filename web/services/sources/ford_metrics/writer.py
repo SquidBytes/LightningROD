@@ -8,11 +8,11 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.base import INGEST_SCHEMA_VERSION
 from db.models.battery_status import EVBatteryStatus
 from db.models.vehicle_status import EVVehicleStatus
 from web.services.sources.ford_metrics.parser import BATTERY, VEHICLE, ParsedRow
 
-INGEST_SCHEMA_VERSION = 2
 _MODELS: dict[str, Any] = {BATTERY: EVBatteryStatus, VEHICLE: EVVehicleStatus}
 
 

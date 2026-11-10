@@ -31,6 +31,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.base import INGEST_SCHEMA_VERSION
 from web.services.source_system import SourceSystem
 from web.services.units import detection
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
@@ -395,8 +396,6 @@ def _record_last_seen(
 # ---------------------------------------------------------------------------
 # Lookup + conversion helpers (consumed by ha_fordpass.handlers slug handlers)
 # ---------------------------------------------------------------------------
-
-INGEST_SCHEMA_VERSION = 2  # mark every new adapter-driven row
 
 _ENTITY_SUFFIX_PREFIX = "sensor.fordpass_"
 

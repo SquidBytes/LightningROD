@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.base import INGEST_SCHEMA_VERSION
 from db.models.trip_metrics import EVTripMetrics
 from web.queries.trips import detect_trip_location_ids
 from web.services.sources.fcon.history import telemetry_since_boundary
@@ -29,7 +30,6 @@ from web.services.trip_merge import apply_merge, find_same_drive, is_mergeable
 
 logger = logging.getLogger("lightningrod.sources.fcon.trips")
 
-INGEST_SCHEMA_VERSION = 2
 IGNITION_ON = frozenset({"ON", "RUN", "START"})
 
 
