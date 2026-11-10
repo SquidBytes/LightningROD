@@ -94,7 +94,7 @@ async def query_energy_summary(
 
     for s in sessions:
         total_sessions += 1
-        kwh = float(s.energy_kwh or 0)
+        kwh = s.energy_kwh or 0.0
         total_kwh += kwh
 
         # Group by charge type — AC, DC, or Unknown (anything else/NULL)
@@ -115,10 +115,10 @@ async def query_energy_summary(
         # Compute efficiency — requires BOTH distance_added > 0 and energy_kwh > 0
         if (
             s.distance_added is not None
-            and float(s.distance_added) > 0
+            and s.distance_added > 0
             and kwh > 0
         ):
-            eff = float(s.distance_added) / kwh  # km/kWh
+            eff = s.distance_added / kwh  # km/kWh
             efficiencies.append(eff)
             sessions_for_chart.append({
                 "date": s.session_start_utc,
@@ -378,7 +378,7 @@ async def query_regen_for_chart(
     chart_data = [
         {
             "date": r.start_time,
-            "range_regenerated": float(r.range_regenerated or 0),
+            "range_regenerated": r.range_regenerated or 0.0,
         }
         for r in rows
     ]
@@ -435,7 +435,7 @@ async def query_monthly_energy(
         else:
             ct = raw_ct or "Unknown"
         key = (month, ct)
-        monthly[key] = monthly.get(key, 0.0) + float(s.energy_kwh or 0)
+        monthly[key] = monthly.get(key, 0.0) + (s.energy_kwh or 0.0)
 
     return [
         {"month": month, "charge_type": ct, "kwh": kwh}

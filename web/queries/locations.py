@@ -119,7 +119,7 @@ def _find_geo_match(
     for loc in locations:
         if loc.latitude is not None and loc.longitude is not None:
             dist = haversine_meters(
-                float(loc.latitude), float(loc.longitude),
+                loc.latitude, loc.longitude,
                 latitude, longitude,
             )
             if dist <= LOCATION_MATCH_RADIUS_M:
@@ -163,7 +163,7 @@ async def _find_gps_alias_match(
     aliases = result.scalars().all()
     for alias in aliases:
         dist = haversine_meters(
-            float(alias.latitude), float(alias.longitude),
+            alias.latitude, alias.longitude,
             latitude, longitude,
         )
         if dist <= LOCATION_MATCH_RADIUS_M:
@@ -182,7 +182,7 @@ def _find_all_geo_matches(
     for loc in locations:
         if loc.latitude is not None and loc.longitude is not None:
             dist = haversine_meters(
-                float(loc.latitude), float(loc.longitude),
+                loc.latitude, loc.longitude,
                 latitude, longitude,
             )
             if dist <= LOCATION_MATCH_RADIUS_M:
@@ -402,10 +402,6 @@ async def _default_stall(
     return stalls[0] if len(stalls) == 1 else None
 
 
-def _as_float(value) -> float | None:
-    return float(value) if value is not None else None
-
-
 async def get_location_defaults(
     db: AsyncSession, location_id: int | None
 ) -> LocationDefaults:
@@ -430,9 +426,9 @@ async def get_location_defaults(
         location_type=loc.location_type,
         network_id=loc.network_id,
         stall_id=stall.id if stall else None,
-        evse_voltage=_as_float(stall.voltage) if stall else None,
-        evse_amperage=_as_float(stall.amperage) if stall else None,
-        charger_rated_kw=_as_float(stall.rated_kw) if stall else None,
+        evse_voltage=stall.voltage if stall else None,
+        evse_amperage=stall.amperage if stall else None,
+        charger_rated_kw=stall.rated_kw if stall else None,
         charge_type=(
             _STALL_CHARGE_TYPE.get(stall.charger_type)
             if stall and stall.charger_type

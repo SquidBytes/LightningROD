@@ -83,7 +83,7 @@ def compute_session_cost(
         "savings": None,
     }
 
-    energy_kwh = float(session.energy_kwh or 0)
+    energy_kwh = session.energy_kwh or 0.0
 
     # Resolve the subscription active on this session's date.
     active_sub = None
@@ -279,7 +279,7 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
             continue
 
         total_sessions += 1
-        kwh = float(s.energy_kwh or 0)
+        kwh = s.energy_kwh or 0.0
         total_kwh += kwh
         total_cost += cost_info["display_cost"]
 

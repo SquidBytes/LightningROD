@@ -240,19 +240,19 @@ async def query_charge_curve(
         result = await db.execute(stmt)
         detailed = [
             {
-                "soc": float(r.hv_battery_soc),
-                "kw": float(r.hv_battery_kw or 0),
-                "temp": float(r.hv_battery_temperature) if r.hv_battery_temperature is not None else None,
+                "soc": r.hv_battery_soc,
+                "kw": r.hv_battery_kw or 0.0,
+                "temp": r.hv_battery_temperature,
                 "timestamp": r.recorded_at,
             }
             for r in result.all()
         ]
 
     fallback = {
-        "start_soc": float(session.start_soc) if session.start_soc else None,
-        "end_soc": float(session.end_soc) if session.end_soc else None,
-        "charging_kw": float(session.charging_kw) if session.charging_kw else None,
-        "max_power": float(session.max_power) if session.max_power else None,
+        "start_soc": session.start_soc or None,
+        "end_soc": session.end_soc or None,
+        "charging_kw": session.charging_kw or None,
+        "max_power": session.max_power or None,
     }
 
     return {"detailed": detailed, "fallback": fallback, "session": session}
@@ -513,7 +513,7 @@ async def query_recent_sessions_for_picker(
             "id": row.id,
             "session_start_utc": row.session_start_utc,
             "location_name": row.location_name,
-            "energy_kwh": float(row.energy_kwh) if row.energy_kwh else None,
+            "energy_kwh": row.energy_kwh or None,
             "charge_type": row.charge_type,
             "network_name": row.network_name,
             "network_color": row.color,
@@ -640,7 +640,7 @@ async def query_degradation_by_mileage(
     )
     odo_df = pd.DataFrame(
         [
-            {"recorded_at": r.recorded_at, "odometer": float(r.odometer)}
+            {"recorded_at": r.recorded_at, "odometer": r.odometer}
             for r in odo_rows
         ]
     )
@@ -1440,13 +1440,13 @@ def build_mini_charge_curve(session, ref_curve: list[dict] | None = None) -> str
     if not getattr(session, "start_soc", None) and not getattr(session, "end_soc", None):
         return ""
 
-    start_soc = float(session.start_soc or 0)
-    end_soc = float(session.end_soc or 0)
+    start_soc = session.start_soc or 0.0
+    end_soc = session.end_soc or 0.0
     est_kw: float = 0.0
     if getattr(session, "charging_kw", None):
-        est_kw = abs(float(session.charging_kw))
+        est_kw = abs(session.charging_kw)
     elif getattr(session, "max_power", None):
-        est_kw = abs(float(session.max_power))
+        est_kw = abs(session.max_power)
 
     ref_points = [(float(p["soc"]), float(p["kw"])) for p in (ref_curve or [])]
     session_points = [(start_soc, est_kw), (end_soc, est_kw)]

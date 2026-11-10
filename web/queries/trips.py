@@ -270,8 +270,8 @@ async def query_efficiency_trend(
     chart_data = [
         {
             "date": row.end_time,
-            "efficiency": float(row.efficiency),
-            "distance": float(row.distance) if row.distance else 0.0,
+            "efficiency": row.efficiency,
+            "distance": row.distance or 0.0,
         }
         for row in result.all()
     ]
@@ -637,7 +637,7 @@ async def _nearest_gps(
     # SQLite returns naive datetimes; coerce both sides to UTC-aware to subtract.
     target = utc(target_time)
     nearest = min(rows, key=lambda r: abs((utc(r.recorded_at) - target).total_seconds()))
-    return (float(nearest.latitude), float(nearest.longitude))
+    return (nearest.latitude, nearest.longitude)
 
 
 async def detect_trip_locations(
