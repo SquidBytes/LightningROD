@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from db.models.vehicle import EVVehicle
 from tests.test_fcon.payloads import telemetry
+from web.queries.settings import get_app_setting, set_app_setting
 from web.services.sources.fcon import adapter
 from web.services.sources.fcon.garage import garage_facts
 from web.services.vehicles.auto_create import ensure_vehicle
@@ -95,6 +96,19 @@ async def test_vehicle_home_assistant_created_gets_filled(db_session):
     )
     assert v.trim_level is None  # ambiguous: left for the user
     assert v.vin == DEVICE  # already set by Home Assistant; not replaced
+
+
+@pytest.mark.db
+async def test_colliding_insert_keeps_the_callers_staged_work(db_session):
+    """A duplicate VIN rolls back only the vehicle insert, not what the caller staged."""
+    await ensure_vehicle(db_session, DEVICE, source_system="fcon", vin=VIN)
+    await set_app_setting(db_session, "auto_create_probe", "staged")
+    assert await ensure_vehicle(db_session, "other-device", source_system="fcon", vin=VIN) is None
+    assert await get_app_setting(db_session, "auto_create_probe") == "staged"
+    assert await db_session.scalar(
+        select(EVVehicle.device_id).where(EVVehicle.device_id == "other-device")
+    ) is None
+    assert (await _vehicle(db_session)).vin == VIN
 
 
 @pytest.mark.db
