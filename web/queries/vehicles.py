@@ -89,13 +89,12 @@ async def create_vehicle(
         device_id=device_id,
         source_system=source_system,
     )
-    db.add(vehicle)
     try:
-        await db.flush()
+        async with db.begin_nested():
+            db.add(vehicle)
+            await db.flush()
     except IntegrityError:
-        await db.rollback()
         return None
-    await db.commit()
     await db.refresh(vehicle)
     return vehicle
 
@@ -118,16 +117,14 @@ async def update_vehicle(
         "battery_capacity_kwh", "battery_gross_capacity_kwh",
         "vin", "device_id", "source_system",
     }
-    for key, value in kwargs.items():
-        if key in allowed_fields:
-            setattr(vehicle, key, value)
-
     try:
-        await db.flush()
+        async with db.begin_nested():
+            for key, value in kwargs.items():
+                if key in allowed_fields:
+                    setattr(vehicle, key, value)
+            await db.flush()
     except IntegrityError:
-        await db.rollback()
         return None
-    await db.commit()
     await db.refresh(vehicle)
     return vehicle
 
@@ -154,7 +151,7 @@ async def delete_vehicle(db: AsyncSession, vehicle_id: int) -> bool:
     if vehicle is None:
         return False
     await db.delete(vehicle)
-    await db.commit()
+    await db.flush()
     return True
 
 
