@@ -4,17 +4,15 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_
 
+from web.util.time import parse_iso
+
 _PRESET_DAYS = {"7d": 7, "30d": 30, "90d": 90, "1y": 365}
 
 
 def _parse_iso_date(value: str | None) -> datetime | None:
     """Parse a yyyy-mm-dd string into a UTC start-of-day datetime, or None."""
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value).replace(tzinfo=UTC)
-    except ValueError:
-        return None
+    parsed = parse_iso(value)
+    return parsed.replace(tzinfo=UTC) if parsed else None
 
 
 def resolve_time_window(

@@ -34,6 +34,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from web.services.units import detection
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
+from web.util.numbers import safe_float
+from web.util.time import parse_iso, utc
 
 logger = logging.getLogger("lightningrod.sources.ha_fordpass")
 
@@ -583,7 +585,7 @@ def convert(
         return None
     if mapping.wh_autoscale and source_unit == "Wh":
         # Real packs are ~10-300 kWh, so |value| < 1000 can only be kWh already.
-        numeric = _safe_float(raw_value)
+        numeric = safe_float(raw_value)
         if numeric is not None and abs(numeric) < 1000:
             source_unit, method = "kWh", "wh_autoscale"
     try:
@@ -624,19 +626,6 @@ def convert(
             mapping.db_column,
         )
     return converted
-
-
-# ---------------------------------------------------------------------------
-# Safe-float helper (kept here for parity with the ingestion._helpers copy)
-# ---------------------------------------------------------------------------
-
-def _safe_float(val: Any) -> float | None:
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
 
 
 def _metric_value(attrs: dict, key: str) -> Any:
@@ -786,16 +775,16 @@ async def _handle_metrics_entity(
         )
 
     # SI-already scalar attributes pass through without conversion
-    hv_soc = _safe_float(_metric_value(attrs, "xevBatteryStateOfCharge"))
-    hv_actual_soc = _safe_float(_metric_value(attrs, "xevBatteryActualStateOfCharge"))
+    hv_soc = safe_float(_metric_value(attrs, "xevBatteryStateOfCharge"))
+    hv_actual_soc = safe_float(_metric_value(attrs, "xevBatteryActualStateOfCharge"))
     cap_mapping = lookup_mapping(pattern, "xevBatteryCapacity")
     hv_capacity = (
         convert(cap_mapping, _metric_value(attrs, "xevBatteryCapacity"), new_state, ha_config)
         if cap_mapping
         else None
     )
-    hv_voltage = _safe_float(_metric_value(attrs, "xevBatteryVoltage"))
-    hv_amperage = _safe_float(_metric_value(attrs, "xevBatteryIoCurrent"))
+    hv_voltage = safe_float(_metric_value(attrs, "xevBatteryVoltage"))
+    hv_amperage = safe_float(_metric_value(attrs, "xevBatteryIoCurrent"))
     # Ford publishes no pack-power metric. ha-fordpass derives its elveh
     # batterykW attribute from voltage x current, so deriving it the same way
     # here keeps the two ingestion paths numerically identical.
@@ -862,7 +851,7 @@ async def _backfill_trip_regen(
     Only NULL fields are filled; elveh-sourced values are never overwritten.
     """
     raw_regen = _metric_value(attrs, "tripXevBatteryRangeRegenerated")
-    raw_score = _safe_float(_metric_value(attrs, "tripXevBatteryChargeRegenerated"))
+    raw_score = safe_float(_metric_value(attrs, "tripXevBatteryChargeRegenerated"))
     # ha-fordpass emits 0 for missing telemetry; treat as unmeasured.
     if raw_score == 0:
         raw_score = None
@@ -1008,11 +997,11 @@ async def _handle_events_entity(
         )
 
     # duration (s) is SI-passthrough; no mapping conversion needed
-    duration = _safe_float(trip.get("trip_duration"))
+    duration = safe_float(trip.get("trip_duration"))
 
     # The event's own updateTime is the key-off.
     recorded_at = (
-        _parse_iso(update_time_iso)
+        parse_iso(update_time_iso)
         or _parse_event_ts(new_state)
         or datetime.now(UTC)
     )
@@ -1228,25 +1217,10 @@ def _parse_event_ts(new_state: dict) -> datetime | None:
         val = new_state.get(key)
         if not val:
             continue
-        parsed = _parse_iso(val)
+        parsed = parse_iso(val)
         if parsed is not None:
             return parsed
     return None
-
-
-def _parse_iso(val: Any) -> datetime | None:
-    if val is None:
-        return None
-    if isinstance(val, datetime):
-        return val
-    if not isinstance(val, str):
-        return None
-    try:
-        if val.endswith("Z"):
-            val = val[:-1] + "+00:00"
-        return datetime.fromisoformat(val)
-    except (ValueError, TypeError):
-        return None
 
 
 async def _closest_odometer(
@@ -1285,11 +1259,11 @@ async def _closest_odometer(
     # SQLite returns naive datetimes via aiosqlite; PG returns tz-aware.
     # Coerce both sides to UTC-aware before subtraction so the comparison
     # works on either backend.
-    target_aware = target_time if target_time.tzinfo else target_time.replace(tzinfo=UTC)
+    target_aware = utc(target_time)
 
     def _delta(r):
         recorded = r.recorded_at
-        recorded_aware = recorded if recorded.tzinfo else recorded.replace(tzinfo=UTC)
+        recorded_aware = utc(recorded)
         return abs((recorded_aware - target_aware).total_seconds())
 
     closest = min(rows, key=_delta)

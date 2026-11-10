@@ -18,9 +18,9 @@ from web.services.repair.base import (
     RepairGroup,
     RepairOperation,
     RepairPreview,
-    _aware,
     mutable_only,
 )
+from web.util.time import utc
 
 ODO_END_LOOKBACK = timedelta(minutes=30)
 ODO_END_LOOKAHEAD = timedelta(minutes=5)
@@ -105,7 +105,7 @@ class TelemetryDerive(RepairOperation):
         row = (await db.execute(stmt)).first()
         if row is None or row[0] is None:
             return None
-        return float(row[0]), _aware(row[1])
+        return float(row[0]), utc(row[1])
 
     async def _start_from_odometer(
         self, db: AsyncSession, device_id: str, end_time: datetime, odo_start: float
@@ -129,7 +129,7 @@ class TelemetryDerive(RepairOperation):
             .order_by(EVVehicleStatus.recorded_at.desc())
             .limit(1)
         )
-        return _aware((await db.execute(stmt)).scalar_one_or_none())
+        return utc((await db.execute(stmt)).scalar_one_or_none())
 
     async def _odometer_near(
         self, db: AsyncSession, device_id: str, ts: datetime
@@ -144,7 +144,7 @@ class TelemetryDerive(RepairOperation):
         rows = (await db.execute(stmt)).all()
         if not rows:
             return None
-        nearest = min(rows, key=lambda r: abs((_aware(r[0]) - ts).total_seconds()))
+        nearest = min(rows, key=lambda r: abs((utc(r[0]) - ts).total_seconds()))
         assert nearest[1] is not None  # filtered in SQL
         return float(nearest[1])
 
@@ -187,7 +187,7 @@ class TelemetryDerive(RepairOperation):
         # transition is trustworthy — older ones can't be told apart from
         # other journeys.
         for recorded_at, odometer in reversed(transitions):
-            start = _aware(recorded_at)
+            start = utc(recorded_at)
             odo_at_start = (
                 float(odometer)
                 if odometer is not None
@@ -247,13 +247,13 @@ class TelemetryDerive(RepairOperation):
         """
         changes: dict[str, Any] = {}
         notes: dict[str, str] = {}
-        end_time = _aware(trip.end_time)
+        end_time = utc(trip.end_time)
         if end_time is None:
             # _candidates() filters these out; without an end anchor every
             # derivation below is unanchored.
             return changes, notes
         distance = float(trip.distance) if trip.distance is not None else None
-        start_effective = _aware(trip.start_time)
+        start_effective = utc(trip.start_time)
 
         # Stored duration pins start_time exactly (ingestion computes start
         # the same way); no odometer heuristics or plausibility gate needed.

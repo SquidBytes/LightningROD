@@ -17,6 +17,8 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from web.util.time import parse_iso, utc
+
 # ---------------------------------------------------------------------------
 # CSV field options — descriptors for all mappable EVChargingSession columns
 # ---------------------------------------------------------------------------
@@ -583,13 +585,7 @@ def _parse_timestamp(v: str) -> datetime | None:
     v = v.strip() if v else ""
     if not v:
         return None
-    try:
-        dt = datetime.fromisoformat(v)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        return dt
-    except (ValueError, TypeError):
-        return None
+    return utc(parse_iso(v))
 
 
 def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> datetime | None:
@@ -603,7 +599,9 @@ def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> datetime | None:
     if not v:
         return None
     try:
-        dt = datetime.fromisoformat(v)
+        dt = parse_iso(v)
+        if dt is None:
+            return None
         if dt.tzinfo is None:
             # Treat naive timestamp as being in the user-selected import timezone
             tz = ZoneInfo(import_tz) if import_tz and import_tz != "UTC" else UTC

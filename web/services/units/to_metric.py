@@ -17,6 +17,8 @@ Supported source units (target in parens):
 
 import logging
 
+from web.util.numbers import safe_float
+
 logger = logging.getLogger("lightningrod.units")
 
 
@@ -29,22 +31,13 @@ _MILES_TO_KM = 1.609344
 # Wh -> kWh is exactly 1/1000 (no constant needed)
 
 
-def _safe_float(val) -> float | None:
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
-
-
 def to_metric(value, source_unit: str) -> float | None:
     """Convert `value` from `source_unit` to the canonical metric unit.
 
     Returns None when `value` is None or cannot be coerced to float.
     Raises UnknownSourceUnit when `source_unit` is not in the supported set.
     """
-    numeric = _safe_float(value)
+    numeric = safe_float(value)
     if numeric is None:
         return None
 

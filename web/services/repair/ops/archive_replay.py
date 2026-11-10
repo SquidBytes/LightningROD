@@ -8,9 +8,9 @@ from datetime import datetime
 from sqlalchemy import func, select
 
 from db.models.raw_event import HARawEvent
-from web.services.repair.base import _aware
 from web.services.repair.recorder_replay import _WINDOW_CACHE_TTL, RecorderReplay
 from web.services.repair.replay_core import fetch_archive
+from web.util.time import utc
 
 
 class _ArchiveSource:
@@ -91,7 +91,7 @@ class ArchiveReplay(RecorderReplay):
                     HARawEvent.slug == "events"
                 )
             )
-        self._window = _aware(earliest)
+        self._window = utc(earliest)
         self._window_probed_at = now
         return self._window
 

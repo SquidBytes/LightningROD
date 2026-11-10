@@ -21,6 +21,8 @@ from typing import Any
 from web.services.sources.ha_fordpass import adapter as ha_fordpass
 from web.services.units import detection
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
+from web.util.numbers import safe_float as _safe_float  # noqa: F401  (re-exported)
+from web.util.time import parse_iso
 
 logger = logging.getLogger("lightningrod.ingestion.helpers")
 
@@ -149,16 +151,6 @@ def _convert_with_uom(
 # ---------------------------------------------------------------------------
 
 
-def _safe_float(val) -> float | None:
-    """Safely convert a value to float, returning None on failure."""
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
-
-
 def _get_state_value(new_state: dict) -> str | None:
     """Extract state value from HA state object."""
     if not new_state:
@@ -244,13 +236,7 @@ def _get_event_timestamp(
     for key in keys:
         val = new_state.get(key) if new_state else None
         if val:
-            try:
-                if isinstance(val, str):
-                    if val.endswith("Z"):
-                        val = val[:-1] + "+00:00"
-                    return datetime.fromisoformat(val)
-                if isinstance(val, datetime):
-                    return val
-            except (ValueError, TypeError):
-                continue
+            parsed = parse_iso(val)
+            if parsed is not None:
+                return parsed
     return None

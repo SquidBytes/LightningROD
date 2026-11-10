@@ -35,6 +35,7 @@ from web.services.ingestion._helpers import (
 from web.services.sources.ha_fordpass import adapter as ha_fordpass
 from web.services.sources.ha_fordpass.dispatch import handles
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
+from web.util.time import parse_iso as _parse_iso_datetime
 
 logger = logging.getLogger("lightningrod.sources.ha_fordpass.handlers")
 
@@ -301,20 +302,6 @@ def _format_address(addr: dict | None) -> str | None:
     if addr.get("state"):
         parts.append(addr["state"])
     return ", ".join(parts) if parts else None
-
-
-def _parse_iso_datetime(val: str | None) -> datetime | None:
-    """Parse ISO 8601 datetime string, returning None on failure."""
-    if not val:
-        return None
-    try:
-        # Handle Z suffix and various ISO formats
-        if val.endswith("Z"):
-            val = val[:-1] + "+00:00"
-        return datetime.fromisoformat(val)
-    except (ValueError, TypeError):
-        logger.warning("Failed to parse datetime: %s", val)
-        return None
 
 
 # ---------------------------------------------------------------------------

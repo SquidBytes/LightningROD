@@ -7,7 +7,7 @@ inserting, through `PRECEDENCE` (see `source_merge`).
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
 from web.services.source_merge import FCON, HA, MERGEABLE_SOURCES, Rule, merge_values
+from web.util.time import utc
 
 __all__ = ["FCON", "HA", "MERGEABLE_SOURCES", "PRECEDENCE", "apply_merge", "find_same_drive"]
 
@@ -101,10 +102,10 @@ def merge_changes(current: dict, incoming: dict, incoming_source: str) -> dict[s
     merged = {**current, **changes}
     # FCON's first ON poll can trail the real start by minutes; the vehicle's
     # duration back from ignition-off does not.
-    end, duration = _aware(merged.get("end_time")), merged.get("duration")
+    end, duration = utc(merged.get("end_time")), merged.get("duration")
     if end is not None and duration is not None:
         start = end - timedelta(seconds=float(duration))
-        if _aware(current.get("start_time")) != start:
+        if utc(current.get("start_time")) != start:
             changes["start_time"] = start
         else:
             changes.pop("start_time", None)
@@ -116,15 +117,8 @@ def merge_changes(current: dict, incoming: dict, incoming_source: str) -> dict[s
     return changes
 
 
-def _aware(value: Any) -> Any:
-    """SQLite hands timestamps back naive; they are UTC."""
-    if isinstance(value, datetime) and value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value
-
-
 def row_values(row: EVTripMetrics) -> dict[str, Any]:
-    return {f: _aware(getattr(row, f)) for f in (*PRECEDENCE, *DERIVED, *_MATCH_FIELDS)}
+    return {f: utc(getattr(row, f)) for f in (*PRECEDENCE, *DERIVED, *_MATCH_FIELDS)}
 
 
 def apply_merge(row: EVTripMetrics, incoming: dict, incoming_source: str) -> dict[str, Any]:
@@ -141,7 +135,7 @@ async def find_same_drive(db: AsyncSession, candidate: dict) -> EVTripMetrics | 
         is_same_drive,
     )
 
-    end: datetime | None = _aware(candidate.get("end_time"))
+    end: datetime | None = utc(candidate.get("end_time"))
     if end is None or candidate.get("device_id") is None:
         return None
     window = timedelta(seconds=END_TIME_WINDOW_SECONDS)
@@ -156,5 +150,5 @@ async def find_same_drive(db: AsyncSession, candidate: dict) -> EVTripMetrics | 
             .order_by(EVTripMetrics.id)
         )
     ).scalars().all()
-    candidate = {k: _aware(v) for k, v in candidate.items()}
+    candidate = {k: utc(v) for k, v in candidate.items()}
     return next((r for r in rows if is_same_drive(row_values(r), candidate)), None)

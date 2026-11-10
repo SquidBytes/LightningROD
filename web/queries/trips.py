@@ -5,7 +5,7 @@ data with 7-day rolling average chart, and driving score radar chart.
 """
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -23,6 +23,7 @@ from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
 from web.queries.locations import _find_geo_match
 from web.queries.settings import get_app_settings_dict
 from web.queries.time_window import resolve_time_window, window_clause
+from web.util.time import utc
 
 logger = logging.getLogger("lightningrod.queries.trips")
 
@@ -632,11 +633,8 @@ async def _nearest_gps(
         return None
 
     # SQLite returns naive datetimes; coerce both sides to UTC-aware to subtract.
-    def _aware(ts: datetime) -> datetime:
-        return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
-
-    target = _aware(target_time)
-    nearest = min(rows, key=lambda r: abs((_aware(r.recorded_at) - target).total_seconds()))
+    target = utc(target_time)
+    nearest = min(rows, key=lambda r: abs((utc(r.recorded_at) - target).total_seconds()))
     return (float(nearest.latitude), float(nearest.longitude))
 
 

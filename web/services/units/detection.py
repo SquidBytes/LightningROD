@@ -30,6 +30,8 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from web.util.numbers import safe_float
+
 logger = logging.getLogger("lightningrod.units.detection")
 
 
@@ -273,15 +275,6 @@ def _insert_or_update(new: DetectionRecord) -> None:
     _records[key] = new
 
 
-def _safe_float(val: Any) -> float | None:
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
-
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -300,7 +293,7 @@ def record_declared(
         detected_unit=unit,
         method=_METHOD_DECLARED,
         confidence=_confidence_for_declared(),
-        sample_raw=_safe_float(raw_value),
+        sample_raw=safe_float(raw_value),
         sample_canonical=None,
         ratio=None,
         last_seen=_now(),
@@ -327,7 +320,7 @@ def record_read_time(
         detected_unit=unit,
         method=_METHOD_READ_TIME,
         confidence=_confidence_for_read_time(),
-        sample_raw=_safe_float(raw_value),
+        sample_raw=safe_float(raw_value),
         sample_canonical=None,
         ratio=None,
         last_seen=_now(),
@@ -361,7 +354,7 @@ def record_unknown(
         detected_unit=None,
         method=_METHOD_UNKNOWN,
         confidence="low",
-        sample_raw=_safe_float(raw_value),
+        sample_raw=safe_float(raw_value),
         sample_canonical=None,
         ratio=None,
         last_seen=_now(),
@@ -394,7 +387,7 @@ def record_device_class_inference(
         detected_unit=unit,
         method=_METHOD_DEVICE_CLASS,
         confidence=_confidence_for_device_class(),
-        sample_raw=_safe_float(raw_value),
+        sample_raw=safe_float(raw_value),
         sample_canonical=None,
         ratio=None,
         last_seen=_now(),
@@ -424,7 +417,7 @@ def try_cross_reference(
     Never raises.
     """
     updated: list[DetectionRecord] = []
-    canonical_f = _safe_float(canonical_value)
+    canonical_f = safe_float(canonical_value)
     if canonical_f is None or canonical_f == 0:
         return updated
 
