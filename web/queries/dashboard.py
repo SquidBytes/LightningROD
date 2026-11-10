@@ -41,7 +41,7 @@ async def query_dashboard_summary(db: AsyncSession, device_id: str | None = None
     agg_result = await db.execute(agg_stmt)
     agg_row = agg_result.one()
     total_sessions = agg_row.total_sessions
-    total_kwh = float(agg_row.total_kwh)
+    total_kwh = agg_row.total_kwh
 
     # For cost calculation, load only the columns compute_session_cost needs
     networks_by_name = await get_networks_by_name(db)

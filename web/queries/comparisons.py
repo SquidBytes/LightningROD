@@ -252,7 +252,7 @@ async def _monthly_distance_from_odometer(
     prev = None
     for recorded_at, odometer in rows:
         assert odometer is not None  # filtered in SQL
-        odo = float(odometer)
+        odo = odometer
         if prev is not None:
             delta = odo - prev
             if delta > 0:
@@ -282,7 +282,7 @@ async def _monthly_distance_from_trips(
     for end_time, distance in rows:
         assert end_time is not None and distance is not None  # filtered in SQL
         key = (end_time.year, end_time.month)
-        monthly[key] = monthly.get(key, 0.0) + float(distance)
+        monthly[key] = monthly.get(key, 0.0) + distance
     return monthly
 
 

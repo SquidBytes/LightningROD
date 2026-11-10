@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import func, select
+from sqlalchemy import Float, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.dialect import date_trunc_compat
@@ -102,8 +102,8 @@ async def query_soc_timeline(
         stmt = (
             select(
                 bucket_col,
-                func.avg(EVBatteryStatus.hv_battery_soc).label("soc"),
-                func.avg(EVBatteryStatus.hv_battery_kw).label("kw"),
+                func.avg(EVBatteryStatus.hv_battery_soc, type_=Float()).label("soc"),
+                func.avg(EVBatteryStatus.hv_battery_kw, type_=Float()).label("kw"),
                 func.max(EVBatteryStatus.hv_battery_range).label("range"),
             )
             .where(EVBatteryStatus.hv_battery_soc.isnot(None))
@@ -122,9 +122,9 @@ async def query_soc_timeline(
         return [
             {
                 "recorded_at": row.bucket,
-                "soc": float(row.soc) if row.soc is not None else None,
-                "kw": float(row.kw) if row.kw is not None else None,
-                "range": float(row.range) if row.range is not None else None,
+                "soc": row.soc,
+                "kw": row.kw,
+                "range": row.range,
             }
             for row in result.all()
         ]
@@ -287,7 +287,7 @@ async def query_degradation_data(
 
     result = await db.execute(stmt)
     return [
-        {"date": row.date, "max_capacity": float(row.max_capacity)}
+        {"date": row.date, "max_capacity": row.max_capacity}
         for row in result.all()
     ]
 
@@ -632,7 +632,7 @@ async def query_degradation_by_mileage(
         [
             {
                 "date": r.date,
-                "max_capacity": float(r.max_capacity),
+                "max_capacity": r.max_capacity,
                 "latest_ts": r.latest_ts,
             }
             for r in cap_rows

@@ -83,8 +83,8 @@ async def query_driving_performance_summary(
 
     result = await db.execute(stmt)
     row = result.one()
-    total_distance = float(row[0]) if row[0] is not None else None
-    total_energy = float(row[1]) if row[1] is not None else None
+    total_distance = row[0]
+    total_energy = row[1]
     trip_count_trips = int(row[2]) if row[2] is not None else 0
 
     # 3. Derive avg driving efficiency (None-safe)

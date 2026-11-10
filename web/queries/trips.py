@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import and_, asc, desc, func, not_, or_, select
+from sqlalchemy import Float, and_, asc, desc, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.battery_status import EVBatteryStatus
@@ -210,15 +210,15 @@ async def query_trips(
         func.count().label("trip_count"),
         func.sum(summary_subq.c.distance).label("total_distance"),
         func.sum(summary_subq.c.energy_consumed).label("total_energy"),
-        func.avg(summary_subq.c.efficiency).label("avg_efficiency"),
+        func.avg(summary_subq.c.efficiency, type_=Float()).label("avg_efficiency"),
     ).select_from(summary_subq)
     summary_result = await db.execute(summary_stmt)
     summary_row = summary_result.one()
     summary = {
         "count": summary_row.trip_count or 0,
-        "total_distance": float(summary_row.total_distance) if summary_row.total_distance else 0.0,
-        "total_energy": float(summary_row.total_energy) if summary_row.total_energy else 0.0,
-        "avg_efficiency": float(summary_row.avg_efficiency) if summary_row.avg_efficiency else None,
+        "total_distance": summary_row.total_distance or 0.0,
+        "total_energy": summary_row.total_energy or 0.0,
+        "avg_efficiency": summary_row.avg_efficiency or None,
     }
 
     # Data query. fetch_all (export) returns every matching row; otherwise

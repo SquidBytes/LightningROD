@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import func, select
+from sqlalchemy import Float, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.dialect import date_trunc_compat
@@ -189,7 +189,7 @@ async def monthly_energy_series(
         stmt = stmt.where(EVChargingSession.device_id == device_id)
 
     result = await db.execute(stmt)
-    return [(row.m, float(row.kwh)) for row in result.all() if row.m is not None]
+    return [(row.m, row.kwh) for row in result.all() if row.m is not None]
 
 
 async def charging_speed_series(
@@ -216,7 +216,7 @@ async def charging_speed_series(
                 "month", EVChargingSession.session_start_utc, dialect=db.get_bind().dialect
             ).label("m"),
             func.coalesce(func.sum(EVChargingSession.energy_kwh), 0.0).label("kwh"),
-            func.coalesce(func.sum(duration_hours), 0.0).label("hours"),
+            func.coalesce(func.sum(duration_hours, type_=Float()), 0.0).label("hours"),
         )
         .where(EVChargingSession.energy_kwh.isnot(None))
         .where(EVChargingSession.energy_kwh > 0)
@@ -236,10 +236,10 @@ async def charging_speed_series(
     for row in result.all():
         if row.m is None:
             continue
-        hours = float(row.hours or 0)
+        hours = row.hours or 0.0
         if hours <= 0:
             continue
-        out.append((row.m, float(row.kwh) / hours))
+        out.append((row.m, row.kwh / hours))
     return out
 
 
@@ -342,7 +342,7 @@ async def query_regen_summary(
     regen_total, trip_count = row
 
     return {
-        "regen_total": float(regen_total) if regen_total is not None else 0.0,
+        "regen_total": regen_total if regen_total is not None else 0.0,
         "trip_count": int(trip_count),
     }
 
