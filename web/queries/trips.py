@@ -19,7 +19,9 @@ from db.models.location import EVLocation
 from db.models.reference import EVLocationLookup
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle_status import EVVehicleStatus
-from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
+from web.queries.charts import HOVER_LABEL as _HOVER_LABEL
+from web.queries.charts import PLOTLY_CONFIG as _PLOTLY_CONFIG
+from web.queries.charts import wrap_chart as _wrap_chart
 from web.queries.locations import _find_geo_match
 from web.queries.settings import get_app_settings_dict
 from web.queries.time_window import resolve_time_window, window_clause

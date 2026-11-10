@@ -136,6 +136,13 @@ html[data-theme="dark"] { background-color: oklch(23.26% 0.014 253.1); }
   flex-wrap: nowrap !important;
 }
 
+/* Phones: no toolbar, taps go to the chart. */
+@media (max-width: 639.98px) {
+  .js-plotly-plot .modebar-container {
+    display: none !important;
+  }
+}
+
 /* ── Tab-active contrast (Phase 35 / D-10, D-11) ─────────────────────
    Beef up tab-active state on every tabs-bordered instance.
    Stronger bottom-border + brand-accent color + semibold weight.

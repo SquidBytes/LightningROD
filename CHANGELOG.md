@@ -13,6 +13,10 @@ For feature documentation, see the docs site at
 
 ### Changed
 
+- Pages without charts load faster because they no longer download the chart library
+- Charts fit the screen on phones and hide their toolbar
+- The charge curve in the charging session drawer is now a lightweight drawing
+
 ### Fixed
 
 - Fixed location recording stopping after the first GPS reading on SQLite installs

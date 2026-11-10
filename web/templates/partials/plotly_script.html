@@ -1,0 +1,4 @@
+{# Pages with charts in their first HTML load Plotly blocking; pages whose charts arrive via htmx can defer. #}
+{% macro plotly_script(defer=false) -%}
+<script src="{{ url_for('static', path='vendor/plotly/plotly.min.js') }}"{% if defer %} defer{% endif %}></script>
+{%- endmacro %}

@@ -21,7 +21,9 @@ from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargingNetwork
 from db.models.vehicle_status import EVVehicleStatus
-from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
+from web.queries.charts import HOVER_LABEL as _HOVER_LABEL
+from web.queries.charts import PLOTLY_CONFIG as _PLOTLY_CONFIG
+from web.queries.charts import wrap_chart as _wrap_chart
 from web.queries.time_window import resolve_time_window, window_clause
 from web.unit_system import format_user_local
 
@@ -1425,64 +1427,56 @@ def build_degradation_chart(
     )
 
 
-def build_mini_charge_curve(session, ref_curve: list[dict] | None = None) -> str:
-    """Build compact charge curve for session drawer (flipped: SOC on X, kW on Y).
+_MINI_W, _MINI_H, _MINI_PAD = 100, 80, 4
 
-    Returns HTML string. Empty string if no SOC data on session.
+
+def build_mini_charge_curve(session, ref_curve: list[dict] | None = None) -> str:
+    """Build an inline SVG charge curve for the session drawer (SOC on X, kW on Y).
+
+    Returns an empty string if the session has no SOC data.
     """
     if not session:
         return ""
     if not getattr(session, "start_soc", None) and not getattr(session, "end_soc", None):
         return ""
 
-    pio.templates.default = "plotly_dark"
-    fig = go.Figure()
-
     start_soc = float(session.start_soc or 0)
     end_soc = float(session.end_soc or 0)
-    # Estimate kW as flat line from session data
     est_kw: float = 0.0
     if getattr(session, "charging_kw", None):
         est_kw = abs(float(session.charging_kw))
     elif getattr(session, "max_power", None):
         est_kw = abs(float(session.max_power))
 
-    # Reference curve (thin gray dashed)
-    if ref_curve:
-        fig.add_trace(
-            go.Scatter(
-                x=[p["soc"] for p in ref_curve],
-                y=[p["kw"] for p in ref_curve],
-                mode="lines",
-                line=dict(color="#9ca3af", width=1, dash="dash"),
-                hoverinfo="skip",
-            )
+    ref_points = [(float(p["soc"]), float(p["kw"])) for p in (ref_curve or [])]
+    session_points = [(start_soc, est_kw), (end_soc, est_kw)]
+    max_kw = max([kw for _, kw in ref_points + session_points] + [0.0]) or 1.0
+
+    def xy(soc: float, kw: float) -> str:
+        x = soc / 100 * _MINI_W
+        y = _MINI_H - _MINI_PAD - kw / max_kw * (_MINI_H - 2 * _MINI_PAD)
+        return f"{x:.2f},{y:.2f}"
+
+    # viewBox stretches to the container; non-scaling-stroke keeps line widths in pixels.
+    parts = [
+        f'<svg viewBox="0 0 {_MINI_W} {_MINI_H}" preserveAspectRatio="none" '
+        f'class="w-full block" style="height:{_MINI_H}px" role="img" aria-label="Charge curve">'
+    ]
+    if ref_points:
+        parts.append(
+            f'<polyline points="{" ".join(xy(s, k) for s, k in ref_points)}" fill="none" '
+            'stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3" '
+            'vector-effect="non-scaling-stroke"/>'
         )
-
-    # Session line (solid blue)
-    fig.add_trace(
-        go.Scatter(
-            x=[start_soc, end_soc],
-            y=[est_kw, est_kw],
-            mode="lines+markers",
-            line=dict(color="#47A8E5", width=2),
-            marker=dict(size=4),
-            hoverinfo="skip",
+    parts.append(
+        f'<polyline points="{" ".join(xy(s, k) for s, k in session_points)}" fill="none" '
+        'stroke="#47A8E5" stroke-width="2" vector-effect="non-scaling-stroke"/>'
+    )
+    # Zero-length round-capped paths draw as circles even when the viewBox is stretched.
+    for s, k in session_points:
+        parts.append(
+            f'<path d="M{xy(s, k)}h0" stroke="#47A8E5" stroke-width="5" '
+            'stroke-linecap="round" vector-effect="non-scaling-stroke"/>'
         )
-    )
-
-    fig.update_layout(
-        height=80,
-        margin=dict(l=0, r=0, t=0, b=0),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(visible=False, range=[0, 100]),
-        yaxis=dict(visible=False),
-        showlegend=False,
-    )
-
-    return fig.to_html(
-        full_html=False,
-        include_plotlyjs=False,
-        config={"displayModeBar": False, "staticPlot": True},
-    )
+    parts.append("</svg>")
+    return "".join(parts)

@@ -12,24 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
 from db.models.charging_session import EVChargingSession
+from web.queries.charts import HOVER_LABEL as _HOVER_LABEL
+from web.queries.charts import PLOTLY_CONFIG as _PLOTLY_CONFIG
+from web.queries.charts import wrap_chart as _wrap_chart
 from web.queries.costs import (
     compute_session_cost,
     get_networks_by_name,
 )
-
-# Shared Plotly modebar config — show minimal controls, hide logo
-_PLOTLY_CONFIG = {
-    "displayModeBar": "hover",
-    "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
-    "displaylogo": False,
-}
-
-_HOVER_LABEL = dict(bgcolor="#1f2937", font_color="#e5e7eb", bordercolor="#374151")
-
-
-def _wrap_chart(html: str) -> str:
-    """Wrap Plotly HTML in a container for modebar positioning."""
-    return f'<div class="plotly-chart-wrap">{html}</div>'
 
 
 async def query_dashboard_summary(db: AsyncSession, device_id: str | None = None) -> dict:
