@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-# Charger type normalization mapping — collapse all variants to AC/DC codes
-# matching csv_parser._normalize_charge_type. Level 1/2 granularity is
-# intentionally discarded: callers that need it can derive it from the EVSE
+# Charger type normalization mapping — collapse all variants to AC/DC codes.
+# Level 1/2 granularity is intentionally discarded: callers that need it can derive it from the EVSE
 # power/voltage columns.
 CHARGER_TYPE_MAP = {
     "AC": "AC",
     "AC_BASIC": "AC",
     "AC_LEVEL_1": "AC",
     "AC_LEVEL_2": "AC",
+    "AC_CHARGING": "AC",
     "AC LEVEL 1": "AC",
     "AC LEVEL 2": "AC",
     "LEVEL_1": "AC",
@@ -23,6 +23,7 @@ CHARGER_TYPE_MAP = {
     "DC_FAST": "DC",
     "DC_DCFAST": "DC",
     "DC_COMBO": "DC",
+    "DC_CHARGING": "DC",
     "DC FAST": "DC",
     "DCFC": "DC",
     "L3": "DC",

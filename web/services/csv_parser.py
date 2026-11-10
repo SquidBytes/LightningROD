@@ -17,6 +17,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from web.services.charge_types import normalize_charge_type
 from web.services.source_system import SourceSystem
 from web.util.time import parse_iso, utc
 
@@ -628,15 +629,10 @@ def _parse_uuid(v: str) -> uuid.UUID | None:
 
 def _normalize_charge_type(charger_type: str, location_name: str) -> str | None:
     """Normalize charger type to 'AC' or 'DC'."""
-    ct = charger_type.strip().upper() if charger_type else ""
-    if ct in ("AC", "AC LEVEL 2", "AC_BASIC", "LEVEL_2", "AC_CHARGING", "AC LEVEL 1", "L2", "LEVEL 2", "LEVEL 1"):
+    normalized = normalize_charge_type(charger_type)
+    if normalized is None and (location_name.strip() if location_name else "") == "Work":
         return "AC"
-    if ct in ("DC", "DC_FAST", "DC_CHARGING", "DCFC", "L3", "LEVEL 3"):
-        return "DC"
-    loc = location_name.strip() if location_name else ""
-    if not ct and loc == "Work":
-        return "AC"
-    return ct if ct else None
+    return normalized
 
 
 def _classify_location_type(location_name: str) -> str:
