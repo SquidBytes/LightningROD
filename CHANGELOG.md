@@ -15,6 +15,8 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Fixed location recording stopping after the first GPS reading on SQLite installs
+
 ### Removed
 
 ## [0.6.0] - 2026-10-26

@@ -53,7 +53,11 @@ from db.models.raw_event import HARawEvent  # noqa: E402
 from db.models.trip_metrics import EVTripMetrics  # noqa: E402
 from db.models.vehicle_status import EVVehicleStatus  # noqa: E402
 from web.services.repair.base import _aware  # noqa: E402
-from web.services.repair.replay_core import ReplayStats, replay_archive  # noqa: E402
+from web.services.repair.replay_core import (  # noqa: E402
+    ReplayStats,
+    replay_archive,
+    short_device,
+)
 
 REPLAY_SOURCE_SYSTEM = "ha_fordpass"
 
@@ -249,11 +253,6 @@ def _key_of(row: dict[str, Any], spec: TableSpec) -> tuple[Any, ...]:
     return tuple(_norm(row[column]) for column in spec.key)
 
 
-def short_device(device_id: Any) -> str:
-    text = str(device_id or "")
-    return f"…{text[-4:]}" if len(text) > 4 else text
-
-
 def _render(value: Any) -> str:
     value = _norm(value)
     if isinstance(value, datetime):
@@ -368,14 +367,19 @@ async def load_rows(
     db: AsyncSession,
     spec: TableSpec,
     *,
-    since: datetime,
-    until: datetime,
-    devices: Iterable[str] | None,
-    sources: Iterable[str] | None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    devices: Iterable[str] | None = None,
+    sources: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
+    """Rows of one table; `since`/`until` bound the window column when given."""
     model = spec.model
     window = getattr(model, spec.window)
-    stmt = select(model).where(window >= since, window <= until)
+    stmt = select(model)
+    if since is not None:
+        stmt = stmt.where(window >= since)
+    if until is not None:
+        stmt = stmt.where(window <= until)
     if devices is not None:
         stmt = stmt.where(model.device_id.in_(tuple(devices)))
     if sources is not None:
@@ -420,6 +424,8 @@ def render_text(report: RunReport, *, examples: int) -> str:
         f"(no unit system), {r.errors} errors"
     )
     out.append(f"tolerance   {report.tolerance} on numeric columns")
+    for f in r.failures:
+        out.append(f"error       {f.slug} {f.exception} x{f.count}: {f.example}")
     for t in report.tables:
         out.append("")
         out.append(
@@ -434,7 +440,7 @@ def render_text(report: RunReport, *, examples: int) -> str:
                 f"  {t.window_column}: live {live_span[0]} .. {live_span[1]}; "
                 f"scratch {scratch_span[0]} .. {scratch_span[1]}"
             )
-            if scratch_span[0] and scratch_span[0] > report.until:
+            if scratch_span[1] and scratch_span[1] > report.until:
                 out.append(
                     f"  note: scratch {t.window_column} lies after the window; "
                     "these rows were stamped at replay time, not reading time"
@@ -523,9 +529,10 @@ async def run(
                     devices=devices,
                     sources=sources,
                 )
-                scratch_rows = await load_rows(
-                    scratch, spec, since=since, until=until, devices=None, sources=None
-                )
+                # The scratch holds only the replayed window, and today's path
+                # stamps status and location rows at replay time (after
+                # `until`), so it is read whole and the drift is reported.
+                scratch_rows = await load_rows(scratch, spec)
                 tables.append(
                     diff_rows(name, spec, live_rows, scratch_rows, tolerance=tolerance)
                 )
