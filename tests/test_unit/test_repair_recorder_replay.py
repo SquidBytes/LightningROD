@@ -4,7 +4,7 @@ Covers WP3 of the data-repair capability:
   - _fetch_states merges multi-entity history chronologically
   - execute fills NULL trip fields from replayed states and is idempotent
   - non-mutable (csv_import) rows touched by replay are reverted byte-identical
-  - preview runs the full replay (including the elveh handler-commit path)
+  - preview runs the full replay (including the elveh trip-creation path)
     inside rollback_session and persists nothing
   - disconnected/absent runtime -> window None, census 0
   - _fetch_entity_history forwards the new end_time query param
@@ -277,7 +277,7 @@ async def test_apply_recovers_trips_at_census_zero(db_session):
 
 @pytest.mark.db
 async def test_preview_returns_diffs_but_persists_nothing():
-    """Preview replays (through the elveh commit path) yet leaves the DB unchanged."""
+    """Preview replays (through the elveh trip-creation path) yet leaves the DB unchanged."""
     from sqlalchemy.ext.asyncio import create_async_engine
 
     from tests.conftest import TEST_DB_URL, _attach_sqlite_pragmas
@@ -285,8 +285,7 @@ async def test_preview_returns_diffs_but_persists_nothing():
     histories = {
         _entity("events"): [_state("events", STATE_TS)],
         # Distinct distance/energy so the elveh state can't match the
-        # events-created trip and takes the trip-creation branch, which
-        # calls db.commit() inside the handler.
+        # events-created trip and takes the trip-creation branch.
         _entity("elveh"): [
             _state(
                 "elveh",

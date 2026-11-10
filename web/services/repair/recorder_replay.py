@@ -53,9 +53,9 @@ def _state_ts(state: dict) -> datetime | None:
 class _StateAttribution:
     """Records which replayed state wrote each trip row, for preview evidence.
 
-    Handlers flush (and sometimes commit) mid-replay, so the pending sets are
-    gone by the time a dispatch returns; a flush listener is the only place
-    they can still be read. `after_flush` is the hook rather than
+    Handlers flush mid-replay, so the pending sets are gone by the time a
+    dispatch returns; a flush listener is the only place they can still be
+    read. `after_flush` is the hook rather than
     `before_flush` because a recovered trip has no primary key to key on until
     its INSERT has run.
     """
@@ -98,11 +98,10 @@ class RecorderReplay(RepairOperation):
     rows are ever written. Battery/vehicle status history recovery is
     explicitly out of scope — the snapshot/restore model doesn't cover it.
 
-    Apply-session semantics: `handle_battery_status` commits mid-replay on
-    its elveh trip-creation branch, so an apply persists the snapshot plus
-    partial progress together. Safe because the snapshot is taken first and
-    replay is idempotent — a rerun converges to the same state. Dry-run
-    neutralizes those commits via `rollback_session` savepoints.
+    Apply-session semantics: handlers only flush, so the caller's commit
+    persists the snapshot and the replayed rows together. Replay is
+    idempotent — a rerun converges to the same state. Dry-run runs the same
+    replay inside `rollback_session`.
 
     Dedup safety: deterministic trip_ids (uuid5 of device|tripUpdateTime)
     plus the `around=event-ts` predicate match mean replayed states enrich

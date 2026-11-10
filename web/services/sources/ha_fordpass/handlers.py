@@ -757,7 +757,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         **trip_fields,
                     )
                     db.add(trip_record)
-                    await db.commit()
+                    await db.flush()
                     logger.info(
                         "Trip recorded for %s: distance=%s duration_s=%s",
                         device_id,

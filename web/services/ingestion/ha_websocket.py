@@ -316,9 +316,9 @@ class HAWebSocketRuntime:
     async def _dispatch(self, entity_id: str, new_state: dict) -> None:
         """Per-event fan-out: archive the raw event, gas-price adapter, then slug.
 
-        The session-per-branch pattern keeps the archive, gas-price writes and
-        FordPass slug writes isolated; single-session optimization is
-        deliberately deferred.
+        The archive commits in its own session so the raw row survives a parse
+        failure. The gas and slug branches share one session: each rolls back
+        its own failure, and the session is committed once.
         """
         from db.engine import AsyncSessionLocal
         from web.services.ingestion.raw_archive import raw_archive
@@ -341,11 +341,10 @@ class HAWebSocketRuntime:
         branch = "none"
         raised = False
 
-        # Gas-price branch — match by configured entity_id, not slug pattern.
         async with AsyncSessionLocal() as db:
+            # Gas-price branch — match by configured entity_id, not slug pattern.
             try:
                 if await try_handle_event(entity_id, new_state, db):
-                    await db.commit()
                     branch = "gas"
             except Exception as e:
                 raised = True
@@ -357,28 +356,26 @@ class HAWebSocketRuntime:
                     exc_info=True,
                 )
 
-        # Slug-based ha_fordpass dispatch.
-        if branch == "none":
-            async with AsyncSessionLocal() as db:
-                try:
-                    if await dispatch_slug(
-                        entity_id,
-                        new_state,
-                        self._ha_config or {},
-                        db,
-                        config_id=self.config_id,
-                    ):
-                        branch = "fordpass"
-                    await db.commit()
-                except Exception as e:
-                    raised = True
-                    await db.rollback()
-                    logger.error(
-                        "ha_fordpass dispatch error for %s: %s",
-                        entity_id,
-                        e,
-                        exc_info=True,
-                    )
+            # Slug-based ha_fordpass dispatch, then the one commit for either branch.
+            try:
+                if branch == "none" and await dispatch_slug(
+                    entity_id,
+                    new_state,
+                    self._ha_config or {},
+                    db,
+                    config_id=self.config_id,
+                ):
+                    branch = "fordpass"
+                await db.commit()
+            except Exception as e:
+                raised = True
+                await db.rollback()
+                logger.error(
+                    "ha_fordpass dispatch error for %s: %s",
+                    entity_id,
+                    e,
+                    exc_info=True,
+                )
 
         self._log_event(entity_id, new_state, branch, raised)
 
