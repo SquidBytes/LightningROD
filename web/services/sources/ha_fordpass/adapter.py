@@ -59,7 +59,7 @@ def compute_trip_id(device_id: str | None, trip_update_time: str | None) -> uuid
     return uuid.uuid5(LIGHTNINGROD_TRIP_NAMESPACE, canonical)
 
 # Separate from the module logger so per-field conversion traces can be
-# switched on alone: getLogger("lightningrod.units.trace").setLevel(INFO).
+# switched on alone: getLogger("lightningrod.units.trace").setLevel(DEBUG).
 _trace = logging.getLogger("lightningrod.units.trace")
 
 
@@ -609,8 +609,8 @@ def convert(
         source_unit,
         raw_value,
     )
-    if _trace.isEnabledFor(logging.INFO):
-        _trace.info(
+    if _trace.isEnabledFor(logging.DEBUG):
+        _trace.debug(
             "convert %s.%s | raw=%r | method=%s | source_unit=%s -> db_unit=%s | "
             "converted=%r | -> %s.%s",
             mapping.source.pattern,
