@@ -877,7 +877,11 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
         now = datetime.now(UTC)
 
         if last_loc is not None:
-            time_diff = (now - last_loc.recorded_at).total_seconds()
+            # SQLite returns naive datetimes; they are stored as UTC.
+            last_at = last_loc.recorded_at
+            if last_at.tzinfo is None:
+                last_at = last_at.replace(tzinfo=UTC)
+            time_diff = (now - last_at).total_seconds()
             if time_diff < 60 and last_loc.latitude is not None and last_loc.longitude is not None:
                 dist = haversine_meters(float(last_loc.latitude), float(last_loc.longitude), lat, lon)
                 if dist < 50:
