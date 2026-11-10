@@ -116,4 +116,5 @@ async def activate_vehicle(
 ):
     """Switch active vehicle and redirect back to current page."""
     await set_active_vehicle(db, vehicle_id)
+    await db.commit()
     return RedirectResponse(url=redirect_to, status_code=303)

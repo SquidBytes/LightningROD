@@ -130,6 +130,7 @@ async def save_credentials(
         updates.update({k: None for k in TOKEN_FIELDS})
         updates["needs_consent"] = False
     await merge_into_row(db, SOURCE_NAME, updates)
+    await db.commit()
     await _restart(db)
     return await _card(request, db, message="Saved.")
 
@@ -141,6 +142,7 @@ async def connect_vehicle(request: Request, db: AsyncSession = Depends(get_db)):
         return await _card(
             request, db, error="Save your Client ID and Client Secret first."
         )
+    await db.commit()
     return await _card(request, db, authorize_url=url)
 
 
@@ -154,6 +156,7 @@ async def finish_connect(
     result = await finish_consent(db, pasted, client)
     if not result.ok:
         return await _card(request, db, paste_error=result.message, pasting=True)
+    await db.commit()
     await _restart(db)
     return await _card(request, db, message=result.message)
 
@@ -176,6 +179,7 @@ async def save_retention(
     db: AsyncSession = Depends(get_db),
 ):
     await set_retention_days(db, days)
+    await db.commit()
     return await _card(request, db, message="Saved.")
 
 
@@ -187,6 +191,7 @@ async def disconnect(request: Request, db: AsyncSession = Depends(get_db)):
         updates: dict[str, Any] = {k: None for k in TOKEN_FIELDS}
         updates["needs_consent"] = False
         await merge_into_row(db, SOURCE_NAME, updates, row=row)
+        await db.commit()
     return await _card(request, db, message="Disconnected. History is kept.")
 
 
@@ -199,6 +204,7 @@ async def ford_callback(
     """Ford redirected a browser on this machine here: finish without a paste."""
     result = await finish_consent(db, str(request.url), client)
     if result.ok:
+        await db.commit()
         await _restart(db)
         return RedirectResponse("/settings?tab=data_sources", status_code=303)
     return templates.TemplateResponse(

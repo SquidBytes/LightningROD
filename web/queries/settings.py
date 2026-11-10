@@ -123,7 +123,7 @@ async def create_network(
         color=resolved_color,
     )
     db.add(network)
-    await db.commit()
+    await db.flush()
     await db.refresh(network)
     return network
 
@@ -151,7 +151,7 @@ async def update_network(
     network.cost_per_kwh = cost_per_kwh
     network.is_free = is_free
     network.color = color if color else (known["color"] if known else DEFAULT_COLOR)
-    await db.commit()
+    await db.flush()
     await db.refresh(network)
     return network
 
@@ -168,7 +168,7 @@ async def delete_network(db: AsyncSession, network_id: int) -> bool:
     if network is None:
         return False
     await db.delete(network)
-    await db.commit()
+    await db.flush()
     return True
 
 
@@ -218,7 +218,7 @@ async def seed_predefined_networks(db: AsyncSession) -> int:
             existing_names.add(name)
             added += 1
 
-    await db.commit()
+    await db.flush()
     return added
 
 
@@ -257,7 +257,7 @@ async def create_location(
         cost_per_kwh=cost_per_kwh,
     )
     db.add(loc)
-    await db.commit()
+    await db.flush()
     await db.refresh(loc)
     return loc
 
@@ -287,7 +287,7 @@ async def update_location(
     loc.latitude = latitude
     loc.longitude = longitude
     loc.cost_per_kwh = cost_per_kwh
-    await db.commit()
+    await db.flush()
     await db.refresh(loc)
     return loc
 
@@ -301,7 +301,7 @@ async def delete_location(db: AsyncSession, location_id: int) -> bool:
     if loc is None:
         return False
     await db.delete(loc)
-    await db.commit()
+    await db.flush()
     return True
 
 
@@ -395,7 +395,7 @@ async def create_subscription(
         notes=notes,
     )
     db.add(sub)
-    await db.commit()
+    await db.flush()
     await db.refresh(sub)
     return sub
 
@@ -428,7 +428,7 @@ async def update_subscription(
     sub.start_date = start_date
     sub.end_date = end_date
     sub.notes = notes
-    await db.commit()
+    await db.flush()
     await db.refresh(sub)
     return sub
 
@@ -442,7 +442,7 @@ async def delete_subscription(db: AsyncSession, subscription_id: int) -> bool:
     if sub is None:
         return False
     await db.delete(sub)
-    await db.commit()
+    await db.flush()
     return True
 
 
@@ -532,7 +532,6 @@ async def set_app_setting(db: AsyncSession, key: str, value: str) -> None:
         set_={"value": value, "updated_at": func.now()},
     )
     await db.execute(stmt)
-    await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -643,7 +642,7 @@ async def create_stall(
         is_default=is_default,
     )
     db.add(stall)
-    await db.commit()
+    await db.flush()
     await db.refresh(stall)
     return stall
 
@@ -683,7 +682,7 @@ async def update_stall(
         stall.notes = notes
     if is_default is not None:
         stall.is_default = is_default
-    await db.commit()
+    await db.flush()
     await db.refresh(stall)
     return stall
 
@@ -697,5 +696,5 @@ async def delete_stall(db: AsyncSession, stall_id: int) -> bool:
     if stall is None:
         return False
     await db.delete(stall)
-    await db.commit()
+    await db.flush()
     return True

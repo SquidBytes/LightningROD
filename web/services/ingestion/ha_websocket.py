@@ -504,6 +504,7 @@ class HAWebSocketRuntime:
                 if force or not current:
                     await set_app_setting(db, key, value)
                     applied[key] = value
+            await db.commit()
 
         if applied:
             logger.info(
@@ -757,9 +758,11 @@ class HAWebSocketRuntime:
         from web.queries.gas_prices import store_gas_price_reading_if_new
 
         async with AsyncSessionLocal() as db:
-            return await store_gas_price_reading_if_new(
+            inserted = await store_gas_price_reading_if_new(
                 db, entity_id, price_metric, recorded_at
             )
+            await db.commit()
+        return inserted
 
     async def _refresh_gas_monthly_history(self, entity_id: str) -> None:
         """Recompute monthly averages for a gas sensor and upsert into history."""
@@ -788,3 +791,4 @@ class HAWebSocketRuntime:
                     await upsert_gas_price(
                         db, year, month, average_price=avg, source="ha_sensor"
                     )
+            await db.commit()

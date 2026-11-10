@@ -73,6 +73,7 @@ async def persist_token_fields(config_id: int, fields: dict[str, Any]) -> None:
         row = await db.get(DataSourceConfig, config_id)
         if row is not None:
             await merge_into_row(db, row.source_name, fields, row=row)
+            await db.commit()
 
 
 class FconPollingRuntime:

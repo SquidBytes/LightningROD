@@ -326,6 +326,7 @@ async def create_vehicle_route(
         vin=vin or None,
         device_id=device_id or None,
     )
+    await db.commit()
     veh_ctx = await _vehicle_management_context(db)
     veh_ctx["saved"] = True
     veh_ctx["just_saved_row_id"] = getattr(new_vehicle, "id", None)
@@ -394,6 +395,7 @@ async def update_vehicle_route(
         vin=vin or None,
         device_id=device_id or None,
     )
+    await db.commit()
     veh_ctx = await _vehicle_management_context(db)
     veh_ctx["saved"] = True
     veh_ctx["just_saved_row_id"] = vehicle_id
@@ -418,6 +420,7 @@ async def delete_vehicle_route(
             '<div class="alert alert-error text-sm">Cannot delete the active vehicle. Set another vehicle as active first.</div>',
             status_code=400,
         )
+    await db.commit()
     veh_ctx = await _vehicle_management_context(db)
     return templates.TemplateResponse(
         request,
@@ -433,6 +436,7 @@ async def activate_vehicle_route(
     db: AsyncSession = Depends(get_db),
 ):
     await set_active_vehicle(db, vehicle_id)
+    await db.commit()
     veh_ctx = await _vehicle_management_context(db)
     response = templates.TemplateResponse(
         request,
@@ -495,6 +499,7 @@ async def create_ice_vehicle_route(
         tank_capacity_l=tank_metric,
         is_default=is_default,
     )
+    await db.commit()
     ctx = await _ice_vehicle_management_context(db)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = getattr(new_ice, "id", None)
@@ -565,6 +570,7 @@ async def update_ice_vehicle_route(
         tank_capacity_l=tank_metric,
         is_default=is_default,
     )
+    await db.commit()
     ctx = await _ice_vehicle_management_context(db)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = ice_id
@@ -585,6 +591,7 @@ async def delete_ice_vehicle_route(
 ):
     """Delete an ICE vehicle. Refuses to delete the default row when others exist."""
     success = await delete_ice_vehicle(db, ice_id)
+    await db.commit()
     ctx = await _ice_vehicle_management_context(db)
     if not success:
         ctx["delete_error"] = "Cannot delete the default ICE vehicle. Set a different default first."
@@ -603,6 +610,7 @@ async def set_default_ice_vehicle_route(
 ):
     """Promote one ICE row to default; demote all others."""
     await set_default_ice_vehicle(db, ice_id)
+    await db.commit()
     ctx = await _ice_vehicle_management_context(db)
     return templates.TemplateResponse(
         request,
@@ -633,6 +641,7 @@ async def create_network_route(
         is_free=is_free_bool,
         color=color,
     )
+    await db.commit()
     net_ctx = await _network_management_context(db)
     net_ctx["saved"] = True
     net_ctx["just_saved_row_id"] = getattr(new_network, "id", None)
@@ -711,6 +720,7 @@ async def update_network_route(
         is_free=is_free_bool,
         color=color,
     )
+    await db.commit()
     net_ctx = await _network_management_context(db)
     net_ctx["saved"] = True
     net_ctx["just_saved_row_id"] = network_id
@@ -730,6 +740,7 @@ async def delete_network_route(
     db: AsyncSession = Depends(get_db),
 ):
     await delete_network(db, network_id=network_id)
+    await db.commit()
     net_ctx = await _network_management_context(db)
     return templates.TemplateResponse(
         request,
@@ -944,6 +955,7 @@ async def create_location_route(
         address=address or None, latitude=latitude, longitude=longitude,
         cost_per_kwh=cost_per_kwh,
     )
+    await db.commit()
     locations = await get_locations_for_network(db, network_id)
     stall_counts: dict[int, int] = {}
     if locations:
@@ -986,6 +998,7 @@ async def update_location_route(
         address=address or None, latitude=latitude, longitude=longitude,
         cost_per_kwh=cost_per_kwh,
     )
+    await db.commit()
     locations = await get_locations_for_network(db, network_id)
     stall_counts: dict[int, int] = {}
     if locations:
@@ -1017,6 +1030,7 @@ async def delete_location_route(
 ):
     """Delete a location and return the refreshed location list."""
     await delete_location(db, location_id)
+    await db.commit()
     if network_id:
         locations = await get_locations_for_network(db, network_id)
         stall_counts: dict[int, int] = {}
@@ -1129,6 +1143,7 @@ async def create_stall_route(
         notes=notes or None,
         is_default=is_default is not None,
     )
+    await db.commit()
     ctx = await _stall_context(db, location_id)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = getattr(new_stall, "id", None)
@@ -1167,6 +1182,7 @@ async def update_stall_route(
         notes=notes or None,
         is_default=is_default is not None,
     )
+    await db.commit()
     ctx = await _stall_context(db, location_id)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = stall_id
@@ -1186,6 +1202,7 @@ async def delete_stall_route(
 ):
     """Delete a stall and return refreshed stall rows."""
     await delete_stall(db, stall_id)
+    await db.commit()
     if location_id:
         ctx = await _stall_context(db, location_id)
         return templates.TemplateResponse(
@@ -1228,6 +1245,7 @@ async def prefill_stalls(
                     connector_type=tmpl.get("connector_type"),
                     is_default=False,
                 )
+    await db.commit()
     ctx = await _stall_context(db, location_id)
     return templates.TemplateResponse(
         request,
@@ -1294,6 +1312,7 @@ async def create_subscription_route(
             ctx,
         )
 
+    await db.commit()
     ctx = await _subscription_tab_context(db, network_id)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = getattr(new_sub, "id", None)
@@ -1364,6 +1383,7 @@ async def update_subscription_route(
             ctx,
         )
 
+    await db.commit()
     ctx = await _subscription_tab_context(db, network_id)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = subscription_id
@@ -1383,6 +1403,7 @@ async def delete_subscription_route(
 ):
     """Delete a subscription period and return refreshed list."""
     await delete_subscription(db, subscription_id)
+    await db.commit()
     if network_id:
         ctx = await _subscription_tab_context(db, network_id)
         return templates.TemplateResponse(
@@ -1597,6 +1618,8 @@ async def save_data_source(
     if source_name == SourceSystem.HA_FORDPASS:
         await set_app_setting(db, "gas_sensor_station_entity_id", gas_station_entity)
         await set_app_setting(db, "gas_sensor_average_entity_id", gas_average_entity)
+    await db.commit()
+    if source_name == "ha_fordpass":
         from web.services.sources.ha_gas_price.adapter import (
             invalidate_gas_sensor_cache,
         )
@@ -1850,6 +1873,7 @@ async def add_gas_price(
     saved_row = await upsert_gas_price(
         db, year, month, station_price=station_metric, average_price=average_metric
     )
+    await db.commit()
     ctx = await _gas_price_history_context(db)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = getattr(saved_row, "id", None)
@@ -1867,6 +1891,7 @@ async def delete_gas_price_route(
     db: AsyncSession = Depends(get_db),
 ):
     await delete_gas_price(db, price_id)
+    await db.commit()
     ctx = await _gas_price_history_context(db)
     return templates.TemplateResponse(
         request,
@@ -1971,6 +1996,7 @@ async def save_hass_gas_sensors(
     await set_app_setting(
         db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or ""
     )
+    await db.commit()
     from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
     invalidate_gas_sensor_cache()
     ctx = await _hass_gas_sensors_context(db, check_live=True, gas_saved=True)
@@ -1991,6 +2017,7 @@ async def save_gas_sensors(
 ):
     await set_app_setting(db, "gas_sensor_station_entity_id", gas_sensor_station_entity_id or "")
     await set_app_setting(db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or "")
+    await db.commit()
     from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
     invalidate_gas_sensor_cache()
     ctx = await _gas_price_history_context(db)
@@ -2016,6 +2043,7 @@ async def update_unit_settings(
         temp_unit = "us"
     await set_app_setting(db, "distance_unit", distance_unit)
     await set_app_setting(db, "temp_unit", temp_unit)
+    await db.commit()
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
     response = templates.TemplateResponse(
         request,
@@ -2036,6 +2064,7 @@ async def update_timezone_setting(
 ):
     """Save the user's preferred display timezone."""
     await set_app_setting(db, "user_timezone", user_timezone)
+    await db.commit()
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
     response = templates.TemplateResponse(
         request,
@@ -2070,6 +2099,7 @@ async def update_toggles(
         "comparison_section_visible",
         "true" if comparison_section_visible is not None else "false",
     )
+    await db.commit()
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
     return templates.TemplateResponse(
         request,
@@ -2104,6 +2134,7 @@ async def update_trip_display_settings(
             max(trip_hide_min_distance, 0), unit_ctx["distance_unit"]
         )
         await set_app_setting(db, "trip_hide_min_distance_km", str(metric_km))
+    await db.commit()
     ctx = await _trip_display_ctx(db)
     ctx["saved"] = True
     return templates.TemplateResponse(
@@ -2134,6 +2165,7 @@ async def update_raw_archive_settings(
             "raw_archive_retention_days",
             str(clamp_retention_days(raw_archive_retention_days)),
         )
+    await db.commit()
     raw_archive.invalidate_settings()
     ctx = await _raw_archive_ctx(db)
     ctx["saved"] = True
@@ -2152,6 +2184,7 @@ async def update_developer_mode(
 ):
     enabled = developer_mode is not None
     await set_app_setting(db, "developer_mode", "true" if enabled else "false")
+    await db.commit()
     dev_mode_module.set_enabled(enabled)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
     response = templates.TemplateResponse(

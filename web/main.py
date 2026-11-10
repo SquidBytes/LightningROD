@@ -130,6 +130,7 @@ async def _seal_stored_credentials() -> None:
     try:
         async with AsyncSessionLocal() as session:
             await seal_stored_configs(session)
+            await session.commit()
     except Exception:
         logger.exception("Could not encrypt stored credentials")
 
@@ -140,6 +141,7 @@ async def lifespan(app: FastAPI):
     # Startup: seed charger templates (idempotent) + restore developer mode flag
     async with AsyncSessionLocal() as session:
         await seed_charger_templates(session)
+        await session.commit()
         val = await get_app_setting(session, "developer_mode", "false")
         developer_mode.set_enabled(val == "true")
     await _seal_stored_credentials()
