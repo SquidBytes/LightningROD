@@ -122,7 +122,9 @@ What it does:
 3. Reads the archive window from the live database in `recorded_at` order and replays each event through the ingestion entry point under its archived unit system. Events that need a unit system and recorded none are skipped and counted.
 4. Compares `ev_battery_status`, `ev_vehicle_status`, `ev_location`, `ev_trip_metrics` and `ev_charging_session`: row counts on each side, rows present on one side only, and column values on matched rows. Status and location rows match on `(device_id, recorded_at)`, trips on `trip_id`, sessions on `(device_id, session_start_utc)`. `--tolerance` (default `0.01`) is the numeric difference treated as equal.
 
-Exit status is `0` when the tables are identical, `1` when anything differs and `2` on a setup error. Device ids are shown by their last four characters, and coordinates and addresses are never printed.
+Exit status is `0` when the tables are identical, `1` when anything differs and `2` on a setup error. Device ids are shown by their last four characters, and coordinates and addresses are never printed. Events whose replay raised are counted per slug and exception class with one example message each (`error` lines in the text report, `replay.failures` in `--json`); the tracebacks go to stderr.
+
+The scratch database holds nothing but the replayed window, so it is compared whole: rows it stamped after the window (today's wall-clock `recorded_at` on status and location rows) are counted and flagged, not dropped.
 
 Live rows are limited to `source_system = ha_fordpass` unless `--all-sources` is passed, because the replay cannot reproduce rows from other sources. Columns the scratch database cannot reproduce (surrogate ids, arrival stamps, anything joined from the user's reference tables such as networks, locations and cost) are listed under `ignored columns` for each table rather than compared.
 

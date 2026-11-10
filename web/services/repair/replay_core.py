@@ -8,8 +8,9 @@ replay-and-diff harness.
 from __future__ import annotations
 
 import logging
+import traceback
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -55,10 +56,42 @@ class ArchivedEvent:
 
 
 @dataclass
+class ReplayFailure:
+    """Failed dispatches of one slug with one exception class; `example` is device-free."""
+
+    slug: str
+    exception: str
+    count: int = 0
+    example: str = ""
+
+
+@dataclass
 class ReplayStats:
     replayed: int = 0
     skipped_unknown_units: int = 0
     errors: int = 0
+    failures: list[ReplayFailure] = field(default_factory=list)
+
+    def record_failure(self, slug: str, exception: str, example: str) -> None:
+        self.errors += 1
+        for failure in self.failures:
+            if (failure.slug, failure.exception) == (slug, exception):
+                failure.count += 1
+                return
+        self.failures.append(ReplayFailure(slug, exception, 1, example))
+
+
+def short_device(device_id: str | None) -> str:
+    """Last four characters of a device id, for logs and reports."""
+    text = device_id or ""
+    return f"…{text[-4:]}" if len(text) > 4 else text
+
+
+def _redact(text: str, device_id: str | None) -> str:
+    # get_device_id yields "unknown" for ids it cannot read; nothing to hide then.
+    if not device_id or device_id == "unknown":
+        return text
+    return text.replace(device_id, short_device(device_id))
 
 
 def needs_unit_system(entity_id: str) -> bool:
@@ -140,6 +173,7 @@ async def replay_events(
     # Lazy: the repair registry imports this package and must never pull in
     # the HA stack.
     from web.services.sources.ha_fordpass.dispatch import dispatch_slug
+    from web.services.sources.ha_fordpass.handlers import extract_slug, get_device_id
 
     stats = ReplayStats()
     fallback = dict(fallback_config or {})
@@ -165,9 +199,21 @@ async def replay_events(
             else:
                 await dispatch(event, ha_config, db)
             stats.replayed += 1
-        except Exception:
-            logger.exception("%s: dispatch failed for %s", log_prefix, event.entity_id)
-            stats.errors += 1
+        except Exception as exc:
+            # Entity ids carry the full device id; logs and reports show the
+            # slug and the device suffix only, so the traceback is redacted too.
+            slug = extract_slug(event.entity_id) or "?"
+            device_id = get_device_id(event.entity_id, ha_config)
+            message = _redact(f"{type(exc).__name__}: {exc}", device_id)
+            logger.error(
+                "%s: %s failed for %s: %s\n%s",
+                log_prefix,
+                slug,
+                short_device(device_id),
+                message,
+                _redact("".join(traceback.format_exception(exc)).rstrip(), device_id),
+            )
+            stats.record_failure(slug, type(exc).__name__, message)
     return stats
 
 
