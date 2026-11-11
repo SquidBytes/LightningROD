@@ -23,7 +23,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from db.models.base import INGEST_SCHEMA_VERSION
+from db.models.base import HA_INGEST_SCHEMA_VERSION
 from web.services.charge_types import normalize_charge_type as _normalize_charge_type
 from web.services.ingestion._helpers import (
     _convert_with_uom,
@@ -213,7 +213,7 @@ async def _flush_battery_status(device_id: str, db, *, config_id: int = 0) -> No
         device_id=device_id,
         recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
         source_system=SourceSystem.HA_FORDPASS,
-        ingest_schema_version=INGEST_SCHEMA_VERSION,
+        ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
         **fields,
     )
     db.add(record)
@@ -687,16 +687,16 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         duration=trip_fields.get("duration"),
                     )
 
-                from web.services.trip_merge import HA, apply_merge, is_mergeable
+                from web.services.trip_merge import apply_merge, is_mergeable
 
                 if existing is not None and not is_mergeable(existing):
                     logger.info("Trip matches protected row %s; not written", existing.id)
                 elif existing is not None:
-                    if existing.source_system != HA:
+                    if existing.source_system != SourceSystem.HA_FORDPASS:
                         apply_merge(existing, {
                             **trip_fields, "start_time": start_time, "end_time": end_time,
-                            "trip_id": deterministic_id, "source_system": HA,
-                        }, HA)
+                            "trip_id": deterministic_id, "source_system": SourceSystem.HA_FORDPASS,
+                        }, SourceSystem.HA_FORDPASS)
                     # Enrich the existing row with elveh-owned fields.
                     # Scores and regen always overwrite (elveh is canonical).
                     # efficiency and duration only fill NULLs.
@@ -753,7 +753,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         is_complete=True,
                         source_system=SourceSystem.HA_FORDPASS,
                         original_timestamp=event_ts,
-                        ingest_schema_version=INGEST_SCHEMA_VERSION,
+                        ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
                         **trip_fields,
                     )
                     db.add(trip_record)
@@ -1131,14 +1131,14 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         duplicate_of_id=duplicate_of_id,
         needs_review=duplicate_of_id is not None,
         review_type="duplicate" if duplicate_of_id is not None else None,
-        ingest_schema_version=INGEST_SCHEMA_VERSION,
+        ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
     )
     if merge_into is not None:
-        from web.services.session_merge import HA, apply_session_merge, session_values
+        from web.services.session_merge import apply_session_merge, session_values
 
         target = await db.get(EVChargingSession, merge_into)
         if target is not None:
-            apply_session_merge(target, session_values(session), HA)
+            apply_session_merge(target, session_values(session), SourceSystem.HA_FORDPASS)
             logger.info("Merged HA charging session into FordConnect row %s", merge_into)
             return
     db.add(session)

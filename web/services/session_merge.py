@@ -13,13 +13,11 @@ from typing import Any
 
 from db.models.charging_session import EVChargingSession
 from web.services.source_merge import (
-    FCON,
-    HA,
-    MERGEABLE_SOURCES,
     Rule,
     is_km_mile_twin,
     merge_values,
 )
+from web.services.source_system import INGESTED, SourceSystem
 
 logger = logging.getLogger("lightningrod.session_merge")
 
@@ -30,7 +28,7 @@ def checked_distance_added(current: dict, incoming: dict, incoming_source: str) 
     trip distances. Range added and a range-estimate change measure slightly
     different things, so only the x1.609 signature overrules HA.
     """
-    fcon_side, ha_side = (incoming, current) if incoming_source == FCON else (current, incoming)
+    fcon_side, ha_side = (incoming, current) if incoming_source == SourceSystem.FCON else (current, incoming)
     ha_value, fcon_value = float(ha_side["distance_added"]), float(fcon_side["distance_added"])
     if not is_km_mile_twin(ha_value, fcon_value):
         return ha_side["distance_added"]
@@ -50,33 +48,33 @@ KEEP = "keep"
 _CURATED = "curated or from the approved location; fill-only"
 
 SESSION_PRECEDENCE: dict[str, Rule] = {
-    "session_start_utc": Rule(HA, "Ford's log timestamps; FCON's are per-minute samples"),
-    "session_end_utc": Rule(HA, "Ford's log timestamps; FCON's are per-minute samples"),
-    "charge_duration_seconds": Rule(HA, "measured by the vehicle for the whole charge"),
-    "plugged_in_duration_seconds": Rule(HA, "measured plug time; FCON starts at first charging sample"),
-    "energy_kwh": Rule(HA, "energy the vehicle logged; FCON's is a pack-estimate delta"),
-    "start_soc": Rule(HA, "log's first/last SoC"),
-    "end_soc": Rule(HA, "log's first/last SoC"),
-    "max_power": Rule(HA, "log covers every second; FCON samples once a minute"),
-    "min_power": Rule(HA, "log covers every second; FCON samples once a minute"),
-    "charging_kw": Rule(HA, "log's weighted average; FCON's is the last live sample"),
+    "session_start_utc": Rule(SourceSystem.HA_FORDPASS, "Ford's log timestamps; FCON's are per-minute samples"),
+    "session_end_utc": Rule(SourceSystem.HA_FORDPASS, "Ford's log timestamps; FCON's are per-minute samples"),
+    "charge_duration_seconds": Rule(SourceSystem.HA_FORDPASS, "measured by the vehicle for the whole charge"),
+    "plugged_in_duration_seconds": Rule(SourceSystem.HA_FORDPASS, "measured plug time; FCON starts at first charging sample"),
+    "energy_kwh": Rule(SourceSystem.HA_FORDPASS, "energy the vehicle logged; FCON's is a pack-estimate delta"),
+    "start_soc": Rule(SourceSystem.HA_FORDPASS, "log's first/last SoC"),
+    "end_soc": Rule(SourceSystem.HA_FORDPASS, "log's first/last SoC"),
+    "max_power": Rule(SourceSystem.HA_FORDPASS, "log covers every second; FCON samples once a minute"),
+    "min_power": Rule(SourceSystem.HA_FORDPASS, "log covers every second; FCON samples once a minute"),
+    "charging_kw": Rule(SourceSystem.HA_FORDPASS, "log's weighted average; FCON's is the last live sample"),
     "distance_added": Rule(
-        HA, "log's range added, unless it is FCON's x1.609", resolve=checked_distance_added
+        SourceSystem.HA_FORDPASS, "log's range added, unless it is FCON's x1.609", resolve=checked_distance_added
     ),
-    "charge_type": Rule(HA, "the log names the charger type directly"),
-    "address": Rule(HA, "only the log carries a street address"),
-    "latitude": Rule(HA, "the log's location is where Ford recorded the charge"),
-    "longitude": Rule(HA, "the log's location is where Ford recorded the charge"),
-    "plug_status": Rule(FCON, "live plug state at the unplug sample"),
-    "charging_status": Rule(FCON, "live charge display state"),
-    "station_status": Rule(FCON, "only telemetry reports the station link"),
-    "charging_voltage": Rule(FCON, "only telemetry reports charger volts"),
-    "charging_amperage": Rule(FCON, "only telemetry reports charger amps"),
-    "estimated_end_utc": Rule(FCON, "only telemetry reports time-to-full"),
-    "battery_temp_start": Rule(FCON, "read at the start; HA reuses one cached value"),
-    "battery_temp_end": Rule(FCON, "read at the end; HA reuses one cached value"),
-    "ambient_temp_start": Rule(FCON, "read at the start; HA reuses one cached value"),
-    "ambient_temp_end": Rule(FCON, "read at the end; HA reuses one cached value"),
+    "charge_type": Rule(SourceSystem.HA_FORDPASS, "the log names the charger type directly"),
+    "address": Rule(SourceSystem.HA_FORDPASS, "only the log carries a street address"),
+    "latitude": Rule(SourceSystem.HA_FORDPASS, "the log's location is where Ford recorded the charge"),
+    "longitude": Rule(SourceSystem.HA_FORDPASS, "the log's location is where Ford recorded the charge"),
+    "plug_status": Rule(SourceSystem.FCON, "live plug state at the unplug sample"),
+    "charging_status": Rule(SourceSystem.FCON, "live charge display state"),
+    "station_status": Rule(SourceSystem.FCON, "only telemetry reports the station link"),
+    "charging_voltage": Rule(SourceSystem.FCON, "only telemetry reports charger volts"),
+    "charging_amperage": Rule(SourceSystem.FCON, "only telemetry reports charger amps"),
+    "estimated_end_utc": Rule(SourceSystem.FCON, "only telemetry reports time-to-full"),
+    "battery_temp_start": Rule(SourceSystem.FCON, "read at the start; HA reuses one cached value"),
+    "battery_temp_end": Rule(SourceSystem.FCON, "read at the end; HA reuses one cached value"),
+    "ambient_temp_start": Rule(SourceSystem.FCON, "read at the start; HA reuses one cached value"),
+    "ambient_temp_end": Rule(SourceSystem.FCON, "read at the end; HA reuses one cached value"),
     "location_id": Rule(KEEP, _CURATED),
     "location_name": Rule(KEEP, _CURATED),
     "location_type": Rule(KEEP, _CURATED),
@@ -94,12 +92,12 @@ SESSION_PRECEDENCE: dict[str, Rule] = {
     "cost_without_overrides": Rule(KEEP, _CURATED),
     "cost_source": Rule(KEEP, _CURATED),
     "estimated_cost": Rule(KEEP, _CURATED),
-    "source_system": Rule(HA, "one label whichever source arrived first"),
+    "source_system": Rule(SourceSystem.HA_FORDPASS, "one label whichever source arrived first"),
 }
 
 
 def is_mergeable(row: EVChargingSession) -> bool:
-    return row.source_system in MERGEABLE_SOURCES
+    return row.source_system in INGESTED
 
 
 def session_values(row: EVChargingSession) -> dict[str, Any]:

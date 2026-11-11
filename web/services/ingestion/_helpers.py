@@ -4,8 +4,9 @@ Both `web/services/sources/ha_fordpass/handlers.py` and
 `web/services/sources/ha_gas_price/handlers.py` import from here so the
 two adapters stay thin.
 
-Functions in this module are HA-event-shape generic (no FordPass / gas-specific
-logic); unit handling is delegated to `web.services.units`.
+Functions in this module are HA-event-shape generic; unit handling is delegated
+to `web.services.units`. The one FordPass tie is `_resolve_and_convert` reading
+the adapter's entity patterns, so a second adapter would need its own resolver.
 """
 
 from __future__ import annotations

@@ -8,8 +8,9 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 # All timestamps carry timezone info.
 TIMESTAMPTZ = DateTime(timezone=True)
 
-# Adapter-driven ingest with declared source units.
-INGEST_SCHEMA_VERSION = 2
+# Parser versions stamped on ingested rows; each re-parse op compares its own.
+HA_INGEST_SCHEMA_VERSION = 2  # adapter-driven ingest with declared source units
+FCON_INGEST_SCHEMA_VERSION = 2
 
 
 class Base(DeclarativeBase):

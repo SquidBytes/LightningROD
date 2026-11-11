@@ -31,7 +31,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.base import INGEST_SCHEMA_VERSION
+from db.models.base import HA_INGEST_SCHEMA_VERSION
 from web.services.source_system import SourceSystem
 from web.services.units import detection
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
@@ -697,7 +697,7 @@ async def _handle_metrics_entity(
 
     Writes a row with hv_battery_range + hv_battery_max_range (+ any other
     battery fields available on the metrics entity) and
-    ingest_schema_version = INGEST_SCHEMA_VERSION.
+    ingest_schema_version = HA_INGEST_SCHEMA_VERSION.
     """
     from db.models.battery_status import EVBatteryStatus
 
@@ -780,7 +780,7 @@ async def _handle_metrics_entity(
             recorded_at=recorded_at,
             source_system=SourceSystem.HA_FORDPASS,
             original_timestamp=recorded_at,
-            ingest_schema_version=INGEST_SCHEMA_VERSION,
+            ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
             **values,
         ))
         logger.debug(
@@ -1007,7 +1007,7 @@ async def _handle_events_entity(
     # Match-and-enrich fallback: legacy predicate match for trips whose source
     # didn't carry tripUpdateTime (no deterministic id available).
     from web.services.sources.ha_fordpass.handlers import _find_matching_trip
-    from web.services.trip_merge import HA, apply_merge, is_mergeable
+    from web.services.trip_merge import apply_merge, is_mergeable
 
     start_time = recorded_at - timedelta(seconds=duration) if duration else None
     existing = await _find_matching_trip(
@@ -1018,13 +1018,13 @@ async def _handle_events_entity(
         logger.info("ha_fordpass: trip matches protected row %s; not written", existing.id)
         return
     if existing is not None:
-        if existing.source_system != HA:
+        if existing.source_system != SourceSystem.HA_FORDPASS:
             apply_merge(existing, {
                 "trip_id": deterministic_id, "start_time": start_time,
                 "end_time": recorded_at, "duration": duration, "distance": distance,
                 "energy_consumed": energy, "ambient_temp": ambient, "cabin_temp": cabin,
-                "outside_air_temp": outside_air, "source_system": HA,
-            }, HA)
+                "outside_air_temp": outside_air, "source_system": SourceSystem.HA_FORDPASS,
+            }, SourceSystem.HA_FORDPASS)
         # events values are canonical °C — always overwrite temps.
         if ambient is not None:
             existing.ambient_temp = ambient
@@ -1067,7 +1067,7 @@ async def _handle_events_entity(
         is_complete=True,
         source_system=SourceSystem.HA_FORDPASS,
         original_timestamp=recorded_at,
-        ingest_schema_version=INGEST_SCHEMA_VERSION,
+        ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
     )
     db.add(record)
     logger.debug(
@@ -1107,7 +1107,7 @@ async def _handle_elvehcharging_entity(
         recorded_at=_parse_event_ts(new_state) or datetime.now(UTC),
         source_system=SourceSystem.HA_FORDPASS,
         hv_battery_temperature=battery_temp,
-        ingest_schema_version=INGEST_SCHEMA_VERSION,
+        ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
     )
     db.add(record)
     logger.debug(

@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.base import INGEST_SCHEMA_VERSION
+from db.models.base import FCON_INGEST_SCHEMA_VERSION
 from db.models.battery_status import EVBatteryStatus
 from db.models.vehicle_status import EVVehicleStatus
 from web.services.sources.ford_metrics.parser import BATTERY, VEHICLE, ParsedRow
@@ -41,7 +41,7 @@ async def upsert_rows(
                 db, device_id, row.recorded_at, values["odometer"]
             )
         if hasattr(model, "ingest_schema_version"):
-            values["ingest_schema_version"] = INGEST_SCHEMA_VERSION
+            values["ingest_schema_version"] = FCON_INGEST_SCHEMA_VERSION
         existing = await db.scalar(
             select(model).where(
                 model.device_id == device_id,

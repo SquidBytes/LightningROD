@@ -12,11 +12,12 @@ from sqlalchemy import select
 from db.models.trip_metrics import EVTripMetrics
 from tests.factories.trips import TripFactory
 from tests.test_fcon.payloads import telemetry
+from web.services.source_system import SourceSystem
 from web.services.sources.fcon import adapter as fcon_adapter
 from web.services.sources.fcon.raw_store import FconRawArchive
 from web.services.sources.ha_fordpass import handlers as fp_handlers
 from web.services.sources.ha_fordpass.adapter import process_sample as ha_process
-from web.services.trip_merge import FCON, HA, PRECEDENCE, merge_changes
+from web.services.trip_merge import PRECEDENCE, merge_changes
 
 VIN = "YOURVIN0000000001"
 DEVICE = VIN.lower()
@@ -139,7 +140,7 @@ EXPECTED = {
     "odometer_start": 1000.0, "odometer_end": 1013.0,
     "ambient_temp": 22.0, "cabin_temp": 21.0, "outside_air_temp": 20.0,
     "driving_score": 88.0, "range_regenerated": 3.0, "electrical_efficiency": 90.0,
-    "brake_torque": 500.0, "source_system": HA,
+    "brake_torque": 500.0, "source_system": SourceSystem.HA_FORDPASS,
 }
 
 
@@ -195,7 +196,7 @@ async def test_protected_row_is_left_alone(db_session):
 async def test_different_drives_stay_separate(db_session):
     # Ended together, but began half an hour apart: not the same drive.
     await TripFactory.create(
-        db_session, device_id=DEVICE, source_system=HA, trip_id=uuid.uuid4(),
+        db_session, device_id=DEVICE, source_system=SourceSystem.HA_FORDPASS, trip_id=uuid.uuid4(),
         start_time=T0 - timedelta(minutes=30), end_time=T0 + timedelta(minutes=25),
         duration=3300.0, distance=40.0, energy_consumed=8.0,
     )
@@ -206,7 +207,7 @@ async def test_different_drives_stay_separate(db_session):
 
 @pytest.mark.unit
 def test_precedence_table_documents_every_field():
-    assert all(rule.winner in (HA, FCON) and rule.why for rule in PRECEDENCE.values())
+    assert all(rule.winner in (SourceSystem.HA_FORDPASS, SourceSystem.FCON) and rule.why for rule in PRECEDENCE.values())
 
 
 @pytest.mark.unit
@@ -214,7 +215,7 @@ def test_merge_fills_nulls_and_applies_winner():
     current = {"distance": 13.0, "energy_consumed": None, "cabin_temp": None, "duration": 1510.0}
     incoming = {"distance": 12.6, "energy_consumed": 2.4, "cabin_temp": 21.0, "duration": 1500.0}
     # FCON arriving onto an HA row: HA keeps distance and duration.
-    changes = merge_changes({**current, "distance": 12.6}, {**incoming, "distance": 13.0}, FCON)
+    changes = merge_changes({**current, "distance": 12.6}, {**incoming, "distance": 13.0}, SourceSystem.FCON)
     assert "distance" not in changes
     assert "duration" not in changes
     assert changes["energy_consumed"] == 2.4
@@ -237,9 +238,9 @@ def test_fcon_odometer_checks_ha_distance(ha_km, stored, warns, fcon_first, capl
     ha = {"distance": ha_km, "energy_consumed": 2.4, "device_id": DEVICE}
     with caplog.at_level("WARNING", logger="lightningrod.trip_merge"):
         if fcon_first:
-            merged = {**fcon, **merge_changes(fcon, ha, HA)}
+            merged = {**fcon, **merge_changes(fcon, ha, SourceSystem.HA_FORDPASS)}
         else:
-            merged = {**ha, **merge_changes(ha, fcon, FCON)}
+            merged = {**ha, **merge_changes(ha, fcon, SourceSystem.FCON)}
     assert merged["distance"] == pytest.approx(stored)
     assert merged["efficiency"] == round(stored / 2.4, 3)
     warnings = [r for r in caplog.records if "disagreement" in r.getMessage()]

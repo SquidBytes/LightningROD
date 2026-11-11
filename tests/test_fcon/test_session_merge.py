@@ -9,7 +9,8 @@ from sqlalchemy import select
 
 from db.models.charging_session import EVChargingSession
 from tests.test_fcon.payloads import telemetry
-from web.services.session_merge import HA, KEEP, SESSION_PRECEDENCE
+from web.services.session_merge import KEEP, SESSION_PRECEDENCE
+from web.services.source_system import SourceSystem
 from web.services.sources.fcon import adapter as fcon_adapter
 from web.services.sources.fcon.raw_store import FconRawArchive
 from web.services.sources.ha_fordpass.handlers import handle_energy_transfer
@@ -116,7 +117,7 @@ EXPECTED = {
     "battery_temp_end": 31.0,
     "charging_voltage": 355.0,
     "station_status": "NOT_DETECTED",
-    "source_system": HA,
+    "source_system": SourceSystem.HA_FORDPASS,
 }
 
 
@@ -194,7 +195,7 @@ async def test_ha_against_protected_session_still_goes_to_review(db_session):
     await db_session.flush()
     await _feed_ha(db_session)
     rows = await _sessions(db_session)
-    ha_row = next(r for r in rows if r.source_system == HA)
+    ha_row = next(r for r in rows if r.source_system == SourceSystem.HA_FORDPASS)
     assert ha_row.duplicate_of_id == manual.id and ha_row.needs_review
 
 
@@ -215,15 +216,15 @@ def test_every_rule_documents_its_reason():
 )
 @pytest.mark.parametrize("fcon_first", [True, False])
 def test_distance_added_rejects_unit_conversion(ha_km, stored, warns, fcon_first, caplog):
-    from web.services.session_merge import FCON, merge_values
+    from web.services.session_merge import merge_values
 
     fcon = {"distance_added": 13.0, "device_id": DEVICE}
     ha = {"distance_added": ha_km, "device_id": DEVICE}
     with caplog.at_level("WARNING", logger="lightningrod.session_merge"):
         if fcon_first:
-            merged = {**fcon, **merge_values(SESSION_PRECEDENCE, fcon, ha, HA)}
+            merged = {**fcon, **merge_values(SESSION_PRECEDENCE, fcon, ha, SourceSystem.HA_FORDPASS)}
         else:
-            merged = {**ha, **merge_values(SESSION_PRECEDENCE, ha, fcon, FCON)}
+            merged = {**ha, **merge_values(SESSION_PRECEDENCE, ha, fcon, SourceSystem.FCON)}
     assert merged["distance_added"] == pytest.approx(stored)
     hits = [r for r in caplog.records if "unit-converted" in r.getMessage()]
     assert bool(hits) is warns

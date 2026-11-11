@@ -12,12 +12,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from web.services.source_system import INGESTED, SourceSystem
-
-HA = SourceSystem.HA_FORDPASS
-FCON = SourceSystem.FCON
-MERGEABLE_SOURCES = INGESTED
-
 # (current, incoming, incoming_source) -> the value the column should hold.
 Resolver = Callable[[dict, dict, str], Any]
 

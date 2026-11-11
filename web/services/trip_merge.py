@@ -14,10 +14,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
-from web.services.source_merge import FCON, HA, MERGEABLE_SOURCES, Rule, merge_values
+from web.services.source_merge import Rule, merge_values
+from web.services.source_system import INGESTED, SourceSystem
 from web.util.time import utc
 
-__all__ = ["FCON", "HA", "MERGEABLE_SOURCES", "PRECEDENCE", "apply_merge", "find_same_drive"]
+__all__ = ["PRECEDENCE", "apply_merge", "find_same_drive"]
 
 logger = logging.getLogger("lightningrod.trip_merge")
 
@@ -40,7 +41,7 @@ def checked_distance(current: dict, incoming: dict, incoming_source: str) -> Any
     cannot be converted, so it is the referee. Only an FCON row reaches here
     with HA incoming, and HA rows with FCON incoming, so each side is known.
     """
-    fcon_side, ha_side = (incoming, current) if incoming_source == FCON else (current, incoming)
+    fcon_side, ha_side = (incoming, current) if incoming_source == SourceSystem.FCON else (current, incoming)
     reference = _odometer_delta(fcon_side)
     if reference is None:
         reference = float(fcon_side["distance"])
@@ -59,30 +60,30 @@ def checked_distance(current: dict, incoming: dict, incoming_source: str) -> Any
 
 
 PRECEDENCE: dict[str, Rule] = {
-    "trip_id": Rule(HA, "HA's id is derived from the vehicle's own trip timestamp"),
-    "start_time": Rule(FCON, "recomputed as end_time minus duration once both are merged"),
-    "end_time": Rule(FCON, "ignition-off from the TCU; HA's elveh path stamps receipt time"),
-    "duration": Rule(HA, "the vehicle's own count; FCON's starts at its first ON poll"),
+    "trip_id": Rule(SourceSystem.HA_FORDPASS, "HA's id is derived from the vehicle's own trip timestamp"),
+    "start_time": Rule(SourceSystem.FCON, "recomputed as end_time minus duration once both are merged"),
+    "end_time": Rule(SourceSystem.FCON, "ignition-off from the TCU; HA's elveh path stamps receipt time"),
+    "duration": Rule(SourceSystem.HA_FORDPASS, "the vehicle's own count; FCON's starts at its first ON poll"),
     "distance": Rule(
-        HA, "HA's decimals if the FCON odometer agrees, else FCON", resolve=checked_distance
+        SourceSystem.HA_FORDPASS, "HA's decimals if the FCON odometer agrees, else FCON", resolve=checked_distance
     ),
-    "odometer_start": Rule(FCON, "read at the boundary; HA picks the nearest status row"),
-    "odometer_end": Rule(FCON, "read at the boundary; HA picks the nearest status row"),
-    "energy_consumed": Rule(HA, "measured by the vehicle; FCON's is a pack-estimate delta"),
-    "range_regenerated": Rule(HA, "elveh is canonical for regen"),
-    "ambient_temp": Rule(HA, "events trip summary is canonical for temperatures"),
-    "cabin_temp": Rule(HA, "events trip summary is canonical for temperatures"),
-    "outside_air_temp": Rule(HA, "events trip summary is canonical for temperatures"),
-    "driving_score": Rule(HA, "elveh is canonical for scores"),
-    "speed_score": Rule(HA, "elveh is canonical for scores"),
-    "acceleration_score": Rule(HA, "elveh is canonical for scores"),
-    "deceleration_score": Rule(HA, "elveh is canonical for scores"),
-    "electrical_efficiency": Rule(HA, "elveh is canonical for scores"),
-    "start_location_id": Rule(FCON, "resolved from a measured GPS fix"),
-    "end_location_id": Rule(FCON, "resolved from a measured GPS fix"),
-    "brake_torque": Rule(FCON, "only FordConnect reports it"),
+    "odometer_start": Rule(SourceSystem.FCON, "read at the boundary; HA picks the nearest status row"),
+    "odometer_end": Rule(SourceSystem.FCON, "read at the boundary; HA picks the nearest status row"),
+    "energy_consumed": Rule(SourceSystem.HA_FORDPASS, "measured by the vehicle; FCON's is a pack-estimate delta"),
+    "range_regenerated": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for regen"),
+    "ambient_temp": Rule(SourceSystem.HA_FORDPASS, "events trip summary is canonical for temperatures"),
+    "cabin_temp": Rule(SourceSystem.HA_FORDPASS, "events trip summary is canonical for temperatures"),
+    "outside_air_temp": Rule(SourceSystem.HA_FORDPASS, "events trip summary is canonical for temperatures"),
+    "driving_score": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for scores"),
+    "speed_score": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for scores"),
+    "acceleration_score": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for scores"),
+    "deceleration_score": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for scores"),
+    "electrical_efficiency": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for scores"),
+    "start_location_id": Rule(SourceSystem.FCON, "resolved from a measured GPS fix"),
+    "end_location_id": Rule(SourceSystem.FCON, "resolved from a measured GPS fix"),
+    "brake_torque": Rule(SourceSystem.FCON, "only FordConnect reports it"),
     # Deterministic so both arrival orders label the row the same way.
-    "source_system": Rule(HA, "one label whichever source arrived first"),
+    "source_system": Rule(SourceSystem.HA_FORDPASS, "one label whichever source arrived first"),
 }
 
 # Recomputed from the merged inputs, never taken from either side.
@@ -93,7 +94,7 @@ _MATCH_FIELDS = (
 
 
 def is_mergeable(row: EVTripMetrics) -> bool:
-    return row.source_system in MERGEABLE_SOURCES
+    return row.source_system in INGESTED
 
 
 def merge_changes(current: dict, incoming: dict, incoming_source: str) -> dict[str, Any]:

@@ -20,7 +20,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.base import INGEST_SCHEMA_VERSION
+from db.models.base import FCON_INGEST_SCHEMA_VERSION
 from db.models.trip_metrics import EVTripMetrics
 from web.queries.trips import detect_trip_location_ids
 from web.services.sources.fcon.history import telemetry_since_boundary
@@ -187,7 +187,7 @@ async def record_trip_if_ended(
         is_complete=True,
         recorded_at=fields["end_time"],
         original_timestamp=fields["start_time"],
-        ingest_schema_version=INGEST_SCHEMA_VERSION,
+        ingest_schema_version=FCON_INGEST_SCHEMA_VERSION,
         **fields,
     )
     db.add(trip)

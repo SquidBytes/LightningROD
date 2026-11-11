@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy import delete, select
 
 from db.engine import AsyncSessionLocal
-from db.models.base import INGEST_SCHEMA_VERSION
+from db.models.base import HA_INGEST_SCHEMA_VERSION
 from db.models.raw_event import HARawEvent
 from db.portable_insert import portable_insert
 from web.queries.settings import get_raw_archive_settings
@@ -253,7 +253,7 @@ class RawEventArchive(RetentionPruner):
             ),
             config_id=config_id,
             source_system=SOURCE_SYSTEM,
-            ingest_schema_version=INGEST_SCHEMA_VERSION,
+            ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
         )
         # Suppresses only true re-sends: a reconnect replays the initial
         # snapshot with the original last_updated of every entity.

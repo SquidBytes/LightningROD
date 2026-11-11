@@ -38,6 +38,7 @@ from web.queries.vehicles import (
 from web.services.source_system import SourceSystem
 from web.services.sources.ha_fordpass.adapter import LIGHTNINGROD_TRIP_NAMESPACE
 from web.unit_system import MI_PER_KM, parse_user_local_to_utc, to_metric_distance
+from web.util.time import utc
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -195,10 +196,7 @@ async def export_trips_csv(
     def _local(dt, timespec: str = "minutes") -> str:
         if dt is None:
             return ""
-        if dt.tzinfo is None:
-            from datetime import UTC as _utc
-            dt = dt.replace(tzinfo=_utc)
-        return dt.astimezone(tz).isoformat(sep=" ", timespec=timespec)
+        return utc(dt).astimezone(tz).isoformat(sep=" ", timespec=timespec)
 
     def _num(v, dp: int) -> str:
         return "" if v is None else f"{float(v):.{dp}f}"

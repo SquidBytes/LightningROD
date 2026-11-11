@@ -17,7 +17,7 @@ from typing import Any
 from sqlalchemy import event, func, inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.base import INGEST_SCHEMA_VERSION
+from db.models.base import FCON_INGEST_SCHEMA_VERSION
 from db.models.data_source_config import DataSourceConfig
 from db.models.fcon_raw_sample import FconRawSample
 from db.models.trip_metrics import EVTripMetrics
@@ -30,8 +30,7 @@ from web.services.repair.base import (
     RepairResult,
     scratch_session,
 )
-from web.services.source_merge import MERGEABLE_SOURCES
-from web.services.source_system import SourceSystem
+from web.services.source_system import INGESTED, SourceSystem
 from web.util.time import utc
 
 # Tables the FordConnect adapter writes; anything else it touches is a bug.
@@ -138,7 +137,7 @@ class FconArchiveReparse(RepairOperation):
         "Assistant also recorded are merged, never duplicated."
     )
     model = EVTripMetrics
-    guarded_source_systems = MERGEABLE_SOURCES
+    guarded_source_systems = INGESTED
 
     def __init__(self) -> None:
         self.last_details: dict[str, Any] = {}
@@ -156,7 +155,7 @@ class FconArchiveReparse(RepairOperation):
 
     @staticmethod
     def _current_version() -> int:
-        return INGEST_SCHEMA_VERSION
+        return FCON_INGEST_SCHEMA_VERSION
 
     async def census(self, db: AsyncSession) -> int:
         """Archived responses parsed by an older parser version."""
