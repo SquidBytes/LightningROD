@@ -27,17 +27,20 @@ def test_parse_iso_naive_stays_naive():
     assert result.tzinfo is None
 
 
-def test_parse_iso_empty_is_silent(caplog):
-    with caplog.at_level(logging.WARNING, logger="lightningrod.util.time"):
+def test_parse_iso_silent_by_default(caplog):
+    with caplog.at_level(logging.WARNING):
         assert parse_iso(None) is None
         assert parse_iso("") is None
+        assert parse_iso("not-a-date") is None
     assert caplog.records == []
 
 
-def test_parse_iso_malformed_warns(caplog):
-    with caplog.at_level(logging.WARNING, logger="lightningrod.util.time"):
-        assert parse_iso("not-a-date") is None
-        assert parse_iso(12345) is None
+def test_parse_iso_logs_malformed_to_given_logger(caplog):
+    log = logging.getLogger("test.parse_iso")
+    with caplog.at_level(logging.WARNING, logger="test.parse_iso"):
+        assert parse_iso(None, logger=log) is None
+        assert parse_iso("not-a-date", logger=log) is None
+        assert parse_iso(12345, logger=log) is None
     assert [r.levelname for r in caplog.records] == ["WARNING", "WARNING"]
     assert "not-a-date" in caplog.records[0].getMessage()
 

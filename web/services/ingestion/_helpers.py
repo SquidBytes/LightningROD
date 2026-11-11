@@ -232,7 +232,7 @@ def _get_event_timestamp(
     for key in keys:
         val = new_state.get(key) if new_state else None
         if val:
-            parsed = parse_iso(val)
+            parsed = parse_iso(val, logger=logger)
             if parsed is not None:
                 return parsed
     return None

@@ -967,7 +967,7 @@ async def _handle_events_entity(
 
     # The event's own updateTime is the key-off.
     recorded_at = (
-        parse_iso(update_time_iso)
+        parse_iso(update_time_iso, logger=logger)
         or _parse_event_ts(new_state)
         or datetime.now(UTC)
     )
@@ -1183,7 +1183,7 @@ def _parse_event_ts(new_state: dict) -> datetime | None:
         val = new_state.get(key)
         if not val:
             continue
-        parsed = parse_iso(val)
+        parsed = parse_iso(val, logger=logger)
         if parsed is not None:
             return parsed
     return None

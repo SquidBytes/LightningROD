@@ -75,7 +75,7 @@ def test_get_device_id_unknown():
 # ---------------------------------------------------------------------------
 
 
-def testsafe_float():
+def test_safe_float():
     assert safe_float("42.5") == 42.5
     assert safe_float(42) == 42.0
     assert safe_float(None) is None

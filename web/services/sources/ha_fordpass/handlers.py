@@ -646,7 +646,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 _last_trip_values[key] = trip_fields.copy()
                 # last_changed freezes while only attributes update, so prefer
                 # the vehicle's key-off time, then last_updated.
-                event_ts = parse_iso(attrs.get("tripUpdateTime")) or _get_event_timestamp(
+                event_ts = parse_iso(attrs.get("tripUpdateTime"), logger=logger) or _get_event_timestamp(
                     new_state, ("last_updated", "last_changed")
                 )
                 end_time = event_ts or datetime.now(UTC)
@@ -953,8 +953,8 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
 
     # Duration fields
     duration_data = attrs.get("energyTransferDuration", {}) or {}
-    session_start_utc = parse_iso(duration_data.get("begin"))
-    session_end_utc = parse_iso(duration_data.get("end"))
+    session_start_utc = parse_iso(duration_data.get("begin"), logger=logger)
+    session_end_utc = parse_iso(duration_data.get("end"), logger=logger)
     charge_duration_seconds = safe_float(duration_data.get("totalTime"))
 
     # HA always sends friendly_name/icon, so an entity with no log entry still
@@ -1009,7 +1009,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     network_name = location_data.get("network")
 
     # Timestamp
-    original_timestamp = parse_iso(attrs.get("timeStamp"))
+    original_timestamp = parse_iso(attrs.get("timeStamp"), logger=logger)
 
     # Thermal context comes from the elvehcharging / outsidetemp caches the
     # earlier handlers filled — this payload's own values are the fallback for
