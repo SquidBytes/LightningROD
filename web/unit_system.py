@@ -18,6 +18,8 @@ and converted to UTC before storage. See ``parse_user_local_to_utc``.
 from datetime import UTC, datetime, tzinfo
 from zoneinfo import ZoneInfo
 
+from web.util.timestamps import from_local, utc
+
 # Conversion constants
 KM_PER_MI = 1.60934
 MI_PER_KM = 0.621371
@@ -222,7 +224,7 @@ def parse_user_local_to_utc(
             tz = ZoneInfo(tz_str)
         except Exception:
             tz = UTC
-    return naive.replace(tzinfo=tz).astimezone(UTC)
+    return from_local(naive, tz)
 
 
 def format_user_local(dt, tz_str: str | None, fmt: str) -> str:
@@ -255,5 +257,4 @@ def format_user_local(dt, tz_str: str | None, fmt: str) -> str:
             tz = ZoneInfo(tz_str)
         except Exception:
             tz = UTC
-    aware = dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
-    return aware.astimezone(tz).strftime(fmt)
+    return utc(dt).astimezone(tz).strftime(fmt)

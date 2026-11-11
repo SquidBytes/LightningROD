@@ -2,12 +2,10 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, UniqueConstraint, func
+from sqlalchemy import Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.models.base import Base
-
-TIMESTAMPTZ = DateTime(timezone=True)
+from db.models.base import TIMESTAMPTZ, Base
 
 
 class RepairSkip(Base):

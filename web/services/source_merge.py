@@ -12,11 +12,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-HA = "ha_fordpass"
-FCON = "fcon"
-# Ingested rows a merge may enrich; manual and imported rows never.
-MERGEABLE_SOURCES = (HA, FCON)
-
 # (current, incoming, incoming_source) -> the value the column should hold.
 Resolver = Callable[[dict, dict, str], Any]
 

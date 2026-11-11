@@ -3,13 +3,11 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Index, Integer, SmallInteger, String, func
+from sqlalchemy import Index, Integer, SmallInteger, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.models.base import Base
+from db.models.base import TIMESTAMPTZ, Base
 from db.types import JSONStorage
-
-TIMESTAMPTZ = DateTime(timezone=True)
 
 
 class HARawEvent(Base):

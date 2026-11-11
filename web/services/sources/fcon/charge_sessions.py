@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.base import FCON_INGEST_SCHEMA_VERSION
 from db.models.charging_session import EVChargingSession
 from db.models.fcon_raw_sample import FconRawSample
 from web.queries.locations import (
@@ -30,14 +31,14 @@ from web.queries.locations import (
 )
 from web.queries.sessions import find_matching_sessions
 from web.services.charge_types import normalize_charge_type
-from web.services.session_merge import FCON, HA, apply_session_merge, refresh_own_row
+from web.services.session_merge import apply_session_merge, refresh_own_row
+from web.services.source_system import SourceSystem
 from web.services.sources.fcon.history import telemetry_since_boundary
 from web.services.sources.fcon.identity import SOURCE_SYSTEM
 from web.services.sources.ford_metrics.parser import parse_time
 
 logger = logging.getLogger("lightningrod.sources.fcon.sessions")
 
-INGEST_SCHEMA_VERSION = 2
 IN_PROGRESS = "IN_PROGRESS"
 CONNECTED = "CONNECTED"
 DISCONNECTED = "DISCONNECTED"
@@ -299,7 +300,7 @@ async def record_session_if_ended(
             )
             if m[1] != SOURCE_SYSTEM
         ]
-        ha_id = next((mid for mid, source in others if source == HA), None)
+        ha_id = next((mid for mid, source in others if source == SourceSystem.HA_FORDPASS), None)
         if ha_id is not None:
             target = await db.get(EVChargingSession, ha_id)
         elif others:
@@ -315,7 +316,7 @@ async def record_session_if_ended(
         refresh_own_row(existing, fields)
         return existing
     if target is not None:
-        apply_session_merge(target, {**fields, "source_system": SOURCE_SYSTEM}, FCON)
+        apply_session_merge(target, {**fields, "source_system": SOURCE_SYSTEM}, SourceSystem.FCON)
         return target
 
     session = EVChargingSession(
@@ -324,7 +325,7 @@ async def record_session_if_ended(
         is_complete=True,
         recorded_at=current.at,
         original_timestamp=fields["session_start_utc"],
-        ingest_schema_version=INGEST_SCHEMA_VERSION,
+        ingest_schema_version=FCON_INGEST_SCHEMA_VERSION,
         **fields,
     )
     db.add(session)

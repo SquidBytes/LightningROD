@@ -4,12 +4,9 @@ Both `web/services/sources/ha_fordpass/handlers.py` and
 `web/services/sources/ha_gas_price/handlers.py` import from here so the
 two adapters stay thin.
 
-Functions in this module are HA-event-shape generic (no FordPass / gas-specific
-logic). The single edge case: `_read_time_uom` and `_convert_with_uom` import
-`_normalize_uom_string` from `web.services.sources.ha_fordpass.adapter` — that
-edge is preserved (FordPass owns the canonical UOM normalization table). Future
-adapters that need their own UOM normalizer can swap the import or pass the
-normalizer in.
+Functions in this module are HA-event-shape generic; unit handling is delegated
+to `web.services.units`. The one FordPass tie is `_resolve_and_convert` reading
+the adapter's entity patterns, so a second adapter would need its own resolver.
 """
 
 from __future__ import annotations
@@ -20,7 +17,9 @@ from typing import Any
 
 from web.services.sources.ha_fordpass import adapter as ha_fordpass
 from web.services.units import detection
+from web.services.units.families import normalize_unit_string
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
+from web.util.timestamps import parse_iso
 
 logger = logging.getLogger("lightningrod.ingestion.helpers")
 
@@ -43,7 +42,7 @@ def _read_time_uom(new_state: dict) -> str | None:
     raw = attrs.get("unit_of_measurement")
     if raw is None:
         return None
-    return ha_fordpass._normalize_uom_string(raw)
+    return normalize_unit_string(raw)
 
 
 def _convert_with_uom(
@@ -149,16 +148,6 @@ def _convert_with_uom(
 # ---------------------------------------------------------------------------
 
 
-def _safe_float(val) -> float | None:
-    """Safely convert a value to float, returning None on failure."""
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
-
-
 def _get_state_value(new_state: dict) -> str | None:
     """Extract state value from HA state object."""
     if not new_state:
@@ -244,13 +233,7 @@ def _get_event_timestamp(
     for key in keys:
         val = new_state.get(key) if new_state else None
         if val:
-            try:
-                if isinstance(val, str):
-                    if val.endswith("Z"):
-                        val = val[:-1] + "+00:00"
-                    return datetime.fromisoformat(val)
-                if isinstance(val, datetime):
-                    return val
-            except (ValueError, TypeError):
-                continue
+            parsed = parse_iso(val, logger=logger)
+            if parsed is not None:
+                return parsed
     return None

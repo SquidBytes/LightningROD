@@ -21,6 +21,7 @@ from websockets.exceptions import (
     WebSocketException,
 )
 
+from web.services.source_system import SourceSystem
 from web.unit_system import GAL_PER_LITER
 
 logger = logging.getLogger("lightningrod.hass")
@@ -54,7 +55,7 @@ class HAWebSocketRuntime:
         ha_url: str,
         ha_token: str,
         *,
-        source_name: str = "ha_fordpass",
+        source_name: str = SourceSystem.HA_FORDPASS,
         instance_label: str = "default",
     ) -> None:
         self.config_id = config_id

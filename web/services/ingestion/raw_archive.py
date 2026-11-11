@@ -16,15 +16,17 @@ from typing import Any
 from sqlalchemy import delete, select
 
 from db.engine import AsyncSessionLocal
+from db.models.base import HA_INGEST_SCHEMA_VERSION
 from db.models.raw_event import HARawEvent
 from db.portable_insert import portable_insert
 from web.queries.settings import get_raw_archive_settings
 from web.services.ingestion._helpers import _get_event_timestamp
-from web.services.sources.ha_fordpass.adapter import INGEST_SCHEMA_VERSION
+from web.services.source_system import SourceSystem
+from web.util.timestamps import utc
 
 logger = logging.getLogger("lightningrod.ingestion.raw_archive")
 
-SOURCE_SYSTEM = "ha_fordpass"
+SOURCE_SYSTEM = SourceSystem.HA_FORDPASS
 # Entity id prefixes the archive keeps. The device tracker is here because it
 # is the only source of GPS accuracy and altitude — the gps sensor carries
 # neither, and ev_location has columns for both.
@@ -41,18 +43,6 @@ PRUNE_BATCH = 5000
 # A stuck archive fails once per event — 10k+ stack traces a day at a typical
 # event rate. Log the first in full, then at most one per interval.
 FAILURE_LOG_INTERVAL = 300.0
-
-
-def _utc(ts: datetime | None) -> datetime | None:
-    """UTC-normalized copy, re-basing an offset-aware value.
-
-    Unlike the repair layer's `_aware`, this resolves offsets rather than
-    just stamping naive values: SQLite drops tzinfo on bind, so a +02:00
-    timestamp would otherwise be stored as UTC wall time.
-    """
-    if ts is None:
-        return None
-    return ts.astimezone(UTC) if ts.tzinfo else ts.replace(tzinfo=UTC)
 
 
 def archive_scope(entity_id: str) -> tuple[str, str] | None:
@@ -258,12 +248,12 @@ class RawEventArchive(RetentionPruner):
             # has no reason to hold.
             ha_unit_system=(ha_config or {}).get("unit_system"),
             recorded_at=(
-                _utc(_get_event_timestamp(new_state, EVENT_TS_KEYS))
+                utc(_get_event_timestamp(new_state, EVENT_TS_KEYS))
                 or datetime.now(UTC)
             ),
             config_id=config_id,
             source_system=SOURCE_SYSTEM,
-            ingest_schema_version=INGEST_SCHEMA_VERSION,
+            ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
         )
         # Suppresses only true re-sends: a reconnect replays the initial
         # snapshot with the original last_updated of every entity.

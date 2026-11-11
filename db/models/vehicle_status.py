@@ -2,17 +2,14 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Numeric, String, func
+from sqlalchemy import Index, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.models.base import Base
+from db.models.base import TIMESTAMPTZ, Base, IngestMetaMixin
 from db.types import JSONStorage
 
-# PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = DateTime(timezone=True)
 
-
-class EVVehicleStatus(Base):
+class EVVehicleStatus(IngestMetaMixin, Base):
     """Operational, drivetrain, environment, and structured vehicle status."""
 
     __tablename__ = "ev_vehicle_status"
@@ -57,13 +54,6 @@ class EVVehicleStatus(Base):
     # Environment (time-series, populated from per-sensor HA entities)
     outside_temperature: Mapped[float | None] = mapped_column(Numeric)
     cabin_temperature: Mapped[float | None] = mapped_column(Numeric)
-
-    # Pipeline metadata
-    source_system: Mapped[str | None] = mapped_column(String(100))
-    ingested_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=func.now()
-    )
-    original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
     __table_args__ = (
         Index("idx_ev_vehicle_status_recorded_at", "recorded_at"),

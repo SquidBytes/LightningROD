@@ -11,9 +11,9 @@ from datetime import UTC, datetime
 from web.services.ingestion._helpers import (
     _get_event_timestamp,
     _get_state_value,
-    _safe_float,
 )
 from web.unit_system import GAL_PER_LITER
+from web.util.numbers import safe_float
 
 logger = logging.getLogger("lightningrod.sources.ha_gas_price.handlers")
 
@@ -43,7 +43,7 @@ async def handle_gas_sensor_event(
         logger.debug("Gas sensor %s has non-numeric state '%s', skipping", entity_id, state_val)
         return False
 
-    price = _safe_float(state_val)
+    price = safe_float(state_val)
     if price is None or price <= 0:
         logger.debug("Gas sensor %s value not a valid price: '%s', skipping", entity_id, state_val)
         return False

@@ -31,7 +31,8 @@ from web.services.repair.replay_core import (
     replay_events,
 )
 from web.services.repair.snapshot import deserialize_row, serialize_row
-from web.services.trip_merge import MERGEABLE_SOURCES
+from web.services.source_system import INGESTED, SourceSystem
+from web.util.timestamps import parse_iso, utc
 
 logger = logging.getLogger("lightningrod.repair.recorder_replay")
 
@@ -43,15 +44,9 @@ _MAX_SOURCES = 6
 def _state_ts(state: dict) -> datetime | None:
     """UTC-aware timestamp of an HA history state (last_updated/last_changed)."""
     for key in ("last_updated", "last_changed"):
-        val = state.get(key)
-        if isinstance(val, datetime):
-            return val if val.tzinfo else val.replace(tzinfo=UTC)
-        if isinstance(val, str) and val:
-            try:
-                parsed = datetime.fromisoformat(val.replace("Z", "+00:00"))
-            except ValueError:
-                continue
-            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+        parsed = parse_iso(state.get(key))
+        if parsed is not None:
+            return utc(parsed)
     return None
 
 
@@ -116,7 +111,7 @@ class RecorderReplay(RepairOperation):
 
     # FordConnect trips are in scope too: a replayed HA trip merges into the
     # FordConnect row for the same drive rather than being dropped.
-    guarded_source_systems = MERGEABLE_SOURCES
+    guarded_source_systems = INGESTED
 
     slug = "recorder-replay"
     display_name = "Recorder history replay"
@@ -165,7 +160,7 @@ class RecorderReplay(RepairOperation):
         # Lazy import: registry import must never pull in the HA stack.
         from web.services.ingestion.supervisor import supervisor
 
-        return supervisor.get_runtime("ha_fordpass", "default")
+        return supervisor.get_runtime(SourceSystem.HA_FORDPASS, "default")
 
     def _entity_id(self, runtime, suffix: str) -> str:
         return f"sensor.fordpass_{runtime.detected_vin or 'unknown'}_{suffix}"

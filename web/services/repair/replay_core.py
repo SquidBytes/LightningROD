@@ -18,7 +18,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.raw_event import HARawEvent
-from web.services.repair.base import _aware
+from web.util.timestamps import utc
 
 logger = logging.getLogger("lightningrod.repair.replay_core")
 
@@ -48,7 +48,7 @@ class ArchivedEvent:
     @classmethod
     def from_row(cls, row: HARawEvent) -> ArchivedEvent:
         return cls(
-            _aware(row.recorded_at),
+            utc(row.recorded_at),
             row.entity_id,
             row.payload,
             {"unit_system": row.ha_unit_system} if row.ha_unit_system else None,

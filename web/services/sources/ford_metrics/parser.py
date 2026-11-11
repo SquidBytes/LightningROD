@@ -11,11 +11,12 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, Literal
 
 from web.services.units.data_map import DataMapping, SourceRef
 from web.services.units.to_metric import to_metric
+from web.util.timestamps import parse_iso, utc
 
 Shape = Literal["number", "text", "json", "json_text"]
 # Units to_metric does not know, all already SI: taken as-is.
@@ -93,13 +94,7 @@ def data_map(source: SourceRef) -> list[DataMapping]:
 
 
 def parse_time(raw: Any) -> datetime | None:
-    if not isinstance(raw, str) or not raw:
-        return None
-    try:
-        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return parsed.astimezone(UTC) if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    return utc(parse_iso(raw))
 
 
 def _update_time(entry: Any) -> datetime | None:

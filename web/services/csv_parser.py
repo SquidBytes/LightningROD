@@ -17,6 +17,10 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from web.services.charge_types import normalize_charge_type
+from web.services.source_system import SourceSystem
+from web.util.timestamps import from_local, parse_iso, utc
+
 # ---------------------------------------------------------------------------
 # CSV field options — descriptors for all mappable EVChargingSession columns
 # ---------------------------------------------------------------------------
@@ -583,13 +587,7 @@ def _parse_timestamp(v: str) -> datetime | None:
     v = v.strip() if v else ""
     if not v:
         return None
-    try:
-        dt = datetime.fromisoformat(v)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        return dt
-    except (ValueError, TypeError):
-        return None
+    return utc(parse_iso(v))
 
 
 def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> datetime | None:
@@ -603,15 +601,11 @@ def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> datetime | None:
     if not v:
         return None
     try:
-        dt = datetime.fromisoformat(v)
-        if dt.tzinfo is None:
-            # Treat naive timestamp as being in the user-selected import timezone
-            tz = ZoneInfo(import_tz) if import_tz and import_tz != "UTC" else UTC
-            dt = dt.replace(tzinfo=tz).astimezone(UTC)
-        else:
-            # Already has timezone — convert to UTC
-            dt = dt.astimezone(UTC)
-        return dt
+        dt = parse_iso(v)
+        if dt is None:
+            return None
+        tz = ZoneInfo(import_tz) if import_tz and import_tz != "UTC" else UTC
+        return from_local(dt, tz)
     except (ValueError, TypeError, KeyError):
         return None
 
@@ -629,15 +623,10 @@ def _parse_uuid(v: str) -> uuid.UUID | None:
 
 def _normalize_charge_type(charger_type: str, location_name: str) -> str | None:
     """Normalize charger type to 'AC' or 'DC'."""
-    ct = charger_type.strip().upper() if charger_type else ""
-    if ct in ("AC", "AC LEVEL 2", "AC_BASIC", "LEVEL_2", "AC_CHARGING", "AC LEVEL 1", "L2", "LEVEL 2", "LEVEL 1"):
+    normalized = normalize_charge_type(charger_type)
+    if normalized is None and (location_name.strip() if location_name else "") == "Work":
         return "AC"
-    if ct in ("DC", "DC_FAST", "DC_CHARGING", "DCFC", "L3", "LEVEL 3"):
-        return "DC"
-    loc = location_name.strip() if location_name else ""
-    if not ct and loc == "Work":
-        return "AC"
-    return ct if ct else None
+    return normalized
 
 
 def _classify_location_type(location_name: str) -> str:
@@ -785,7 +774,7 @@ def transform_rows(
             db_row["location_type"] = _classify_location_type(location_name)
         if db_row.get("is_free") is None:
             db_row["is_free"] = _classify_is_free(location_name)
-        db_row["source_system"] = "csv_import"
+        db_row["source_system"] = SourceSystem.CSV_IMPORT
         db_row["is_complete"] = True
 
         # Generate deterministic session_id if not provided as a valid UUID
@@ -1033,7 +1022,7 @@ async def import_rows(
                                 address=addr,
                                 network_id=clean_row.get("network_id"),
                                 location_name=clean_row.get("location_name"),
-                                source_system="csv_import",
+                                source_system=SourceSystem.CSV_IMPORT,
                             )
                             if resolved_loc_id:
                                 clean_row["location_id"] = resolved_loc_id

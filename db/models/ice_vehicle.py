@@ -2,12 +2,10 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Numeric, String, func, text
+from sqlalchemy import Boolean, Numeric, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.models.base import Base
-
-TIMESTAMPTZ = DateTime(timezone=True)
+from db.models.base import TIMESTAMPTZ, Base
 
 
 class IceVehicle(Base):

@@ -23,6 +23,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from db.models.base import HA_INGEST_SCHEMA_VERSION
 from web.services.charge_types import normalize_charge_type as _normalize_charge_type
 from web.services.ingestion._helpers import (
     _convert_with_uom,
@@ -30,11 +31,13 @@ from web.services.ingestion._helpers import (
     _get_event_timestamp,
     _get_state_value,
     _resolve_and_convert,
-    _safe_float,
 )
+from web.services.source_system import SourceSystem
 from web.services.sources.ha_fordpass import adapter as ha_fordpass
 from web.services.sources.ha_fordpass.dispatch import handles
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
+from web.util.numbers import safe_float
+from web.util.timestamps import parse_iso, utc
 
 logger = logging.getLogger("lightningrod.sources.ha_fordpass.handlers")
 
@@ -80,7 +83,7 @@ def _score_or_null(val: Any) -> float | None:
 
     ha-fordpass emits 0 when the telemetry is missing; storing it would paint empty trips red.
     """
-    raw = _safe_float(val)
+    raw = safe_float(val)
     if raw is None or raw == 0:
         return None
     return raw
@@ -101,18 +104,18 @@ def _duration_to_seconds(val: Any) -> float | None:
         clock = val.strip()
         if "," in clock:  # "N day(s), H:MM:SS"
             day_part, clock = (p.strip() for p in clock.split(",", 1))
-            day_num = _safe_float(day_part.split(" ", 1)[0])
+            day_num = safe_float(day_part.split(" ", 1)[0])
             if day_num is None:
                 return None
             days = day_num
-        parts = [_safe_float(p) for p in clock.split(":")]
+        parts = [safe_float(p) for p in clock.split(":")]
         if len(parts) != 3:
             return None
         h, m, sec = parts
         if h is None or m is None or sec is None:
             return None
         return days * 86400.0 + h * 3600.0 + m * 60.0 + sec
-    raw = _safe_float(val)
+    raw = safe_float(val)
     return raw * 60.0 if raw is not None else None
 
 
@@ -168,7 +171,7 @@ async def _ensure_vehicle_exists(device_id: str, entity_id: str, db) -> None:
     """Create the vehicle for this device_id on first sight; FordPass device_id is the VIN."""
     from web.services.vehicles.auto_create import ensure_vehicle
 
-    await ensure_vehicle(db, device_id, source_system="ha_fordpass", vin=device_id)
+    await ensure_vehicle(db, device_id, source_system=SourceSystem.HA_FORDPASS, vin=device_id)
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +192,7 @@ async def _flush_vehicle_status(device_id: str, db, *, config_id: int = 0) -> No
     record = EVVehicleStatus(
         device_id=device_id,
         recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         **fields,
     )
     db.add(record)
@@ -209,8 +212,8 @@ async def _flush_battery_status(device_id: str, db, *, config_id: int = 0) -> No
     record = EVBatteryStatus(
         device_id=device_id,
         recorded_at=fields.pop("_recorded_at", datetime.now(UTC)),
-        source_system="ha_fordpass",
-        ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
+        source_system=SourceSystem.HA_FORDPASS,
+        ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
         **fields,
     )
     db.add(record)
@@ -303,20 +306,6 @@ def _format_address(addr: dict | None) -> str | None:
     return ", ".join(parts) if parts else None
 
 
-def _parse_iso_datetime(val: str | None) -> datetime | None:
-    """Parse ISO 8601 datetime string, returning None on failure."""
-    if not val:
-        return None
-    try:
-        # Handle Z suffix and various ISO formats
-        if val.endswith("Z"):
-            val = val[:-1] + "+00:00"
-        return datetime.fromisoformat(val)
-    except (ValueError, TypeError):
-        logger.warning("Failed to parse datetime: %s", val)
-        return None
-
-
 # ---------------------------------------------------------------------------
 # Adapter-delegated handler (metrics + events entities)
 # ---------------------------------------------------------------------------
@@ -398,21 +387,21 @@ async def handle_vehicle_status(slug, new_state, ha_config, device_id, db):
         )
 
     # Map slug to field. Numeric + distance/temp/speed converters route through
-    # web.services.units.to_metric via _convert_with_uom; string / _safe_float
+    # web.services.units.to_metric via _convert_with_uom; string / safe_float
     # converters remain pure.
     slug_field_map = {
         "odometer": ("odometer", _distance_converter),
         "speed": ("speed", _speed_converter),
-        "acceleratorpedalposition": ("accelerator_position", _safe_float),
+        "acceleratorpedalposition": ("accelerator_position", safe_float),
         "brakepedalstatus": ("brake_status", str),
-        "braketorque": ("brake_torque", _safe_float),
+        "braketorque": ("brake_torque", safe_float),
         "gearleverposition": ("gear_position", str),
         "parkingbrakestatus": ("parking_brake", str),
         "ignitionstatus": ("ignition_status", str),
-        "yawrate": ("yaw_rate", _safe_float),
-        "torqueattransmission": ("torque_at_transmission", _safe_float),
+        "yawrate": ("yaw_rate", safe_float),
+        "torqueattransmission": ("torque_at_transmission", safe_float),
         "wheeltorquestatus": ("wheel_torque_status", str),
-        "acceleration": ("acceleration", _safe_float),
+        "acceleration": ("acceleration", safe_float),
         "deepsleep": ("deep_sleep_status", str),
         "deviceconnectivity": ("device_connectivity", str),
         "evccstatus": ("evcc_status", str),
@@ -480,7 +469,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
 
     if slug == "soc":
         # HV battery state of charge (%)
-        pending["hv_battery_soc"] = _safe_float(state_val)
+        pending["hv_battery_soc"] = safe_float(state_val)
         # batteryRange is an elveh-shaped fallback attribute on the soc entity.
         # The soc state UoM is "%", which is NOT the batteryRange attribute's
         # unit. Fall through to the detection-layer cross-reference path:
@@ -490,7 +479,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         battery_range = attrs.get("batteryRange")
         if battery_range is not None:
             # The soc entity's unit_of_measurement is "%", which isn't a
-            # distance unit. _normalize_uom_string("%") returns None, so the
+            # distance unit. normalize_unit_string("%") returns None, so the
             # resolver falls through to device_class + ha_config -> cross-ref
             # against metrics.xevBatteryRange -> unknown. No silent "mi" default.
             converted = _resolve_and_convert(
@@ -520,9 +509,9 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             if converted is not None:
                 pending["hv_battery_range"] = converted
         # SI-already, so no conversion and no DATA_MAP entry.
-        hv_voltage = _safe_float(attrs.get("batteryVoltage"))
-        hv_amperage = _safe_float(attrs.get("batteryAmperage"))
-        hv_kw = _safe_float(attrs.get("batterykW"))
+        hv_voltage = safe_float(attrs.get("batteryVoltage"))
+        hv_amperage = safe_float(attrs.get("batteryAmperage"))
+        hv_kw = safe_float(attrs.get("batterykW"))
         # Mirrors xevBatteryCapacity, so it inherits the same mixed Wh/kWh
         # problem; the wh_autoscale mapping lands it in kWh.
         _cap_mapping = ha_fordpass.lookup_mapping(
@@ -535,10 +524,10 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             if _cap_mapping
             else None
         )
-        hv_actual_soc = _safe_float(attrs.get("batteryActualCharge"))
-        motor_voltage = _safe_float(attrs.get("motorVoltage"))
-        motor_amperage = _safe_float(attrs.get("motorAmperage"))
-        motor_kw = _safe_float(attrs.get("motorkW"))
+        hv_actual_soc = safe_float(attrs.get("batteryActualCharge"))
+        motor_voltage = safe_float(attrs.get("motorVoltage"))
+        motor_amperage = safe_float(attrs.get("motorAmperage"))
+        motor_kw = safe_float(attrs.get("motorkW"))
         if hv_voltage is not None:
             pending["hv_battery_voltage"] = hv_voltage
         if hv_amperage is not None:
@@ -556,7 +545,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
         if motor_kw is not None:
             pending["motor_kw"] = motor_kw
         # Max range from attributes — unit-bearing, resolved via HA signals.
-        max_range = _safe_float(attrs.get("maximumBatteryRange"))
+        max_range = safe_float(attrs.get("maximumBatteryRange"))
         if max_range is not None:
             converted = _resolve_and_convert(
                 raw_value=max_range,
@@ -618,7 +607,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
             "tripDistanceTraveled": ("distance", _d),
             # Canonical storage is seconds; elveh emits "H:MM:SS" (or legacy minutes).
             "tripDuration": ("duration", _duration_to_seconds),
-            "tripEnergyConsumed": ("energy_consumed", _safe_float),
+            "tripEnergyConsumed": ("energy_consumed", safe_float),
             "tripEfficiency": ("efficiency", _efficiency_conv),
             # Score fields use the 0-as-sentinel converter so empty trips
             # store NULL rather than rendering as a red 0-score gauge.
@@ -657,7 +646,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 _last_trip_values[key] = trip_fields.copy()
                 # last_changed freezes while only attributes update, so prefer
                 # the vehicle's key-off time, then last_updated.
-                event_ts = _parse_iso_datetime(attrs.get("tripUpdateTime")) or _get_event_timestamp(
+                event_ts = parse_iso(attrs.get("tripUpdateTime"), logger=logger) or _get_event_timestamp(
                     new_state, ("last_updated", "last_changed")
                 )
                 end_time = event_ts or datetime.now(UTC)
@@ -698,16 +687,16 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         duration=trip_fields.get("duration"),
                     )
 
-                from web.services.trip_merge import HA, apply_merge, is_mergeable
+                from web.services.trip_merge import apply_merge, is_mergeable
 
                 if existing is not None and not is_mergeable(existing):
                     logger.info("Trip matches protected row %s; not written", existing.id)
                 elif existing is not None:
-                    if existing.source_system != HA:
+                    if existing.source_system != SourceSystem.HA_FORDPASS:
                         apply_merge(existing, {
                             **trip_fields, "start_time": start_time, "end_time": end_time,
-                            "trip_id": deterministic_id, "source_system": HA,
-                        }, HA)
+                            "trip_id": deterministic_id, "source_system": SourceSystem.HA_FORDPASS,
+                        }, SourceSystem.HA_FORDPASS)
                     # Enrich the existing row with elveh-owned fields.
                     # Scores and regen always overwrite (elveh is canonical).
                     # efficiency and duration only fill NULLs.
@@ -762,9 +751,9 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         odometer_start=odometer_start,
                         odometer_end=odometer_end,
                         is_complete=True,
-                        source_system="ha_fordpass",
+                        source_system=SourceSystem.HA_FORDPASS,
                         original_timestamp=event_ts,
-                        ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
+                        ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
                         **trip_fields,
                     )
                     db.add(trip_record)
@@ -778,15 +767,15 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
 
     elif slug == "battery":
         # 12V battery level (%)
-        pending["lv_battery_level"] = _safe_float(state_val)
+        pending["lv_battery_level"] = safe_float(state_val)
         # 12V voltage from attributes (SI-already)
-        lv_voltage = _safe_float(attrs.get("batteryVoltage"))
+        lv_voltage = safe_float(attrs.get("batteryVoltage"))
         if lv_voltage is not None:
             pending["lv_battery_voltage"] = lv_voltage
 
     elif slug == "lastenergyconsumed":
         # Energy consumed on last trip (Wh) -- log but no direct column
-        energy_wh = _safe_float(state_val)
+        energy_wh = safe_float(state_val)
         if energy_wh is not None:
             try:
                 energy_kwh = to_metric(energy_wh, "Wh")
@@ -856,9 +845,9 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
     gps_value = attrs.get("value", {})
     location = gps_value.get("location", {}) if isinstance(gps_value, dict) else {}
 
-    lat = _safe_float(location.get("lat"))
-    lon = _safe_float(location.get("lon"))
-    gps_accuracy = _safe_float(location.get("accuracy") or gps_value.get("accuracy"))
+    lat = safe_float(location.get("lat"))
+    lon = safe_float(location.get("lon"))
+    gps_accuracy = safe_float(location.get("accuracy") or gps_value.get("accuracy"))
 
     if lat is not None and lon is not None:
         logger.debug("GPS update: lat=%.6f, lon=%.6f", lat, lon)
@@ -878,9 +867,7 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
 
         if last_loc is not None:
             # SQLite returns naive datetimes; they are stored as UTC.
-            last_at = last_loc.recorded_at
-            if last_at.tzinfo is None:
-                last_at = last_at.replace(tzinfo=UTC)
+            last_at = utc(last_loc.recorded_at)
             time_diff = (now - last_at).total_seconds()
             if time_diff < 60 and last_loc.latitude is not None and last_loc.longitude is not None:
                 dist = haversine_meters(float(last_loc.latitude), float(last_loc.longitude), lat, lon)
@@ -895,7 +882,7 @@ async def handle_gps(slug, new_state, ha_config, device_id, db):
             latitude=lat,
             longitude=lon,
             gps_accuracy=gps_accuracy,
-            source_system="ha_fordpass",
+            source_system=SourceSystem.HA_FORDPASS,
         )
         db.add(new_loc)
         logger.debug("Stored GPS snapshot for %s", device_id)
@@ -961,14 +948,14 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         return
 
     # Extract core fields
-    energy_kwh = _safe_float(attrs.get("energyConsumed"))
+    energy_kwh = safe_float(attrs.get("energyConsumed"))
     charge_type = _normalize_charge_type(attrs.get("chargerType"))
 
     # Duration fields
     duration_data = attrs.get("energyTransferDuration", {}) or {}
-    session_start_utc = _parse_iso_datetime(duration_data.get("begin"))
-    session_end_utc = _parse_iso_datetime(duration_data.get("end"))
-    charge_duration_seconds = _safe_float(duration_data.get("totalTime"))
+    session_start_utc = parse_iso(duration_data.get("begin"), logger=logger)
+    session_end_utc = parse_iso(duration_data.get("end"), logger=logger)
+    charge_duration_seconds = safe_float(duration_data.get("totalTime"))
 
     # HA always sends friendly_name/icon, so an entity with no log entry still
     # has attributes; without a start or energy there is no session to record.
@@ -978,8 +965,8 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
 
     # Plug details
     plug_data = attrs.get("plugDetails", {}) or {}
-    plugged_in_duration_seconds = _safe_float(plug_data.get("totalPluggedInTime"))
-    raw_distance_added = _safe_float(plug_data.get("totalDistanceAdded"))
+    plugged_in_duration_seconds = safe_float(plug_data.get("totalPluggedInTime"))
+    raw_distance_added = safe_float(plug_data.get("totalDistanceAdded"))
     # ha-fordpass localizes this field, so its unit is HA's unit system, not
     # necessarily km — the mapping resolves it per event.
     dist_mapping = ha_fordpass.lookup_mapping(
@@ -998,14 +985,14 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
 
     # State of charge
     soc_data = attrs.get("stateOfCharge", {}) or {}
-    start_soc = _safe_float(soc_data.get("firstSOC"))
-    end_soc = _safe_float(soc_data.get("lastSOC"))
+    start_soc = safe_float(soc_data.get("firstSOC"))
+    end_soc = safe_float(soc_data.get("lastSOC"))
 
     # Power stats (W -> kW)
     power_data = attrs.get("power", {}) or {}
-    max_power = _safe_float(power_data.get("max"))
-    min_power = _safe_float(power_data.get("min"))
-    weighted_avg_power = _safe_float(power_data.get("weightedAverage"))
+    max_power = safe_float(power_data.get("max"))
+    min_power = safe_float(power_data.get("min"))
+    weighted_avg_power = safe_float(power_data.get("weightedAverage"))
     if max_power is not None:
         max_power = max_power / 1000
     if min_power is not None:
@@ -1016,13 +1003,13 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     location_data = attrs.get("location", {}) or {}
     address_dict = location_data.get("address", {}) or {}
     address = _format_address(address_dict)
-    latitude = _safe_float(location_data.get("latitude"))
-    longitude = _safe_float(location_data.get("longitude"))
+    latitude = safe_float(location_data.get("latitude"))
+    longitude = safe_float(location_data.get("longitude"))
     location_name = location_data.get("name") or (address_dict.get("city") if address_dict else None)
     network_name = location_data.get("network")
 
     # Timestamp
-    original_timestamp = _parse_iso_datetime(attrs.get("timeStamp"))
+    original_timestamp = parse_iso(attrs.get("timeStamp"), logger=logger)
 
     # Thermal context comes from the elvehcharging / outsidetemp caches the
     # earlier handlers filled — this payload's own values are the fallback for
@@ -1051,7 +1038,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         from web.queries.sessions import find_matching_sessions
 
         matches = await find_matching_sessions(db, device_id, session_start_utc, energy_kwh)
-        if any(source == "ha_fordpass" for _, source in matches):
+        if any(source == SourceSystem.HA_FORDPASS for _, source in matches):
             # Same source duplicate -- skip silently (existing behavior)
             logger.info(
                 "Duplicate HA session detected (start=%s, energy=%s kWh), skipping",
@@ -1059,7 +1046,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
             )
             return
         # FordConnect's record of the same charge is merged, not duplicated.
-        merge_into = next((mid for mid, source in matches if source == "fcon"), None)
+        merge_into = next((mid for mid, source in matches if source == SourceSystem.FCON), None)
         if matches and merge_into is None:
             # Cross-source duplicate -- create but flag for review
             duplicate_of_id = matches[0][0]
@@ -1070,7 +1057,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     network_id = None
     if network_name and network_name.upper() != "UNKNOWN":
         from web.queries.settings import resolve_network
-        network_id = await resolve_network(db, network_name=network_name, source_system="ha_fordpass")
+        network_id = await resolve_network(db, network_name=network_name, source_system=SourceSystem.HA_FORDPASS)
 
     # -----------------------------------------------------------------------
     # Location resolution
@@ -1086,7 +1073,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         network_id=network_id,
         location_name=location_name,
         address_dict=address_dict,
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         _location_data=location_data,
         _network_name_raw=network_name,
     )
@@ -1109,7 +1096,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
     # -----------------------------------------------------------------------
     session = EVChargingSession(
         device_id=device_id,
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         charge_type=charge_type,
         location_name=location_name,
         location_id=location_id,
@@ -1144,14 +1131,14 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         duplicate_of_id=duplicate_of_id,
         needs_review=duplicate_of_id is not None,
         review_type="duplicate" if duplicate_of_id is not None else None,
-        ingest_schema_version=ha_fordpass.INGEST_SCHEMA_VERSION,
+        ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
     )
     if merge_into is not None:
-        from web.services.session_merge import HA, apply_session_merge, session_values
+        from web.services.session_merge import apply_session_merge, session_values
 
         target = await db.get(EVChargingSession, merge_into)
         if target is not None:
-            apply_session_merge(target, session_values(session), HA)
+            apply_session_merge(target, session_values(session), SourceSystem.HA_FORDPASS)
             logger.info("Merged HA charging session into FordConnect row %s", merge_into)
             return
     db.add(session)

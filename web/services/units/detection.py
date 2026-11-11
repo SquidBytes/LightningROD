@@ -30,6 +30,13 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from web.services.units.families import (
+    FAMILY_OF_UNIT,
+    UNIT_FOR_FAMILY,
+    normalize_unit_string,
+)
+from web.util.numbers import safe_float
+
 logger = logging.getLogger("lightningrod.units.detection")
 
 
@@ -273,15 +280,6 @@ def _insert_or_update(new: DetectionRecord) -> None:
     _records[key] = new
 
 
-def _safe_float(val: Any) -> float | None:
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
-
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -300,7 +298,7 @@ def record_declared(
         detected_unit=unit,
         method=_METHOD_DECLARED,
         confidence=_confidence_for_declared(),
-        sample_raw=_safe_float(raw_value),
+        sample_raw=safe_float(raw_value),
         sample_canonical=None,
         ratio=None,
         last_seen=_now(),
@@ -327,7 +325,7 @@ def record_read_time(
         detected_unit=unit,
         method=_METHOD_READ_TIME,
         confidence=_confidence_for_read_time(),
-        sample_raw=_safe_float(raw_value),
+        sample_raw=safe_float(raw_value),
         sample_canonical=None,
         ratio=None,
         last_seen=_now(),
@@ -361,7 +359,7 @@ def record_unknown(
         detected_unit=None,
         method=_METHOD_UNKNOWN,
         confidence="low",
-        sample_raw=_safe_float(raw_value),
+        sample_raw=safe_float(raw_value),
         sample_canonical=None,
         ratio=None,
         last_seen=_now(),
@@ -394,7 +392,7 @@ def record_device_class_inference(
         detected_unit=unit,
         method=_METHOD_DEVICE_CLASS,
         confidence=_confidence_for_device_class(),
-        sample_raw=_safe_float(raw_value),
+        sample_raw=safe_float(raw_value),
         sample_canonical=None,
         ratio=None,
         last_seen=_now(),
@@ -424,7 +422,7 @@ def try_cross_reference(
     Never raises.
     """
     updated: list[DetectionRecord] = []
-    canonical_f = _safe_float(canonical_value)
+    canonical_f = safe_float(canonical_value)
     if canonical_f is None or canonical_f == 0:
         return updated
 
@@ -565,25 +563,6 @@ def _coerce_unit_system_family(ha_unit_system: Any, field_type: str) -> str | No
     return None
 
 
-# Map normalized unit strings -> semantic field_type, so read-time UoM
-# applied to one field (e.g. the state's "mi") isn't blindly reused when a
-# handler is asking about a temperature attribute.
-_UNIT_FIELD_TYPES: dict[str, str] = {
-    "km": "distance",
-    "mi": "distance",
-    "kmh": "speed",
-    "mph": "speed",
-    "degC": "temperature",
-    "degF": "temperature",
-    "F": "temperature",
-    "kWh": "energy",
-    "Wh": "energy",
-    "kW": "power",
-    "s": "duration",
-    "seconds": "duration",
-}
-
-
 def _unit_matches_field_type(unit: str | None, field_type: str) -> bool:
     """Return True when `unit` is the right kind of unit for `field_type`.
 
@@ -595,7 +574,7 @@ def _unit_matches_field_type(unit: str | None, field_type: str) -> bool:
     """
     if unit is None:
         return False
-    expected = _UNIT_FIELD_TYPES.get(unit)
+    expected = FAMILY_OF_UNIT.get(unit)
     if expected is None:
         # Unit we don't know how to classify — trust the caller.
         return True
@@ -634,13 +613,7 @@ def _unit_from_device_class(
     if family is None:
         return None
 
-    if dc == "temperature":
-        return "degC" if family == "metric" else "degF"
-    if dc == "distance":
-        return "km" if family == "metric" else "mi"
-    if dc == "speed":
-        return "kmh" if family == "metric" else "mph"
-    return None
+    return UNIT_FOR_FAMILY.get((dc, family))
 
 
 def _compose_unknown_reason(
@@ -718,7 +691,7 @@ def resolve_source_unit(
 
     # --- 2. read_time_uom ------------------------------------------------
     raw_uom = attrs.get("unit_of_measurement")
-    normalized = ha_fordpass._normalize_uom_string(raw_uom) if raw_uom else None
+    normalized = normalize_unit_string(raw_uom) if raw_uom else None
     # Only accept the event's UoM when it matches the field_type. The event
     # attribute `unit_of_measurement` is the entity's STATE unit; nested
     # attributes (e.g. elveh.tripAmbientTemp on a `mi`-unit state) have

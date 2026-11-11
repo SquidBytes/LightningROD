@@ -5,28 +5,22 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
-    DateTime,
     ForeignKey,
     Index,
     Integer,
     Numeric,
-    SmallInteger,
     String,
     Text,
     UniqueConstraint,
     Uuid,
-    func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.models.base import Base
-
-# PostgreSQL TIMESTAMPTZ — all timestamps must have timezone info
-TIMESTAMPTZ = DateTime(timezone=True)
+from db.models.base import TIMESTAMPTZ, Base, IngestMetaMixin, IngestVersionMixin
 
 
-class EVChargingSession(Base):
+class EVChargingSession(IngestMetaMixin, IngestVersionMixin, Base):
     """One EV charging session with cost, location, EVSE, and telemetry fields."""
 
     __tablename__ = "ev_charging_session"
@@ -118,17 +112,6 @@ class EVChargingSession(Base):
     battery_temp_end: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     ambient_temp_start: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     ambient_temp_end: Mapped[float | None] = mapped_column(Numeric, nullable=True)
-
-    # Pipeline metadata
-    source_system: Mapped[str | None] = mapped_column(String(100))
-    ingested_at: Mapped[datetime] = mapped_column(
-        TIMESTAMPTZ, nullable=False, server_default=func.now()
-    )
-    original_timestamp: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
-
-    # Pipeline schema version. NULL = older rows with uncertain unit provenance.
-    # Value 2 = adapter-driven ingest with declared source units.
-    ingest_schema_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("session_id", name="uq_ev_charging_session_session_id"),

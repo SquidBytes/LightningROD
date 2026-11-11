@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-SOURCE_SYSTEM = "fcon"
+from web.services.source_system import SourceSystem
+
+SOURCE_SYSTEM = SourceSystem.FCON
 
 
 def device_id_of(payload: dict) -> str | None:

@@ -31,9 +31,18 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.base import HA_INGEST_SCHEMA_VERSION
+from web.services.source_system import SourceSystem
 from web.services.units import detection
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
+from web.services.units.families import (
+    FAMILY_OF_UNIT,
+    UNIT_FOR_FAMILY,
+    normalize_unit_string,
+)
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
+from web.util.numbers import safe_float
+from web.util.timestamps import parse_iso, utc
 
 logger = logging.getLogger("lightningrod.sources.ha_fordpass")
 
@@ -393,8 +402,6 @@ def _record_last_seen(
 # Lookup + conversion helpers (consumed by ha_fordpass.handlers slug handlers)
 # ---------------------------------------------------------------------------
 
-INGEST_SCHEMA_VERSION = 2  # mark every new adapter-driven row
-
 _ENTITY_SUFFIX_PREFIX = "sensor.fordpass_"
 
 
@@ -444,18 +451,15 @@ def lookup_mapping(
     return None
 
 
+# Families whose unit follows HA's metric/imperial setting; energy, power and
+# duration are the same in both systems.
+_SYSTEM_FAMILIES = frozenset(family for family, _ in UNIT_FOR_FAMILY)
+
+
 def _field_type_for_mapping(mapping: DataMapping) -> str | None:
-    """Classify a mapping's unit as distance/speed/temperature, else None."""
-    # Same semantics as web.services.units.detection._UNIT_FIELD_TYPES,
-    # duplicated locally to avoid widening the import graph.
-    unit = mapping.db_unit or mapping.source_unit
-    if unit in ("km", "mi"):
-        return "distance"
-    if unit in ("kmh", "mph"):
-        return "speed"
-    if unit in ("degC", "degF", "F"):
-        return "temperature"
-    return None
+    """Family of a mapping's unit when HA's unit system decides it, else None."""
+    family = FAMILY_OF_UNIT.get(mapping.db_unit or mapping.source_unit)
+    return family if family in _SYSTEM_FAMILIES else None
 
 
 def _unit_for_ha_system(
@@ -475,13 +479,7 @@ def _unit_for_ha_system(
     family = _coerce_unit_system_family(unit_system, field_type)
     if family is None:
         return None
-    if field_type == "distance":
-        return "km" if family == "metric" else "mi"
-    if field_type == "temperature":
-        return "degC" if family == "metric" else "degF"
-    if field_type == "speed":
-        return "kmh" if family == "metric" else "mph"
-    return None
+    return UNIT_FOR_FAMILY.get((field_type, family))
 
 
 def _resolve_source_unit(
@@ -500,7 +498,7 @@ def _resolve_source_unit(
     # --- 1. Read-time unit_of_measurement path (state-sourced fields) ---
     if mapping.read_time_uom:
         attrs = (new_state or {}).get("attributes") or {}
-        resolved = _normalize_uom_string(attrs.get("unit_of_measurement"))
+        resolved = normalize_unit_string(attrs.get("unit_of_measurement"))
         if resolved:
             return resolved, "read_time_uom"
         logger.warning(
@@ -534,36 +532,6 @@ def _resolve_source_unit(
     return mapping.source_unit, "declared"
 
 
-def _normalize_uom_string(raw: Any) -> str | None:
-    """Normalize an HA `unit_of_measurement` string to a to_metric key.
-
-    None for spellings to_metric would not recognize, so callers can fall back.
-    """
-    if not isinstance(raw, str):
-        return None
-    u = raw.strip()
-    lowered = u.lower()
-    if lowered in ("mi", "mile", "miles"):
-        return "mi"
-    if lowered in ("km", "kilometer", "kilometers"):
-        return "km"
-    if lowered in ("mph", "mi/h"):
-        return "mph"
-    if lowered in ("kmh", "km/h"):
-        return "kmh"
-    if u in ("°C", "degC") or lowered in ("c", "°c"):
-        return "degC"
-    if u in ("°F", "degF") or lowered in ("f", "°f"):
-        return "degF"
-    if u == "kWh" or lowered == "kwh":
-        return "kWh"
-    if u == "Wh" or lowered == "wh":
-        return "Wh"
-    if lowered in ("s", "sec", "seconds"):
-        return "s"
-    return None
-
-
 def convert(
     mapping: DataMapping,
     raw_value: Any,
@@ -583,7 +551,7 @@ def convert(
         return None
     if mapping.wh_autoscale and source_unit == "Wh":
         # Real packs are ~10-300 kWh, so |value| < 1000 can only be kWh already.
-        numeric = _safe_float(raw_value)
+        numeric = safe_float(raw_value)
         if numeric is not None and abs(numeric) < 1000:
             source_unit, method = "kWh", "wh_autoscale"
     try:
@@ -624,19 +592,6 @@ def convert(
             mapping.db_column,
         )
     return converted
-
-
-# ---------------------------------------------------------------------------
-# Safe-float helper (kept here for parity with the ingestion._helpers copy)
-# ---------------------------------------------------------------------------
-
-def _safe_float(val: Any) -> float | None:
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
 
 
 def _metric_value(attrs: dict, key: str) -> Any:
@@ -742,7 +697,7 @@ async def _handle_metrics_entity(
 
     Writes a row with hv_battery_range + hv_battery_max_range (+ any other
     battery fields available on the metrics entity) and
-    ingest_schema_version = INGEST_SCHEMA_VERSION.
+    ingest_schema_version = HA_INGEST_SCHEMA_VERSION.
     """
     from db.models.battery_status import EVBatteryStatus
 
@@ -786,16 +741,16 @@ async def _handle_metrics_entity(
         )
 
     # SI-already scalar attributes pass through without conversion
-    hv_soc = _safe_float(_metric_value(attrs, "xevBatteryStateOfCharge"))
-    hv_actual_soc = _safe_float(_metric_value(attrs, "xevBatteryActualStateOfCharge"))
+    hv_soc = safe_float(_metric_value(attrs, "xevBatteryStateOfCharge"))
+    hv_actual_soc = safe_float(_metric_value(attrs, "xevBatteryActualStateOfCharge"))
     cap_mapping = lookup_mapping(pattern, "xevBatteryCapacity")
     hv_capacity = (
         convert(cap_mapping, _metric_value(attrs, "xevBatteryCapacity"), new_state, ha_config)
         if cap_mapping
         else None
     )
-    hv_voltage = _safe_float(_metric_value(attrs, "xevBatteryVoltage"))
-    hv_amperage = _safe_float(_metric_value(attrs, "xevBatteryIoCurrent"))
+    hv_voltage = safe_float(_metric_value(attrs, "xevBatteryVoltage"))
+    hv_amperage = safe_float(_metric_value(attrs, "xevBatteryIoCurrent"))
     # Ford publishes no pack-power metric. ha-fordpass derives its elveh
     # batterykW attribute from voltage x current, so deriving it the same way
     # here keeps the two ingestion paths numerically identical.
@@ -823,9 +778,9 @@ async def _handle_metrics_entity(
         db.add(EVBatteryStatus(
             device_id=device_id,
             recorded_at=recorded_at,
-            source_system="ha_fordpass",
+            source_system=SourceSystem.HA_FORDPASS,
             original_timestamp=recorded_at,
-            ingest_schema_version=INGEST_SCHEMA_VERSION,
+            ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
             **values,
         ))
         logger.debug(
@@ -862,7 +817,7 @@ async def _backfill_trip_regen(
     Only NULL fields are filled; elveh-sourced values are never overwritten.
     """
     raw_regen = _metric_value(attrs, "tripXevBatteryRangeRegenerated")
-    raw_score = _safe_float(_metric_value(attrs, "tripXevBatteryChargeRegenerated"))
+    raw_score = safe_float(_metric_value(attrs, "tripXevBatteryChargeRegenerated"))
     # ha-fordpass emits 0 for missing telemetry; treat as unmeasured.
     if raw_score == 0:
         raw_score = None
@@ -1008,11 +963,11 @@ async def _handle_events_entity(
         )
 
     # duration (s) is SI-passthrough; no mapping conversion needed
-    duration = _safe_float(trip.get("trip_duration"))
+    duration = safe_float(trip.get("trip_duration"))
 
     # The event's own updateTime is the key-off.
     recorded_at = (
-        _parse_iso(update_time_iso)
+        parse_iso(update_time_iso, logger=logger)
         or _parse_event_ts(new_state)
         or datetime.now(UTC)
     )
@@ -1052,7 +1007,7 @@ async def _handle_events_entity(
     # Match-and-enrich fallback: legacy predicate match for trips whose source
     # didn't carry tripUpdateTime (no deterministic id available).
     from web.services.sources.ha_fordpass.handlers import _find_matching_trip
-    from web.services.trip_merge import HA, apply_merge, is_mergeable
+    from web.services.trip_merge import apply_merge, is_mergeable
 
     start_time = recorded_at - timedelta(seconds=duration) if duration else None
     existing = await _find_matching_trip(
@@ -1063,13 +1018,13 @@ async def _handle_events_entity(
         logger.info("ha_fordpass: trip matches protected row %s; not written", existing.id)
         return
     if existing is not None:
-        if existing.source_system != HA:
+        if existing.source_system != SourceSystem.HA_FORDPASS:
             apply_merge(existing, {
                 "trip_id": deterministic_id, "start_time": start_time,
                 "end_time": recorded_at, "duration": duration, "distance": distance,
                 "energy_consumed": energy, "ambient_temp": ambient, "cabin_temp": cabin,
-                "outside_air_temp": outside_air, "source_system": HA,
-            }, HA)
+                "outside_air_temp": outside_air, "source_system": SourceSystem.HA_FORDPASS,
+            }, SourceSystem.HA_FORDPASS)
         # events values are canonical °C — always overwrite temps.
         if ambient is not None:
             existing.ambient_temp = ambient
@@ -1110,9 +1065,9 @@ async def _handle_events_entity(
         odometer_start=odometer_start,
         odometer_end=odometer_end,
         is_complete=True,
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         original_timestamp=recorded_at,
-        ingest_schema_version=INGEST_SCHEMA_VERSION,
+        ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
     )
     db.add(record)
     logger.debug(
@@ -1150,9 +1105,9 @@ async def _handle_elvehcharging_entity(
     record = EVBatteryStatus(
         device_id=device_id,
         recorded_at=_parse_event_ts(new_state) or datetime.now(UTC),
-        source_system="ha_fordpass",
+        source_system=SourceSystem.HA_FORDPASS,
         hv_battery_temperature=battery_temp,
-        ingest_schema_version=INGEST_SCHEMA_VERSION,
+        ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
     )
     db.add(record)
     logger.debug(
@@ -1228,25 +1183,10 @@ def _parse_event_ts(new_state: dict) -> datetime | None:
         val = new_state.get(key)
         if not val:
             continue
-        parsed = _parse_iso(val)
+        parsed = parse_iso(val, logger=logger)
         if parsed is not None:
             return parsed
     return None
-
-
-def _parse_iso(val: Any) -> datetime | None:
-    if val is None:
-        return None
-    if isinstance(val, datetime):
-        return val
-    if not isinstance(val, str):
-        return None
-    try:
-        if val.endswith("Z"):
-            val = val[:-1] + "+00:00"
-        return datetime.fromisoformat(val)
-    except (ValueError, TypeError):
-        return None
 
 
 async def _closest_odometer(
@@ -1285,11 +1225,11 @@ async def _closest_odometer(
     # SQLite returns naive datetimes via aiosqlite; PG returns tz-aware.
     # Coerce both sides to UTC-aware before subtraction so the comparison
     # works on either backend.
-    target_aware = target_time if target_time.tzinfo else target_time.replace(tzinfo=UTC)
+    target_aware = utc(target_time)
 
     def _delta(r):
         recorded = r.recorded_at
-        recorded_aware = recorded if recorded.tzinfo else recorded.replace(tzinfo=UTC)
+        recorded_aware = utc(recorded)
         return abs((recorded_aware - target_aware).total_seconds())
 
     closest = min(rows, key=_delta)

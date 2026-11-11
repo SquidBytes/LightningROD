@@ -1,6 +1,6 @@
 """Shared preset/custom date-window resolution for filter-bar queries."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import and_
 
@@ -12,9 +12,10 @@ def _parse_iso_date(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value).replace(tzinfo=UTC)
+        d = date.fromisoformat(value)
     except ValueError:
         return None
+    return datetime(d.year, d.month, d.day, tzinfo=UTC)
 
 
 def resolve_time_window(

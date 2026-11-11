@@ -35,7 +35,9 @@ from web.queries.vehicles import (
     get_active_vehicle,
     get_all_vehicles,
 )
+from web.services.source_system import SourceSystem
 from web.unit_system import parse_user_local_to_utc, to_metric_distance
+from web.util.timestamps import utc
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -259,10 +261,7 @@ async def export_sessions_csv(
     def _local(dt, timespec: str = "minutes") -> str:
         if dt is None:
             return ""
-        if dt.tzinfo is None:
-            from datetime import UTC as _utc
-            dt = dt.replace(tzinfo=_utc)
-        return dt.astimezone(tz).isoformat(sep=" ", timespec=timespec)
+        return utc(dt).astimezone(tz).isoformat(sep=" ", timespec=timespec)
 
     def _num(v, dp: int) -> str:
         return "" if v is None else f"{float(v):.{dp}f}"
@@ -579,7 +578,7 @@ async def create_session(
         plug_status=plug_status or None,
         charging_status=charging_status or None,
         is_complete=True,
-        source_system="manual_entry",
+        source_system=SourceSystem.MANUAL_ENTRY,
         is_free=is_free,
         evse_voltage=evse_voltage or None,
         evse_amperage=evse_amperage or None,
@@ -606,7 +605,7 @@ async def create_session(
                 address=addr,
                 network_id=new_session.network_id,
                 location_name=new_session.location_name,
-                source_system="manual",
+                source_system=SourceSystem.MANUAL,
             )
             if resolved_loc_id:
                 new_session.location_id = resolved_loc_id
@@ -856,7 +855,7 @@ async def update_session(
                 address=s_addr,
                 network_id=session.network_id,
                 location_name=session.location_name,
-                source_system="manual",
+                source_system=SourceSystem.MANUAL,
             )
             if resolved_loc:
                 session.location_id = resolved_loc

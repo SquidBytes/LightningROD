@@ -7,38 +7,21 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from typing import Any, TypeVar, overload
+from typing import Any, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
-# Preservation invariant: repairs only ever mutate rows ingested by these
-# source systems — manual/manual_entry/csv_import rows are untouchable.
-MUTABLE_SOURCE_SYSTEMS = ("ha_fordpass",)
+from web.services.source_system import SourceSystem
+
+# Preservation invariant: generic repairs only touch rows the HA ingestion
+# path wrote. Manual and imported rows are untouchable; FordConnect rows are
+# re-parsed from their own archive (ops/fcon_reparse) instead.
+MUTABLE_SOURCE_SYSTEMS = (SourceSystem.HA_FORDPASS,)
 
 
 def mutable_only(model):
     """Filter clause restricting a query to rows repairs may mutate."""
     return model.source_system.in_(MUTABLE_SOURCE_SYSTEMS)
-
-
-@overload
-def _aware(ts: datetime) -> datetime: ...
-
-
-@overload
-def _aware(ts: None) -> None: ...
-
-
-def _aware(ts: datetime | None) -> datetime | None:
-    """UTC-aware copy; SQLite returns naive datetimes.
-
-    Stamps UTC on a naive value only — an offset-aware value is returned
-    unchanged, not re-based onto UTC.
-    """
-    if ts is None:
-        return None
-    return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
 
 
 DEFAULT_PREVIEW_LIMIT = 10

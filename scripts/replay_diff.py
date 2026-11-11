@@ -52,14 +52,15 @@ from db.models.location import EVLocation  # noqa: E402
 from db.models.raw_event import HARawEvent  # noqa: E402
 from db.models.trip_metrics import EVTripMetrics  # noqa: E402
 from db.models.vehicle_status import EVVehicleStatus  # noqa: E402
-from web.services.repair.base import _aware  # noqa: E402
 from web.services.repair.replay_core import (  # noqa: E402
     ReplayStats,
     replay_archive,
     short_device,
 )
+from web.services.source_system import SourceSystem  # noqa: E402
+from web.util.timestamps import parse_iso, utc  # noqa: E402
 
-REPLAY_SOURCE_SYSTEM = "ha_fordpass"
+REPLAY_SOURCE_SYSTEM = SourceSystem.HA_FORDPASS
 
 
 @dataclass(frozen=True)
@@ -142,8 +143,10 @@ def parse_since(text: str, *, now: datetime) -> datetime:
         return now - (
             timedelta(days=amount) if unit == "d" else timedelta(hours=amount)
         )
-    parsed = datetime.fromisoformat(text)
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    parsed = parse_iso(text)
+    if parsed is None:
+        raise ValueError(f"not a duration or ISO timestamp: {text!r}")
+    return utc(parsed)
 
 
 def default_scratch_url() -> str:
@@ -226,7 +229,7 @@ def _norm(value: Any) -> Any:
     if isinstance(value, Decimal):
         return float(value)
     if isinstance(value, datetime):
-        return _aware(value).astimezone(UTC)
+        return utc(value)
     if isinstance(value, uuid.UUID):
         return str(value)
     return value

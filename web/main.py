@@ -5,7 +5,7 @@ import logging.config
 import os
 from collections.abc import MutableMapping
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import datetime
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from typing import Any, cast
@@ -15,6 +15,8 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+
+from web.util.timestamps import utc
 
 
 def _resolve_version() -> str:
@@ -104,11 +106,8 @@ def localtime_filter(dt, tz_str: str = "UTC", fmt: str | None = None):
         return "" if fmt else None
     if not isinstance(dt, datetime):
         return dt
-    # Ensure the datetime is timezone-aware (assume UTC if naive)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
     try:
-        converted = dt.astimezone(ZoneInfo(tz_str))
+        converted = utc(dt).astimezone(ZoneInfo(tz_str))
     except Exception:
         converted = dt  # Fall back to original if invalid tz
     if fmt:

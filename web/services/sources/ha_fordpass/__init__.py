@@ -1,11 +1,12 @@
 """ha-fordpass source adapter package. See `adapter.py`."""
 
+from web.services.source_system import SourceSystem
 from web.services.sources.base import DataSource
 from web.services.sources.ha_fordpass.config import HAFordpassConfig
 from web.services.sources.ha_fordpass.runtime import build_runtime
 
 DATA_SOURCE = DataSource(
-    source_name="ha_fordpass",
+    source_name=SourceSystem.HA_FORDPASS,
     display_name="Home Assistant (FordPass)",
     adapter_module="web.services.sources.ha_fordpass.adapter",
     config_schema=HAFordpassConfig,

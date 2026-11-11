@@ -16,6 +16,7 @@ For feature documentation, see the docs site at
 - Pages without charts load faster because they no longer download the chart library
 - Charts fit the screen on phones and hide their toolbar
 - The charge curve in the charging session drawer is now a lightweight drawing
+- Charging sessions reported as `AC_CHARGING` or `DC_CHARGING` are now stored as `AC` or `DC` like every other charger-type spelling; existing rows are updated on upgrade
 
 ### Fixed
 
