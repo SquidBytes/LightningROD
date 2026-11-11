@@ -19,7 +19,13 @@ Instructions for AI agents working on LightningROD tests. Read this before writi
 ./run-tests.sh -k "test_name"      # Specific test
 ```
 
-Always run the relevant test subset after making changes. Run the full suite before committing.
+Selective testing while developing; the full suite is a merge gate:
+
+- **Every change:** `uv run ruff check .` and `uv run mypy`.
+- **Changed a test or substantially changed a module:** run only the affected tests (`./run-tests.sh tests/test_x/` or `-k name`).
+- **Before merging into `dev`, and again after:** the full suite once, `./run-tests.sh`.
+
+Do not run the full suite on every edit or on every work branch. CI runs it on every push to `dev` and `main`.
 
 ## Key Rules
 

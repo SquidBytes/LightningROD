@@ -15,6 +15,16 @@ pytest -m unit
 ./run-tests.sh -m db
 ```
 
+## When to Run What
+
+| When | Run |
+|---|---|
+| Any code change | `uv run ruff check .` and `uv run mypy` |
+| Changed a test or a module | The affected tests only (`./run-tests.sh tests/test_x/`, `-k name`, `-m unit`) |
+| Before and after merging into `dev` | Full suite: `./run-tests.sh` |
+
+The full suite is a merge gate, not a per-edit check. CI runs it on every push to `dev` and `main`.
+
 ## Architecture Overview
 
 ```
