@@ -32,7 +32,7 @@ from web.services.repair.replay_core import (
 )
 from web.services.repair.snapshot import deserialize_row, serialize_row
 from web.services.source_system import INGESTED, SourceSystem
-from web.util.time import parse_iso, utc
+from web.util.timestamps import parse_iso, utc
 
 logger = logging.getLogger("lightningrod.repair.recorder_replay")
 

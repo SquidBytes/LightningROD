@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
-from web.util.time import utc
+from web.util.timestamps import utc
 
 
 def _resolve_version() -> str:

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.trip_metrics import EVTripMetrics
 from web.services.source_merge import Rule, merge_values
 from web.services.source_system import INGESTED, SourceSystem
-from web.util.time import utc
+from web.util.timestamps import utc
 
 __all__ = ["PRECEDENCE", "apply_merge", "find_same_drive"]
 

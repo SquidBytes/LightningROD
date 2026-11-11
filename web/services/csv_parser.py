@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.services.charge_types import normalize_charge_type
 from web.services.source_system import SourceSystem
-from web.util.time import parse_iso, utc
+from web.util.timestamps import from_local, parse_iso, utc
 
 # ---------------------------------------------------------------------------
 # CSV field options — descriptors for all mappable EVChargingSession columns
@@ -604,14 +604,8 @@ def _parse_timestamp_with_tz(v: str, import_tz: str = "UTC") -> datetime | None:
         dt = parse_iso(v)
         if dt is None:
             return None
-        if dt.tzinfo is None:
-            # Treat naive timestamp as being in the user-selected import timezone
-            tz = ZoneInfo(import_tz) if import_tz and import_tz != "UTC" else UTC
-            dt = dt.replace(tzinfo=tz).astimezone(UTC)
-        else:
-            # Already has timezone — convert to UTC
-            dt = dt.astimezone(UTC)
-        return dt
+        tz = ZoneInfo(import_tz) if import_tz and import_tz != "UTC" else UTC
+        return from_local(dt, tz)
     except (ValueError, TypeError, KeyError):
         return None
 

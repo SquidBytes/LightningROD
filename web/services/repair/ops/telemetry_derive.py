@@ -20,7 +20,7 @@ from web.services.repair.base import (
     RepairPreview,
     mutable_only,
 )
-from web.util.time import utc
+from web.util.timestamps import utc
 
 ODO_END_LOOKBACK = timedelta(minutes=30)
 ODO_END_LOOKAHEAD = timedelta(minutes=5)

@@ -58,7 +58,7 @@ from web.services.repair.replay_core import (  # noqa: E402
     short_device,
 )
 from web.services.source_system import SourceSystem  # noqa: E402
-from web.util.time import parse_iso, to_utc, utc  # noqa: E402
+from web.util.timestamps import parse_iso, utc  # noqa: E402
 
 REPLAY_SOURCE_SYSTEM = SourceSystem.HA_FORDPASS
 
@@ -229,7 +229,7 @@ def _norm(value: Any) -> Any:
     if isinstance(value, Decimal):
         return float(value)
     if isinstance(value, datetime):
-        return to_utc(value)
+        return utc(value)
     if isinstance(value, uuid.UUID):
         return str(value)
     return value

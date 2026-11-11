@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from db.models.raw_event import HARawEvent
 from web.services.repair.recorder_replay import _WINDOW_CACHE_TTL, RecorderReplay
 from web.services.repair.replay_core import fetch_archive
-from web.util.time import utc
+from web.util.timestamps import utc
 
 
 class _ArchiveSource:

@@ -1,11 +1,11 @@
-"""web.util.time: parse_iso, utc, to_utc."""
+"""web.util.timestamps: parse_iso, utc, from_local."""
 
 import logging
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from web.util.time import parse_iso, to_utc, utc
+from web.util.timestamps import from_local, parse_iso, utc
 
 pytestmark = pytest.mark.unit
 
@@ -50,18 +50,18 @@ def test_parse_iso_passes_datetime_through():
     assert parse_iso(dt) is dt
 
 
-def test_utc_stamps_naive_only():
+def test_utc_stamps_naive_and_rebases_aware():
     naive = datetime(2025, 6, 15, 12)
     plus2 = datetime(2025, 6, 15, 12, tzinfo=timezone(timedelta(hours=2)))
     assert utc(naive) == datetime(2025, 6, 15, 12, tzinfo=UTC)
-    assert utc(plus2) is plus2
+    assert utc(plus2) == datetime(2025, 6, 15, 10, tzinfo=UTC)
+    assert utc(plus2).tzinfo is UTC
     assert utc(None) is None
     assert utc("x") == "x"
 
 
-def test_to_utc_rebases_aware_and_stamps_naive():
-    naive = datetime(2025, 6, 15, 12)
-    plus2 = datetime(2025, 6, 15, 12, tzinfo=timezone(timedelta(hours=2)))
-    assert to_utc(naive) == datetime(2025, 6, 15, 12, tzinfo=UTC)
-    assert to_utc(plus2) == datetime(2025, 6, 15, 10, tzinfo=UTC)
-    assert to_utc(None) is None
+def test_from_local_reads_naive_in_zone_and_rebases_aware():
+    plus2 = timezone(timedelta(hours=2))
+    assert from_local(datetime(2025, 6, 15, 12), plus2) == datetime(2025, 6, 15, 10, tzinfo=UTC)
+    minus5 = datetime(2025, 6, 15, 12, tzinfo=timezone(timedelta(hours=-5)))
+    assert from_local(minus5, plus2) == datetime(2025, 6, 15, 17, tzinfo=UTC)

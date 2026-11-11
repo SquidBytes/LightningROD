@@ -38,7 +38,7 @@ from web.queries.vehicles import (
 from web.services.source_system import SourceSystem
 from web.services.sources.ha_fordpass.adapter import LIGHTNINGROD_TRIP_NAMESPACE
 from web.unit_system import MI_PER_KM, parse_user_local_to_utc, to_metric_distance
-from web.util.time import utc
+from web.util.timestamps import utc
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")

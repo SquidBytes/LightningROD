@@ -37,7 +37,7 @@ from web.services.sources.ha_fordpass import adapter as ha_fordpass
 from web.services.sources.ha_fordpass.dispatch import handles
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
 from web.util.numbers import safe_float
-from web.util.time import parse_iso, utc
+from web.util.timestamps import parse_iso, utc
 
 logger = logging.getLogger("lightningrod.sources.ha_fordpass.handlers")
 

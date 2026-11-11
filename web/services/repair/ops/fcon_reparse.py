@@ -31,7 +31,7 @@ from web.services.repair.base import (
     scratch_session,
 )
 from web.services.source_system import INGESTED, SourceSystem
-from web.util.time import utc
+from web.util.timestamps import utc
 
 # Tables the FordConnect adapter writes; anything else it touches is a bug.
 _SCOPE = (

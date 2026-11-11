@@ -1,19 +1,21 @@
 """Shared preset/custom date-window resolution for filter-bar queries."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import and_
-
-from web.util.time import parse_iso
 
 _PRESET_DAYS = {"7d": 7, "30d": 30, "90d": 90, "1y": 365}
 
 
 def _parse_iso_date(value: str | None) -> datetime | None:
     """Parse a yyyy-mm-dd string into a UTC start-of-day datetime, or None."""
-    parsed = parse_iso(value)
-    # A date has no offset; force UTC rather than honour one a client sneaks in.
-    return parsed.replace(tzinfo=UTC) if parsed else None
+    if not value:
+        return None
+    try:
+        d = date.fromisoformat(value)
+    except ValueError:
+        return None
+    return datetime(d.year, d.month, d.day, tzinfo=UTC)
 
 
 def resolve_time_window(

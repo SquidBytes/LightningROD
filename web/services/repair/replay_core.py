@@ -18,7 +18,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.raw_event import HARawEvent
-from web.util.time import utc
+from web.util.timestamps import utc
 
 logger = logging.getLogger("lightningrod.repair.replay_core")
 

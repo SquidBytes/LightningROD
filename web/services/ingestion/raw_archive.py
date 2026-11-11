@@ -22,7 +22,7 @@ from db.portable_insert import portable_insert
 from web.queries.settings import get_raw_archive_settings
 from web.services.ingestion._helpers import _get_event_timestamp
 from web.services.source_system import SourceSystem
-from web.util.time import to_utc
+from web.util.timestamps import utc
 
 logger = logging.getLogger("lightningrod.ingestion.raw_archive")
 
@@ -248,7 +248,7 @@ class RawEventArchive(RetentionPruner):
             # has no reason to hold.
             ha_unit_system=(ha_config or {}).get("unit_system"),
             recorded_at=(
-                to_utc(_get_event_timestamp(new_state, EVENT_TS_KEYS))
+                utc(_get_event_timestamp(new_state, EVENT_TS_KEYS))
                 or datetime.now(UTC)
             ),
             config_id=config_id,

@@ -1,9 +1,9 @@
-"""Timestamp parsing and UTC coercion shared across ingestion, repair and queries."""
+"""Timestamp parsing and UTC coercion shared across ingestion, repair, queries and forms."""
 
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from typing import Any, cast
 
 
@@ -13,7 +13,7 @@ def parse_iso(value: Any, *, logger: logging.Logger | None = None) -> datetime |
     Silent by default: user input (CSV rows, filters) reports its own errors.
     Pass `logger` for machine-sourced timestamps so a malformed one leaves a
     trace. The result is naive when the input carries no offset; pass it
-    through `utc` or `to_utc`.
+    through `utc` or `from_local`.
     """
     if value is None or value == "":
         return None
@@ -30,21 +30,21 @@ def parse_iso(value: Any, *, logger: logging.Logger | None = None) -> datetime |
 
 
 def utc[T](value: T) -> T:
-    """Stamp UTC on a naive datetime; aware datetimes and non-datetimes pass through.
+    """UTC-aware copy of a datetime; non-datetimes pass through.
 
-    SQLite hands timestamps back naive. Offsets are not re-based.
+    A naive value is stamped UTC (SQLite hands timestamps back naive); an aware
+    one is re-based, because SQLite drops tzinfo on bind and would otherwise
+    store a +02:00 wall time as UTC.
     """
-    if isinstance(value, datetime) and value.tzinfo is None:
+    if not isinstance(value, datetime):
+        return value
+    if value.tzinfo is None:
         return cast(T, value.replace(tzinfo=UTC))
-    return value
+    return cast(T, value.astimezone(UTC))
 
 
-def to_utc[T](value: T) -> T:
-    """UTC-aware copy: an aware datetime is re-based, a naive one stamped.
-
-    Use before storing: SQLite drops tzinfo on bind, so a +02:00 timestamp
-    would otherwise be stored as UTC wall time.
-    """
-    if isinstance(value, datetime) and value.tzinfo is not None:
-        return cast(T, value.astimezone(UTC))
-    return utc(value)
+def from_local(value: datetime, tz: tzinfo) -> datetime:
+    """UTC instant of a wall-clock time read in `tz`; an aware input is just re-based."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=tz)
+    return value.astimezone(UTC)

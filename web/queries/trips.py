@@ -23,7 +23,7 @@ from web.queries.dashboard import _HOVER_LABEL, _PLOTLY_CONFIG, _wrap_chart
 from web.queries.locations import _find_geo_match
 from web.queries.settings import get_app_settings_dict
 from web.queries.time_window import resolve_time_window, window_clause
-from web.util.time import utc
+from web.util.timestamps import utc
 
 logger = logging.getLogger("lightningrod.queries.trips")
 

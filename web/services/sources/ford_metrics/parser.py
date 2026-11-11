@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from web.services.units.data_map import DataMapping, SourceRef
 from web.services.units.to_metric import to_metric
-from web.util.time import parse_iso, to_utc
+from web.util.timestamps import parse_iso, utc
 
 Shape = Literal["number", "text", "json", "json_text"]
 # Units to_metric does not know, all already SI: taken as-is.
@@ -94,7 +94,7 @@ def data_map(source: SourceRef) -> list[DataMapping]:
 
 
 def parse_time(raw: Any) -> datetime | None:
-    return to_utc(parse_iso(raw))
+    return utc(parse_iso(raw))
 
 
 def _update_time(entry: Any) -> datetime | None:

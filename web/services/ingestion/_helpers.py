@@ -19,7 +19,7 @@ from web.services.sources.ha_fordpass import adapter as ha_fordpass
 from web.services.units import detection
 from web.services.units.families import normalize_unit_string
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
-from web.util.time import parse_iso
+from web.util.timestamps import parse_iso
 
 logger = logging.getLogger("lightningrod.ingestion.helpers")
 
