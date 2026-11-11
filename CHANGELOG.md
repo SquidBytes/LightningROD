@@ -13,6 +13,8 @@ For feature documentation, see the docs site at
 
 ### Changed
 
+- Charging sessions reported as `AC_CHARGING` or `DC_CHARGING` are now stored as `AC` or `DC` like every other charger-type spelling; existing rows are updated on upgrade
+
 ### Fixed
 
 - Fixed location recording stopping after the first GPS reading on SQLite installs
