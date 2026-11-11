@@ -780,7 +780,7 @@ def transform_rows(
             db_row["location_type"] = _classify_location_type(location_name)
         if db_row.get("is_free") is None:
             db_row["is_free"] = _classify_is_free(location_name)
-        db_row["source_system"] = "csv_import"
+        db_row["source_system"] = SourceSystem.CSV_IMPORT
         db_row["is_complete"] = True
 
         # Generate deterministic session_id if not provided as a valid UUID

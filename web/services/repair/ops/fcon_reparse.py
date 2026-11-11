@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import event, func, inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.base import INGEST_SCHEMA_VERSION
 from db.models.data_source_config import DataSourceConfig
 from db.models.fcon_raw_sample import FconRawSample
 from db.models.trip_metrics import EVTripMetrics
@@ -31,6 +32,7 @@ from web.services.repair.base import (
 )
 from web.services.source_merge import MERGEABLE_SOURCES
 from web.services.source_system import SourceSystem
+from web.util.time import utc
 
 # Tables the FordConnect adapter writes; anything else it touches is a bug.
 _SCOPE = (
@@ -57,9 +59,7 @@ def _norm(value: Any) -> Any:
         return value
     if isinstance(value, (Decimal, int, float)):
         return float(value)
-    if isinstance(value, datetime) and value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value
+    return utc(value)
 
 
 def _same(a: Any, b: Any) -> bool:
@@ -156,8 +156,6 @@ class FconArchiveReparse(RepairOperation):
 
     @staticmethod
     def _current_version() -> int:
-        from web.services.sources.fcon.raw_store import INGEST_SCHEMA_VERSION
-
         return INGEST_SCHEMA_VERSION
 
     async def census(self, db: AsyncSession) -> int:

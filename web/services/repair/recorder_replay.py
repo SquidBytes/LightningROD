@@ -33,6 +33,7 @@ from web.services.repair.replay_core import (
 from web.services.repair.snapshot import deserialize_row, serialize_row
 from web.services.source_system import SourceSystem
 from web.services.trip_merge import MERGEABLE_SOURCES
+from web.util.time import parse_iso, utc
 
 logger = logging.getLogger("lightningrod.repair.recorder_replay")
 
@@ -44,15 +45,9 @@ _MAX_SOURCES = 6
 def _state_ts(state: dict) -> datetime | None:
     """UTC-aware timestamp of an HA history state (last_updated/last_changed)."""
     for key in ("last_updated", "last_changed"):
-        val = state.get(key)
-        if isinstance(val, datetime):
-            return val if val.tzinfo else val.replace(tzinfo=UTC)
-        if isinstance(val, str) and val:
-            try:
-                parsed = datetime.fromisoformat(val.replace("Z", "+00:00"))
-            except ValueError:
-                continue
-            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+        parsed = parse_iso(state.get(key))
+        if parsed is not None:
+            return utc(parsed)
     return None
 
 

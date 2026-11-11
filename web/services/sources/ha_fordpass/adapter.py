@@ -451,9 +451,15 @@ def lookup_mapping(
     return None
 
 
+# Families whose unit follows HA's metric/imperial setting; energy, power and
+# duration are the same in both systems.
+_SYSTEM_FAMILIES = frozenset(family for family, _ in UNIT_FOR_FAMILY)
+
+
 def _field_type_for_mapping(mapping: DataMapping) -> str | None:
-    """Classify a mapping's unit by family, else None."""
-    return FAMILY_OF_UNIT.get(mapping.db_unit or mapping.source_unit)
+    """Family of a mapping's unit when HA's unit system decides it, else None."""
+    family = FAMILY_OF_UNIT.get(mapping.db_unit or mapping.source_unit)
+    return family if family in _SYSTEM_FAMILIES else None
 
 
 def _unit_for_ha_system(

@@ -5,8 +5,7 @@ Both `web/services/sources/ha_fordpass/handlers.py` and
 two adapters stay thin.
 
 Functions in this module are HA-event-shape generic (no FordPass / gas-specific
-logic). The single edge case: `_read_time_uom` and `_convert_with_uom` import
-`normalize_unit_string` from `web.services.units.families`.
+logic); unit handling is delegated to `web.services.units`.
 """
 
 from __future__ import annotations
@@ -19,7 +18,6 @@ from web.services.sources.ha_fordpass import adapter as ha_fordpass
 from web.services.units import detection
 from web.services.units.families import normalize_unit_string
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
-from web.util.numbers import safe_float as _safe_float  # noqa: F401  (re-exported)
 from web.util.time import parse_iso
 
 logger = logging.getLogger("lightningrod.ingestion.helpers")

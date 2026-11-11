@@ -16,8 +16,7 @@ from web.services.source_system import INGESTED, SourceSystem
 
 HA = SourceSystem.HA_FORDPASS
 FCON = SourceSystem.FCON
-# Ingested rows a merge may enrich; manual and imported rows never.
-MERGEABLE_SOURCES = tuple(sorted(INGESTED))
+MERGEABLE_SOURCES = INGESTED
 
 # (current, incoming, incoming_source) -> the value the column should hold.
 Resolver = Callable[[dict, dict, str], Any]

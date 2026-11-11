@@ -14,4 +14,4 @@ class SourceSystem(StrEnum):
 
 
 # Machine-ingested sources; a merge may enrich these rows, manual and imported rows never.
-INGESTED = frozenset({SourceSystem.HA_FORDPASS, SourceSystem.FCON})
+INGESTED: tuple[str, ...] = (SourceSystem.FCON, SourceSystem.HA_FORDPASS)

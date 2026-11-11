@@ -13,8 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from web.services.source_system import SourceSystem
 
-# Preservation invariant: repairs only ever mutate rows ingested by these
-# source systems — manual/manual_entry/csv_import rows are untouchable.
+# Preservation invariant: generic repairs only touch rows the HA ingestion
+# path wrote. Manual and imported rows are untouchable; FordConnect rows are
+# re-parsed from their own archive (ops/fcon_reparse) instead.
 MUTABLE_SOURCE_SYSTEMS = (SourceSystem.HA_FORDPASS,)
 
 

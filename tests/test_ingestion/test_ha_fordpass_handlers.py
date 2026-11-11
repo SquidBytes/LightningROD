@@ -10,14 +10,13 @@ The 2026-03-21 auto-detect unit system logic is gone ; see
 
 import pytest
 
-from web.services.ingestion._helpers import _safe_float
 from web.services.sources.ha_fordpass.handlers import (
     _format_address,
     _normalize_charge_type,
-    _parse_iso_datetime,
     extract_slug,
     get_device_id,
 )
+from web.util.numbers import safe_float
 
 pytestmark = pytest.mark.unit
 
@@ -76,11 +75,11 @@ def test_get_device_id_unknown():
 # ---------------------------------------------------------------------------
 
 
-def test_safe_float():
-    assert _safe_float("42.5") == 42.5
-    assert _safe_float(42) == 42.0
-    assert _safe_float(None) is None
-    assert _safe_float("not_a_number") is None
+def testsafe_float():
+    assert safe_float("42.5") == 42.5
+    assert safe_float(42) == 42.0
+    assert safe_float(None) is None
+    assert safe_float("not_a_number") is None
 
 
 def test_normalize_charge_type():
@@ -118,15 +117,3 @@ def test_format_address_none():
     assert _format_address({}) is None
 
 
-def test_parse_iso_datetime():
-
-    result = _parse_iso_datetime("2025-06-15T12:00:00Z")
-    assert result is not None
-    assert result.year == 2025
-    assert result.month == 6
-    assert result.tzinfo is not None
-
-
-def test_parse_iso_datetime_none():
-    assert _parse_iso_datetime(None) is None
-    assert _parse_iso_datetime("") is None
