@@ -6,14 +6,13 @@ from datetime import date
 from typing import Annotated
 
 import pandas as pd
-from fastapi import APIRouter, Depends, Form, Header, Request
+from fastapi import APIRouter, Form, Header, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.settings import get_app_setting, get_unit_context
 from web.queries.trips import (
     build_drive_graph,
@@ -49,7 +48,7 @@ PER_PAGE = 25
 @router.get("/sessions", response_class=HTMLResponse)
 async def trips(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     range: str | None = "30d",
     date_from: str | None = None,
     date_to: str | None = None,
@@ -140,7 +139,7 @@ async def trips(
 
 @router.get("/sessions/export.csv")
 async def export_trips_csv(
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     range: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -258,7 +257,7 @@ async def export_trips_csv(
 async def trip_detail(
     request: Request,
     trip_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     result = await db.execute(
         select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
@@ -286,7 +285,7 @@ async def trip_detail(
 async def trip_drawer(
     request: Request,
     trip_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     result = await db.execute(
         select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
@@ -320,7 +319,7 @@ async def trip_drawer(
 async def trip_environment_chart(
     request: Request,
     trip_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     result = await db.execute(
         select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
@@ -349,7 +348,7 @@ async def trip_environment_chart(
 async def trip_drive_chart(
     request: Request,
     trip_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     result = await db.execute(
         select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
@@ -382,7 +381,7 @@ async def trip_drive_chart(
 async def trip_expanded(
     request: Request,
     trip_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     result = await db.execute(
         select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
@@ -430,7 +429,7 @@ async def trip_expanded(
 @router.get("/sessions/new", response_class=HTMLResponse)
 async def new_trip_form(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     unit_ctx = await get_unit_context(db)
     context = {
@@ -443,7 +442,7 @@ async def new_trip_form(
 @router.post("/sessions", response_class=HTMLResponse)
 async def create_trip(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     trip_date: Annotated[str | None, Form()] = None,
     distance: Annotated[float | None, Form()] = None,
     duration_minutes: Annotated[float | None, Form()] = None,
@@ -511,7 +510,6 @@ async def create_trip(
     )
 
     db.add(new_trip)
-    await db.commit()
 
     # Return HX-Trigger to refresh the trip list, or redirect
     if hx_request:
@@ -531,7 +529,7 @@ async def create_trip(
 @router.delete("/sessions/{trip_id}")
 async def delete_trip(
     trip_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     result = await db.execute(
         select(EVTripMetrics).where(EVTripMetrics.id == trip_id)
@@ -541,7 +539,6 @@ async def delete_trip(
         return HTMLResponse(content="Trip not found.", status_code=404)
 
     await db.delete(trip)
-    await db.commit()
 
     return Response(
         content="",

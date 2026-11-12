@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request
+from fastapi import APIRouter, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, func, select
@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargerStall, EVLocationLookup
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.battery import build_mini_charge_curve, load_reference_charge_curve
 from web.queries.costs import (
     compute_session_cost,
@@ -84,7 +84,7 @@ async def _verified_locations_for_network(
 @router.get("/sessions", response_class=HTMLResponse)
 async def sessions(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     page: int = 1,
     per_page: int = 25,
     date_preset: str | None = None,
@@ -205,7 +205,7 @@ async def sessions(
 
 @router.get("/sessions/export.csv")
 async def export_sessions_csv(
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     date_preset: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -340,7 +340,7 @@ async def _load_selected_sessions(
 @router.put("/sessions/bulk", response_class=HTMLResponse)
 async def bulk_update_sessions(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Bulk update selected sessions with common field values."""
     form = await request.form()
@@ -385,7 +385,6 @@ async def bulk_update_sessions(
         if changed:
             updated += 1
 
-    await db.commit()
 
     # Return response that triggers table reload
     return Response(
@@ -400,7 +399,7 @@ async def bulk_update_sessions(
 @router.post("/sessions/bulk-delete")
 async def bulk_delete_sessions(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Delete every selected session."""
     selected = await _load_selected_sessions(await request.form(), db)
@@ -408,7 +407,6 @@ async def bulk_delete_sessions(
         return selected
     for s in selected:
         await db.delete(s)
-    await db.commit()
     return Response(
         content="",
         status_code=200,
@@ -421,7 +419,7 @@ async def bulk_delete_sessions(
 @router.get("/sessions/new", response_class=HTMLResponse)
 async def new_session_form(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Render blank add-session form with smart defaults."""
     default_location = await get_most_recent_location(db)
@@ -435,7 +433,7 @@ async def new_session_form(
 @router.get("/sessions/new/modal", response_class=HTMLResponse)
 async def new_session_modal(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Render advanced edit modal in add mode with smart defaults."""
     default_location = await get_most_recent_location(db)
@@ -458,7 +456,7 @@ async def new_session_modal(
 @router.post("/sessions", response_class=HTMLResponse)
 async def create_session(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     session_date: Annotated[str | None, Form()] = None,
     session_time: Annotated[str | None, Form()] = None,
     energy_kwh: Annotated[float | None, Form()] = None,
@@ -649,7 +647,7 @@ async def create_session(
     else:
         new_session.estimated_cost = None
 
-    await db.commit()
+    await db.flush()
     await db.refresh(new_session)
 
     sub_periods = await get_subscriptions_for_network(db, network_obj.id) if network_obj else []
@@ -686,7 +684,7 @@ async def create_session(
 async def update_session(
     request: Request,
     session_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     location_name: Annotated[str | None, Form()] = None,
     location_type: Annotated[str | None, Form()] = None,
     charge_type: Annotated[str | None, Form()] = None,
@@ -904,7 +902,7 @@ async def update_session(
     else:
         session.estimated_cost = None
 
-    await db.commit()
+    await db.flush()
     await db.refresh(session)
 
     sub_periods = await get_subscriptions_for_network(db, network_obj.id) if network_obj else []
@@ -942,7 +940,7 @@ async def update_session(
 @router.delete("/sessions/{session_id}")
 async def delete_session(
     session_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     result = await db.execute(
         select(EVChargingSession).where(EVChargingSession.id == session_id)
@@ -952,7 +950,6 @@ async def delete_session(
         return HTMLResponse(content="Session not found.", status_code=404)
 
     await db.delete(session)
-    await db.commit()
 
     return Response(
         content="",
@@ -968,9 +965,9 @@ async def delete_session(
 async def session_detail(
     request: Request,
     session_id: int,
+    db: DbSession,
     prev_id: int | None = None,
     next_id: int | None = None,
-    db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(EVChargingSession).where(EVChargingSession.id == session_id)
@@ -1026,7 +1023,7 @@ async def session_detail(
 async def session_modal(
     request: Request,
     session_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Render advanced edit modal in edit mode for an existing session."""
     result = await db.execute(
@@ -1075,7 +1072,7 @@ async def session_modal(
 @router.post("/sessions/check-duplicate", response_class=HTMLResponse)
 async def check_duplicate(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     session_date: Annotated[str | None, Form()] = None,
     energy_kwh: Annotated[float | None, Form()] = None,
 ):
@@ -1131,7 +1128,7 @@ async def check_duplicate(
 @router.get("/sessions/review-count-badge", response_class=HTMLResponse)
 async def review_count_badge(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return badge HTML for session review count (for sidebar lazy load)."""
     count = await get_review_count(db)
@@ -1144,7 +1141,7 @@ async def review_count_badge(
 async def session_review_panel(
     session_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return inline comparison panel for a session needing review."""
     session = (
@@ -1176,7 +1173,7 @@ async def resolve_duplicate(
     session_id: int,
     request: Request,
     action: Annotated[str, Form()],  # 'keep_this', 'keep_other', 'keep_both'
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Resolve a duplicate session: keep one, delete the other, or keep both."""
     session = (
@@ -1219,7 +1216,6 @@ async def resolve_duplicate(
         session.review_type = None
         session.duplicate_of_id = None
 
-    await db.commit()
 
     # Trigger table refresh
     response = HTMLResponse("")

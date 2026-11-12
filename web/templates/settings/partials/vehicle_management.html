@@ -3,6 +3,9 @@
     <div class="card-body">
         <h2 class="card-title text-base font-semibold">Vehicles</h2>
         <p class="text-base-content/60 text-sm">Manage your electric vehicles. Set one as active to scope dashboard data.</p>
+        {% if error %}
+        <div class="alert alert-error text-sm">{{ error }}</div>
+        {% endif %}
 
         {# Vehicle table #}
         <div class="overflow-x-auto">

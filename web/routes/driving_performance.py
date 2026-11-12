@@ -7,12 +7,11 @@ so the handler path `/performance` becomes the external `/driving/performance`.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Header, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.driving_performance import (
     _min_points_for_range,
     build_regen_recovery_chart,
@@ -41,7 +40,7 @@ templates = Jinja2Templates(directory="web/templates")
 @router.get("/performance", response_class=HTMLResponse)
 async def driving_performance(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     range: str | None = "30d",
     date_from: str | None = None,
     date_to: str | None = None,

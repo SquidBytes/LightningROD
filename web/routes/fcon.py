@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings as app_settings
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.services.ingestion import supervisor
 from web.services.secrets import mask_secret
 from web.services.sources.config_store import find_row, merge_into_row, read_row
@@ -93,17 +93,17 @@ async def _restart(db: AsyncSession) -> None:
 
 
 @router.get("/settings/fcon", response_class=HTMLResponse)
-async def fcon_card(request: Request, db: AsyncSession = Depends(get_db)):
+async def fcon_card(request: Request, db: DbSession):
     return await _card(request, db)
 
 
 @router.post("/settings/fcon/credentials", response_class=HTMLResponse)
 async def save_credentials(
     request: Request,
+    db: DbSession,
     client_id: str = Form(""),
     client_secret: str = Form(""),
     redirect_uri: str = Form(""),
-    db: AsyncSession = Depends(get_db),
 ):
     stored = read_row(await find_row(db, SOURCE_NAME)).values
     old_secret = stored.get("client_secret", "")
@@ -130,27 +130,26 @@ async def save_credentials(
         updates.update({k: None for k in TOKEN_FIELDS})
         updates["needs_consent"] = False
     await merge_into_row(db, SOURCE_NAME, updates)
-    await db.commit()
+    await db.commit()  # the supervisor re-reads the row from its own session
     await _restart(db)
     return await _card(request, db, message="Saved.")
 
 
 @router.post("/settings/fcon/connect", response_class=HTMLResponse)
-async def connect_vehicle(request: Request, db: AsyncSession = Depends(get_db)):
+async def connect_vehicle(request: Request, db: DbSession):
     url = await start_consent(db)
     if url is None:
         return await _card(
             request, db, error="Save your Client ID and Client Secret first."
         )
-    await db.commit()
     return await _card(request, db, authorize_url=url)
 
 
 @router.post("/settings/fcon/finish", response_class=HTMLResponse)
 async def finish_connect(
     request: Request,
+    db: DbSession,
     pasted: str = Form(""),
-    db: AsyncSession = Depends(get_db),
     client: FordClient = Depends(get_ford_client),
 ):
     result = await finish_consent(db, pasted, client)
@@ -164,8 +163,8 @@ async def finish_connect(
 @router.get("/settings/fcon/retention-estimate", response_class=HTMLResponse)
 async def retention_estimate(
     request: Request,
+    db: DbSession,
     days: int = Query(0),
-    db: AsyncSession = Depends(get_db),
 ):
     return templates.TemplateResponse(
         request, ESTIMATE, {"estimate": await estimate(db, max(days, 0))}
@@ -175,30 +174,28 @@ async def retention_estimate(
 @router.post("/settings/fcon/retention", response_class=HTMLResponse)
 async def save_retention(
     request: Request,
+    db: DbSession,
     days: int = Form(...),
-    db: AsyncSession = Depends(get_db),
 ):
     await set_retention_days(db, days)
-    await db.commit()
     return await _card(request, db, message="Saved.")
 
 
 @router.post("/settings/fcon/disconnect", response_class=HTMLResponse)
-async def disconnect(request: Request, db: AsyncSession = Depends(get_db)):
+async def disconnect(request: Request, db: DbSession):
     row = await find_row(db, SOURCE_NAME)
     if row is not None:
         await supervisor.stop_runtime(row.id)
         updates: dict[str, Any] = {k: None for k in TOKEN_FIELDS}
         updates["needs_consent"] = False
         await merge_into_row(db, SOURCE_NAME, updates, row=row)
-        await db.commit()
     return await _card(request, db, message="Disconnected. History is kept.")
 
 
 @router.get(CALLBACK_PATH, response_class=HTMLResponse)
 async def ford_callback(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     client: FordClient = Depends(get_ford_client),
 ) -> Response:
     """Ford redirected a browser on this machine here: finish without a paste."""

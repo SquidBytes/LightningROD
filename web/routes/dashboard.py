@@ -1,13 +1,12 @@
 """Home dashboard route."""
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.costs import (
     query_cost_summary,
 )
@@ -29,7 +28,7 @@ templates = Jinja2Templates(directory="web/templates")
 
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
+async def dashboard(request: Request, db: DbSession):
     # Home page shows GLOBAL stats across all vehicles (device_id=None)
     active_vehicle = await get_active_vehicle(db)
     all_vehicles = await get_all_vehicles(db)
@@ -111,10 +110,9 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 async def activate_vehicle(
     vehicle_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     redirect_to: str = Form("/charging/sessions"),
 ):
     """Switch active vehicle and redirect back to current page."""
     await set_active_vehicle(db, vehicle_id)
-    await db.commit()
     return RedirectResponse(url=redirect_to, status_code=303)

@@ -2,14 +2,13 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Header, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.battery_status import EVBatteryStatus
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.battery import (
     build_battery_temp_chart,
     build_charge_curve_chart,
@@ -42,7 +41,7 @@ templates = Jinja2Templates(directory="web/templates")
 @router.get("/battery", response_class=HTMLResponse)
 async def battery(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     range: str | None = "7d",
     date_from: str | None = None,
     date_to: str | None = None,

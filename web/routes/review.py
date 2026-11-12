@@ -1,7 +1,7 @@
 """Review queue routes for locations, networks, and duplicate sessions."""
 
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, func, select, update
@@ -16,7 +16,7 @@ from db.models.reference import (
     EVNetworkNameAlias,
     EVNetworkSubscription,
 )
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.settings import get_all_networks
 from web.queries.vehicles import get_active_vehicle, get_all_vehicles
 from web.services.source_system import SourceSystem
@@ -259,11 +259,11 @@ async def _approved_tree_context(db: AsyncSession) -> dict:
 @router.get("", response_class=HTMLResponse)
 async def review_queue(
     request: Request,
+    db: DbSession,
     tab: str = "pending",
     sub: str = "networks",
     q: str | None = None,
     sort: str = "name",
-    db: AsyncSession = Depends(get_db),
 ):
     """Review queue page with Pending/Approved top-level tabs."""
     # Validate tabs
@@ -339,9 +339,9 @@ async def review_queue(
 @router.get("/networks", response_class=HTMLResponse)
 async def review_networks(
     request: Request,
+    db: DbSession,
     q: str | None = None,
     sort: str = "name",
-    db: AsyncSession = Depends(get_db),
 ):
     """Pending networks sub-tab partial -- forced unverified filter."""
     ctx = await _networks_context(db, q=q, filter="unverified", sort=sort)
@@ -355,9 +355,9 @@ async def review_networks(
 @router.get("/locations", response_class=HTMLResponse)
 async def review_locations(
     request: Request,
+    db: DbSession,
     q: str | None = None,
     sort: str = "name",
-    db: AsyncSession = Depends(get_db),
 ):
     """Pending locations sub-tab partial -- forced unverified filter."""
     ctx = await _locations_context(db, q=q, filter="unverified", sort=sort)
@@ -371,7 +371,7 @@ async def review_locations(
 @router.get("/approved", response_class=HTMLResponse)
 async def review_approved(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Approved tab partial -- tree view of approved networks + locations."""
     ctx = await _approved_tree_context(db)
@@ -391,7 +391,7 @@ async def review_approved(
 async def verify_location(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Mark a location as verified."""
     result = await db.execute(
@@ -401,7 +401,6 @@ async def verify_location(
     if loc:
         loc.is_verified = True
         loc.source_system = SourceSystem.MANUAL
-        await db.commit()
     ctx = await _locations_context(db, filter="unverified")
     return templates.TemplateResponse(
         request,
@@ -414,7 +413,7 @@ async def verify_location(
 async def verify_network(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Mark a network as verified."""
     result = await db.execute(
@@ -424,7 +423,6 @@ async def verify_network(
     if net:
         net.is_verified = True
         net.source_system = SourceSystem.MANUAL
-        await db.commit()
     ctx = await _networks_context(db, filter="unverified")
     return templates.TemplateResponse(
         request,
@@ -437,7 +435,7 @@ async def verify_network(
 async def unverify_network(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Mark a network as unverified and refresh the Approved tab tree.
 
@@ -450,7 +448,6 @@ async def unverify_network(
     net = result.scalar_one_or_none()
     if net:
         net.is_verified = False
-        await db.commit()
     ctx = await _approved_tree_context(db)
     return templates.TemplateResponse(
         request,
@@ -463,7 +460,7 @@ async def unverify_network(
 async def unverify_location(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Mark a location as unverified and refresh the Approved tab tree.
 
@@ -476,7 +473,6 @@ async def unverify_location(
     loc = result.scalar_one_or_none()
     if loc:
         loc.is_verified = False
-        await db.commit()
     ctx = await _approved_tree_context(db)
     return templates.TemplateResponse(
         request,
@@ -489,7 +485,7 @@ async def unverify_location(
 async def review_edit_network_modal(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Render the shared network edit modal in review-page mode.
 
@@ -519,7 +515,7 @@ async def review_edit_network_modal(
 async def review_edit_network(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     network_name: str = Form(...),
     cost_per_kwh: float | None = Form(None),
     color: str | None = Form(None),
@@ -542,7 +538,6 @@ async def review_edit_network(
         net.is_free = is_free is not None
         if notes is not None:
             net.notes = notes.strip() or None
-        await db.commit()
     ctx = await _networks_context(db, filter="unverified")
     response = templates.TemplateResponse(
         request,
@@ -557,8 +552,8 @@ async def review_edit_network(
 async def review_location_edit_form(
     location_id: int,
     request: Request,
+    db: DbSession,
     return_to: str = "pending",  # Caller tab context: pending or approved.
-    db: AsyncSession = Depends(get_db),
 ):
     """Render the location edit form used by the shared page-level modal.
 
@@ -587,7 +582,7 @@ async def review_location_edit_form(
 async def associate_location_modal(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the Associate picker form for the page-scope #edit-loc-modal
     dialog.
@@ -613,7 +608,7 @@ async def associate_location_modal(
 async def associate_location(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     network_id: str = Form(""),
     network_name: str = Form(""),
 ):
@@ -654,7 +649,6 @@ async def associate_location(
     if nid is not None:
         loc.network_id = nid
         # Association is intentionally separate from verification.
-    await db.commit()
 
     ctx = await _locations_context(db, filter="unverified")
     response = templates.TemplateResponse(
@@ -670,7 +664,7 @@ async def associate_location(
 async def promote_location(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Create a new network from this location and mark both as verified.
 
@@ -695,7 +689,6 @@ async def promote_location(
     loc.network_id = new_net.id
     loc.is_verified = True
     loc.source_system = SourceSystem.MANUAL
-    await db.commit()
 
     ctx = await _locations_context(db, filter="unverified")
     return templates.TemplateResponse(
@@ -709,7 +702,7 @@ async def promote_location(
 async def edit_location(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     location_name: str = Form(...),
     address: str = Form(""),
     location_type: str = Form(""),
@@ -737,7 +730,6 @@ async def edit_location(
         loc.latitude = float(latitude) if latitude.strip() else None
         loc.longitude = float(longitude) if longitude.strip() else None
         loc.cost_per_kwh = float(cost_per_kwh) if cost_per_kwh.strip() else None
-        await db.commit()
     # Refresh the partial that matches the caller tab.
     if return_to == "approved":
         ctx = await _approved_tree_context(db)
@@ -761,7 +753,7 @@ async def edit_location(
 async def delete_location(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Delete an unverified location (safety check: only if is_verified=False)."""
     result = await db.execute(
@@ -773,7 +765,6 @@ async def delete_location(
     loc = result.scalar_one_or_none()
     if loc:
         await db.delete(loc)
-        await db.commit()
     ctx = await _locations_context(db, filter="unverified")
     return templates.TemplateResponse(
         request,
@@ -786,7 +777,7 @@ async def delete_location(
 async def delete_network(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Delete an unverified network (safety check: only if is_verified=False)."""
     result = await db.execute(
@@ -798,7 +789,6 @@ async def delete_network(
     net = result.scalar_one_or_none()
     if net:
         await db.delete(net)
-        await db.commit()
     ctx = await _networks_context(db, filter="unverified")
     return templates.TemplateResponse(
         request,
@@ -816,8 +806,8 @@ async def delete_network(
 async def network_merge_preview(
     source_id: int,
     request: Request,
+    db: DbSession,
     return_to: str = "pending",  # caller tab context (pending|approved)
-    db: AsyncSession = Depends(get_db),
 ):
     """Show merge preview modal for a network with counts of affected items.
 
@@ -879,9 +869,9 @@ async def network_merge_preview(
 async def merge_network(
     source_id: int,
     request: Request,
+    db: DbSession,
     target_id: int = Form(...),
     return_to: str = Form("pending"),  # pending|approved
-    db: AsyncSession = Depends(get_db),
 ):
     """Merge source network into target: reassign all references, delete source.
 
@@ -937,7 +927,6 @@ async def merge_network(
 
     # Delete source
     await db.execute(delete(EVChargingNetwork).where(EVChargingNetwork.id == source_id))
-    await db.commit()
 
     # Render the correct partial for the caller's active tab.
     # Approved callers land back on the tree (#review-content); Pending
@@ -965,8 +954,8 @@ async def merge_network(
 async def location_merge_preview(
     source_id: int,
     request: Request,
+    db: DbSession,
     return_to: str = "pending",  # pending|approved
-    db: AsyncSession = Depends(get_db),
 ):
     """Show merge preview modal for a location with counts of affected items.
 
@@ -1021,9 +1010,9 @@ async def location_merge_preview(
 async def merge_location(
     source_id: int,
     request: Request,
+    db: DbSession,
     target_id: int = Form(...),
     return_to: str = Form("pending"),  # pending|approved
-    db: AsyncSession = Depends(get_db),
 ):
     """Merge source location into target: reassign all references, delete source.
 
@@ -1090,7 +1079,6 @@ async def merge_location(
 
     # Delete source
     await db.execute(delete(EVLocationLookup).where(EVLocationLookup.id == source_id))
-    await db.commit()
 
     # Render the correct partial for the caller's active tab.
     # Approved callers land back on the tree (#review-content); Pending
