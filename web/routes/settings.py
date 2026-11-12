@@ -292,10 +292,28 @@ async def new_vehicle_form(
     )
 
 
+async def _vehicle_conflict_response(request: Request, db: AsyncSession) -> HTMLResponse:
+    """Re-render the vehicle card with the unique-constraint error."""
+    veh_ctx = await _vehicle_management_context(db)
+    veh_ctx["error"] = "A vehicle with that VIN or device ID already exists."
+    return templates.TemplateResponse(
+        request, "settings/partials/vehicle_management.html", veh_ctx, status_code=409
+    )
+
+
+async def _ice_vehicle_conflict_response(request: Request, db: AsyncSession) -> HTMLResponse:
+    """Re-render the ICE vehicle card with the unique-constraint error."""
+    ctx = await _ice_vehicle_management_context(db)
+    ctx["error"] = "Could not save: it conflicts with an existing ICE vehicle."
+    return templates.TemplateResponse(
+        request, "settings/partials/ice_vehicle_management.html", ctx, status_code=409
+    )
+
+
 @router.post("/settings/vehicles", response_class=HTMLResponse)
 async def create_vehicle_route(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     display_name: str = Form(""),
     make: str | None = Form(None),
     model: str | None = Form(None),
@@ -326,10 +344,11 @@ async def create_vehicle_route(
         vin=vin or None,
         device_id=device_id or None,
     )
-    await db.commit()
+    if new_vehicle is None:
+        return await _vehicle_conflict_response(request, db)
     veh_ctx = await _vehicle_management_context(db)
     veh_ctx["saved"] = True
-    veh_ctx["just_saved_row_id"] = getattr(new_vehicle, "id", None)
+    veh_ctx["just_saved_row_id"] = new_vehicle.id
     return templates.TemplateResponse(
         request,
         "settings/partials/vehicle_management.html",
@@ -381,7 +400,10 @@ async def update_vehicle_route(
             status_code=422,
             content={"detail": "Display name is required"},
         )
-    await update_vehicle(
+    if await get_vehicle_by_id(db, vehicle_id) is None:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"detail": "Vehicle not found"})
+    updated = await update_vehicle(
         db,
         vehicle_id,
         display_name=display_name.strip(),
@@ -395,7 +417,8 @@ async def update_vehicle_route(
         vin=vin or None,
         device_id=device_id or None,
     )
-    await db.commit()
+    if updated is None:
+        return await _vehicle_conflict_response(request, db)
     veh_ctx = await _vehicle_management_context(db)
     veh_ctx["saved"] = True
     veh_ctx["just_saved_row_id"] = vehicle_id
@@ -497,10 +520,11 @@ async def create_ice_vehicle_route(
         tank_capacity_l=tank_metric,
         is_default=is_default,
     )
-    await db.commit()
+    if new_ice is None:
+        return await _ice_vehicle_conflict_response(request, db)
     ctx = await _ice_vehicle_management_context(db)
     ctx["saved"] = True
-    ctx["just_saved_row_id"] = getattr(new_ice, "id", None)
+    ctx["just_saved_row_id"] = new_ice.id
     response = templates.TemplateResponse(
         request,
         "settings/partials/ice_vehicle_management.html",
@@ -560,7 +584,7 @@ async def update_ice_vehicle_route(
     if fuel_metric is None:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=422, content={"detail": "Combined fuel economy is required"})
-    await update_ice_vehicle(
+    updated = await update_ice_vehicle(
         db,
         ice_id,
         label=label.strip(),
@@ -568,7 +592,8 @@ async def update_ice_vehicle_route(
         tank_capacity_l=tank_metric,
         is_default=is_default,
     )
-    await db.commit()
+    if updated is None:
+        return await _ice_vehicle_conflict_response(request, db)
     ctx = await _ice_vehicle_management_context(db)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = ice_id
@@ -585,14 +610,13 @@ async def update_ice_vehicle_route(
 async def delete_ice_vehicle_route(
     ice_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Delete an ICE vehicle. Refuses to delete the default row when others exist."""
     success = await delete_ice_vehicle(db, ice_id)
-    await db.commit()
     ctx = await _ice_vehicle_management_context(db)
     if not success:
-        ctx["delete_error"] = "Cannot delete the default ICE vehicle. Set a different default first."
+        ctx["error"] = "Cannot delete the default ICE vehicle. Set a different default first."
     return templates.TemplateResponse(
         request,
         "settings/partials/ice_vehicle_management.html",
