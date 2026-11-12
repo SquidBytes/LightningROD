@@ -366,7 +366,6 @@ class HAWebSocketRuntime:
                     config_id=self.config_id,
                 ):
                     branch = "fordpass"
-                await db.commit()
             except Exception as e:
                 raised = True
                 await db.rollback()
@@ -376,6 +375,19 @@ class HAWebSocketRuntime:
                     e,
                     exc_info=True,
                 )
+            else:
+                try:
+                    await db.commit()
+                except Exception as e:
+                    raised = True
+                    await db.rollback()
+                    logger.error(
+                        "Commit failed for %s (branch=%s): %s",
+                        entity_id,
+                        branch,
+                        e,
+                        exc_info=True,
+                    )
 
         self._log_event(entity_id, new_state, branch, raised)
 
@@ -485,7 +497,7 @@ class HAWebSocketRuntime:
         from web.queries.settings import get_app_settings_dict, set_app_setting
 
         applied: dict = {}
-        async with AsyncSessionLocal() as db:
+        async with AsyncSessionLocal.begin() as db:
             existing = await get_app_settings_dict(
                 db,
                 ["home_latitude", "home_longitude", "home_location_name"],
@@ -501,7 +513,6 @@ class HAWebSocketRuntime:
                 if force or not current:
                     await set_app_setting(db, key, value)
                     applied[key] = value
-            await db.commit()
 
         if applied:
             logger.info(
@@ -754,11 +765,10 @@ class HAWebSocketRuntime:
         from db.engine import AsyncSessionLocal
         from web.queries.gas_prices import store_gas_price_reading_if_new
 
-        async with AsyncSessionLocal() as db:
+        async with AsyncSessionLocal.begin() as db:
             inserted = await store_gas_price_reading_if_new(
                 db, entity_id, price_metric, recorded_at
             )
-            await db.commit()
         return inserted
 
     async def _refresh_gas_monthly_history(self, entity_id: str) -> None:
@@ -770,7 +780,7 @@ class HAWebSocketRuntime:
         )
         from web.queries.settings import get_app_settings_dict
 
-        async with AsyncSessionLocal() as db:
+        async with AsyncSessionLocal.begin() as db:
             settings = await get_app_settings_dict(
                 db,
                 ["gas_sensor_station_entity_id", "gas_sensor_average_entity_id"],
@@ -788,4 +798,3 @@ class HAWebSocketRuntime:
                     await upsert_gas_price(
                         db, year, month, average_price=avg, source="ha_sensor"
                     )
-            await db.commit()
