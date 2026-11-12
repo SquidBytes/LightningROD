@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from db.models.base import HA_INGEST_SCHEMA_VERSION
+from db.transaction_hooks import on_rollback
 from web.services.charge_types import normalize_charge_type as _normalize_charge_type
 from web.services.ingestion._helpers import (
     _convert_with_uom,
@@ -61,6 +62,13 @@ _pending_battery_status_ts: dict[tuple[int, str], float] = {}
 
 # Track last-seen trip values per (config_id, device_id) to detect new trips.
 _last_trip_values: dict[tuple[int, str], dict[str, Any]] = {}
+
+
+def _restore_trip_cache(key: tuple[int, str], previous: dict[str, Any] | None) -> None:
+    if previous is None:
+        _last_trip_values.pop(key, None)
+    else:
+        _last_trip_values[key] = previous
 
 _FLUSH_TIMEOUT = 30  # seconds
 
@@ -643,7 +651,11 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                 or last.get("efficiency") != trip_fields.get("efficiency")
             )
             if is_new:
+                previous = _last_trip_values.get(key)
                 _last_trip_values[key] = trip_fields.copy()
+                # The cache is set before the insert commits; put it back if
+                # the event's transaction fails so the trip is retried.
+                on_rollback(db, lambda: _restore_trip_cache(key, previous))
                 # last_changed freezes while only attributes update, so prefer
                 # the vehicle's key-off time, then last_updated.
                 event_ts = parse_iso(attrs.get("tripUpdateTime"), logger=logger) or _get_event_timestamp(
