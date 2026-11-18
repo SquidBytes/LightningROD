@@ -1552,6 +1552,17 @@ async def data_sources_tab(
     )
 
 
+async def _save_gas_sensors(db: AsyncSession, station: str | None, average: str | None) -> None:
+    """Store both gas sensor entity ids, then drop the cached ones."""
+    from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
+
+    await set_app_setting(db, "gas_sensor_station_entity_id", station or "")
+    await set_app_setting(db, "gas_sensor_average_entity_id", average or "")
+    # Commit before clearing the cache so the next reader sees the new rows.
+    await db.commit()
+    invalidate_gas_sensor_cache()
+
+
 @router.post("/settings/data-sources/{source_name}", response_class=HTMLResponse)
 async def save_data_source(
     source_name: str,
@@ -1622,15 +1633,7 @@ async def save_data_source(
     await _upsert_data_source_config(db, source, config)
 
     if source_name == SourceSystem.HA_FORDPASS:
-        from web.services.sources.ha_gas_price.adapter import (
-            invalidate_gas_sensor_cache,
-        )
-
-        await set_app_setting(db, "gas_sensor_station_entity_id", gas_station_entity)
-        await set_app_setting(db, "gas_sensor_average_entity_id", gas_average_entity)
-        # Commit before clearing the cache so the next reader sees the new rows.
-        await db.commit()
-        invalidate_gas_sensor_cache()
+        await _save_gas_sensors(db, gas_station_entity, gas_average_entity)
 
     health, last_seen = _card_health_inputs(source)
     return templates.TemplateResponse(
@@ -1995,16 +1998,7 @@ async def save_hass_gas_sensors(
     gas_sensor_average_entity_id: str | None = Form(None),
 ):
     """Save gas sensor config + trigger an immediate live check in the render."""
-    await set_app_setting(
-        db, "gas_sensor_station_entity_id", gas_sensor_station_entity_id or ""
-    )
-    await set_app_setting(
-        db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or ""
-    )
-    from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
-    # Commit before clearing the cache so the next reader sees the new rows.
-    await db.commit()
-    invalidate_gas_sensor_cache()
+    await _save_gas_sensors(db, gas_sensor_station_entity_id, gas_sensor_average_entity_id)
     ctx = await _hass_gas_sensors_context(db, check_live=True, gas_saved=True)
     return templates.TemplateResponse(
         request, "settings/partials/hass_gas_sensors.html", ctx
@@ -2021,12 +2015,7 @@ async def save_gas_sensors(
     gas_sensor_station_entity_id: str | None = Form(None),
     gas_sensor_average_entity_id: str | None = Form(None),
 ):
-    await set_app_setting(db, "gas_sensor_station_entity_id", gas_sensor_station_entity_id or "")
-    await set_app_setting(db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or "")
-    from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
-    # Commit before clearing the cache so the next reader sees the new rows.
-    await db.commit()
-    invalidate_gas_sensor_cache()
+    await _save_gas_sensors(db, gas_sensor_station_entity_id, gas_sensor_average_entity_id)
     ctx = await _gas_price_history_context(db)
     ctx["saved"] = True
     return templates.TemplateResponse(
