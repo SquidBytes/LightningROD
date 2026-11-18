@@ -6,7 +6,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
@@ -17,7 +17,7 @@ from db.models.charging_session import EVChargingSession
 from db.models.data_source_config import DataSourceConfig
 from db.models.reference import EVChargerStall, EVChargingNetwork, EVLocationLookup
 from web import developer_mode as dev_mode_module
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.gas_prices import (
     delete_gas_price,
     get_all_gas_prices,
@@ -202,7 +202,7 @@ async def _trip_display_ctx(db: AsyncSession) -> dict:
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_index(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     tab: str | None = Query(None),
 ):
     net_ctx = await _network_management_context(db)
@@ -263,7 +263,7 @@ async def settings_index(
 @router.get("/settings/vehicles", response_class=HTMLResponse)
 async def vehicles_partial(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the vehicle management partial (for HTMX refresh)."""
     veh_ctx = await _vehicle_management_context(db)
@@ -277,7 +277,7 @@ async def vehicles_partial(
 @router.get("/settings/vehicles/new", response_class=HTMLResponse)
 async def new_vehicle_form(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the vehicle add modal form."""
     unit_ctx = await get_unit_context(db)
@@ -292,10 +292,28 @@ async def new_vehicle_form(
     )
 
 
+async def _vehicle_conflict_response(request: Request, db: AsyncSession) -> HTMLResponse:
+    """Re-render the vehicle card with the unique-constraint error."""
+    veh_ctx = await _vehicle_management_context(db)
+    veh_ctx["error"] = "A vehicle with that VIN or device ID already exists."
+    return templates.TemplateResponse(
+        request, "settings/partials/vehicle_management.html", veh_ctx, status_code=409
+    )
+
+
+async def _ice_vehicle_conflict_response(request: Request, db: AsyncSession) -> HTMLResponse:
+    """Re-render the ICE vehicle card with the unique-constraint error."""
+    ctx = await _ice_vehicle_management_context(db)
+    ctx["error"] = "Could not save: it conflicts with an existing ICE vehicle."
+    return templates.TemplateResponse(
+        request, "settings/partials/ice_vehicle_management.html", ctx, status_code=409
+    )
+
+
 @router.post("/settings/vehicles", response_class=HTMLResponse)
 async def create_vehicle_route(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     display_name: str = Form(""),
     make: str | None = Form(None),
     model: str | None = Form(None),
@@ -326,9 +344,11 @@ async def create_vehicle_route(
         vin=vin or None,
         device_id=device_id or None,
     )
+    if new_vehicle is None:
+        return await _vehicle_conflict_response(request, db)
     veh_ctx = await _vehicle_management_context(db)
     veh_ctx["saved"] = True
-    veh_ctx["just_saved_row_id"] = getattr(new_vehicle, "id", None)
+    veh_ctx["just_saved_row_id"] = new_vehicle.id
     return templates.TemplateResponse(
         request,
         "settings/partials/vehicle_management.html",
@@ -340,7 +360,7 @@ async def create_vehicle_route(
 async def edit_vehicle_form(
     vehicle_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the vehicle edit modal form with vehicle data + presets."""
     vehicle = await get_vehicle_by_id(db, vehicle_id)
@@ -362,7 +382,7 @@ async def edit_vehicle_form(
 async def update_vehicle_route(
     vehicle_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     display_name: str = Form(""),
     make: str | None = Form(None),
     model: str | None = Form(None),
@@ -380,7 +400,10 @@ async def update_vehicle_route(
             status_code=422,
             content={"detail": "Display name is required"},
         )
-    await update_vehicle(
+    if await get_vehicle_by_id(db, vehicle_id) is None:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"detail": "Vehicle not found"})
+    updated = await update_vehicle(
         db,
         vehicle_id,
         display_name=display_name.strip(),
@@ -394,6 +417,8 @@ async def update_vehicle_route(
         vin=vin or None,
         device_id=device_id or None,
     )
+    if updated is None:
+        return await _vehicle_conflict_response(request, db)
     veh_ctx = await _vehicle_management_context(db)
     veh_ctx["saved"] = True
     veh_ctx["just_saved_row_id"] = vehicle_id
@@ -410,7 +435,7 @@ async def update_vehicle_route(
 async def delete_vehicle_route(
     vehicle_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     deleted = await delete_vehicle(db, vehicle_id)
     if not deleted:
@@ -430,7 +455,7 @@ async def delete_vehicle_route(
 async def activate_vehicle_route(
     vehicle_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     await set_active_vehicle(db, vehicle_id)
     veh_ctx = await _vehicle_management_context(db)
@@ -453,7 +478,7 @@ async def activate_vehicle_route(
 @router.get("/settings/ice-vehicles/new", response_class=HTMLResponse)
 async def new_ice_vehicle_form(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the ICE vehicle add modal body."""
     unit_ctx = await get_unit_context(db)
@@ -472,7 +497,7 @@ async def new_ice_vehicle_form(
 @router.post("/settings/ice-vehicles", response_class=HTMLResponse)
 async def create_ice_vehicle_route(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     label: str = Form(""),
     fuel_efficiency_display: float | None = Form(None),
     tank_capacity_display: float | None = Form(None),
@@ -495,9 +520,11 @@ async def create_ice_vehicle_route(
         tank_capacity_l=tank_metric,
         is_default=is_default,
     )
+    if new_ice is None:
+        return await _ice_vehicle_conflict_response(request, db)
     ctx = await _ice_vehicle_management_context(db)
     ctx["saved"] = True
-    ctx["just_saved_row_id"] = getattr(new_ice, "id", None)
+    ctx["just_saved_row_id"] = new_ice.id
     response = templates.TemplateResponse(
         request,
         "settings/partials/ice_vehicle_management.html",
@@ -511,7 +538,7 @@ async def create_ice_vehicle_route(
 async def edit_ice_vehicle_form(
     ice_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the ICE vehicle edit modal body with display-unit values pre-converted."""
     row = await get_ice_vehicle_by_id(db, ice_id)
@@ -537,7 +564,7 @@ async def edit_ice_vehicle_form(
 async def update_ice_vehicle_route(
     ice_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     label: str = Form(""),
     fuel_efficiency_display: float | None = Form(None),
     tank_capacity_display: float | None = Form(None),
@@ -557,7 +584,7 @@ async def update_ice_vehicle_route(
     if fuel_metric is None:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=422, content={"detail": "Combined fuel economy is required"})
-    await update_ice_vehicle(
+    updated = await update_ice_vehicle(
         db,
         ice_id,
         label=label.strip(),
@@ -565,6 +592,8 @@ async def update_ice_vehicle_route(
         tank_capacity_l=tank_metric,
         is_default=is_default,
     )
+    if updated is None:
+        return await _ice_vehicle_conflict_response(request, db)
     ctx = await _ice_vehicle_management_context(db)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = ice_id
@@ -581,13 +610,13 @@ async def update_ice_vehicle_route(
 async def delete_ice_vehicle_route(
     ice_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Delete an ICE vehicle. Refuses to delete the default row when others exist."""
     success = await delete_ice_vehicle(db, ice_id)
     ctx = await _ice_vehicle_management_context(db)
     if not success:
-        ctx["delete_error"] = "Cannot delete the default ICE vehicle. Set a different default first."
+        ctx["error"] = "Cannot delete the default ICE vehicle. Set a different default first."
     return templates.TemplateResponse(
         request,
         "settings/partials/ice_vehicle_management.html",
@@ -599,7 +628,7 @@ async def delete_ice_vehicle_route(
 async def set_default_ice_vehicle_route(
     ice_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Promote one ICE row to default; demote all others."""
     await set_default_ice_vehicle(db, ice_id)
@@ -619,7 +648,7 @@ async def set_default_ice_vehicle_route(
 @router.post("/settings/networks", response_class=HTMLResponse)
 async def create_network_route(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     network_name: str = Form(...),
     cost_per_kwh: float | None = Form(None),
     color: str | None = Form(None),
@@ -646,7 +675,7 @@ async def create_network_route(
 @router.get("/settings/networks", response_class=HTMLResponse)
 async def networks_partial(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the network management partial (used by cancel button to revert edits)."""
     net_ctx = await _network_management_context(db)
@@ -661,7 +690,7 @@ async def networks_partial(
 async def edit_network_row(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     networks = await get_all_networks(db)
     network = next((n for n in networks if n.id == network_id), None)
@@ -678,7 +707,7 @@ async def edit_network_row(
 async def edit_network_modal(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the tabbed network edit modal for the given network."""
     networks = await get_all_networks(db)
@@ -696,7 +725,7 @@ async def edit_network_modal(
 async def update_network_route(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     network_name: str = Form(...),
     cost_per_kwh: float | None = Form(None),
     color: str | None = Form(None),
@@ -727,7 +756,7 @@ async def update_network_route(
 async def delete_network_route(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     await delete_network(db, network_id=network_id)
     net_ctx = await _network_management_context(db)
@@ -742,7 +771,7 @@ async def delete_network_route(
 async def recalculate_network_costs(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Recalculate estimated_cost for all sessions under this network.
 
@@ -779,7 +808,6 @@ async def recalculate_network_costs(
             s.estimated_cost = float(network.cost_per_kwh) * energy
             updated += 1
 
-    await db.commit()
     return HTMLResponse(f'<span class="text-success text-sm">{updated} sessions recalculated</span>')
 
 
@@ -787,7 +815,7 @@ async def recalculate_network_costs(
 async def convert_network_modal(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the 'Convert to Location' modal form for a given network."""
     networks = await get_all_networks(db)
@@ -811,7 +839,7 @@ async def convert_network_modal(
 async def convert_network_to_location(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     target_network_id: int = Form(...),
     location_name: str = Form(...),
     location_type: str | None = Form(None),
@@ -860,7 +888,6 @@ async def convert_network_to_location(
 
     # Delete the old network
     await db.delete(source)
-    await db.commit()
 
     net_ctx = await _network_management_context(db)
     response = templates.TemplateResponse(
@@ -874,7 +901,7 @@ async def convert_network_to_location(
 
 @router.get("/settings/networks/{network_id}/locations", response_class=HTMLResponse)
 async def network_locations(
-    network_id: int, request: Request, db: AsyncSession = Depends(get_db)
+    network_id: int, request: Request, db: DbSession
 ):
     """Return location rows partial for a given network (used in modal)."""
     locations = await get_locations_for_network(db, network_id)
@@ -896,7 +923,7 @@ async def network_locations(
 
 @router.get("/settings/networks/{network_id}/locations-summary", response_class=HTMLResponse)
 async def network_locations_summary(
-    network_id: int, request: Request, db: AsyncSession = Depends(get_db)
+    network_id: int, request: Request, db: DbSession
 ):
     """Return read-only location summary for the network table expandable row."""
     locations = await get_locations_for_network(db, network_id)
@@ -929,7 +956,7 @@ async def network_locations_summary(
 async def create_location_route(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     location_name: str = Form(...),
     location_type: str | None = Form(None),
     notes: str | None = Form(None),
@@ -970,7 +997,7 @@ async def create_location_route(
 async def update_location_route(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     location_name: str = Form(...),
     location_type: str | None = Form(None),
     notes: str | None = Form(None),
@@ -1012,7 +1039,7 @@ async def update_location_route(
 async def delete_location_route(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     network_id: int = 0,
 ):
     """Delete a location and return the refreshed location list."""
@@ -1069,7 +1096,7 @@ async def _stall_context(db: AsyncSession, location_id: int) -> dict:
 
 @router.get("/settings/locations/{location_id}/stalls", response_class=HTMLResponse)
 async def location_stalls(
-    location_id: int, request: Request, db: AsyncSession = Depends(get_db)
+    location_id: int, request: Request, db: DbSession
 ):
     """Return stall rows partial for a given location."""
     ctx = await _stall_context(db, location_id)
@@ -1084,7 +1111,7 @@ async def location_stalls(
 async def stall_edit_modal(
     stall_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     location_id: int = 0,
 ):
     """Return stall edit modal content."""
@@ -1106,7 +1133,7 @@ async def stall_edit_modal(
 async def create_stall_route(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     stall_label: str = Form(...),
     charger_type: str | None = Form(None),
     rated_kw: float | None = Form(None),
@@ -1143,7 +1170,7 @@ async def create_stall_route(
 async def update_stall_route(
     stall_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     location_id: int = Form(...),
     stall_label: str = Form(...),
     charger_type: str | None = Form(None),
@@ -1181,7 +1208,7 @@ async def update_stall_route(
 async def delete_stall_route(
     stall_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     location_id: int = 0,
 ):
     """Delete a stall and return refreshed stall rows."""
@@ -1200,7 +1227,7 @@ async def delete_stall_route(
 async def prefill_stalls(
     location_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Pre-fill stalls from network charger templates (non-destructive)."""
     # Look up the location's network name
@@ -1249,7 +1276,7 @@ async def _subscription_tab_context(db: AsyncSession, network_id: int) -> dict:
 
 @router.get("/settings/networks/{network_id}/subscriptions", response_class=HTMLResponse)
 async def network_subscriptions(
-    network_id: int, request: Request, db: AsyncSession = Depends(get_db)
+    network_id: int, request: Request, db: DbSession
 ):
     """Return subscription tab partial for a given network (lazy-loaded in modal)."""
     ctx = await _subscription_tab_context(db, network_id)
@@ -1264,7 +1291,7 @@ async def network_subscriptions(
 async def create_subscription_route(
     network_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     member_rate: float = Form(...),
     monthly_fee: float = Form(0),
     start_date: str = Form(...),
@@ -1308,7 +1335,7 @@ async def create_subscription_route(
 async def edit_subscription_form(
     subscription_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return inline edit form for a subscription period."""
     from sqlalchemy import select as sa_select
@@ -1333,7 +1360,7 @@ async def edit_subscription_form(
 async def update_subscription_route(
     subscription_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     member_rate: float = Form(...),
     monthly_fee: float = Form(0),
     start_date: str = Form(...),
@@ -1378,7 +1405,7 @@ async def update_subscription_route(
 async def delete_subscription_route(
     subscription_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     network_id: int = 0,
 ):
     """Delete a subscription period and return refreshed list."""
@@ -1467,7 +1494,7 @@ def _card_health_inputs(source) -> tuple[dict, str | None]:
 @router.get("/settings/data-sources", response_class=HTMLResponse)
 async def data_sources_tab(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     saved: bool = False,
 ):
     """Render the registry-driven Data Sources tab partial."""
@@ -1529,7 +1556,7 @@ async def data_sources_tab(
 async def save_data_source(
     source_name: str,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Save per-source config; one handler covers the whole registry."""
     source = next(
@@ -1595,11 +1622,14 @@ async def save_data_source(
     await _upsert_data_source_config(db, source, config)
 
     if source_name == SourceSystem.HA_FORDPASS:
-        await set_app_setting(db, "gas_sensor_station_entity_id", gas_station_entity)
-        await set_app_setting(db, "gas_sensor_average_entity_id", gas_average_entity)
         from web.services.sources.ha_gas_price.adapter import (
             invalidate_gas_sensor_cache,
         )
+
+        await set_app_setting(db, "gas_sensor_station_entity_id", gas_station_entity)
+        await set_app_setting(db, "gas_sensor_average_entity_id", gas_average_entity)
+        # Commit before clearing the cache so the next reader sees the new rows.
+        await db.commit()
         invalidate_gas_sensor_cache()
 
     health, last_seen = _card_health_inputs(source)
@@ -1647,7 +1677,7 @@ async def hass_status(request: Request):
 @router.post("/settings/hass/reconnect", response_class=HTMLResponse)
 async def hass_reconnect(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Stop and restart the HASS websocket runtime via the supervisor.
 
@@ -1736,7 +1766,7 @@ async def hass_backfill(request: Request):
 @router.post("/settings/hass/disconnect", response_class=HTMLResponse)
 async def hass_disconnect(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Stop the HASS websocket runtime via the supervisor."""
     result = await db.execute(
@@ -1806,7 +1836,7 @@ async def _gas_price_history_context(db: AsyncSession) -> dict:
 @router.get("/settings/gas-prices", response_class=HTMLResponse)
 async def gas_price_history(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the gas price history partial (lazy-loaded from gas_settings.html)."""
     ctx = await _gas_price_history_context(db)
@@ -1820,7 +1850,7 @@ async def gas_price_history(
 @router.get("/settings/fuel-price-trend", response_class=HTMLResponse)
 async def fuel_price_trend_chart(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return Plotly HTML for the Fuel Price Trend chart card.
 
@@ -1837,7 +1867,7 @@ async def fuel_price_trend_chart(
 @router.post("/settings/gas-prices", response_class=HTMLResponse)
 async def add_gas_price(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     year: int = Form(...),
     month: int = Form(...),
     station_price: float | None = Form(None),
@@ -1864,7 +1894,7 @@ async def add_gas_price(
 async def delete_gas_price_route(
     price_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     await delete_gas_price(db, price_id)
     ctx = await _gas_price_history_context(db)
@@ -1948,7 +1978,7 @@ async def _hass_gas_sensors_context(
 @router.get("/settings/hass/gas-sensors", response_class=HTMLResponse)
 async def hass_gas_sensors_partial(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Return the gas-sensor card for the HASS page, with a live HA check."""
     ctx = await _hass_gas_sensors_context(db, check_live=True)
@@ -1960,7 +1990,7 @@ async def hass_gas_sensors_partial(
 @router.post("/settings/hass/gas-sensors", response_class=HTMLResponse)
 async def save_hass_gas_sensors(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     gas_sensor_station_entity_id: str | None = Form(None),
     gas_sensor_average_entity_id: str | None = Form(None),
 ):
@@ -1972,6 +2002,8 @@ async def save_hass_gas_sensors(
         db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or ""
     )
     from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
+    # Commit before clearing the cache so the next reader sees the new rows.
+    await db.commit()
     invalidate_gas_sensor_cache()
     ctx = await _hass_gas_sensors_context(db, check_live=True, gas_saved=True)
     return templates.TemplateResponse(
@@ -1985,13 +2017,15 @@ async def save_hass_gas_sensors(
 @router.post("/settings/gas-sensors", response_class=HTMLResponse)
 async def save_gas_sensors(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     gas_sensor_station_entity_id: str | None = Form(None),
     gas_sensor_average_entity_id: str | None = Form(None),
 ):
     await set_app_setting(db, "gas_sensor_station_entity_id", gas_sensor_station_entity_id or "")
     await set_app_setting(db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or "")
     from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
+    # Commit before clearing the cache so the next reader sees the new rows.
+    await db.commit()
     invalidate_gas_sensor_cache()
     ctx = await _gas_price_history_context(db)
     ctx["saved"] = True
@@ -2005,7 +2039,7 @@ async def save_gas_sensors(
 @router.post("/settings/units", response_class=HTMLResponse)
 async def update_unit_settings(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     distance_unit: str = Form("us"),
     temp_unit: str = Form("us"),
 ):
@@ -2031,7 +2065,7 @@ async def update_unit_settings(
 @router.post("/settings/timezone", response_class=HTMLResponse)
 async def update_timezone_setting(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     user_timezone: str = Form("UTC"),
 ):
     """Save the user's preferred display timezone."""
@@ -2050,7 +2084,7 @@ async def update_timezone_setting(
 @router.post("/settings/toggles", response_class=HTMLResponse)
 async def update_toggles(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     comparison_gas_enabled: str | None = Form(None),
     comparison_network_enabled: str | None = Form(None),
     comparison_section_visible: str | None = Form(None),
@@ -2081,7 +2115,7 @@ async def update_toggles(
 @router.post("/settings/trip-display", response_class=HTMLResponse)
 async def update_trip_display_settings(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     trip_hide_enabled: str | None = Form(None),
     trip_hide_min_duration: float | None = Form(None),
     trip_hide_min_distance: float | None = Form(None),
@@ -2116,7 +2150,7 @@ async def update_trip_display_settings(
 @router.post("/settings/raw-archive", response_class=HTMLResponse)
 async def update_raw_archive_settings(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     raw_archive_enabled: str | None = Form(None),
     raw_archive_retention_days: int | None = Form(None),
 ):
@@ -2134,6 +2168,8 @@ async def update_raw_archive_settings(
             "raw_archive_retention_days",
             str(clamp_retention_days(raw_archive_retention_days)),
         )
+    # Commit before clearing the cache so the next reader sees the new rows.
+    await db.commit()
     raw_archive.invalidate_settings()
     ctx = await _raw_archive_ctx(db)
     ctx["saved"] = True
@@ -2147,11 +2183,13 @@ async def update_raw_archive_settings(
 @router.post("/settings/developer-mode", response_class=HTMLResponse)
 async def update_developer_mode(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     developer_mode: str | None = Form(None),
 ):
     enabled = developer_mode is not None
     await set_app_setting(db, "developer_mode", "true" if enabled else "false")
+    # Commit first so the in-process flag never gets ahead of the database.
+    await db.commit()
     dev_mode_module.set_enabled(enabled)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
     response = templates.TemplateResponse(
@@ -2199,7 +2237,7 @@ async def _repair_preview_page(op, db: AsyncSession, offset: int):
 @router.get("/settings/data-repair", response_class=HTMLResponse)
 async def data_repair_tab(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Render the Data Repair tab: op cards, recorder banner, snapshot runs."""
     cards = [await _repair_card_ctx(op, db) for op in REPAIR_REGISTRY]
@@ -2223,7 +2261,7 @@ async def data_repair_tab(
 
 
 @router.get("/settings/data-repair/backup")
-async def download_database_backup(db: AsyncSession = Depends(get_db)):
+async def download_database_backup(db: DbSession):
     """Stream a consistent copy of the SQLite database as a download.
 
     Uses VACUUM INTO on a separate connection — safe while the app runs (WAL).
@@ -2279,8 +2317,8 @@ async def download_database_backup(db: AsyncSession = Depends(get_db)):
 async def data_repair_preview(
     slug: str,
     request: Request,
+    db: DbSession,
     offset: int = 0,
-    db: AsyncSession = Depends(get_db),
 ):
     """Dry-run a repair operation and render one page of its review groups."""
     op = get_operation(slug)
@@ -2298,8 +2336,8 @@ async def data_repair_preview(
 async def data_repair_apply(
     slug: str,
     request: Request,
+    db: DbSession,
     offset: int = 0,
-    db: AsyncSession = Depends(get_db),
 ):
     """Snapshot + apply a repair, then re-render its card with a toast.
 
@@ -2326,7 +2364,7 @@ async def data_repair_apply(
         )
     else:
         result = await op.apply(db)
-    await db.commit()
+    await db.commit()  # the preview below runs on its own connection
     ctx = await _repair_card_ctx(op, db)
     ctx["result"] = result
     ctx["skipped_now"] = skipped_now
@@ -2341,14 +2379,13 @@ async def data_repair_apply(
 async def data_repair_clear_skips(
     slug: str,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Forget every skipped group for an operation and re-render its card."""
     op = get_operation(slug)
     if op is None:
         raise HTTPException(status_code=404, detail=f"Unknown repair: {slug}")
     await clear_skips(db, op.slug)
-    await db.commit()
     return templates.TemplateResponse(
         request,
         "settings/partials/repair_op_card.html",
@@ -2380,14 +2417,13 @@ def _parse_run_id(run_id: str) -> uuid.UUID:
 async def data_repair_restore(
     run_id: str,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Write a snapshot run's rows back and re-render the snapshot list."""
     rid = _parse_run_id(run_id)
     restored = await restore_run(db, rid)
     if restored == 0:
         raise HTTPException(status_code=404, detail="Unknown snapshot run")
-    await db.commit()
     return await _render_snapshots(request, db, f"Restored {restored} rows.")
 
 
@@ -2397,12 +2433,11 @@ async def data_repair_restore(
 async def data_repair_purge(
     run_id: str,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     """Delete a snapshot run and re-render the snapshot list."""
     rid = _parse_run_id(run_id)
     purged = await purge_run(db, rid)
     if purged == 0:
         raise HTTPException(status_code=404, detail="Unknown snapshot run")
-    await db.commit()
     return await _render_snapshots(request, db, "Snapshot deleted.")

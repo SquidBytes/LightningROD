@@ -2,12 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Header, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.comparisons import query_distance_gas_comparison, query_gas_comparison
 from web.queries.cost_explorer import (
     build_cost_explorer_monthly_chart,
@@ -44,7 +43,7 @@ RANGE_LABELS: dict[str, str] = {
 @router.get("/costs", response_class=HTMLResponse)
 async def costs(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     range: str | None = "all",
     date_from: str | None = None,
     date_to: str | None = None,

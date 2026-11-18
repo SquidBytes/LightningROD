@@ -606,3 +606,32 @@ async def test_unique_constraint_blocks_duplicate(db_session):
     with pytest.raises(IntegrityError):
         await db_session.flush()
     await db_session.rollback()
+
+
+async def test_trip_cache_restored_when_transaction_rolls_back(db_session):
+    """A rolled-back trip insert must not leave the in-memory cache claiming it was written."""
+    from db.models.trip_metrics import EVTripMetrics
+    from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    entity_id, state = make_trip_event(
+        device_id=_TEST_DEVICE_ID,
+        distance_miles=9.0,
+        duration_minutes=15.0,
+        efficiency=3.2,
+        energy_consumed=2.8,
+    )
+    await _dispatch_event(entity_id, state, db_session)
+    await db_session.flush()
+    assert any(k[1] == _TEST_DEVICE_ID for k in fordpass_handlers._last_trip_values)
+
+    await db_session.rollback()
+    assert not any(k[1] == _TEST_DEVICE_ID for k in fordpass_handlers._last_trip_values)
+
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    await _dispatch_event(entity_id, state, db_session)
+    await db_session.flush()
+    rows = (await db_session.execute(
+        select(EVTripMetrics).where(EVTripMetrics.device_id == _TEST_DEVICE_ID)
+    )).scalars().all()
+    assert len(rows) == 1

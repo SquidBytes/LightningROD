@@ -5,12 +5,11 @@ import io
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.settings import get_all_networks, get_app_setting, resolve_network
 from web.queries.vehicles import get_active_vehicle, get_all_vehicles, get_vehicle_by_id
 from web.services.csv_parser import (
@@ -51,7 +50,7 @@ async def download_template() -> Response:
 @router.post("/settings/import/upload", response_class=HTMLResponse)
 async def upload_csv(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     file: UploadFile = File(...),
     import_timezone: str = Form("UTC"),
 ) -> Response:
@@ -141,7 +140,7 @@ async def upload_csv(
 @router.post("/settings/import/verify-row", response_class=HTMLResponse)
 async def verify_row(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> HTMLResponse:
     """Re-verify a single edited row and return updated row HTML.
 
@@ -211,7 +210,7 @@ async def verify_row(
 @router.post("/settings/import/execute", response_class=HTMLResponse)
 async def execute_import(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> Response:
     """Accept the confirmed import form, commit selected rows, and return summary.
 
@@ -294,7 +293,7 @@ async def execute_import(
 @router.get("/settings/import/reset", response_class=HTMLResponse)
 async def reset_import(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> HTMLResponse:
     """Return the initial import file picker so the user can start a new import.
 

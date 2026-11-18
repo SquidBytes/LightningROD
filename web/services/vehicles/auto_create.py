@@ -88,12 +88,12 @@ async def ensure_vehicle(
         source_system=source_system,
         **{c: facts[c] for c in FILLABLE if not _empty(facts.get(c))},
     )
-    db.add(vehicle)
     try:
-        await db.flush()
+        async with db.begin_nested():
+            db.add(vehicle)
+            await db.flush()
     except IntegrityError:
-        # Another writer created it first.
-        await db.rollback()
+        # Another writer created it first; only the insert is rolled back.
         return None
     logger.info("Auto-created vehicle record for device_id=%s", device_id)
     if not await get_app_setting(db, "active_vehicle_id", ""):

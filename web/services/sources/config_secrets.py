@@ -95,6 +95,6 @@ async def seal_stored_configs(db: AsyncSession) -> int:
             row.config_json = seal_config(row.source_name, row.config_json)
             changed += 1
     if changed:
-        await db.commit()
+        await db.flush()
         logger.info("Encrypted stored credentials in %d config row(s)", changed)
     return changed

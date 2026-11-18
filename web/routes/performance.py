@@ -4,12 +4,11 @@ from typing import Annotated
 
 import plotly.graph_objects as go
 import plotly.io as pio
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Header, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.energy import (
     CHARGE_TYPE_LABELS,
     build_charge_type_donut_chart,
@@ -92,7 +91,7 @@ def _build_sparkline(xs, ys, line_color: str = "#47A8E5") -> str:
 @router.get("/performance", response_class=HTMLResponse)
 async def performance(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     range: str | None = "all",
     date_from: str | None = None,
     date_to: str | None = None,

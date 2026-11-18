@@ -4,13 +4,12 @@ Sessions group-edit bar cascades from a selected network to a filtered location 
 """
 
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import EVLocationLookup
-from web.dependencies import get_db
+from web.dependencies import DbSession
 
 router = APIRouter()
 
@@ -18,8 +17,8 @@ router = APIRouter()
 @router.get("/locations/by-network", response_class=HTMLResponse)
 async def locations_by_network(
     request: Request,
+    db: DbSession,
     network_id: str | None = None,
-    db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
     """Return an `<option>` fragment of verified locations for a given network.
 

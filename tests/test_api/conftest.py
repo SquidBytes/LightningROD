@@ -61,7 +61,13 @@ async def client(db_session):
             route_module.templates.env.filters["localtime"] = localtime_filter
 
     async def override_get_db():
-        yield db_session
+        # Same shape as get_db; the fixture's savepoint mode absorbs the commit.
+        try:
+            yield db_session
+        except BaseException:
+            await db_session.rollback()
+            raise
+        await db_session.commit()
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)

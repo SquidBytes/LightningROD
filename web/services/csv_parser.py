@@ -1057,6 +1057,6 @@ async def import_rows(
             except (IntegrityError, Exception):
                 failed += 1
 
-    await db_session.commit()
+    await db_session.flush()
 
     return {"added": added, "skipped": skipped, "updated": updated, "failed": failed}

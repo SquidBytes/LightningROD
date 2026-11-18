@@ -20,13 +20,11 @@ async def store_sample(config_id: int, endpoint: str, payload: Any) -> None:
     """
     if not isinstance(payload, dict):
         return
-    async with AsyncSessionLocal() as db:
+    async with AsyncSessionLocal.begin() as db:
         is_new = await fcon_raw_archive.store(db, config_id, endpoint, payload, utc_now())
-        await db.commit()
     if is_new:
-        async with AsyncSessionLocal() as db:
+        async with AsyncSessionLocal.begin() as db:
             await adapter.process_sample(endpoint, payload, db, {"config_id": config_id})
-            await db.commit()
     try:
         await fcon_raw_archive.prune()
     except Exception:

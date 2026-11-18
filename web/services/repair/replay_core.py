@@ -192,12 +192,15 @@ async def replay_events(
             stats.skipped_unknown_units += 1
             continue
         try:
-            if dispatch is None:
-                await dispatch_slug(
-                    event.entity_id, event.payload, ha_config, db, config_id=config_id
-                )
-            else:
-                await dispatch(event, ha_config, db)
+            # A savepoint per event: a failed flush rolls back this event only
+            # and leaves the session usable for the next one.
+            async with db.begin_nested():
+                if dispatch is None:
+                    await dispatch_slug(
+                        event.entity_id, event.payload, ha_config, db, config_id=config_id
+                    )
+                else:
+                    await dispatch(event, ha_config, db)
             stats.replayed += 1
         except Exception as exc:
             # Entity ids carry the full device id; logs and reports show the

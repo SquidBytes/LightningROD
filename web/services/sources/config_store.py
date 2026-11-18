@@ -43,7 +43,7 @@ async def merge_into_row(
     instance_label: str = "default",
     row: DataSourceConfig | None = None,
 ) -> DataSourceConfig:
-    """Merge `updates` over the stored config, seal, and commit; inserts if absent."""
+    """Merge `updates` over the stored config and seal it; inserts if absent. Caller commits."""
     row = row or await find_row(db, source_name, instance_label)
     base = read_row(row).values if row is not None else {}
     # Sealing first means a missing key raises before the row is touched.
@@ -59,5 +59,5 @@ async def merge_into_row(
     else:
         row.config_json = sealed
         row.updated_at = datetime.now(UTC)
-    await db.commit()
+    await db.flush()
     return row

@@ -69,7 +69,7 @@ def age_text(then: datetime, now: datetime) -> str:
 
 
 async def persist_token_fields(config_id: int, fields: dict[str, Any]) -> None:
-    async with AsyncSessionLocal() as db:
+    async with AsyncSessionLocal.begin() as db:
         row = await db.get(DataSourceConfig, config_id)
         if row is not None:
             await merge_into_row(db, row.source_name, fields, row=row)

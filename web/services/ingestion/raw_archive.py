@@ -103,7 +103,7 @@ class RetentionPruner:
     async def _prune_expired(self, retention_days: int) -> int:
         """Delete up to PRUNE_BATCH rows that fell out of the retention window."""
         cutoff = datetime.now(UTC) - timedelta(days=retention_days)
-        async with AsyncSessionLocal() as db:
+        async with AsyncSessionLocal.begin() as db:
             # This runs on the ingestion path, so the delete has to be
             # bounded. PostgreSQL has no DELETE ... LIMIT and SQLite's is
             # compile-time optional, hence the id subquery.
@@ -115,7 +115,6 @@ class RetentionPruner:
                 .limit(PRUNE_BATCH)
             )
             result = await db.execute(delete(model).where(model.id.in_(expired)))
-            await db.commit()
         return int(getattr(result, "rowcount", 0) or 0)
 
 
@@ -162,14 +161,14 @@ class RawEventArchive(RetentionPruner):
             if scope is None:
                 return
             device_id, slug = scope
-            async with AsyncSessionLocal() as db:
+            async with AsyncSessionLocal.begin() as db:
                 settings = await self._settings_for(db)
                 if settings["enabled"]:
                     await self._insert(
                         db, entity_id, device_id, slug, new_state, config_id, ha_config
                     )
-                    await db.commit()
-                    self._health["writes"] += 1
+            if settings["enabled"]:
+                self._health["writes"] += 1
         except Exception as exc:
             self._note_failure(entity_id, exc)
 

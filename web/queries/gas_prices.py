@@ -50,7 +50,6 @@ async def upsert_gas_price(
             existing.average_price = average_price
         existing.source = source
         await db.flush()
-        await db.commit()
         await db.refresh(existing)
         return existing
     else:
@@ -63,7 +62,6 @@ async def upsert_gas_price(
         )
         db.add(entry)
         await db.flush()
-        await db.commit()
         await db.refresh(entry)
         return entry
 
@@ -77,7 +75,7 @@ async def delete_gas_price(db: AsyncSession, price_id: int) -> bool:
     if entry is None:
         return False
     await db.delete(entry)
-    await db.commit()
+    await db.flush()
     return True
 
 
@@ -139,7 +137,6 @@ async def store_gas_price_reading(
     )
     db.add(reading)
     await db.flush()
-    await db.commit()
 
 
 async def store_gas_price_reading_if_new(
@@ -168,7 +165,6 @@ async def store_gas_price_reading_if_new(
     )
     db.add(reading)
     await db.flush()
-    await db.commit()
     return True
 
 

@@ -6,7 +6,8 @@ Covers WP1 of the data-repair capability:
   - a dummy RepairOperation walks apply -> snapshot -> restore -> purge,
     and a second apply() is a no-op
   - mutable_only excludes manual_entry/csv_import rows
-  - rollback_session discards work committed inside the context
+  - rollback_session discards work committed inside the context, including
+    a vehicle auto-create and a settings write
 """
 
 from __future__ import annotations
@@ -20,10 +21,13 @@ import pytest
 from sqlalchemy import MetaData, func, select
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from db.models.reference import AppSettings
 from db.models.repair_backup import RepairBackup
 from db.models.trip_metrics import EVTripMetrics
+from db.models.vehicle import EVVehicle
 from tests.factories.trips import TripFactory
 from tests.factories.vehicles import VehicleFactory
+from web.queries.settings import set_app_setting
 from web.services.repair import (
     RepairDiff,
     RepairGroup,
@@ -41,6 +45,7 @@ from web.services.repair import (
     serialize_row,
     skipped_keys,
 )
+from web.services.vehicles.auto_create import ensure_vehicle
 
 pytestmark = pytest.mark.unit
 
@@ -288,6 +293,36 @@ async def test_rollback_session_discards_internal_commit(db_session):
                 .where(EVTripMetrics.device_id == device)
             )
         assert persisted == 0
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.db
+async def test_rollback_session_discards_vehicle_and_setting_writes(db_session):
+    """A dry-run that auto-creates a vehicle and writes a setting leaves both tables unchanged."""
+    from tests.conftest import TEST_DB_URL, _attach_sqlite_pragmas
+
+    engine = create_async_engine(TEST_DB_URL)
+    _attach_sqlite_pragmas(engine)
+    suffix = uuid.uuid4().hex[:8]
+    device = f"DRYRUN_VIN_{suffix}"
+    key = f"dry_run_probe_{suffix}"
+    try:
+        async with rollback_session(engine=engine) as session:
+            assert await ensure_vehicle(session, device, source_system="ha_fordpass") is not None
+            await set_app_setting(session, key, "staged")
+            await session.commit()  # the owner's commit becomes a savepoint
+
+        async with engine.connect() as conn:
+            vehicles = await conn.scalar(
+                select(func.count())
+                .select_from(EVVehicle)
+                .where(EVVehicle.device_id == device)
+            )
+            setting = await conn.scalar(
+                select(AppSettings.value).where(AppSettings.key == key)
+            )
+        assert (vehicles, setting) == (0, None)
     finally:
         await engine.dispose()
 

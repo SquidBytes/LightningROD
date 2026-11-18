@@ -12,12 +12,11 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from web.dependencies import get_db
+from web.dependencies import DbSession
 from web.queries.vehicles import get_active_vehicle, get_all_vehicles
 from web.services.ingestion import supervisor
 from web.services.sources.registry import REGISTRY
@@ -72,7 +71,7 @@ def _load_groups() -> list[dict[str, Any]]:
 @router.get("/data-sources", response_class=HTMLResponse)
 async def data_sources_page(
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ):
     active_vehicle = await get_active_vehicle(db)
     all_vehicles = await get_all_vehicles(db)

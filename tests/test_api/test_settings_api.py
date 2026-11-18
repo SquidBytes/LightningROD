@@ -33,3 +33,17 @@ async def test_create_vehicle_via_post(client, db_session):
     )
     assert response.status_code == 200
     assert "Test Mach-E" in response.text
+
+
+@pytest.mark.db
+async def test_create_vehicle_duplicate_device_id_is_rejected(client, db_session):
+    """A second vehicle with the same device_id gets an error, not a saved toast."""
+    form = {"display_name": "First", "device_id": "DUP_DEVICE_001"}
+    assert (await client.post("/settings/vehicles", data=form)).status_code == 200
+
+    response = await client.post(
+        "/settings/vehicles", data={**form, "display_name": "Second"}
+    )
+    assert response.status_code == 409
+    assert "already exists" in response.text
+    assert "Vehicle saved." not in response.text

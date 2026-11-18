@@ -38,7 +38,7 @@ async def set_default_ice_vehicle(db: AsyncSession, ice_id: int) -> bool:
         return False
     await db.execute(update(IceVehicle).values(is_default=False))
     row.is_default = True
-    await db.commit()
+    await db.flush()
     return True
 
 
@@ -53,21 +53,20 @@ async def create_ice_vehicle(
 
     Returns the new row, or None on IntegrityError (e.g. partial unique index conflict).
     """
-    if is_default:
-        await db.execute(update(IceVehicle).values(is_default=False))
     row = IceVehicle(
         label=label,
         fuel_efficiency_l_per_100km=fuel_efficiency_l_per_100km,
         tank_capacity_l=tank_capacity_l,
         is_default=is_default,
     )
-    db.add(row)
     try:
-        await db.flush()
+        async with db.begin_nested():
+            if is_default:
+                await db.execute(update(IceVehicle).values(is_default=False))
+            db.add(row)
+            await db.flush()
     except IntegrityError:
-        await db.rollback()
         return None
-    await db.commit()
     await db.refresh(row)
     return row
 
@@ -91,19 +90,18 @@ async def update_ice_vehicle(
         "tank_capacity_l",
         "is_default",
     }
-    if kwargs.get("is_default") is True:
-        await db.execute(
-            update(IceVehicle).where(IceVehicle.id != ice_id).values(is_default=False)
-        )
-    for key, value in kwargs.items():
-        if key in allowed_fields:
-            setattr(row, key, value)
     try:
-        await db.flush()
+        async with db.begin_nested():
+            if kwargs.get("is_default") is True:
+                await db.execute(
+                    update(IceVehicle).where(IceVehicle.id != ice_id).values(is_default=False)
+                )
+            for key, value in kwargs.items():
+                if key in allowed_fields:
+                    setattr(row, key, value)
+            await db.flush()
     except IntegrityError:
-        await db.rollback()
         return None
-    await db.commit()
     await db.refresh(row)
     return row
 
@@ -126,5 +124,5 @@ async def delete_ice_vehicle(db: AsyncSession, ice_id: int) -> bool:
         if other_count.scalar_one_or_none() is not None:
             return False
     await db.delete(row)
-    await db.commit()
+    await db.flush()
     return True

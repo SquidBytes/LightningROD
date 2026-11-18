@@ -274,6 +274,8 @@ async def rollback_session(engine=None):
         try:
             yield session
         finally:
+            # close() alone skips the rollback hooks (see db.transaction_hooks)
+            await session.rollback()
             await session.close()
             await trans.rollback()
 

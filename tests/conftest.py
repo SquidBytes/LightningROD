@@ -193,6 +193,25 @@ class FixedSessionFactory:
     async def __aexit__(self, *_):
         return False
 
+    def begin(self):
+        """Mirror ``AsyncSessionLocal.begin()``; the fixture's savepoint mode absorbs the commit."""
+        return _FixedBegin(self._session)
+
+
+class _FixedBegin:
+    def __init__(self, session):
+        self._session = session
+
+    async def __aenter__(self):
+        return self._session
+
+    async def __aexit__(self, exc_type, *_):
+        if exc_type is None:
+            await self._session.commit()
+        else:
+            await self._session.rollback()
+        return False
+
 
 @pytest.fixture
 def no_secret_key(monkeypatch):
