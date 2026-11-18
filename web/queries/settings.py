@@ -1,6 +1,7 @@
 """Application settings, networks, and preset lookup queries."""
 
 import json
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select
@@ -244,7 +245,7 @@ async def create_location(
     address: str | None = None,
     latitude: float | None = None,
     longitude: float | None = None,
-    cost_per_kwh: float | None = None,
+    cost_per_kwh: float | Decimal | None = None,
 ) -> EVLocationLookup:
     """Create a new location linked to a network."""
     loc = EVLocationLookup(

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargerStall, EVLocationLookup
 from web.dependencies import DbSession
-from web.money import to_money
+from web.money import cost_of, to_money
 from web.queries.battery import build_mini_charge_curve, load_reference_charge_curve
 from web.queries.costs import (
     compute_session_cost,
@@ -639,12 +639,12 @@ async def create_session(
 
     est_rate = None
     if location_obj and location_obj.cost_per_kwh:
-        est_rate = float(location_obj.cost_per_kwh)
+        est_rate = location_obj.cost_per_kwh
     elif network_obj and network_obj.cost_per_kwh:
-        est_rate = float(network_obj.cost_per_kwh)
+        est_rate = network_obj.cost_per_kwh
 
     if est_rate and new_session.energy_kwh:
-        new_session.estimated_cost = to_money(est_rate * float(new_session.energy_kwh))
+        new_session.estimated_cost = cost_of(est_rate, new_session.energy_kwh)
     else:
         new_session.estimated_cost = None
 
@@ -882,7 +882,7 @@ async def update_session(
     if session.network_id != old_network_id and session.cost_source != 'manual':
         new_network = next((n for n in all_networks if n.id == session.network_id), None)
         if new_network and new_network.cost_per_kwh and session.energy_kwh:
-            session.cost = to_money(float(new_network.cost_per_kwh) * float(session.energy_kwh))
+            session.cost = cost_of(new_network.cost_per_kwh, session.energy_kwh)
             session.cost_source = 'calculated'
 
     # Compute estimated cost from hierarchy
@@ -894,12 +894,12 @@ async def update_session(
 
     est_rate = None
     if location_obj and location_obj.cost_per_kwh:
-        est_rate = float(location_obj.cost_per_kwh)
+        est_rate = location_obj.cost_per_kwh
     elif network_obj and network_obj.cost_per_kwh:
-        est_rate = float(network_obj.cost_per_kwh)
+        est_rate = network_obj.cost_per_kwh
 
     if est_rate and session.energy_kwh:
-        session.estimated_cost = to_money(est_rate * float(session.energy_kwh))
+        session.estimated_cost = cost_of(est_rate, session.energy_kwh)
     else:
         session.estimated_cost = None
 

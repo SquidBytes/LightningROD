@@ -13,3 +13,9 @@ def to_money(value: float | Decimal | None) -> Decimal | None:
     if value is None or isinstance(value, Decimal):
         return value
     return Decimal(str(value))
+
+
+def cost_of(rate: float | Decimal, energy_kwh: float) -> Decimal:
+    """Rate times energy in Decimal, so the product carries no float error."""
+    # A row built from a float in this session still holds the float until it is reloaded.
+    return to_money(rate) * to_money(energy_kwh)
