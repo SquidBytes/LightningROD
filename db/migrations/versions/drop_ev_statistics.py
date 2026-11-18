@@ -1,7 +1,7 @@
 """Drop the unused ev_statistics table.
 
 Revision ID: drop_ev_statistics
-Revises: lv_load_status
+Revises: charge_type_ac_dc
 Create Date: 2026-11-09
 """
 from __future__ import annotations
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "drop_ev_statistics"
-down_revision = "lv_load_status"
+down_revision = "charge_type_ac_dc"
 branch_labels = None
 depends_on = None
 
