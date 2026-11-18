@@ -3,26 +3,23 @@
   <img src="website/logo-lockup-light.svg" alt="LightningROD" width="196">
 </picture>
 
-Self-hosted charging & vehicle analytics. 
+## Self-hosted charging and vehicle analytics.
 
-LightningROD turns vehicle data into charging, battery, and trip insights. Your vehicle data is automatically collected from supported data sources so you don't need to keep your own spreadsheets.
+**Developed using my own Ford F-150 Lightning. Works with other Ford EVs too.**
 
-Developed using an F-150 Lightning, but other Ford EVs are supported today. The data layer is built to grow beyond them.
+LightningROD collects your vehicle data automatically, so you don't need to keep spreadsheets.
 
 > If you'd like support for a vehicle that isn't covered, open an issue and let me know.
 
-Designed to support automatic data ingestion from Home Assistant via [ha-fordpass](https://github.com/marq24/ha-fordpass).
-
-
 ### **DEMO**
 
-An interactive read-only demo is available. Data values are random and meant to showcase various features - their values may be incorrect.
+An interactive read-only demo is available. The data is random, so values may not add up.
 
 **Site**: https://lightningrod.dev/demo  
 *Note: The service may need time to wake up.*
 
 > [!NOTE]
-> **Personal project, built with AI help.** I work on this when I have free time and use AI (primarily Claude) as a tool and to learn new things. For more information read my [AI Usage Disclaimer](https://docs.lightningrod.dev/ai-disclaimer/).
+> **Personal project, built with AI help.** I work on this in my free time and use AI (primarily Claude) as a tool. Read the [AI Usage Disclaimer](https://docs.lightningrod.dev/ai-disclaimer/) for more information.
 
 If you find LightningROD useful, and would like to, you can [buy me a coffee](https://www.buymeacoffee.com/SquidBytes):
 
@@ -30,42 +27,27 @@ If you find LightningROD useful, and would like to, you can [buy me a coffee](ht
 
 > [!IMPORTANT]
 > This is a work in progress. Alternative backups are recommended.
-> 
+
 ## Features
 
-- **Charging analytics** — session CRUD, network/location/stall management, and a Cost Explorer for spend by network with free-charging what-ifs, subscription savings, and custom-rate comparisons.
-- **Battery & trip analytics** — SOC timeline, charge curves with reference overlay, estimated degradation (based on reported capacity and mileage), HV pack telemetry, trip-by-trip efficiency and regen.
-- **Home Assistant ingestion** — real-time WebSocket capture, auto-detected charging sessions and history backfill
-- **CSV import and manual entry** — for data outside Home Assistant (work in progress, not recommended currently)
+- **Charging** -- sessions, costs, and networks.
+- **Battery** -- state of charge, charge curves, and pack telemetry.
+- **Trips** -- trip history, efficiency, and regen.
 
-Full feature list and screenshots are on the [documentation site](https://docs.lightningrod.dev/).
+The full feature list is on the [documentation site](https://docs.lightningrod.dev/).
+
+## Data Sources
+
+Pick whichever fits your setup. You can use more than one.
+
+- **[Home Assistant](https://docs.lightningrod.dev/guide/home-assistant/)** -- Reads live data from [ha-fordpass](https://github.com/marq24/ha-fordpass) and detects charging sessions automatically. Best if you already run Home Assistant.
+- **[FordConnect](https://docs.lightningrod.dev/guide/fordconnect/)** -- Reads straight from Ford's API, no Home Assistant needed. Requires a Ford developer account, which can take a few days to be approved. Only North America has been tested.
+- **[CSV import](https://docs.lightningrod.dev/guide/csv-import/)** -- Upload charging sessions from a spreadsheet. Work in progress.
+- **[Manual entry](https://docs.lightningrod.dev/guide/sessions/)** -- Add or edit a session by hand from the Charging Sessions page.
 
 ## What's Next
 
-The short version: more ways to get data in, like EVSE-direct (Ford Charge Station Pro, OCPP), different import formats (XLSX, network app exports), long term stretch goal is to support data ingestion through OBD readers not relying upon the API.
-
-## Documentation
-
-Full documentation is available at the [documentation site](https://docs.lightningrod.dev/).
-
-- [Installation](https://docs.lightningrod.dev/getting-started/installation/) -- Docker Compose setup and startup
-- [Configuration](https://docs.lightningrod.dev/getting-started/configuration/) -- Environment variables and in-app settings
-- [Data Import](https://docs.lightningrod.dev/getting-started/data-import/) -- CSV format, seed script, classification rules
-- [Home Assistant](https://docs.lightningrod.dev/guide/home-assistant/) -- Real-time FordPass data ingestion via WebSocket
-- [Development](https://docs.lightningrod.dev/development/setup/) -- Running outside of the Docker environment with reloading and database access
-- [Architecture](https://docs.lightningrod.dev/development/architecture/) -- Project structure and patterns
-- [Database](https://docs.lightningrod.dev/development/database/) -- Schema, models, migrations
-
-## Acknowledgments
-
-- [ha-fordpass](https://github.com/marq24/ha-fordpass) by marq24 -- Home Assistant integration for Ford vehicles
-- [fordpass-ha](https://github.com/itchannel/fordpass-ha) by itchannel -- Home Assistant integration that started this journey
-- [TeslaMate](https://github.com/teslamate-org/teslamate) -- Inspiration for the project concept
-
-
-## Gallery
-
-Instead of screenshots, an interactive demo site is available at [lightningrod.dev/demo](https://lightningrod.dev/demo) 
+More ways to get data in: EVSE-direct (Ford Charge Station Pro, OCPP) and more import formats (XLSX, network app exports). Long term, OBD readers, so the API isn't required.
 
 ## Quick Start
 
@@ -78,7 +60,7 @@ cp .env.example .env   # set POSTGRES_PASSWORD
 docker compose up -d
 ```
 
-The app is at `http://localhost:8000`.
+The app runs at `http://localhost:8000`.
 
 ### Standalone Docker (SQLite)
 
@@ -93,8 +75,18 @@ docker run -d \
   ghcr.io/squidbytes/lightningrod-web:latest
 ```
 
-Full install options like Unraid, external databases, etc can be found in the [Installation guide](https://docs.lightningrod.dev/getting-started/installation/).
+Full installation options like Unraid and external databases are in the [Installation guide](https://docs.lightningrod.dev/getting-started/installation/).
+
+## Documentation
+
+Everything else is on the [documentation site](https://docs.lightningrod.dev/). Environment variables and in-app settings are covered in [Configuration](https://docs.lightningrod.dev/getting-started/configuration/).
+
+## Acknowledgments
+
+- [ha-fordpass](https://github.com/marq24/ha-fordpass) by marq24 -- Home Assistant integration for Ford vehicles
+- [fordpass-ha](https://github.com/itchannel/fordpass-ha) by itchannel -- Home Assistant integration that started this journey
+- [TeslaMate](https://github.com/teslamate-org/teslamate) -- Inspiration for the project concept
 
 ## License
 
-[AGPL-3.0](LICENSE)
+[AGPL-3.0](LICENSE). Not affiliated with Ford Motor Company.
