@@ -189,7 +189,8 @@ async def test_status_and_gps_events_replay_into_sqlite_scratch(db_session, tmp_
     assert status.tire_pressure["front_left"] == 240
 
 
-async def test_failures_are_counted_per_slug_without_the_device_id(caplog):
+@pytest.mark.db
+async def test_failures_are_counted_per_slug_without_the_device_id(db_session, caplog):
     async def _raise(event: ArchivedEvent, ha_config: dict, db) -> None:
         raise ValueError(f"bad state on {event.entity_id}")
 
@@ -198,7 +199,7 @@ async def test_failures_are_counted_per_slug_without_the_device_id(caplog):
         for suffix in ("odometer", "odometer", "gps")
     ]
     with caplog.at_level(logging.ERROR, logger="lightningrod.repair.replay_core"):
-        stats = await replay_events(events, db=None, dispatch=_raise)
+        stats = await replay_events(events, db_session, dispatch=_raise)
 
     assert stats.errors == 3
     assert stats.failures == [

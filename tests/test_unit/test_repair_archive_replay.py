@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 
 from db.models.raw_event import HARawEvent
 from db.models.trip_metrics import EVTripMetrics
@@ -21,7 +21,9 @@ from tests.factories.raw_events import (
 )
 from tests.factories.trips import TripFactory
 from tests.factories.vehicles import VehicleFactory
+from web.queries.settings import get_app_settings_dict, set_app_setting
 from web.services.repair.ops.archive_replay import ArchiveReplay
+from web.services.repair.replay_core import ArchivedEvent, replay_events
 from web.services.repair.snapshot import serialize_row
 
 pytestmark = pytest.mark.unit
@@ -415,6 +417,28 @@ async def test_replay_does_not_recover_a_drive_already_stored(op, db_session):
 
     assert await _trip_count(db_session) == 1
     assert op.last_details["trips_recovered"] == 0
+
+
+@pytest.mark.db
+async def test_a_failing_state_does_not_poison_the_states_after_it(db_session):
+    """A bad statement aborts the transaction; each event's savepoint contains it."""
+
+    async def _dispatch(event: ArchivedEvent, ha_config: dict, session) -> None:
+        if event.entity_id.endswith("_gps"):
+            await session.execute(text("INSERT INTO no_such_table VALUES (1)"))
+        else:
+            await set_app_setting(session, f"replayed:{event.entity_id}", "yes")
+
+    ha_config = {"unit_system": METRIC_UNIT_SYSTEM}
+    events = [
+        ArchivedEvent(STATE_TS, f"sensor.fordpass_{VIN}_{suffix}", {}, ha_config)
+        for suffix in ("odometer", "gps", "elveh")
+    ]
+    stats = await replay_events(events, db_session, dispatch=_dispatch)
+
+    assert (stats.replayed, stats.errors) == (2, 1)
+    keys = [f"replayed:sensor.fordpass_{VIN}_{s}" for s in ("odometer", "gps", "elveh")]
+    assert list((await get_app_settings_dict(db_session, keys)).values()) == ["yes", "", "yes"]
 
 
 @pytest.mark.db
