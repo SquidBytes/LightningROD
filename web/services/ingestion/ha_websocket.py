@@ -366,28 +366,17 @@ class HAWebSocketRuntime:
                     config_id=self.config_id,
                 ):
                     branch = "fordpass"
+                await db.commit()
             except Exception as e:
                 raised = True
                 await db.rollback()
                 logger.error(
-                    "ha_fordpass dispatch error for %s: %s",
+                    "ha_fordpass dispatch or commit error for %s (branch=%s): %s",
                     entity_id,
+                    branch,
                     e,
                     exc_info=True,
                 )
-            else:
-                try:
-                    await db.commit()
-                except Exception as e:
-                    raised = True
-                    await db.rollback()
-                    logger.error(
-                        "Commit failed for %s (branch=%s): %s",
-                        entity_id,
-                        branch,
-                        e,
-                        exc_info=True,
-                    )
 
         self._log_event(entity_id, new_state, branch, raised)
 
