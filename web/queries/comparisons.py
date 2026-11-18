@@ -91,10 +91,10 @@ async def query_gas_comparison(
     if ice_vehicle is None or not ice_vehicle.fuel_efficiency_l_per_100km:
         return _empty_gas_result()
 
-    ice_l_per_100km = float(ice_vehicle.fuel_efficiency_l_per_100km)
+    ice_l_per_100km = ice_vehicle.fuel_efficiency_l_per_100km
     ice_mpg = 235.215 / ice_l_per_100km if ice_l_per_100km > 0 else None
-    battery_kwh = float(vehicle.battery_capacity_kwh) if vehicle and vehicle.battery_capacity_kwh else None
-    fuel_tank_liters = float(ice_vehicle.tank_capacity_l) if ice_vehicle.tank_capacity_l else None
+    battery_kwh = vehicle.battery_capacity_kwh if vehicle and vehicle.battery_capacity_kwh else None
+    fuel_tank_liters = ice_vehicle.tank_capacity_l or None
     fuel_tank_gal = fuel_tank_liters * GAL_PER_LITER if fuel_tank_liters else None
 
     price_result = await db.execute(
@@ -136,19 +136,19 @@ async def query_gas_comparison(
             continue
 
         gallons = None
-        distance_km = float(s.distance_added) if s.distance_added else 0.0
+        distance_km = s.distance_added or 0.0
         distance_mi = distance_km * MI_PER_KM
 
         if distance_mi > 0 and ice_mpg:
             gallons = distance_mi / ice_mpg
         elif (
             s.energy_kwh
-            and float(s.energy_kwh) > 0
+            and s.energy_kwh > 0
             and battery_kwh
             and fuel_tank_gal
         ):
             # Fallback: charged fraction of the pack scaled to tank capacity.
-            pct = float(s.energy_kwh) / battery_kwh
+            pct = s.energy_kwh / battery_kwh
             gallons = pct * fuel_tank_gal
 
         if gallons is None:
@@ -252,13 +252,12 @@ async def _monthly_distance_from_odometer(
     prev = None
     for recorded_at, odometer in rows:
         assert odometer is not None  # filtered in SQL
-        odo = float(odometer)
         if prev is not None:
-            delta = odo - prev
+            delta = odometer - prev
             if delta > 0:
                 key = (recorded_at.year, recorded_at.month)
                 monthly[key] = monthly.get(key, 0.0) + delta
-        prev = odo
+        prev = odometer
     return monthly
 
 
@@ -282,7 +281,7 @@ async def _monthly_distance_from_trips(
     for end_time, distance in rows:
         assert end_time is not None and distance is not None  # filtered in SQL
         key = (end_time.year, end_time.month)
-        monthly[key] = monthly.get(key, 0.0) + float(distance)
+        monthly[key] = monthly.get(key, 0.0) + distance
     return monthly
 
 
@@ -332,7 +331,7 @@ async def query_distance_gas_comparison(
     if ice_vehicle is None or not ice_vehicle.fuel_efficiency_l_per_100km:
         return _empty_distance_result()
 
-    ice_l_per_100km = float(ice_vehicle.fuel_efficiency_l_per_100km)
+    ice_l_per_100km = ice_vehicle.fuel_efficiency_l_per_100km
     if ice_l_per_100km <= 0:
         return _empty_distance_result()
     ice_mpg = 235.215 / ice_l_per_100km

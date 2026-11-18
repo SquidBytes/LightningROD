@@ -83,8 +83,8 @@ async def query_driving_performance_summary(
 
     result = await db.execute(stmt)
     row = result.one()
-    total_distance = float(row[0]) if row[0] is not None else None
-    total_energy = float(row[1]) if row[1] is not None else None
+    total_distance = row[0]
+    total_energy = row[1]
     trip_count_trips = int(row[2]) if row[2] is not None else 0
 
     # 3. Derive avg driving efficiency (None-safe)
@@ -153,9 +153,9 @@ async def query_temperature_correlation(
     rows = (await db.execute(stmt)).all()
     return [
         {
-            "ambient_temp": float(r.ambient_temp),
-            "distance": float(r.distance),
-            "energy_consumed": float(r.energy_consumed),
+            "ambient_temp": r.ambient_temp,
+            "distance": r.distance,
+            "energy_consumed": r.energy_consumed,
             "start_time": r.start_time,
         }
         for r in rows
@@ -330,9 +330,9 @@ async def query_regen_per_trip(
     rows = (await db.execute(stmt)).all()
     results: list[dict] = []
     for i, row in enumerate(rows, start=1):
-        distance = float(row.distance)
-        energy = float(row.energy_consumed)
-        regen_range = float(row.range_regenerated)
+        distance = row.distance
+        energy = row.energy_consumed
+        regen_range = row.range_regenerated
         if distance <= 0 or energy <= 0:
             continue
         efficiency = distance / energy  # km/kWh

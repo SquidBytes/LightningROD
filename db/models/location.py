@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Index, Numeric, String, Text
+from sqlalchemy import Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import TIMESTAMPTZ, Base, IngestMetaMixin
@@ -21,10 +21,10 @@ class EVLocation(IngestMetaMixin, Base):
     recorded_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False)
 
     # GPS data
-    latitude: Mapped[float | None] = mapped_column(Numeric)
-    longitude: Mapped[float | None] = mapped_column(Numeric)
-    gps_accuracy: Mapped[float | None] = mapped_column(Numeric)
-    altitude: Mapped[float | None] = mapped_column(Numeric)
+    latitude: Mapped[float | None] = mapped_column()
+    longitude: Mapped[float | None] = mapped_column()
+    gps_accuracy: Mapped[float | None] = mapped_column()
+    altitude: Mapped[float | None] = mapped_column()
     compass_direction: Mapped[str | None] = mapped_column(String)
 
     # Location metadata

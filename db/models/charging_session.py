@@ -2,13 +2,13 @@
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
     ForeignKey,
     Index,
     Integer,
-    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -45,9 +45,9 @@ class EVChargingSession(IngestMetaMixin, IngestVersionMixin, Base):
     station_status: Mapped[str | None] = mapped_column(String)
 
     # Power metrics
-    charging_voltage: Mapped[float | None] = mapped_column(Numeric)
-    charging_amperage: Mapped[float | None] = mapped_column(Numeric)
-    charging_kw: Mapped[float | None] = mapped_column(Numeric)
+    charging_voltage: Mapped[float | None] = mapped_column()
+    charging_amperage: Mapped[float | None] = mapped_column()
+    charging_kw: Mapped[float | None] = mapped_column()
 
     # Timestamps (all TIMESTAMPTZ)
     session_start_utc: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
@@ -56,19 +56,19 @@ class EVChargingSession(IngestMetaMixin, IngestVersionMixin, Base):
     recorded_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
 
     # Duration columns
-    charge_duration_seconds: Mapped[float | None] = mapped_column(Numeric)
-    plugged_in_duration_seconds: Mapped[float | None] = mapped_column(Numeric)
+    charge_duration_seconds: Mapped[float | None] = mapped_column()
+    plugged_in_duration_seconds: Mapped[float | None] = mapped_column()
 
     # SOC and energy
-    start_soc: Mapped[float | None] = mapped_column(Numeric)
-    end_soc: Mapped[float | None] = mapped_column(Numeric)
-    energy_kwh: Mapped[float | None] = mapped_column(Numeric)
+    start_soc: Mapped[float | None] = mapped_column()
+    end_soc: Mapped[float | None] = mapped_column()
+    energy_kwh: Mapped[float | None] = mapped_column()
 
     # Cost
-    cost: Mapped[float | None] = mapped_column(Numeric)
-    cost_without_overrides: Mapped[float | None] = mapped_column(Numeric)
+    cost: Mapped[Decimal | None] = mapped_column()
+    cost_without_overrides: Mapped[Decimal | None] = mapped_column()
     cost_source: Mapped[str | None] = mapped_column(String(20))  # 'imported', 'manual', 'calculated', None
-    estimated_cost: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    estimated_cost: Mapped[Decimal | None] = mapped_column(nullable=True)
 
     # Session flags
     is_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -78,19 +78,19 @@ class EVChargingSession(IngestMetaMixin, IngestVersionMixin, Base):
 
     # HASS-sourced location data
     address: Mapped[str | None] = mapped_column(Text)
-    latitude: Mapped[float | None] = mapped_column(Numeric)
-    longitude: Mapped[float | None] = mapped_column(Numeric)
-    max_power: Mapped[float | None] = mapped_column(Numeric)
-    min_power: Mapped[float | None] = mapped_column(Numeric)
-    distance_added: Mapped[float | None] = mapped_column(Numeric)  # km
+    latitude: Mapped[float | None] = mapped_column()
+    longitude: Mapped[float | None] = mapped_column()
+    max_power: Mapped[float | None] = mapped_column()
+    min_power: Mapped[float | None] = mapped_column()
+    distance_added: Mapped[float | None] = mapped_column()  # km
 
     # EVSE data (charger-side measurements)
-    evse_voltage: Mapped[float | None] = mapped_column(Numeric)
-    evse_amperage: Mapped[float | None] = mapped_column(Numeric)
-    evse_kw: Mapped[float | None] = mapped_column(Numeric)
-    evse_energy_kwh: Mapped[float | None] = mapped_column(Numeric)
-    evse_max_power_kw: Mapped[float | None] = mapped_column(Numeric)
-    charger_rated_kw: Mapped[float | None] = mapped_column(Numeric)
+    evse_voltage: Mapped[float | None] = mapped_column()
+    evse_amperage: Mapped[float | None] = mapped_column()
+    evse_kw: Mapped[float | None] = mapped_column()
+    evse_energy_kwh: Mapped[float | None] = mapped_column()
+    evse_max_power_kw: Mapped[float | None] = mapped_column()
+    charger_rated_kw: Mapped[float | None] = mapped_column()
     evse_source: Mapped[str | None] = mapped_column(String(20))  # 'smart_evse', 'energy_monitor', 'manual', 'estimated', 'stall_default'
     stall_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ev_charger_stalls.id", ondelete="SET NULL"), nullable=True
@@ -108,10 +108,10 @@ class EVChargingSession(IngestMetaMixin, IngestVersionMixin, Base):
     # Charging-session thermal context
     # °C, NULL when the HA payload does not carry a temp reading. Start/end
     # mirror the same value today because HA exposes single-value snapshots.
-    battery_temp_start: Mapped[float | None] = mapped_column(Numeric, nullable=True)
-    battery_temp_end: Mapped[float | None] = mapped_column(Numeric, nullable=True)
-    ambient_temp_start: Mapped[float | None] = mapped_column(Numeric, nullable=True)
-    ambient_temp_end: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    battery_temp_start: Mapped[float | None] = mapped_column(nullable=True)
+    battery_temp_end: Mapped[float | None] = mapped_column(nullable=True)
+    ambient_temp_start: Mapped[float | None] = mapped_column(nullable=True)
+    ambient_temp_end: Mapped[float | None] = mapped_column(nullable=True)
 
     __table_args__ = (
         UniqueConstraint("session_id", name="uq_ev_charging_session_session_id"),

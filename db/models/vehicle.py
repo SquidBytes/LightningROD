@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import TIMESTAMPTZ, Base
@@ -27,11 +27,11 @@ class EVVehicle(Base):
     battery_option: Mapped[str | None] = mapped_column(String)
     # Usable pack capacity (kWh) — what energy_kwh can be meaningfully divided
     # by. This is the "driver-facing" number (e.g. 98 kWh on a Lightning SR).
-    battery_capacity_kwh: Mapped[float | None] = mapped_column(Numeric)
+    battery_capacity_kwh: Mapped[float | None] = mapped_column()
     # Gross pack capacity (kWh) — total installed cells. This is what FordPass
     # reports via `maximumBatteryCapacity` and what battery-health/degradation
     # math must compare against (e.g. 108 kWh on a Lightning SR).
-    battery_gross_capacity_kwh: Mapped[float | None] = mapped_column(Numeric)
+    battery_gross_capacity_kwh: Mapped[float | None] = mapped_column()
     vin: Mapped[str | None] = mapped_column(String, unique=True)
     # Free-form cross-source identifier, not necessarily a VIN. The
     # ha_fordpass adapter writes device_id == VIN because FordPass entity_ids

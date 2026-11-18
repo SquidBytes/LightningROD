@@ -131,7 +131,7 @@ async def query_sessions(
     summary_row = summary_result.one()
     summary = {
         "count": summary_row.count or 0,
-        "total_kwh": float(summary_row.total_kwh) if summary_row.total_kwh else 0.0,
+        "total_kwh": summary_row.total_kwh or 0.0,
     }
 
     # Data query. fetch_all (export) returns every matching row; otherwise

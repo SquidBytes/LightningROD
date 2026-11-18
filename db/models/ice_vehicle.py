@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Numeric, String, func, text
+from sqlalchemy import Boolean, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import TIMESTAMPTZ, Base
@@ -21,8 +21,8 @@ class IceVehicle(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     label: Mapped[str] = mapped_column(String, nullable=False)
-    fuel_efficiency_l_per_100km: Mapped[float] = mapped_column(Numeric, nullable=False)
-    tank_capacity_l: Mapped[float | None] = mapped_column(Numeric)
+    fuel_efficiency_l_per_100km: Mapped[float] = mapped_column(nullable=False)
+    tank_capacity_l: Mapped[float | None] = mapped_column()
     is_default: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )

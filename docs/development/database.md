@@ -22,7 +22,6 @@ LightningROD uses PostgreSQL 16 with SQLAlchemy 2.0 in async mode. The schema co
 | `ev_location_lookup` | Known locations with network FK and optional cost override |
 | `ev_charger_stalls` | Charger configurations per location (type, rated kW, connector) |
 | `app_settings` | Key-value store for user preferences and toggles |
-| `ev_statistics` | Aggregate statistics summary (single row, recomputed) |
 
 ### Key Relationships
 

@@ -41,7 +41,7 @@ async def query_dashboard_summary(db: AsyncSession, device_id: str | None = None
     agg_result = await db.execute(agg_stmt)
     agg_row = agg_result.one()
     total_sessions = agg_row.total_sessions
-    total_kwh = float(agg_row.total_kwh)
+    total_kwh = agg_row.total_kwh
 
     # For cost calculation, load only the columns compute_session_cost needs
     networks_by_name = await get_networks_by_name(db)
@@ -130,8 +130,8 @@ async def query_charging_efficiency(db: AsyncSession, device_id: str | None = No
     loss_pct_sum = 0.0
 
     for s in loss_sessions:
-        evse_e = float(s.evse_energy_kwh or 0)
-        veh_e = float(s.energy_kwh or 0)
+        evse_e = s.evse_energy_kwh or 0.0
+        veh_e = s.energy_kwh or 0.0
         loss = evse_e - veh_e
         total_loss_kwh += loss
         loss_pct_sum += (loss / evse_e) * 100
@@ -161,9 +161,7 @@ async def query_charging_efficiency(db: AsyncSession, device_id: str | None = No
     util_pct_sum = 0.0
     util_count = 0
     for s in util_sessions:
-        max_pwr = float(s.evse_max_power_kw) if s.evse_max_power_kw is not None else (
-            float(s.max_power) if s.max_power is not None else None
-        )
+        max_pwr = s.evse_max_power_kw if s.evse_max_power_kw is not None else s.max_power
         if max_pwr is not None:
             util_pct_sum += (max_pwr / float(s.charger_rated_kw or 1)) * 100
             util_count += 1
@@ -287,7 +285,7 @@ def build_monthly_energy_by_network_chart(
             continue
         network = id_to_name.get(s.network_id, "Unknown") if s.network_id else "Unknown"
         month = s.session_start_utc.strftime("%Y-%m")
-        data_points.append({"month": month, "network": network, "kwh": float(s.energy_kwh)})
+        data_points.append({"month": month, "network": network, "kwh": s.energy_kwh})
 
     if not data_points:
         return ""

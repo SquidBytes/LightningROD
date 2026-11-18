@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import GasPriceHistory, GasPriceReading
+from web.money import to_money
 
 
 async def get_all_gas_prices(db: AsyncSession) -> list[GasPriceHistory]:
@@ -45,9 +46,9 @@ async def upsert_gas_price(
 
     if existing:
         if station_price is not None:
-            existing.station_price = station_price
+            existing.station_price = to_money(station_price)
         if average_price is not None:
-            existing.average_price = average_price
+            existing.average_price = to_money(average_price)
         existing.source = source
         await db.flush()
         await db.refresh(existing)

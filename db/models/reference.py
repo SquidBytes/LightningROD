@@ -1,13 +1,13 @@
 """Reference models for charging networks, subscriptions, and locations."""
 
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
     Date,
     ForeignKey,
     Integer,
-    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -26,7 +26,7 @@ class EVChargingNetwork(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     network_name: Mapped[str] = mapped_column(String, nullable=False)
-    cost_per_kwh: Mapped[float | None] = mapped_column(Numeric)
+    cost_per_kwh: Mapped[Decimal | None] = mapped_column()
     effective_date: Mapped[date | None] = mapped_column(Date)
     notes: Mapped[str | None] = mapped_column(Text)
     is_free: Mapped[bool | None] = mapped_column(Boolean, default=False)
@@ -50,8 +50,8 @@ class EVNetworkSubscription(Base):
     network_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("ev_charging_networks.id", ondelete="CASCADE"), nullable=False
     )
-    member_rate: Mapped[float] = mapped_column(Numeric, nullable=False)  # $/kWh with subscription
-    monthly_fee: Mapped[float] = mapped_column(Numeric, nullable=False, server_default=text("0"))
+    member_rate: Mapped[Decimal] = mapped_column(nullable=False)  # $/kWh with subscription
+    monthly_fee: Mapped[Decimal] = mapped_column(nullable=False, server_default=text("0"))
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # null = still active
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -65,14 +65,14 @@ class EVLocationLookup(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     location_name: Mapped[str] = mapped_column(String, nullable=False)
     address: Mapped[str | None] = mapped_column(String, nullable=True)
-    latitude: Mapped[float | None] = mapped_column(Numeric)
-    longitude: Mapped[float | None] = mapped_column(Numeric)
+    latitude: Mapped[float | None] = mapped_column()
+    longitude: Mapped[float | None] = mapped_column()
     location_type: Mapped[str | None] = mapped_column(String)
     notes: Mapped[str | None] = mapped_column(Text)
     network_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ev_charging_networks.id", ondelete="SET NULL"), nullable=True
     )
-    cost_per_kwh: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    cost_per_kwh: Mapped[Decimal | None] = mapped_column(nullable=True)
     is_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )
@@ -92,8 +92,8 @@ class EVLocationGPSAlias(Base):
     location_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("ev_location_lookup.id", ondelete="CASCADE"), nullable=False
     )
-    latitude: Mapped[float] = mapped_column(Numeric, nullable=False)
-    longitude: Mapped[float] = mapped_column(Numeric, nullable=False)
+    latitude: Mapped[float] = mapped_column(nullable=False)
+    longitude: Mapped[float] = mapped_column(nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False)  # 'merge', 'manual', 'auto_confirm'
     created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, server_default=func.now())
 
@@ -133,36 +133,12 @@ class EVChargerStall(Base):
     )
     stall_label: Mapped[str] = mapped_column(String, nullable=False)
     charger_type: Mapped[str | None] = mapped_column(String(10))  # 'L1', 'L2', 'DCFC'
-    rated_kw: Mapped[float | None] = mapped_column(Numeric)
-    voltage: Mapped[float | None] = mapped_column(Numeric)
-    amperage: Mapped[float | None] = mapped_column(Numeric)
+    rated_kw: Mapped[float | None] = mapped_column()
+    voltage: Mapped[float | None] = mapped_column()
+    amperage: Mapped[float | None] = mapped_column()
     connector_type: Mapped[str | None] = mapped_column(String(20))  # 'CCS', 'CHAdeMO', 'J1772', 'NACS', 'Tesla'
     notes: Mapped[str | None] = mapped_column(Text)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-
-class EVStatistics(Base):
-    """Aggregate statistics summary (11 columns).
-
-    Source: 003_create_reference_tables.sql, ev_statistics table.
-    Single row, recomputed after pipeline runs.
-    """
-
-    __tablename__ = "ev_statistics"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    computed_at: Mapped[datetime | None] = mapped_column(
-        TIMESTAMPTZ, server_default=func.now()
-    )
-    total_sessions: Mapped[int | None] = mapped_column(Integer)
-    total_energy_kwh: Mapped[float | None] = mapped_column(Numeric)
-    total_cost: Mapped[float | None] = mapped_column(Numeric)
-    total_distance_added: Mapped[float | None] = mapped_column(Numeric)  # km
-    avg_session_duration_seconds: Mapped[float | None] = mapped_column(Numeric)
-    avg_energy_per_session_kwh: Mapped[float | None] = mapped_column(Numeric)
-    avg_cost_per_kwh: Mapped[float | None] = mapped_column(Numeric)
-    avg_efficiency: Mapped[float | None] = mapped_column(Numeric)  # km/kWh
-    notes: Mapped[str | None] = mapped_column(Text)
 
 
 class GasPriceHistory(Base):
@@ -177,8 +153,8 @@ class GasPriceHistory(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-12
-    station_price: Mapped[float | None] = mapped_column(Numeric)
-    average_price: Mapped[float | None] = mapped_column(Numeric)
+    station_price: Mapped[Decimal | None] = mapped_column()
+    average_price: Mapped[Decimal | None] = mapped_column()
     source: Mapped[str | None] = mapped_column(String(20))  # 'manual' or 'ha_sensor'
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=func.now()
@@ -200,7 +176,7 @@ class GasPriceReading(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     entity_id: Mapped[str] = mapped_column(String, nullable=False)
-    price: Mapped[float] = mapped_column(Numeric, nullable=False)
+    price: Mapped[Decimal] = mapped_column(nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False)
 
 

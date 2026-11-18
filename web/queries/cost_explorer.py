@@ -251,7 +251,7 @@ async def query_cost_explorer(
         if (cost_info.get("is_free") or (network and getattr(network, "is_free", False))) and s.network_id:
             free_eligible_ids.add(s.network_id)
 
-        energy_kwh = float(s.energy_kwh or 0.0)
+        energy_kwh = s.energy_kwh or 0.0
         paid = float(cost_info["display_cost"])
         hypothetical_at_ref = energy_kwh * reference_rate
 
@@ -274,7 +274,7 @@ async def query_cost_explorer(
 
         # distance_added is stored in km; the route converts to display units.
         if s.distance_added is not None and s.distance_added > 0:
-            total_distance += float(s.distance_added)
+            total_distance += s.distance_added
 
         # On a free session, estimated_cost is the "would-have-cost" — the
         # dollars saved by charging free.

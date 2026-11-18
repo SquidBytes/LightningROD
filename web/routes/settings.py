@@ -18,6 +18,7 @@ from db.models.data_source_config import DataSourceConfig
 from db.models.reference import EVChargerStall, EVChargingNetwork, EVLocationLookup
 from web import developer_mode as dev_mode_module
 from web.dependencies import DbSession
+from web.money import cost_of
 from web.queries.gas_prices import (
     delete_gas_price,
     get_all_gas_prices,
@@ -786,7 +787,7 @@ async def recalculate_network_costs(
         return HTMLResponse("Network not found", status_code=404)
 
     locations = await get_locations_for_network(db, network_id)
-    location_cost_map = {loc.id: float(loc.cost_per_kwh) for loc in locations if loc.cost_per_kwh is not None}
+    location_cost_map = {loc.id: loc.cost_per_kwh for loc in locations if loc.cost_per_kwh is not None}
 
     sessions_result = await db.execute(
         select(EVChargingSession).where(EVChargingSession.network_id == network_id)
@@ -797,15 +798,14 @@ async def recalculate_network_costs(
     for s in sessions:
         if not s.energy_kwh:
             continue
-        energy = float(s.energy_kwh)
 
         if s.location_id and s.location_id in location_cost_map:
             # Location cost override
-            s.estimated_cost = location_cost_map[s.location_id] * energy
+            s.estimated_cost = cost_of(location_cost_map[s.location_id], s.energy_kwh)
             updated += 1
         elif network.cost_per_kwh:
             # Network cost (only for sessions WITHOUT location cost override)
-            s.estimated_cost = float(network.cost_per_kwh) * energy
+            s.estimated_cost = cost_of(network.cost_per_kwh, s.energy_kwh)
             updated += 1
 
     return HTMLResponse(f'<span class="text-success text-sm">{updated} sessions recalculated</span>')
