@@ -18,10 +18,10 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         try:
             yield session
+            await session.commit()
         except BaseException:
             await session.rollback()
             raise
-        await session.commit()
 
 
 # scope="function" ends the transaction before the response is sent, so a

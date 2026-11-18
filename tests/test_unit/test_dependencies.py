@@ -55,3 +55,16 @@ async def test_get_db_rolls_back_on_exception(session):
     with pytest.raises(RuntimeError):
         await gen.athrow(RuntimeError("route failed"))
     assert session.calls == ["rollback", "close"]
+
+
+async def test_get_db_rolls_back_when_commit_fails(session):
+    async def failing_commit():
+        session.calls.append("commit")
+        raise RuntimeError("commit failed")
+
+    session.commit = failing_commit
+    gen = dependencies.get_db()
+    await gen.__anext__()
+    with pytest.raises(RuntimeError):
+        await gen.__anext__()
+    assert session.calls == ["commit", "rollback", "close"]

@@ -36,6 +36,6 @@ def _forget(session: Session) -> None:
 def _undo(session: Session, previous: SessionTransaction) -> None:
     hooks = session.info.get(_KEY, [])
     session.info[_KEY] = [(tx, fn) for tx, fn in hooks if not _under(tx, previous)]
-    for tx, fn in hooks:
+    for tx, fn in reversed(hooks):  # unwind newest first
         if _under(tx, previous):
             fn()

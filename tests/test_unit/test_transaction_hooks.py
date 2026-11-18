@@ -54,3 +54,25 @@ async def test_hook_is_dropped_after_commit(db_session):
     await db_session.rollback()
 
     assert calls == []
+
+
+async def test_hooks_unwind_newest_first(db_session):
+    value = [None]
+    await db_session.execute(text("SELECT 1"))
+    on_rollback(db_session, lambda: value.__setitem__(0, None))
+    on_rollback(db_session, lambda: value.__setitem__(0, "first"))
+
+    await db_session.rollback()
+
+    assert value[0] is None
+
+
+async def test_rollback_session_runs_hooks_on_exit(db_session):
+    from web.services.repair.base import rollback_session
+
+    calls: list[str] = []
+    async with rollback_session(engine=db_session.bind.engine) as session:
+        await session.execute(text("SELECT 1"))
+        on_rollback(session, lambda: calls.append("undo"))
+
+    assert calls == ["undo"]
