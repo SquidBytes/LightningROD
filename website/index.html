@@ -3,225 +3,330 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark light">
-  <meta name="theme-color" content="#081534">
-  <title>LightningROD — self-hosted charging &amp; vehicle analytics</title>
-  <meta name="description" content="Self-hosted charging and vehicle analytics. Turns vehicle data from Home Assistant into charging, battery, and trip insights.">
+  <title>LightningROD · Self-hosted charging and vehicle analytics</title>
+  <meta name="description" content="Self-hosted charging and vehicle analytics. LightningROD collects your vehicle data automatically, so you don't need to keep spreadsheets. Developed for the Ford F-150 Lightning and other Ford EVs.">
+  <meta name="theme-color" content="#0F1215" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#F6F7F9" media="(prefers-color-scheme: light)">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="LightningROD — self-hosted charging and vehicle analytics">
-  <meta property="og:description" content="Self-hosted charging and vehicle analytics. Local-first, Docker-ready, and open source.">
+  <meta property="og:title" content="LightningROD · Self-hosted charging and vehicle analytics">
+  <meta property="og:description" content="Collects your vehicle data automatically, so you don't need to keep spreadsheets. Developed for the Ford F-150 Lightning and other Ford EVs.">
   <meta property="og:url" content="https://lightningrod.dev/">
   <meta property="og:image" content="https://lightningrod.dev/og-image.png">
-  <meta property="og:image:alt" content="LightningROD — self-hosted charging and vehicle analytics.">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="LightningROD — self-hosted charging and vehicle analytics">
-  <meta name="twitter:description" content="Self-hosted charging and vehicle analytics. Local-first, Docker-ready, and open source.">
-  <meta name="twitter:image" content="https://lightningrod.dev/og-image.png">
   <link rel="canonical" href="https://lightningrod.dev/">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23081534'/%3E%3Cpath fill='%2347A8E5' d='M36 6 17 35h13l-3 23 20-32H34z'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='9' fill='%230F1215'/%3E%3Cpath fill='%2347A8E5' d='M23 6 11.5 23.5h8L17.5 35 29 16h-7.5z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
+    /* Tokens: see DESIGN.md */
     :root {
       color-scheme: dark;
-      --night: #081534;
-      --panel: #0c2049;
-      --panel-2: #102b60;
-      --text: #f4f8fd;
-      --muted: #c6c6c6;
-      --faint: rgba(198, 198, 198, .68);
-      --line: rgba(71, 168, 229, .2);
-      --line-strong: rgba(71, 168, 229, .48);
-      --accent: #47a8e5;
-      --accent-deep: #2a6bac;
-      --button-text: #081534;
-      --shadow: rgba(0, 0, 0, .28);
-      --max: 1180px;
-      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    }
+      --bg: #0F1215;
+      --surface: #171B20;
+      --surface-2: #1F242A;
+      --border: #2A3038;
+      --border-strong: #3A424C;
+      --text: #E6EAEE;
+      --text-muted: #97A2AD;
+      --primary: #47A8E5;
+      --primary-hover: #6BBBEC;
+      --on-primary: #0F1215;
+      --primary-soft: rgba(71, 168, 229, .14);
+      --code-cmd: #47A8E5;
+      --code-flag: #E2A541;
+      --code-str: #7FCF9F;
+      --code-var: #C6A8F0;
 
+      --font-display: "Barlow Semi Condensed", system-ui, sans-serif;
+      --font-body: "Barlow", system-ui, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+      --radius-sm: 4px;
+      --radius: 8px;
+      --max: 1040px;
+    }
     @media (prefers-color-scheme: light) {
       :root {
         color-scheme: light;
-        --night: #f4f8fc;
-        --panel: #ffffff;
-        --panel-2: #e7f1fa;
-        --text: #081534;
-        --muted: #274870;
-        --faint: rgba(19, 58, 124, .72);
-        --line: rgba(19, 58, 124, .16);
-        --line-strong: rgba(42, 107, 172, .48);
-        --accent: #17679f;
-        --accent-deep: #133a7c;
-        --button-text: #ffffff;
-        --shadow: rgba(8, 21, 52, .1);
+        --bg: #F6F7F9;
+        --surface: #FFFFFF;
+        --surface-2: #EEF1F4;
+        --border: #DCE1E6;
+        --border-strong: #C3CAD2;
+        --text: #13181D;
+        --text-muted: #535E6A;
+        --primary: #1C6AAB;
+        --primary-hover: #17598F;
+        --on-primary: #FFFFFF;
+        --primary-soft: rgba(28, 106, 171, .1);
+        --code-cmd: #1C6AAB;
+        --code-flag: #8F5E00;
+        --code-str: #1D7A4C;
+        --code-var: #6B3FB0;
       }
     }
 
     *, *::before, *::after { box-sizing: border-box; }
-    html { min-width: 320px; scroll-behavior: smooth; }
-    body { margin: 0; min-height: 100vh; overflow-x: hidden; background: var(--night); color: var(--text); font-family: var(--sans); line-height: 1.5; }
-    a { color: inherit; }
-    svg { display: block; }
-    .shell { width: min(100% - 2rem, var(--max)); margin-inline: auto; }
-    .skip { position: fixed; z-index: 20; top: .75rem; left: .75rem; padding: .7rem 1rem; border-radius: .4rem; background: var(--accent); color: var(--button-text); font-weight: 750; transform: translateY(-180%); }
-    .skip:focus { transform: none; }
-    :focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 400 1rem/1.6 var(--font-body); }
+    a { color: var(--primary); text-underline-offset: 3px; }
+    a:hover { color: var(--primary-hover); }
+    ::selection { background: var(--primary-soft); }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 2px; }
+    h1, h2 { font-family: var(--font-display); margin: 0; }
+    p { margin: 0; }
+    code { font-family: var(--font-mono); font-size: .9em; }
+    .wrap { width: min(100% - 48px, var(--max)); margin-inline: auto; }
 
-    body::before {
-      content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .48;
-      background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
-      background-size: 64px 64px;
-      mask-image: linear-gradient(to bottom, #000, transparent 72%);
+    /* Nav */
+    .nav { border-top: 3px solid var(--primary); border-bottom: 1px solid var(--border); }
+    .nav .wrap { height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font: 700 1.25rem/1 var(--font-display); }
+    .brand:hover { color: var(--text); }
+    .brand .rod { color: var(--primary); }
+    .brand svg { width: 20px; height: 20px; color: var(--primary); }
+    .nav-links { display: flex; gap: 24px; font-weight: 500; }
+    .nav-links a { color: var(--text-muted); text-decoration: none; }
+    .nav-links a:hover { color: var(--text); }
+
+    /* Hero */
+    .hero { padding-block: 88px 80px; display: grid; grid-template-columns: 1fr 520px; gap: 48px; align-items: start; }
+    .nowrap { white-space: nowrap; }
+    .hero h1 { font-size: clamp(2.5rem, 5.6vw, 3.5rem); line-height: 1.05; letter-spacing: -.01em; max-width: 13ch; }
+    .subtitle { margin-top: 18px; font: 600 clamp(1.25rem, 2.4vw, 1.625rem)/1.25 var(--font-display); color: var(--text); max-width: 30ch; }
+    .lead { margin-top: 14px; font-size: 1.125rem; color: var(--text-muted); max-width: 46ch; }
+    .lead strong { color: var(--text); font-weight: 500; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: var(--radius); border: 1px solid transparent; font: 600 1rem/1 var(--font-body); text-decoration: none; }
+    .btn svg { width: 18px; height: 18px; }
+    .btn-primary { background: var(--primary); color: var(--on-primary); }
+    .btn-primary:hover { background: var(--primary-hover); color: var(--on-primary); }
+    .btn-secondary { color: var(--text); border-color: var(--border-strong); }
+    .btn-secondary:hover { color: var(--text); background: var(--surface-2); }
+    .note { margin-top: 14px; font-size: .875rem; color: var(--text-muted); }
+
+    /* Quick start panel */
+    .start { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .start-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 12px 0 4px; border-bottom: 1px solid var(--border); }
+    .tabs { display: flex; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+    .tab { position: relative; flex: none; padding: 13px 12px 12px; background: none; border: 0; color: var(--text-muted); font: 600 .875rem/1.2 var(--font-body); cursor: pointer; }
+    .tab small { font-weight: 400; font-size: .8125rem; margin-left: 2px; opacity: .85; }
+    .tab:hover { color: var(--text); }
+    .tab[aria-selected="true"] { color: var(--primary); }
+    .tab[aria-selected="true"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--primary); border-radius: 2px 2px 0 0; }
+    .tab:focus-visible { outline-offset: -4px; }
+    .copy { flex: none; font: 500 .8125rem var(--font-body); color: var(--text-muted); background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 3px 10px; cursor: pointer; }
+    .copy:hover { color: var(--text); border-color: var(--border-strong); }
+    .copy.done { color: var(--primary); border-color: var(--primary); }
+    .start pre { margin: 0; padding: 16px; font: 400 .8125rem/1.8 var(--font-mono); overflow-x: auto; color: var(--text); }
+    .start pre .k { color: var(--code-cmd); font-weight: 500; }
+    .start pre .f { color: var(--code-flag); }
+    .start pre .s { color: var(--code-str); }
+    .start pre .v { color: var(--code-var); }
+    .start pre .o, .start pre .c { color: var(--text-muted); }
+    .start pre .c { font-style: italic; }
+    .start-foot { padding: 12px 16px; border-top: 1px solid var(--border); font-size: .875rem; color: var(--text-muted); }
+    .start-foot code { color: var(--text); font-size: .8125rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+    /* Sections */
+    section.block { border-top: 1px solid var(--border); padding-block: 64px; }
+    .block .wrap { display: grid; grid-template-columns: 240px 1fr; gap: 48px; }
+    .block h2 { font-size: 1.5rem; line-height: 1.2; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+    .block h2 svg { flex: none; width: 14px; height: 14px; color: var(--primary); transform: translateY(1px); }
+    .prose { max-width: 62ch; color: var(--text-muted); }
+    .prose p + p { margin-top: 16px; }
+    .prose strong { color: var(--text); font-weight: 500; }
+
+    .features { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; }
+    .features li { padding: 16px 0; border-bottom: 1px solid var(--border); }
+    .features li:nth-last-child(-n+2) { border-bottom: 0; }
+    .features li > a, .sources li > a { display: block; color: var(--primary); font-weight: 600; text-decoration: none; }
+    .features li > a:hover, .sources li > a:hover { color: var(--primary-hover); text-decoration: underline; }
+    .muted-sm { color: var(--text-muted); font-weight: 400; margin-left: 6px; }
+    .wip { font-style: normal; font-size: .8125rem; font-weight: 500; color: var(--text-muted); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1px 6px; white-space: nowrap; }
+    .next { margin-top: 24px; max-width: 62ch; padding: 16px 20px; border: 1px dashed color-mix(in srgb, var(--primary) 55%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--primary-soft) 40%, transparent); color: var(--text-muted); }
+    .next p { font-size: .9375rem; }
+    .next b { display: block; color: var(--text); font-weight: 600; margin-bottom: 4px; }
+    .next p + p { margin-top: 8px; }
+    .features span { color: var(--text-muted); font-size: .9375rem; }
+
+    .sources { list-style: none; margin: 24px 0 0; padding: 0; max-width: 62ch; }
+    .sources li { display: grid; grid-template-columns: 160px 1fr; gap: 16px; padding: 12px 0; border-top: 1px solid var(--border); }
+        .sources span { color: var(--text-muted); }
+
+    /* Footer */
+    footer { border-top: 1px solid var(--border); padding-block: 32px 48px; font-size: .875rem; color: var(--text-muted); }
+    footer .wrap { display: flex; justify-content: space-between; gap: 16px 32px; flex-wrap: wrap; }
+    .foot-links { display: flex; gap: 20px; flex-wrap: wrap; }
+    footer a { color: var(--text-muted); text-decoration: none; }
+    footer a:hover { color: var(--text); text-decoration: underline; }
+
+    @media (max-width: 1060px) {
+      .hero { grid-template-columns: 1fr; gap: 48px; padding-block: 64px; }
+      .start { max-width: 560px; }
     }
-
-    header, main, footer { position: relative; }
-    header { padding-block: 1.35rem; border-bottom: 1px solid var(--line); }
-    nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-    .brand { display: inline-flex; align-items: center; gap: .68rem; color: var(--text); text-decoration: none; font-size: 1.05rem; font-weight: 760; letter-spacing: -.025em; }
-    .brand svg { width: 2rem; height: 2rem; }
-    .brand b { color: var(--accent); }
-    .nav-meta { display: flex; align-items: center; gap: .6rem; color: var(--faint); font: 600 .7rem/1 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
-    .status-dot { width: .45rem; height: .45rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent); }
-
-    main { padding-block: clamp(3.6rem, 8vw, 7.5rem) 3rem; }
-    .hero { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(260px, .58fr); align-items: end; gap: clamp(2rem, 7vw, 7.5rem); }
-    .eyebrow { display: flex; align-items: center; gap: .75rem; margin: 0 0 1.35rem; color: var(--accent); font: 650 .73rem/1.2 var(--mono); letter-spacing: .11em; text-transform: uppercase; }
-    .eyebrow::before { content: ""; width: 2.3rem; height: 1px; background: currentColor; }
-    h1 { max-width: 780px; margin: 0; font-size: clamp(2.65rem, 7.3vw, 6.35rem); line-height: .94; letter-spacing: -.067em; font-weight: 760; text-wrap: balance; }
-    h1 span { color: var(--accent); }
-    .lede { max-width: 680px; margin: 1.7rem 0 0; color: var(--muted); font-size: clamp(1rem, 1.8vw, 1.25rem); line-height: 1.65; }
-    .lede strong { color: var(--text); font-weight: 650; }
-
-    .telemetry { position: relative; min-height: 190px; padding: 1.25rem; border: 1px solid var(--line); border-radius: .8rem; background: linear-gradient(145deg, color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--panel-2) 72%, transparent)); box-shadow: 0 24px 70px var(--shadow); }
-    .telemetry::before, .telemetry::after { content: ""; position: absolute; width: 1.15rem; height: 1.15rem; border-color: var(--accent); opacity: .75; }
-    .telemetry::before { top: -.35rem; left: -.35rem; border-top: 2px solid; border-left: 2px solid; }
-    .telemetry::after { right: -.35rem; bottom: -.35rem; border-right: 2px solid; border-bottom: 2px solid; }
-    .telemetry-head { display: flex; justify-content: space-between; color: var(--faint); font: 600 .65rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
-    .trace { width: 100%; height: 78px; margin-block: 1rem .7rem; color: var(--accent); overflow: visible; }
-    .trace path { vector-effect: non-scaling-stroke; }
-    .telemetry-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
-    .telemetry-foot strong { font: 720 1.5rem/1 var(--mono); }
-    .telemetry-foot span { color: var(--faint); font: 500 .66rem/1 var(--mono); text-transform: uppercase; }
-
-    .routes { margin-top: clamp(3.5rem, 8vw, 6rem); }
-    .section-label { margin: 0 0 1rem; color: var(--faint); font: 600 .68rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-    .route-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: .85rem; }
-    .route { position: relative; min-height: 190px; padding: 1.35rem; display: flex; flex-direction: column; justify-content: space-between; gap: 2rem; overflow: hidden; border: 1px solid var(--line); border-radius: .75rem; background: var(--panel); text-decoration: none; box-shadow: 0 14px 36px transparent; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
-    .route:hover { transform: translateY(-4px); border-color: var(--line-strong); box-shadow: 0 18px 44px var(--shadow); }
-    .route.primary { border-color: var(--accent); background: linear-gradient(135deg, #2a6bac, #102b60); }
-    .route.primary::after { content: ""; position: absolute; width: 12rem; height: 12rem; right: -5rem; top: -7rem; border: 1px solid rgba(255,255,255,.17); border-radius: 50%; box-shadow: 0 0 0 2.5rem rgba(255,255,255,.035), 0 0 0 5rem rgba(255,255,255,.025); }
-    .route-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-    .route-tag { color: var(--faint); font: 600 .67rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
-    .primary .route-tag { color: #d7ebf9; }
-    .route-icon { width: 2.5rem; height: 2.5rem; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--accent); }
-    .primary .route-icon { border-color: rgba(255,255,255,.32); color: #fff; }
-    .route-icon svg { width: 1.05rem; height: 1.05rem; }
-    .route h2 { margin: 0; font-size: clamp(1.25rem, 2.2vw, 1.65rem); letter-spacing: -.035em; }
-    .route p { margin: .35rem 0 0; color: var(--faint); font-size: .9rem; }
-    .primary h2, .primary p { color: #fff; }
-    .primary p { color: #d7ebf9; }
-
-    .capabilities { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 1rem; border-block: 1px solid var(--line); }
-    .capability { padding: 1.1rem 1rem; color: var(--muted); font: 560 .76rem/1.35 var(--mono); text-align: center; }
-    .capability + .capability { border-left: 1px solid var(--line); }
-    .capability::before { content: "+"; margin-right: .55rem; color: var(--accent); }
-
-    footer { margin-top: clamp(2.5rem, 6vw, 4.5rem); padding-block: 1.5rem 2rem; border-top: 1px solid var(--line); color: var(--faint); font-size: .76rem; }
-    .footer-inner { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-    .footer-links { display: flex; gap: 1rem; }
-    footer a { text-underline-offset: 3px; }
-    footer a:hover { color: var(--accent); }
-
-    @media (max-width: 800px) {
-      main { padding-top: 3.5rem; }
-      .hero { grid-template-columns: 1fr; }
-      .telemetry { display: none; }
-      .route-grid { grid-template-columns: 1fr 1fr; }
-      .route.primary { grid-column: 1 / -1; }
-      .capabilities { grid-template-columns: 1fr 1fr; }
-      .capability:nth-child(3) { border-left: 0; }
-      .capability:nth-child(n+3) { border-top: 1px solid var(--line); }
+    @media (max-width: 880px) {
+      .hero { padding-block: 56px; }
+      .block .wrap { grid-template-columns: 1fr; gap: 20px; }
     }
-
-    @media (max-width: 520px) {
-      .shell { width: min(100% - 1.25rem, var(--max)); }
-      .nav-meta { font-size: 0; }
-      h1 { font-size: clamp(2.7rem, 15vw, 4.25rem); }
-      .lede { margin-top: 1.25rem; }
-      .routes { margin-top: 3rem; }
-      .route-grid { grid-template-columns: 1fr; }
-      .route.primary { grid-column: auto; }
-      .route { min-height: 165px; }
-      .capabilities { grid-template-columns: 1fr; }
-      .capability + .capability { border-left: 0; border-top: 1px solid var(--line); }
-      .footer-inner { align-items: flex-start; flex-direction: column; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      *, *::before, *::after { transition-duration: .01ms !important; }
+    @media (max-width: 560px) {
+      .wrap { width: min(100% - 32px, var(--max)); }
+      .nav-links { gap: 18px; }
+      .hero h1 { max-width: none; }
+      .actions .btn { flex: 1 1 100%; justify-content: center; }
+      .features { grid-template-columns: 1fr; }
+      .features li:nth-last-child(2) { border-bottom: 1px solid var(--border); }
+      .sources li { grid-template-columns: 1fr; gap: 2px; }
+      .tab { padding-inline: 10px; }
+      .tab .lg { display: none; }
+      .tab[aria-selected="true"]::after { left: 10px; right: 10px; }
+      section.block { padding-block: 48px; }
     }
   </style>
 </head>
 <body>
-  <a class="skip" href="#destinations">Skip to destinations</a>
-  <header>
-    <nav class="shell" aria-label="Primary navigation">
-      <a class="brand" href="/" aria-label="LightningROD home">
-        <svg viewBox="0 0 40 40" aria-hidden="true"><rect x=".75" y=".75" width="38.5" height="38.5" rx="10" fill="none" stroke="currentColor" stroke-opacity=".22"/><path d="M23 6 11.5 23.5h8L17.5 35 29 16h-7.5z" fill="currentColor"/></svg>
-        <span>Lightning<b>ROD</b></span>
+  <header class="nav">
+    <div class="wrap">
+      <a class="brand" href="https://lightningrod.dev/">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M23 6 11.5 23.5h8L17.5 35 29 16h-7.5z" fill="currentColor"/></svg>
+        <span>Lightning<span class="rod">ROD</span></span>
       </a>
-      <span class="nav-meta"><span class="status-dot" aria-hidden="true"></span>Local-first · AGPL-3.0</span>
-    </nav>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="https://lightningrod.dev/demo">Demo</a>
+        <a href="https://docs.lightningrod.dev/">Docs</a>
+        <a href="https://github.com/SquidBytes/LightningROD">GitHub</a>
+      </nav>
+    </div>
   </header>
 
   <main>
-    <section class="hero shell" aria-labelledby="hero-title">
+    <div class="wrap hero">
       <div>
-        <p class="eyebrow">Your EV · your analytics</p>
-        <h1 id="hero-title">Charging &amp; vehicle analytics for your <span>EV</span>.</h1>
-        <p class="lede"><strong>Self-hosted and local-first.</strong> LightningROD turns vehicle data from Home Assistant into charging, battery, and trip insights. Ford EVs are supported today, and the data layer is built to grow beyond them.</p>
+        <h1>Self-hosted charging and vehicle analytics.</h1>
+        <p class="subtitle">Developed for the Ford <span class="nowrap">F-150</span> Lightning and other Ford EVs.</p>
+        <p class="lead">LightningROD collects your vehicle data automatically, so you don't need to keep spreadsheets.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="https://lightningrod.dev/demo">Try the demo</a>
+          <a class="btn btn-secondary" href="https://docs.lightningrod.dev/">Read the docs</a>
+          <a class="btn btn-secondary" href="https://github.com/SquidBytes/LightningROD">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+            GitHub
+          </a>
+        </div>
+        <p class="note">The demo is read-only. The data is random, so values may not add up, and the service may need a moment to wake up.</p>
       </div>
-      <aside class="telemetry" aria-label="Illustrative charging telemetry">
-        <div class="telemetry-head"><span>Charge profile</span><span>Session 042</span></div>
-        <svg class="trace" viewBox="0 0 320 90" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M0 74H320M0 46H320M0 18H320" fill="none" stroke="currentColor" stroke-opacity=".11" stroke-width="1"/>
-          <path d="M0 70 22 69 32 62 46 64 59 39 71 52 88 51 99 26 112 29 126 18 140 22 153 20 168 38 183 31 198 43 213 41 225 55 242 52 256 63 271 60 285 70 304 67 320 73" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <div class="telemetry-foot"><strong>48.2 kWh</strong><span>Stored locally</span></div>
+
+      <aside class="start" aria-labelledby="qs-title">
+        <h2 id="qs-title" class="sr-only">Quick Start</h2>
+        <div class="start-head">
+          <div class="tabs" role="tablist" aria-label="Install method">
+            <button class="tab" role="tab" id="tab-compose" aria-controls="panel-compose" aria-selected="true" type="button"><span class="lg">Docker </span>Compose <small>Postgres</small></button>
+            <button class="tab" role="tab" id="tab-docker" aria-controls="panel-docker" aria-selected="false" tabindex="-1" type="button"><span class="lg">Standalone </span>Docker <small>SQLite</small></button>
+          </div>
+          <button class="copy" type="button" data-copy aria-label="Copy commands">Copy</button>
+        </div>
+        <div class="tab-panel" role="tabpanel" id="panel-compose" aria-labelledby="tab-compose">
+<pre><code><span class="k">git</span> clone <span class="s">https://github.com/SquidBytes/LightningROD.git</span>
+<span class="k">cd</span> LightningROD
+<span class="k">cp</span> .env.example .env   <span class="c"># set POSTGRES_PASSWORD</span>
+<span class="k">docker</span> compose up <span class="f">-d</span></code></pre>
+        </div>
+        <div class="tab-panel" role="tabpanel" id="panel-docker" aria-labelledby="tab-docker" hidden>
+<pre><code><span class="k">docker</span> run <span class="f">-d</span> <span class="o">\</span>
+  <span class="f">-p</span> 8000:8000 <span class="o">\</span>
+  <span class="f">-v</span> lightningrod-data:/data <span class="o">\</span>
+  <span class="f">-e</span> <span class="v">DATABASE_URL</span>=<span class="s">sqlite+aiosqlite:////data/lightningrod.db</span> <span class="o">\</span>
+  <span class="f">--name</span> lightningrod <span class="o">\</span>
+  <span class="s">ghcr.io/squidbytes/lightningrod-web:latest</span></code></pre>
+        </div>
+        <div class="start-foot">Runs at <code>http://localhost:8000</code>. Unraid, and external databases: <a href="https://docs.lightningrod.dev/getting-started/installation/">Installation guide</a></div>
       </aside>
+    </div>
+
+    <section class="block" aria-labelledby="features">
+      <div class="wrap">
+        <h2 id="features"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M23 6 11.5 23.5h8L17.5 35 29 16h-7.5z" fill="currentColor"/></svg>Features</h2>
+        <ul class="features">
+          <li><a href="https://docs.lightningrod.dev/guide/sessions/">Charging Sessions</a><span>Sort, filter, add, edit, and export sessions. Open one to see its cost and charge curve.</span></li>
+          <li><a href="https://docs.lightningrod.dev/guide/costs/">Cost Analytics</a><span>What you paid per network, subscription savings, and comparisons against gas or other networks.</span></li>
+          <li><a href="https://docs.lightningrod.dev/guide/performance/">Charging Performance</a><span>AC vs DC energy, charging efficiency over time, and an estimated DC charge curve.</span></li>
+          <li><a href="https://docs.lightningrod.dev/guide/battery/">Battery Analytics</a><span>State of charge, pack temperature, charge curves, and estimated degradation.</span></li>
+          <li><a href="https://docs.lightningrod.dev/guide/driving/">Driving</a><span>Trip list with drive graphs, plus efficiency vs temperature and regen.</span></li>
+          <li><a href="https://docs.lightningrod.dev/guide/review-queue/">Review Queue</a><span>Verify, edit, or merge the networks and locations LightningROD picks up.</span></li>
+        </ul>
+      </div>
     </section>
 
-    <section class="routes shell" id="destinations" aria-labelledby="destinations-title">
-      <h2 class="section-label" id="destinations-title">Choose a destination</h2>
-      <div class="route-grid">
-        <a class="route primary" href="/demo" target="_blank" rel="noopener">
-          <span class="route-top"><span class="route-tag">01 · Live instance</span><span class="route-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6M5 12h10"/><path d="M15 5h4v14h-4"/></svg></span></span>
-          <span><h2>Try the demo</h2><p>Explore a fully seeded instance — no install required.</p></span>
-        </a>
-        <a class="route" href="/docs/">
-          <span class="route-top"><span class="route-tag">02 · Documentation</span><span class="route-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11a1 1 0 0 1 1 1v17a3 3 0 0 0-3-3H4z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13a1 1 0 0 0-1 1v17a3 3 0 0 1 3-3h5z"/></svg></span></span>
-          <span><h2>Read the docs</h2><p>Setup guides, feature details, and self-hosting notes.</p></span>
-        </a>
-        <a class="route" href="https://github.com/SquidBytes/LightningROD" target="_blank" rel="noopener">
-          <span class="route-top"><span class="route-tag">03 · Source code</span><span class="route-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m8 9-3 3 3 3m8-6 3 3-3 3m-2-9-4 12"/></svg></span></span>
-          <span><h2>View the source</h2><p>AGPL-3.0 on GitHub — inspect it, fork it, run it.</p></span>
-        </a>
-      </div>
-      <div class="capabilities" aria-label="Key capabilities">
-        <div class="capability">Cost explorer</div>
-        <div class="capability">Battery health</div>
-        <div class="capability">Trip analytics</div>
-        <div class="capability">Charging sessions</div>
+    <section class="block" aria-labelledby="sources">
+      <div class="wrap">
+        <h2 id="sources"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M23 6 11.5 23.5h8L17.5 35 29 16h-7.5z" fill="currentColor"/></svg>Data Sources</h2>
+        <div>
+          <p class="prose">Pick whichever fits your setup. You can use more than one.</p>
+          <ul class="sources">
+            <li><a href="https://docs.lightningrod.dev/guide/home-assistant/">Home Assistant</a><span>Reads live data from <a href="https://github.com/marq24/ha-fordpass">ha-fordpass</a> and detects charging sessions automatically. Best if you already run Home Assistant.</span></li>
+            <li><a href="https://docs.lightningrod.dev/guide/fordconnect/">FordConnect</a><span>Reads straight from Ford's API, no Home Assistant needed. Requires a Ford developer account. Only North America has been tested.</span></li>
+            <li><a href="https://docs.lightningrod.dev/guide/csv-import/">CSV import</a><span>Upload charging sessions from a spreadsheet. <em class="wip">Work in progress</em></span></li>
+            <li><a href="https://docs.lightningrod.dev/guide/sessions/">Manual entry</a><span>Add or edit a session by hand from the Charging Sessions page.</span></li>
+          </ul>
+          <div class="next">
+            <b>What's next</b>
+            <p>EVSE-direct (Ford Charge Station Pro, OCPP) and more import formats (XLSX, network app exports). Long term, OBD readers, so the API isn't required.</p>
+            <p>Want support for another vehicle? <a href="https://github.com/SquidBytes/LightningROD/issues">Open an issue</a>.</p>
+          </div>
+        </div>
       </div>
     </section>
   </main>
 
   <footer>
-    <div class="shell footer-inner">
-      <span>Built for the Ford F-150 Lightning · AGPL-3.0</span>
-      <span class="footer-links"><a href="/docs/">Docs</a><a href="https://github.com/SquidBytes/LightningROD" target="_blank" rel="noopener">GitHub</a></span>
+    <div class="wrap">
+      <span>A personal project, built with AI help. Work in progress; keep your own backups.<br>AGPL-3.0. Not affiliated with Ford Motor Company.</span>
+      <nav class="foot-links" aria-label="Footer">
+        <a href="https://docs.lightningrod.dev/history/">Project History</a>
+        <a href="https://docs.lightningrod.dev/changelog/">Changelog</a>
+        <a href="https://docs.lightningrod.dev/ai-disclaimer/">AI Usage Disclaimer</a>
+        <a href="https://github.com/SquidBytes/LightningROD/issues">Issues</a>
+      </nav>
     </div>
   </footer>
+
+  <script>
+    (function () {
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+      function select(tab, focus) {
+        tabs.forEach(function (t) {
+          var on = t === tab;
+          t.setAttribute("aria-selected", on);
+          t.tabIndex = on ? 0 : -1;
+          document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+        });
+        if (focus) tab.focus();
+        try { localStorage.setItem("lr-install-tab", tab.id); } catch (e) {}
+      }
+      tabs.forEach(function (t, i) {
+        t.addEventListener("click", function () { select(t); });
+        t.addEventListener("keydown", function (e) {
+          var n = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+          if (n) { e.preventDefault(); select(tabs[(i + n + tabs.length) % tabs.length], true); }
+        });
+      });
+      try { var saved = document.getElementById(localStorage.getItem("lr-install-tab")); if (saved) select(saved); } catch (e) {}
+
+      var copy = document.querySelector("[data-copy]");
+      copy.addEventListener("click", function () {
+        var panel = document.querySelector('.tab-panel:not([hidden]) code');
+        var text = panel.textContent.trim();
+        try {
+          navigator.clipboard.writeText(text).then(function () {
+            copy.textContent = "Copied";
+            copy.classList.add("done");
+            setTimeout(function () { copy.textContent = "Copy"; copy.classList.remove("done"); }, 1500);
+          });
+        } catch (e) {}
+      });
+    })();
+  </script>
 </body>
 </html>
