@@ -2364,6 +2364,7 @@ async def data_repair_apply(
         )
     else:
         result = await op.apply(db)
+    await db.commit()  # the preview below runs on its own connection
     ctx = await _repair_card_ctx(op, db)
     ctx["result"] = result
     ctx["skipped_now"] = skipped_now

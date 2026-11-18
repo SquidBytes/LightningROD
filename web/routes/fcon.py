@@ -185,10 +185,11 @@ async def save_retention(
 async def disconnect(request: Request, db: DbSession):
     row = await find_row(db, SOURCE_NAME)
     if row is not None:
-        await supervisor.stop_runtime(row.id)
         updates: dict[str, Any] = {k: None for k in TOKEN_FIELDS}
         updates["needs_consent"] = False
         await merge_into_row(db, SOURCE_NAME, updates, row=row)
+        await db.commit()  # tokens must be gone before the poller is
+        await supervisor.stop_runtime(row.id)
     return await _card(request, db, message="Disconnected. History is kept.")
 
 
