@@ -29,6 +29,9 @@ fi
 # --- Content checks: PII scan + reference hygiene ---
 "$PYTHON" scripts/checker.py
 
+# --- Link preview PNG must match its SVG source ---
+"$PYTHON" scripts/render_og_image.py --check
+
 # --- ruff lint on staged Python ---
 mapfile -t staged_py < <(git diff --cached --name-only --diff-filter=ACMR -- '*.py')
 if [ "${#staged_py[@]}" -eq 0 ]; then

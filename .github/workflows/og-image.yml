@@ -1,0 +1,22 @@
+name: Link preview image
+
+# The landing page is served as committed files with no build step, so the
+# PNG has to be rendered and committed alongside its SVG source.
+on:
+  push:
+    branches: [main, dev]
+    paths: ["website/og-image.*", "scripts/render_og_image.py"]
+  pull_request:
+    branches: [main, dev]
+    paths: ["website/og-image.*", "scripts/render_og_image.py"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: PNG matches SVG
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 scripts/render_og_image.py --check
