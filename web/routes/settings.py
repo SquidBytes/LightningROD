@@ -2002,6 +2002,8 @@ async def save_hass_gas_sensors(
         db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or ""
     )
     from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
+    # Commit before clearing the cache so the next reader sees the new rows.
+    await db.commit()
     invalidate_gas_sensor_cache()
     ctx = await _hass_gas_sensors_context(db, check_live=True, gas_saved=True)
     return templates.TemplateResponse(
@@ -2022,6 +2024,8 @@ async def save_gas_sensors(
     await set_app_setting(db, "gas_sensor_station_entity_id", gas_sensor_station_entity_id or "")
     await set_app_setting(db, "gas_sensor_average_entity_id", gas_sensor_average_entity_id or "")
     from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
+    # Commit before clearing the cache so the next reader sees the new rows.
+    await db.commit()
     invalidate_gas_sensor_cache()
     ctx = await _gas_price_history_context(db)
     ctx["saved"] = True
@@ -2184,6 +2188,8 @@ async def update_developer_mode(
 ):
     enabled = developer_mode is not None
     await set_app_setting(db, "developer_mode", "true" if enabled else "false")
+    # Commit first so the in-process flag never gets ahead of the database.
+    await db.commit()
     dev_mode_module.set_enabled(enabled)
     settings = await get_app_settings_dict(db, SETTINGS_KEYS)
     response = templates.TemplateResponse(
