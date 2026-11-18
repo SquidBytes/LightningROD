@@ -36,7 +36,6 @@ tests/
 │   ├── sessions.py              # ChargingSessionFactory
 │   ├── battery.py               # BatteryStatusFactory
 │   ├── trips.py                 # TripFactory
-│   ├── energy.py                # StatisticsFactory
 │   ├── locations.py             # LocationLookupFactory, LocationFactory
 │   └── networks.py              # NetworkFactory, SubscriptionFactory
 ├── test_api/                    # API integration tests (httpx + FastAPI)
@@ -162,7 +161,6 @@ async def test_something(db_session):
 | `ChargingSessionFactory` | `EVChargingSession` | Random 5-80 kWh, AC/DC type             |
 | `BatteryStatusFactory`   | `EVBatteryStatus`  | SOC 10-100%, kW 0-150                    |
 | `TripFactory`            | `EVTripMetrics`    | 5-100 mi, computed efficiency            |
-| `StatisticsFactory`      | `EVStatistics`     | Energy totals, costs, efficiency         |
 | `LocationLookupFactory`  | `LocationLookup`   | Named station with lat/lon              |
 | `LocationFactory`        | `EVLocation`       | GPS snapshot with device_id              |
 | `NetworkFactory`         | `ChargingNetwork`  | Network with cost_per_kwh 0.20-0.55      |

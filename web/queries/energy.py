@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import Float, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.dialect import date_trunc_compat
@@ -216,7 +216,7 @@ async def charging_speed_series(
                 "month", EVChargingSession.session_start_utc, dialect=db.get_bind().dialect
             ).label("m"),
             func.coalesce(func.sum(EVChargingSession.energy_kwh), 0.0).label("kwh"),
-            func.coalesce(func.sum(duration_hours, type_=Float()), 0.0).label("hours"),
+            func.coalesce(func.sum(duration_hours), 0.0).label("hours"),
         )
         .where(EVChargingSession.energy_kwh.isnot(None))
         .where(EVChargingSession.energy_kwh > 0)
@@ -342,7 +342,7 @@ async def query_regen_summary(
     regen_total, trip_count = row
 
     return {
-        "regen_total": regen_total if regen_total is not None else 0.0,
+        "regen_total": regen_total or 0.0,
         "trip_count": int(trip_count),
     }
 

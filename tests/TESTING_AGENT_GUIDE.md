@@ -205,7 +205,6 @@ def test_my_function():
 | `ChargingSessionFactory` | auto ID                 | 5-80 kWh, random AC/DC         |
 | `BatteryStatusFactory`   | auto ID                 | SOC 10-100%, kW 0-150          |
 | `TripFactory`            | auto ID                 | 5-100 mi, computed efficiency   |
-| `StatisticsFactory`      | auto ID                 | Random energy/cost totals       |
 | `LocationLookupFactory`  | auto ID                 | Named station, lat/lon          |
 | `LocationFactory`        | auto ID                 | GPS snapshot                    |
 | `NetworkFactory`         | auto ID                 | cost_per_kwh 0.20-0.55         |

@@ -252,13 +252,12 @@ async def _monthly_distance_from_odometer(
     prev = None
     for recorded_at, odometer in rows:
         assert odometer is not None  # filtered in SQL
-        odo = odometer
         if prev is not None:
-            delta = odo - prev
+            delta = odometer - prev
             if delta > 0:
                 key = (recorded_at.year, recorded_at.month)
                 monthly[key] = monthly.get(key, 0.0) + delta
-        prev = odo
+        prev = odometer
     return monthly
 
 

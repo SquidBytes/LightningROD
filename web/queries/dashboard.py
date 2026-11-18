@@ -161,9 +161,7 @@ async def query_charging_efficiency(db: AsyncSession, device_id: str | None = No
     util_pct_sum = 0.0
     util_count = 0
     for s in util_sessions:
-        max_pwr = s.evse_max_power_kw if s.evse_max_power_kw is not None else (
-            s.max_power
-        )
+        max_pwr = s.evse_max_power_kw if s.evse_max_power_kw is not None else s.max_power
         if max_pwr is not None:
             util_pct_sum += (max_pwr / float(s.charger_rated_kw or 1)) * 100
             util_count += 1
