@@ -540,3 +540,15 @@ def test_unparseable_cost_is_dropped(text):
     from web.services.csv_parser import _money_or_none
 
     assert _money_or_none(text) is None
+
+
+def test_transform_rows_duration_seconds_is_a_number():
+    """A duration column that is not duration_minutes is parsed to a number, not left as text."""
+    from web.services.csv_parser import transform_rows
+
+    raw_rows = [{"start_time": "2026-01-15T10:30:00+00:00", "duration_s": "45"}]
+    mapping = {"start_time": "session_start_utc", "duration_s": "charge_duration_seconds"}
+    result = transform_rows(raw_rows, mapping)
+
+    assert result[0]["charge_duration_seconds"] == 45.0
+    assert isinstance(result[0]["charge_duration_seconds"], float)

@@ -562,10 +562,9 @@ def _float_or_none(v: str) -> float | None:
 def _money_or_none(v: str) -> Decimal | None:
     """Return Decimal or None if empty/invalid; never parsed through float."""
     try:
-        money = to_money(v or "")
+        return to_money(v or "")
     except InvalidOperation:
         return None
-    return money if money is not None and money.is_finite() else None
 
 
 def _parse_bool(v: str) -> bool:
@@ -692,7 +691,8 @@ _DB_FIELD_PARSERS: dict[str, object] = {
     "device_id": _str_or_none,
     "source_system": _str_or_none,
     "session_id": _parse_uuid,
-    # charge_duration_seconds is handled specially (may come as minutes)
+    # A duration_minutes header is converted to seconds before this parser is reached.
+    "charge_duration_seconds": _float_or_none,
     # Location metadata
     "location_id": _int_or_none,
     "address": _str_or_none,
