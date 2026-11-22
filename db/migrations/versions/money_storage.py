@@ -60,7 +60,7 @@ TABLES = sorted({*CENTS, *RATES, *MEASUREMENTS})
 
 
 # Inner round absorbs float noise so 3.675 stored as 3.67499999... still rounds up.
-_TO_CENTS = "ROUND(ROUND({c} * 100, 6))"
+_TO_CENTS = "ROUND(ROUND({c} * 100, 8))"
 _KINDS = (("cents", CENTS), ("rate", RATES), ("measurement", MEASUREMENTS))
 _SA_TYPES: dict[str, sa.types.TypeEngine] = {
     "cents": sa.BigInteger(),
