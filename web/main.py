@@ -62,7 +62,9 @@ def _configure_logging() -> None:
                     "formatter": "app",
                 }
             },
-            "root": {"level": level, "handlers": ["stderr"]},
+            # Libraries stay at WARNING: at DEBUG the SQLite driver logs statement parameters.
+            "root": {"level": "WARNING", "handlers": ["stderr"]},
+            "loggers": {"lightningrod": {"level": level}},
         }
     )
     if level != settings.log_level.upper():
