@@ -61,6 +61,14 @@ TABLES = sorted({*CENTS, *RATES, *MEASUREMENTS})
 
 # Inner round absorbs float noise so 3.675 stored as 3.67499999... still rounds up.
 _TO_CENTS = "ROUND(ROUND({c} * 100, 8))"
+# NaN and infinity came in through CSV import; they cannot be cents and poison every sum.
+_PG_NOT_FINITE = "{c}::text IN ('NaN', 'Infinity', '-Infinity')"
+_SQLITE_NOT_FINITE = "ABS({c}) > 1e300"  # SQLite already stores NaN as NULL
+REQUIRED = {
+    ("ev_network_subscriptions", "monthly_fee"), ("ev_network_subscriptions", "member_rate"),
+    ("gas_price_readings", "price"), ("ev_location_gps_aliases", "latitude"),
+    ("ev_location_gps_aliases", "longitude"), ("ice_vehicles", "fuel_efficiency_l_per_100km"),
+}
 _KINDS = (("cents", CENTS), ("rate", RATES), ("measurement", MEASUREMENTS))
 _SA_TYPES: dict[str, sa.types.TypeEngine] = {
     "cents": sa.BigInteger(),
@@ -68,9 +76,9 @@ _SA_TYPES: dict[str, sa.types.TypeEngine] = {
     "measurement": sa.Double(),
 }
 _PG_UPGRADE = {
-    "cents": f"BIGINT USING {_TO_CENTS}",
-    "rate": "NUMERIC(12, 4)",
-    "measurement": "DOUBLE PRECISION",
+    "cents": f"BIGINT USING {{finite}} {_TO_CENTS} END",
+    "rate": "NUMERIC(12, 4) USING {finite} {c} END",
+    "measurement": "DOUBLE PRECISION USING {finite} {c} END",
 }
 _PG_DOWNGRADE = {"cents": "NUMERIC USING {c} / 100.0", "rate": "NUMERIC", "measurement": "NUMERIC"}
 
@@ -84,10 +92,17 @@ def _is_postgresql() -> bool:
     return op.get_context().dialect.name == "postgresql"
 
 
+def _finite(table: str, column: str, test: str) -> str:
+    """Open CASE: a non-finite value becomes NULL, or 0 in a required column."""
+    blank = "0" if (table, column) in REQUIRED else "NULL"
+    return f"CASE WHEN {test.format(c=column)} THEN {blank} ELSE"
+
+
 def _pg_retype(table: str, type_sql: dict[str, str]) -> None:
     """One ALTER TABLE per table, so PostgreSQL rewrites it once."""
     clauses = [
-        f"ALTER COLUMN {column} TYPE {type_sql[kind].format(c=column)}"
+        f"ALTER COLUMN {column} TYPE "
+        + type_sql[kind].format(c=column, finite=_finite(table, column, _PG_NOT_FINITE))
         for column, kind in _columns(table)
     ]
     op.execute(f"ALTER TABLE {table} {', '.join(clauses)}")
@@ -112,6 +127,11 @@ def upgrade() -> None:
         if _is_postgresql():
             _pg_retype(table, _PG_UPGRADE)
             continue
+        sets = [
+            f"{column} = {_finite(table, column, _SQLITE_NOT_FINITE)} {column} END"
+            for column, _ in _columns(table)
+        ]
+        op.execute(f"UPDATE {table} SET {', '.join(sets)}")
         for column in CENTS.get(table, []):
             op.execute(f"UPDATE {table} SET {column} = {_TO_CENTS.format(c=column)}")
         for column in RATES.get(table, []):

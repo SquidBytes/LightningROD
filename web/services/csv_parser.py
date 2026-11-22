@@ -7,6 +7,7 @@ auto-detecting column-to-database-field mappings, and preparing data for import.
 import csv
 import hashlib
 import io
+import math
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -549,14 +550,15 @@ def _str_or_none(v: str) -> str | None:
 
 
 def _float_or_none(v: str) -> float | None:
-    """Return float or None if empty/invalid."""
+    """Return float or None if empty, invalid, NaN or infinite."""
     v = v.strip() if v else ""
     if not v:
         return None
     try:
-        return float(v)
+        number = float(v)
     except (ValueError, TypeError):
         return None
+    return number if math.isfinite(number) else None
 
 
 def _money_or_none(v: str) -> Decimal | None:
