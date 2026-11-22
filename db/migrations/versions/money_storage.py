@@ -59,37 +59,71 @@ MEASUREMENTS = {
 TABLES = sorted({*CENTS, *RATES, *MEASUREMENTS})
 
 
-def _retype(table: str, new_types: dict[str, sa.types.TypeEngine], *, to_numeric: bool) -> None:
-    """Change column types through batch mode, which SQLite needs to alter a type."""
+# Inner round absorbs float noise so 3.675 stored as 3.67499999... still rounds up.
+_TO_CENTS = "ROUND(ROUND({c} * 100, 6))"
+_KINDS = (("cents", CENTS), ("rate", RATES), ("measurement", MEASUREMENTS))
+_SA_TYPES: dict[str, sa.types.TypeEngine] = {
+    "cents": sa.BigInteger(),
+    "rate": sa.Numeric(12, 4),
+    "measurement": sa.Double(),
+}
+_PG_UPGRADE = {
+    "cents": f"BIGINT USING {_TO_CENTS}",
+    "rate": "NUMERIC(12, 4)",
+    "measurement": "DOUBLE PRECISION",
+}
+_PG_DOWNGRADE = {"cents": "NUMERIC USING {c} / 100.0", "rate": "NUMERIC", "measurement": "NUMERIC"}
+
+
+def _columns(table: str) -> list[tuple[str, str]]:
+    return [(column, kind) for kind, tables in _KINDS for column in tables.get(table, [])]
+
+
+def _is_postgresql() -> bool:
+    # The context knows the dialect in --sql mode too, where there is no bind.
+    return op.get_context().dialect.name == "postgresql"
+
+
+def _pg_retype(table: str, type_sql: dict[str, str]) -> None:
+    """One ALTER TABLE per table, so PostgreSQL rewrites it once."""
+    clauses = [
+        f"ALTER COLUMN {column} TYPE {type_sql[kind].format(c=column)}"
+        for column, kind in _columns(table)
+    ]
+    op.execute(f"ALTER TABLE {table} {', '.join(clauses)}")
+
+
+def _batch_retype(table: str, *, to_numeric: bool) -> None:
+    """Batch mode copies the table once, which SQLite needs to alter a type."""
+    # SQLite commits the copy table's CREATE on its own, so a failed run leaves it behind.
+    op.execute(f"DROP TABLE IF EXISTS _alembic_tmp_{table}")
     with op.batch_alter_table(table) as batch_op:
-        for column, new_type in new_types.items():
+        for column, kind in _columns(table):
+            new, old = _SA_TYPES[kind], sa.Numeric()
             batch_op.alter_column(
                 column,
-                type_=sa.Numeric() if to_numeric else new_type,
-                existing_type=new_type if to_numeric else sa.Numeric(),
+                type_=old if to_numeric else new,
+                existing_type=new if to_numeric else old,
             )
-
-
-def _new_types(table: str) -> dict[str, sa.types.TypeEngine]:
-    return {
-        **{c: sa.BigInteger() for c in CENTS.get(table, [])},
-        **{c: sa.Numeric(12, 4) for c in RATES.get(table, [])},
-        **{c: sa.Double() for c in MEASUREMENTS.get(table, [])},
-    }
 
 
 def upgrade() -> None:
     for table in TABLES:
-        # Inner round absorbs float noise so 3.675 stored as 3.67499999... still rounds up.
+        if _is_postgresql():
+            _pg_retype(table, _PG_UPGRADE)
+            continue
         for column in CENTS.get(table, []):
-            op.execute(f"UPDATE {table} SET {column} = ROUND(ROUND({column} * 100, 6))")
+            op.execute(f"UPDATE {table} SET {column} = {_TO_CENTS.format(c=column)}")
         for column in RATES.get(table, []):
             op.execute(f"UPDATE {table} SET {column} = ROUND({column}, 4)")
-        _retype(table, _new_types(table), to_numeric=False)
+        _batch_retype(table, to_numeric=False)
 
 
 def downgrade() -> None:
     for table in TABLES:
-        _retype(table, _new_types(table), to_numeric=True)
+        if _is_postgresql():
+            _pg_retype(table, _PG_DOWNGRADE)
+            continue
+        _batch_retype(table, to_numeric=True)
         for column in CENTS.get(table, []):
             op.execute(f"UPDATE {table} SET {column} = {column} / 100.0")
