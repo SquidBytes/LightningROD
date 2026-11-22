@@ -4,6 +4,7 @@ Tests energy summary aggregation, charge type breakdown, and efficiency calculat
 """
 
 from datetime import UTC
+from decimal import Decimal
 
 import pytest
 
@@ -143,7 +144,7 @@ async def test_phase_25_by_charge_type_includes_cost(db_session):
                 device_id=device_id,
                 energy_kwh=20.0,
                 charge_type="AC",
-                cost=15.50,
+                cost=Decimal("15.50"),
                 session_start_utc=base,
                 is_complete=True,
                 source_system="test_fixture",
@@ -152,7 +153,7 @@ async def test_phase_25_by_charge_type_includes_cost(db_session):
                 device_id=device_id,
                 energy_kwh=40.0,
                 charge_type="DC",
-                cost=60.00,
+                cost=Decimal("60.00"),
                 session_start_utc=base,
                 is_complete=True,
                 source_system="test_fixture",
@@ -166,5 +167,5 @@ async def test_phase_25_by_charge_type_includes_cost(db_session):
 
     assert "AC" in by_type and "DC" in by_type
     assert "total_cost" in by_type["AC"]
-    assert by_type["AC"]["total_cost"] == pytest.approx(15.50, abs=0.01)
-    assert by_type["DC"]["total_cost"] == pytest.approx(60.00, abs=0.01)
+    assert by_type["AC"]["total_cost"] == Decimal("15.50")
+    assert by_type["DC"]["total_cost"] == Decimal("60.00")

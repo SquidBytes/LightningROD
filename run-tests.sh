@@ -54,7 +54,7 @@ case "$BACKEND" in
     sqlite)
         echo "Running SQLite dialect-compat suite..."
         if [ ${#PYTEST_ARGS[@]} -eq 0 ]; then
-            PYTEST_ARGS=("-x" "--tb=short" "tests/test_dialect_sqlite/")
+            PYTEST_ARGS=("-x" "--tb=short" "tests/test_dialect_sqlite/" "tests/test_queries/test_money_columns.py")
         fi
         # SQLite uses a tmpfile DB — skip docker-compose pre-flight entirely.
         exec "$PYTHON" -m pytest "${PYTEST_ARGS[@]}"

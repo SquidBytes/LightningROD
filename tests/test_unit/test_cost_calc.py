@@ -6,6 +6,7 @@ networks, and locations.
 """
 
 from datetime import UTC, date
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -47,7 +48,7 @@ def _mock_network(**kwargs):
     defaults = {
         "id": 1,
         "network_name": "Test Network",
-        "cost_per_kwh": 0.35,
+        "cost_per_kwh": Decimal("0.35"),
         "is_free": False,
     }
     defaults.update(kwargs)
@@ -68,8 +69,8 @@ def _mock_location(**kwargs):
 def _mock_subscription(**kwargs):
     """Create a mock subscription period."""
     defaults = {
-        "member_rate": 0.25,
-        "monthly_fee": 12.99,
+        "member_rate": Decimal("0.25"),
+        "monthly_fee": Decimal("12.99"),
         "start_date": date(2025, 1, 1),
         "end_date": date(2025, 12, 31),
     }
@@ -85,20 +86,20 @@ def _mock_subscription(**kwargs):
 def test_cost_per_kwh_calculation():
     """Given known rate and energy, verify expected cost."""
     session = _mock_session(energy_kwh=40.0)
-    network = _mock_network(cost_per_kwh=0.35)
+    network = _mock_network(cost_per_kwh=Decimal("0.35"))
 
     result = compute_session_cost(session, network=network)
 
     # 40.0 * 0.35 = 14.00
-    assert result["display_cost"] == pytest.approx(14.00, abs=0.001)
+    assert result["display_cost"] == Decimal("14.00")
     assert result["cost_source"] == "calculated"
-    assert result["cost_per_kwh"] == pytest.approx(0.35, abs=0.001)
+    assert result["cost_per_kwh"] == Decimal("0.35")
 
 
 def test_free_session_flag():
     """Session with is_free=True -> display_cost = 0.0."""
     session = _mock_session(is_free=True, energy_kwh=50.0)
-    network = _mock_network(cost_per_kwh=0.35)
+    network = _mock_network(cost_per_kwh=Decimal("0.35"))
 
     result = compute_session_cost(session, network=network)
 
@@ -109,7 +110,7 @@ def test_free_session_flag():
 def test_free_network_flag():
     """Network with is_free=True -> display_cost = 0.0."""
     session = _mock_session(energy_kwh=50.0)
-    network = _mock_network(is_free=True, cost_per_kwh=0.0)
+    network = _mock_network(is_free=True, cost_per_kwh=Decimal("0.0"))
 
     result = compute_session_cost(session, network=network)
 
@@ -119,8 +120,8 @@ def test_free_network_flag():
 
 def test_stored_cost_takes_priority():
     """Session with stored cost (manual/imported) overrides calculated cost."""
-    session = _mock_session(energy_kwh=50.0, cost=25.00, cost_source="imported")
-    network = _mock_network(cost_per_kwh=0.35)
+    session = _mock_session(energy_kwh=50.0, cost=Decimal("25.00"), cost_source="imported")
+    network = _mock_network(cost_per_kwh=Decimal("0.35"))
 
     result = compute_session_cost(session, network=network)
 
@@ -131,13 +132,13 @@ def test_stored_cost_takes_priority():
 def test_location_override_takes_precedence():
     """Location cost_per_kwh overrides network rate in cascade."""
     session = _mock_session(energy_kwh=30.0)
-    network = _mock_network(cost_per_kwh=0.45)
-    location = _mock_location(cost_per_kwh=0.30)
+    network = _mock_network(cost_per_kwh=Decimal("0.45"))
+    location = _mock_location(cost_per_kwh=Decimal("0.30"))
 
     result = compute_session_cost(session, network=network, location=location)
 
     # 30.0 * 0.30 = 9.00
-    assert result["display_cost"] == pytest.approx(9.00, abs=0.001)
+    assert result["display_cost"] == Decimal("9.00")
     assert "location" in result["calculation"]
 
 
@@ -149,15 +150,15 @@ def test_subscription_member_rate():
         energy_kwh=40.0,
         session_start_utc=datetime(2025, 6, 15, tzinfo=UTC),
     )
-    network = _mock_network(cost_per_kwh=0.45)
-    sub = _mock_subscription(member_rate=0.25)
+    network = _mock_network(cost_per_kwh=Decimal("0.45"))
+    sub = _mock_subscription(member_rate=Decimal("0.25"))
 
     result = compute_session_cost(
         session, network=network, subscription_periods=[sub]
     )
 
     # 40.0 * 0.25 = 10.00
-    assert result["display_cost"] == pytest.approx(10.00, abs=0.001)
+    assert result["display_cost"] == Decimal("10.00")
     assert result["subscription_active"] is True
     assert "member" in result["calculation"]
 
@@ -170,16 +171,16 @@ def test_subscription_savings_formula():
         energy_kwh=40.0,
         session_start_utc=datetime(2025, 6, 15, tzinfo=UTC),
     )
-    network = _mock_network(cost_per_kwh=0.45)
-    sub = _mock_subscription(member_rate=0.25)
+    network = _mock_network(cost_per_kwh=Decimal("0.45"))
+    sub = _mock_subscription(member_rate=Decimal("0.25"))
 
     result = compute_session_cost(
         session, network=network, subscription_periods=[sub]
     )
 
     # Non-member: 40 * 0.45 = 18.00, member: 40 * 0.25 = 10.00, savings: 8.00
-    assert result["non_member_cost"] == pytest.approx(18.00, abs=0.001)
-    assert result["savings"] == pytest.approx(8.00, abs=0.001)
+    assert result["non_member_cost"] == Decimal("18.00")
+    assert result["savings"] == Decimal("8.00")
 
 
 def test_no_cost_data():
@@ -232,7 +233,7 @@ def test_find_active_subscription_open_ended():
 def test_monthly_fees_single_month():
     """Period covering a single month -> one month fee."""
     sub = _mock_subscription(
-        monthly_fee=12.99,
+        monthly_fee=Decimal("12.99"),
         start_date=date(2025, 6, 1),
         end_date=date(2025, 6, 30),
     )
@@ -241,13 +242,13 @@ def test_monthly_fees_single_month():
         [sub], date(2025, 6, 1), date(2025, 6, 30)
     )
 
-    assert result == pytest.approx(12.99, abs=0.01)
+    assert result == Decimal("12.99")
 
 
 def test_monthly_fees_three_months():
     """Period spanning 3 months -> 3 * monthly_fee."""
     sub = _mock_subscription(
-        monthly_fee=10.00,
+        monthly_fee=Decimal("10.00"),
         start_date=date(2025, 1, 1),
         end_date=date(2025, 12, 31),
     )
@@ -256,13 +257,13 @@ def test_monthly_fees_three_months():
         [sub], date(2025, 3, 1), date(2025, 5, 31)
     )
 
-    assert result == pytest.approx(30.00, abs=0.01)
+    assert result == Decimal("30.00")
 
 
 def test_monthly_fees_no_overlap():
     """Period outside range -> zero fees."""
     sub = _mock_subscription(
-        monthly_fee=12.99,
+        monthly_fee=Decimal("12.99"),
         start_date=date(2025, 1, 1),
         end_date=date(2025, 3, 31),
     )

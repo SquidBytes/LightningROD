@@ -5,6 +5,8 @@ location cost override cascade, and monthly cost grouping.
 All assertions use EXACT values via pytest.approx.
 """
 
+from decimal import Decimal
+
 import pytest
 
 from web.queries.costs import (
@@ -27,7 +29,7 @@ async def test_cost_summary_totals(cost_scenario):
 
     result = await query_cost_summary(db, time_range="all")
 
-    assert result["total_cost"] == pytest.approx(exp["total_cost"], abs=0.01)
+    assert float(result["total_cost"]) == pytest.approx(exp["total_cost"], abs=0.01)
     assert result["total_kwh"] == pytest.approx(exp["total_kwh"], abs=0.01)
     assert result["total_sessions"] == exp["total_sessions"]
 
@@ -42,11 +44,11 @@ async def test_cost_per_network(cost_scenario):
     by_network = {item["network"]: item for item in result["by_network"]}
 
     assert "Network A" in by_network
-    assert by_network["Network A"]["total_cost"] == pytest.approx(exp["net_a_cost"], abs=0.01)
+    assert float(by_network["Network A"]["total_cost"]) == pytest.approx(exp["net_a_cost"], abs=0.01)
     assert by_network["Network A"]["session_count"] == exp["net_a_sessions"]
 
     assert "Network B" in by_network
-    assert by_network["Network B"]["total_cost"] == pytest.approx(exp["net_b_cost"], abs=0.01)
+    assert float(by_network["Network B"]["total_cost"]) == pytest.approx(exp["net_b_cost"], abs=0.01)
     assert by_network["Network B"]["session_count"] == exp["net_b_sessions"]
 
 
@@ -68,7 +70,7 @@ async def test_subscription_savings(cost_scenario):
 
     result = await query_cost_summary(db, time_range="all")
 
-    assert result["subscription_total_saved"] == pytest.approx(
+    assert float(result["subscription_total_saved"]) == pytest.approx(
         exp["subscription_savings"], abs=0.01
     )
 
@@ -82,9 +84,9 @@ async def test_cost_cascade_location_override(cost_scenario):
     result = compute_session_cost(s5, network=net_a, location=loc_x)
 
     # Location override: 25 * 0.30 = 7.50
-    assert result["display_cost"] == pytest.approx(7.50, abs=0.01)
+    assert result["display_cost"] == Decimal("7.50")
     assert result["cost_source"] == "calculated"
-    assert result["cost_per_kwh"] == pytest.approx(0.30, abs=0.001)
+    assert result["cost_per_kwh"] == Decimal("0.30")
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +115,7 @@ async def test_cost_no_subscription_period(cost_scenario):
     )
 
     # Non-member rate: 20 * 0.45 = 9.00
-    assert result["display_cost"] == pytest.approx(9.00, abs=0.01)
+    assert result["display_cost"] == Decimal("9.00")
     assert result["subscription_active"] is False
 
 
@@ -124,7 +126,7 @@ async def test_cost_with_zero_energy(db_session):
 
     net = EVChargingNetwork(
         network_name="Zero Test Net",
-        cost_per_kwh=0.35,
+        cost_per_kwh=Decimal("0.35"),
         is_free=False,
         is_verified=True,
     )
@@ -145,5 +147,5 @@ async def test_cost_with_zero_energy(db_session):
     result = compute_session_cost(s, network=net)
 
     # 0 kWh * any rate = 0
-    assert result["display_cost"] == pytest.approx(0.0, abs=0.001)
+    assert result["display_cost"] == Decimal("0.0")
     assert result["actual_cost_per_kwh"] is None  # division by zero avoided

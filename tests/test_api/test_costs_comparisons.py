@@ -1,6 +1,7 @@
 """Costs page renders both Savings Scenarios comparison models."""
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 
@@ -9,7 +10,7 @@ from db.models.reference import GasPriceHistory
 from tests.factories.sessions import ChargingSessionFactory
 from tests.factories.vehicle_status import VehicleStatusFactory
 from tests.factories.vehicles import VehicleFactory
-from web.unit_system import LITER_PER_GAL
+from web.unit_system import to_metric_price_per_volume
 
 pytestmark = pytest.mark.db
 
@@ -23,14 +24,14 @@ async def test_costs_page_renders_mile_for_mile_section(client, db_session):
     ))
     db_session.add(GasPriceHistory(
         year=2026, month=1,
-        station_price=3.50 / LITER_PER_GAL,
-        average_price=3.50 / LITER_PER_GAL,
+        station_price=to_metric_price_per_volume(Decimal("3.50"), "us"),
+        average_price=to_metric_price_per_volume(Decimal("3.50"), "us"),
         source="manual",
     ))
     await ChargingSessionFactory.create(
         db_session,
         device_id=vehicle.device_id,
-        cost=12.00,
+        cost=Decimal("12.00"),
         session_start_utc=datetime(2026, 1, 10, tzinfo=UTC),
         distance_added=160.9,  # feeds the energy-equivalent model's primary path
     )

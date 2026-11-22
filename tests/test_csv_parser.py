@@ -1,5 +1,7 @@
 """Tests for csv_parser transform_rows and detect_duplicates."""
 
+import json
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -60,7 +62,8 @@ def test_transform_rows_basic_mapping():
     row = result[0]
     assert row["energy_kwh"] == 25.5
     assert row["location_name"] == "Home"
-    assert row["cost"] == 3.50
+    assert row["cost"] == Decimal("3.50")
+    assert isinstance(row["cost"], Decimal)
     assert row["session_start_utc"] is not None
     assert row["_status"] == "new"
     assert row["source_system"] == "csv_import"
@@ -510,3 +513,42 @@ async def test_import_rows_inherits_network_from_resolved_location(
     ).scalar_one()
     assert created.location_id == loc.id
     assert created.network_id == net.id
+
+
+def test_cost_survives_the_import_payload_as_decimal():
+    """Cost stays an exact Decimal through the preview JSON; a browser-edited number too."""
+    from web.routes.csv_import import _deserialize_rows, _serialize_rows
+    from web.services.csv_parser import transform_rows
+
+    rows = transform_rows(
+        [{"start": "2026-01-15T10:30:00+00:00", "kwh": "25.5", "cost": "0.35"}],
+        {"start": "session_start_utc", "kwh": "energy_kwh", "cost": "cost"},
+    )
+    payload = json.dumps(_serialize_rows(rows))
+    edited = payload.replace('"cost": "0.35"', '"cost": 12.1')
+
+    (row,) = _deserialize_rows(json.loads(payload, parse_float=Decimal))
+    (edited_row,) = _deserialize_rows(json.loads(edited, parse_float=Decimal))
+
+    assert row["cost"] == Decimal("0.35")
+    assert edited_row["cost"] == Decimal("12.1")
+    assert type(row["energy_kwh"]) is float
+
+
+@pytest.mark.parametrize("text", ["", "abc", "$3.50", "nan", "inf"])
+def test_unparseable_cost_is_dropped(text):
+    from web.services.csv_parser import _money_or_none
+
+    assert _money_or_none(text) is None
+
+
+def test_transform_rows_duration_seconds_is_a_number():
+    """A duration column that is not duration_minutes is parsed to a number, not left as text."""
+    from web.services.csv_parser import transform_rows
+
+    raw_rows = [{"start_time": "2026-01-15T10:30:00+00:00", "duration_s": "45"}]
+    mapping = {"start_time": "session_start_utc", "duration_s": "charge_duration_seconds"}
+    result = transform_rows(raw_rows, mapping)
+
+    assert result[0]["charge_duration_seconds"] == 45.0
+    assert isinstance(result[0]["charge_duration_seconds"], float)

@@ -1,5 +1,5 @@
 """EV-to-ICE comparison calculations and chart helpers."""
-
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,7 @@ from db.models.reference import GasPriceHistory
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle import EVVehicle
 from db.models.vehicle_status import EVVehicleStatus
+from web.money import ZERO, cost_of
 from web.queries.costs import (
     build_time_filter,
     calculate_monthly_fees_in_range,
@@ -18,12 +19,14 @@ from web.queries.costs import (
 )
 from web.queries.settings import get_all_subscriptions_by_network
 from web.queries.time_window import resolve_time_window, window_clause
-from web.unit_system import GAL_PER_LITER, LITER_PER_GAL, MI_PER_KM
+from web.unit_system import GAL_PER_LITER, MI_PER_KM, convert_price_per_volume
+
+_DEFAULT_PRICE_PER_GAL = Decimal("3.50")
 
 
 def _find_gas_price(
     prices: list[GasPriceHistory], year: int, month: int
-) -> tuple[float | None, float | None]:
+) -> tuple[Decimal | None, Decimal | None]:
     """Find the gas price entry for (year, month) or the nearest earlier month.
 
     Prices must be sorted by (year DESC, month DESC). Returns
@@ -32,27 +35,26 @@ def _find_gas_price(
     """
     for entry in prices:
         if (entry.year, entry.month) <= (year, month):
-            station = float(entry.station_price) if entry.station_price is not None else None
-            average = float(entry.average_price) if entry.average_price is not None else None
-            station_per_gal = station * LITER_PER_GAL if station is not None else None
-            average_per_gal = average * LITER_PER_GAL if average is not None else None
-            return (station_per_gal, average_per_gal)
+            return (
+                convert_price_per_volume(entry.station_price, "us"),
+                convert_price_per_volume(entry.average_price, "us"),
+            )
     # No entry found — use default ($/gal)
-    return (3.50, 3.50)
+    return (_DEFAULT_PRICE_PER_GAL, _DEFAULT_PRICE_PER_GAL)
 
 
 def _empty_gas_result() -> dict:
     """Return a zeroed-out gas comparison result dict."""
     return {
-        "ev_total": 0.0,
-        "ev_energy": 0.0,
-        "ev_fees": 0.0,
-        "gas_total_low": 0.0,
-        "gas_total_high": 0.0,
-        "gas_total_station": 0.0,
-        "gas_total_average": 0.0,
-        "savings_low": 0.0,
-        "savings_high": 0.0,
+        "ev_total": ZERO,
+        "ev_energy": ZERO,
+        "ev_fees": ZERO,
+        "gas_total_low": ZERO,
+        "gas_total_high": ZERO,
+        "gas_total_station": ZERO,
+        "gas_total_average": ZERO,
+        "savings_low": ZERO,
+        "savings_high": ZERO,
         "savings_pct_low": 0.0,
         "savings_pct_high": 0.0,
         "session_count": 0,
@@ -117,15 +119,15 @@ async def query_gas_comparison(
     result = await db.execute(stmt)
     sessions = result.scalars().all()
 
-    ev_energy = 0.0
-    gas_total_station = 0.0
-    gas_total_average = 0.0
+    ev_energy = ZERO
+    gas_total_station = ZERO
+    gas_total_average = ZERO
     station_has_data = False
     average_has_data = False
     session_count = 0
     total_distance_km = 0.0
-    station_prices_seen: list[float] = []
-    average_prices_seen: list[float] = []
+    station_prices_seen: list[Decimal] = []
+    average_prices_seen: list[Decimal] = []
     # Session date bounds drive subscription-fee proration for the all-in EV cost.
     range_start_min = None
     range_end_max = None
@@ -161,11 +163,11 @@ async def query_gas_comparison(
         station_price, average_price = _find_gas_price(prices, s_year, s_month)
 
         if station_price is not None:
-            gas_total_station += gallons * station_price
+            gas_total_station += cost_of(station_price, gallons)
             station_has_data = True
             station_prices_seen.append(station_price)
         if average_price is not None:
-            gas_total_average += gallons * average_price
+            gas_total_average += cost_of(average_price, gallons)
             average_has_data = True
             average_prices_seen.append(average_price)
 
@@ -188,11 +190,11 @@ async def query_gas_comparison(
         gas_total_low = gas_total_high = gas_total_average
         has_range = False
     else:
-        gas_total_low = gas_total_high = 0.0
+        gas_total_low = gas_total_high = ZERO
         has_range = False
 
     # ev_total carries subscription fees — the gas comparison is all-in cost.
-    ev_fees = 0.0
+    ev_fees = ZERO
     if range_start_min is not None and range_end_max is not None:
         for periods in subs_by_network.values():
             ev_fees += calculate_monthly_fees_in_range(periods, range_start_min, range_end_max)
@@ -201,8 +203,8 @@ async def query_gas_comparison(
 
     savings_low = gas_total_low - ev_total
     savings_high = gas_total_high - ev_total
-    savings_pct_low = (savings_low / gas_total_low * 100) if gas_total_low > 0 else 0.0
-    savings_pct_high = (savings_high / gas_total_high * 100) if gas_total_high > 0 else 0.0
+    savings_pct_low = float(savings_low / gas_total_low * 100) if gas_total_low > 0 else 0.0
+    savings_pct_high = float(savings_high / gas_total_high * 100) if gas_total_high > 0 else 0.0
 
     return {
         "ev_total": ev_total,
@@ -290,16 +292,16 @@ def _empty_distance_result() -> dict:
         "has_data": False,
         "distance_source": None,
         "total_distance": 0.0,  # km (metric base)
-        "ev_total": 0.0,
-        "ev_energy": 0.0,
-        "ev_fees": 0.0,
+        "ev_total": ZERO,
+        "ev_energy": ZERO,
+        "ev_fees": ZERO,
         "session_count": 0,
-        "gas_total_station": 0.0,
-        "gas_total_average": 0.0,
-        "gas_total_low": 0.0,
-        "gas_total_high": 0.0,
-        "savings_low": 0.0,
-        "savings_high": 0.0,
+        "gas_total_station": ZERO,
+        "gas_total_average": ZERO,
+        "gas_total_low": ZERO,
+        "gas_total_high": ZERO,
+        "savings_low": ZERO,
+        "savings_high": ZERO,
         "has_range": False,
         "ice_label": None,
         "ice_l_per_100km": None,
@@ -353,20 +355,20 @@ async def query_distance_gas_comparison(
     )
     prices = list(price_result.scalars().all())
 
-    gas_total_station = 0.0
-    gas_total_average = 0.0
-    station_prices_seen: list[float] = []
-    average_prices_seen: list[float] = []
+    gas_total_station = ZERO
+    gas_total_average = ZERO
+    station_prices_seen: list[Decimal] = []
+    average_prices_seen: list[Decimal] = []
     total_distance_km = 0.0
 
     for (year, month), km in sorted(monthly_km.items()):
         gallons = (km * MI_PER_KM) / ice_mpg
         station_price, average_price = _find_gas_price(prices, year, month)
         if station_price is not None:
-            gas_total_station += gallons * station_price
+            gas_total_station += cost_of(station_price, gallons)
             station_prices_seen.append(station_price)
         if average_price is not None:
-            gas_total_average += gallons * average_price
+            gas_total_average += cost_of(average_price, gallons)
             average_prices_seen.append(average_price)
         total_distance_km += km
 
@@ -383,7 +385,7 @@ async def query_distance_gas_comparison(
         stmt = stmt.where(EVChargingSession.device_id == device_id)
     sessions = (await db.execute(stmt)).scalars().all()
 
-    ev_energy = 0.0
+    ev_energy = ZERO
     session_count = 0
     range_start_min = None
     range_end_max = None
@@ -397,7 +399,7 @@ async def query_distance_gas_comparison(
         range_start_min = session_date if range_start_min is None else min(range_start_min, session_date)
         range_end_max = session_date if range_end_max is None else max(range_end_max, session_date)
 
-    ev_fees = 0.0
+    ev_fees = ZERO
     if range_start_min is not None and range_end_max is not None:
         for periods in subs_by_network.values():
             ev_fees += calculate_monthly_fees_in_range(periods, range_start_min, range_end_max)

@@ -1,7 +1,6 @@
 """Reference models for charging networks, subscriptions, and locations."""
 
 from datetime import date, datetime
-from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -16,7 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.models.base import TIMESTAMPTZ, Base
+from db.models.base import TIMESTAMPTZ, Base, CentsAmount, RateAmount
 
 
 class EVChargingNetwork(Base):
@@ -26,7 +25,7 @@ class EVChargingNetwork(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     network_name: Mapped[str] = mapped_column(String, nullable=False)
-    cost_per_kwh: Mapped[Decimal | None] = mapped_column()
+    cost_per_kwh: Mapped[RateAmount | None] = mapped_column()
     effective_date: Mapped[date | None] = mapped_column(Date)
     notes: Mapped[str | None] = mapped_column(Text)
     is_free: Mapped[bool | None] = mapped_column(Boolean, default=False)
@@ -50,8 +49,8 @@ class EVNetworkSubscription(Base):
     network_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("ev_charging_networks.id", ondelete="CASCADE"), nullable=False
     )
-    member_rate: Mapped[Decimal] = mapped_column(nullable=False)  # $/kWh with subscription
-    monthly_fee: Mapped[Decimal] = mapped_column(nullable=False, server_default=text("0"))
+    member_rate: Mapped[RateAmount] = mapped_column(nullable=False)  # $/kWh with subscription
+    monthly_fee: Mapped[CentsAmount] = mapped_column(nullable=False, server_default=text("0"))
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # null = still active
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -72,7 +71,7 @@ class EVLocationLookup(Base):
     network_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ev_charging_networks.id", ondelete="SET NULL"), nullable=True
     )
-    cost_per_kwh: Mapped[Decimal | None] = mapped_column(nullable=True)
+    cost_per_kwh: Mapped[RateAmount | None] = mapped_column(nullable=True)
     is_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )
@@ -153,8 +152,8 @@ class GasPriceHistory(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-12
-    station_price: Mapped[Decimal | None] = mapped_column()
-    average_price: Mapped[Decimal | None] = mapped_column()
+    station_price: Mapped[RateAmount | None] = mapped_column()
+    average_price: Mapped[RateAmount | None] = mapped_column()
     source: Mapped[str | None] = mapped_column(String(20))  # 'manual' or 'ha_sensor'
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMPTZ, nullable=False, server_default=func.now()
@@ -176,7 +175,7 @@ class GasPriceReading(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     entity_id: Mapped[str] = mapped_column(String, nullable=False)
-    price: Mapped[Decimal] = mapped_column(nullable=False)
+    price: Mapped[RateAmount] = mapped_column(nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False)
 
 

@@ -14,6 +14,7 @@ from db.dialect import date_trunc_compat
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
+from web.money import ZERO
 from web.queries.charts import HOVER_LABEL as _HOVER_LABEL
 from web.queries.charts import PLOTLY_CONFIG as _PLOTLY_CONFIG
 from web.queries.charts import wrap_chart as _wrap_chart
@@ -105,12 +106,12 @@ async def query_energy_summary(
                 "charge_type": ct,
                 "kwh": 0.0,
                 "session_count": 0,
-                "total_cost": 0.0,
+                "total_cost": ZERO,
             }
         by_charge_type[ct]["kwh"] += kwh
         by_charge_type[ct]["session_count"] += 1
         if s.cost is not None:
-            by_charge_type[ct]["total_cost"] += float(s.cost)
+            by_charge_type[ct]["total_cost"] += s.cost
 
         # Compute efficiency — requires BOTH distance_added > 0 and energy_kwh > 0
         if (

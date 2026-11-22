@@ -103,7 +103,7 @@
                 </p>
                 <p class="text-2xl font-bold mt-1">${{ "%.2f"|format(summary.total_cost) }}</p>
                 {% if summary.avg_kwh_per_session is not none and summary.total_kwh > 0 %}
-                <p class="text-xs text-base-content/40 mt-1">avg ${{ "%.3f"|format(summary.total_cost / summary.total_kwh) }} / kWh</p>
+                <p class="text-xs text-base-content/40 mt-1">avg ${{ "%.3f"|format(summary.total_cost|float / summary.total_kwh) }} / kWh</p>
                 {% endif %}
             </div>
         </div>

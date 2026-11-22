@@ -1,6 +1,7 @@
 """Cost Explorer aggregator — single-query backend for the /charging/costs Cost Explorer card."""
 
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import plotly.graph_objects as go
@@ -10,6 +11,7 @@ from sqlalchemy.orm import load_only
 
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVNetworkSubscription
+from web.money import ZERO, cost_of, per_unit
 from web.queries.charts import HOVER_LABEL as _HOVER_LABEL
 from web.queries.charts import PLOTLY_CONFIG as _PLOTLY_CONFIG
 from web.queries.charts import wrap_chart as _wrap_chart
@@ -71,14 +73,14 @@ def calculate_fee_breakdown(
     """Per-period fee breakdown for the Cost Explorer subscription block.
 
     Returns one dict per period overlapping [range_start, range_end]:
-    `{"months": int, "fee_per_month": float, "fee_total": float, "period": EVNetworkSubscription}`.
+    `{"months": int, "fee_per_month": Decimal, "fee_total": Decimal, "period": EVNetworkSubscription}`.
     Months are counted with the same overlap rule as `calculate_monthly_fees_in_range`:
     any calendar month that has any overlap with both the range and the period counts
     as one full month.
     """
     breakdown: list[dict[str, Any]] = []
     for p in periods:
-        if p.monthly_fee is None or float(p.monthly_fee) == 0.0:
+        if not p.monthly_fee:
             continue
         p_start = p.start_date
         p_end = p.end_date if p.end_date is not None else range_end
@@ -87,11 +89,10 @@ def calculate_fee_breakdown(
         if window_start > window_end:
             continue
         months = (window_end.year - window_start.year) * 12 + (window_end.month - window_start.month) + 1
-        fee = float(p.monthly_fee)
         breakdown.append({
             "months": months,
-            "fee_per_month": fee,
-            "fee_total": round(months * fee, 2),
+            "fee_per_month": p.monthly_fee,
+            "fee_total": months * p.monthly_fee,
             "period": p,
         })
     return breakdown
@@ -110,8 +111,8 @@ def build_cost_explorer_monthly_chart(
         return ""
 
     x_vals = [row["month"] for row in monthly_trend]
-    paid_vals = [row["paid"] for row in monthly_trend]
-    ref_vals = [row["at_reference"] for row in monthly_trend]
+    paid_vals = [float(row["paid"]) for row in monthly_trend]
+    ref_vals = [float(row["at_reference"]) for row in monthly_trend]
 
     ref_name = f"At reference ({reference_network_name})" if reference_network_name else "At reference rate"
 
@@ -163,14 +164,14 @@ async def query_cost_explorer(
     free_charging_what_if: bool = False,
     free_charging_scope: str = "global",
     free_charging_networks: list[int] | None = None,
-    reference_rate: float = 0.0,
+    reference_rate: Decimal = ZERO,
     reference_network_id: int | None = None,
     reference_network_name: str | None = None,
 ) -> dict[str, Any]:
     """Aggregate the Cost Explorer card payload for the active filter set.
 
     Honors network multi-select, the free-charging what-if, reference rate, and
-    the subscription counterfactual. Currency values are rounded at the boundary.
+    the subscription counterfactual. Totals are Decimal; per-unit ratios are floats.
 
     The summary-strip keys are range-scoped, not network-filtered — the route
     calls this aggregator a second time with `network_ids=None` for the strip.
@@ -211,24 +212,24 @@ async def query_cost_explorer(
     location_ids = [s.location_id for s in sessions if s.location_id]
     locations_by_id = await get_locations_by_id(db, location_ids) if location_ids else {}
 
-    total_paid_actual = 0.0
-    total_paid_what_if = 0.0
-    estimated_total = 0.0
-    total_at_reference = 0.0
+    total_paid_actual = ZERO
+    total_paid_what_if = ZERO
+    estimated_total = ZERO
+    total_at_reference = ZERO
     total_distance = 0.0
     free_session_count = 0
-    free_charging_saved = 0.0
-    with_energy = 0.0
-    without_energy = 0.0
+    free_charging_saved = ZERO
+    with_energy = ZERO
+    without_energy = ZERO
     unconfigured_count = 0
     by_network: dict[int, dict[str, Any]] = {}
-    monthly_paid: dict[str, float] = {}
-    monthly_at_ref: dict[str, float] = {}
+    monthly_paid: dict[str, Decimal] = {}
+    monthly_at_ref: dict[str, Decimal] = {}
     free_eligible_ids: set[int] = set()
     range_start_min: date | None = None
     range_end_max: date | None = None
     # Per-network accumulator: only sessions flagged subscription_active.
-    subscription_energy_by_network: dict[int, float] = {}
+    subscription_energy_by_network: dict[int, Decimal] = {}
 
     per_net_scope_set = set(free_charging_networks or [])
 
@@ -252,8 +253,8 @@ async def query_cost_explorer(
             free_eligible_ids.add(s.network_id)
 
         energy_kwh = s.energy_kwh or 0.0
-        paid = float(cost_info["display_cost"])
-        hypothetical_at_ref = energy_kwh * reference_rate
+        paid: Decimal = cost_info["display_cost"]
+        hypothetical_at_ref = cost_of(reference_rate, energy_kwh)
 
         # Free-charging what-if: rebill free sessions at reference_rate when in scope.
         is_free_session = bool(cost_info.get("is_free") or (network and getattr(network, "is_free", False)))
@@ -270,7 +271,7 @@ async def query_cost_explorer(
         total_paid_what_if += paid_what_if
         total_at_reference += hypothetical_at_ref
         if cost_info.get("estimated_cost") is not None:
-            estimated_total += float(cost_info["estimated_cost"])
+            estimated_total += cost_info["estimated_cost"]
 
         # distance_added is stored in km; the route converts to display units.
         if s.distance_added is not None and s.distance_added > 0:
@@ -281,16 +282,16 @@ async def query_cost_explorer(
         if is_free_session:
             free_session_count += 1
             if cost_info.get("estimated_cost") is not None:
-                free_charging_saved += float(cost_info["estimated_cost"])
+                free_charging_saved += cost_info["estimated_cost"]
 
         # Counterfactual: With = display_cost (member rate), Without =
         # non_member_cost when a subscription is active, else display_cost.
         with_energy += paid
         if cost_info.get("subscription_active") and cost_info.get("non_member_cost") is not None:
-            without_energy += float(cost_info["non_member_cost"])
+            without_energy += cost_info["non_member_cost"]
             if s.network_id:
                 subscription_energy_by_network[s.network_id] = (
-                    subscription_energy_by_network.get(s.network_id, 0.0) + paid
+                    subscription_energy_by_network.get(s.network_id, ZERO) + paid
                 )
         else:
             without_energy += paid
@@ -303,8 +304,8 @@ async def query_cost_explorer(
                 "color": (network.color if network and network.color else "#6B7280"),
                 "session_count": 0,
                 "total_kwh": 0.0,
-                "total_paid": 0.0,
-                "total_at_reference": 0.0,
+                "total_paid": ZERO,
+                "total_at_reference": ZERO,
                 "free_session_count": 0,
                 "paid_session_count": 0,
             }
@@ -320,27 +321,25 @@ async def query_cost_explorer(
 
         if session_date:
             month_key = session_date.strftime("%Y-%m")
-            monthly_paid[month_key] = monthly_paid.get(month_key, 0.0) + paid_what_if
-            monthly_at_ref[month_key] = monthly_at_ref.get(month_key, 0.0) + hypothetical_at_ref
+            monthly_paid[month_key] = monthly_paid.get(month_key, ZERO) + paid_what_if
+            monthly_at_ref[month_key] = monthly_at_ref.get(month_key, ZERO) + hypothetical_at_ref
 
     by_network_list: list[dict[str, Any]] = []
     for row in by_network.values():
         kwh = row["total_kwh"]
-        row["effective_rate_per_kwh"] = round(row["total_paid"] / kwh, 3) if kwh > 0 else 0.0
-        row["delta"] = round(row["total_paid"] - row["total_at_reference"], 2)
+        row["effective_rate_per_kwh"] = per_unit(row["total_paid"], kwh) if kwh > 0 else 0.0
+        row["delta"] = row["total_paid"] - row["total_at_reference"]
         row["total_kwh"] = round(kwh, 2)
-        row["total_paid"] = round(row["total_paid"], 2)
-        row["total_at_reference"] = round(row["total_at_reference"], 2)
         by_network_list.append(row)
     by_network_list.sort(key=lambda r: r["total_paid"], reverse=True)
 
     totals_kwh = round(sum(r["total_kwh"] for r in by_network_list), 2)
     # None on a zero-energy range — the template renders "—".
     totals_paid_per_kwh = (
-        round(total_paid_actual / totals_kwh, 2) if totals_kwh > 0 else None
+        per_unit(total_paid_actual, totals_kwh) if totals_kwh > 0 else None
     )
     if reference_rate > 0 and totals_kwh > 0:
-        totals_reference_per_kwh = round(total_at_reference / totals_kwh, 2)
+        totals_reference_per_kwh = per_unit(total_at_reference, totals_kwh)
     else:
         totals_reference_per_kwh = None
     # Reference sub-line label — network mode prefixes the network name, custom
@@ -356,9 +355,9 @@ async def query_cost_explorer(
     totals_row = {
         "session_count": sum(r["session_count"] for r in by_network_list),
         "total_kwh": totals_kwh,
-        "total_paid": round(total_paid_actual, 2),
-        "total_at_reference": round(total_at_reference, 2),
-        "delta": round(total_paid_actual - total_at_reference, 2),
+        "total_paid": total_paid_actual,
+        "total_at_reference": total_at_reference,
+        "delta": total_paid_actual - total_at_reference,
         "paid_per_kwh": totals_paid_per_kwh,
         "reference_per_kwh": totals_reference_per_kwh,
         "reference_label": reference_label,
@@ -391,14 +390,12 @@ async def query_cost_explorer(
     subscription_block: dict[str, Any]
     if all_periods_in_range and range_start_min and range_end_max:
         fee_breakdown = calculate_fee_breakdown(all_periods_in_range, range_start_min, range_end_max)
-        with_fees_total = round(sum(b["fee_total"] for b in fee_breakdown), 2)
+        with_fees_total = sum((b["fee_total"] for b in fee_breakdown), ZERO)
         with_fees_count = sum(b["months"] for b in fee_breakdown)
         # Headline rate is the most-recent period's monthly_fee.
-        with_fees_per_month = fee_breakdown[-1]["fee_per_month"] if fee_breakdown else 0.0
-        with_energy_only = round(with_energy, 2)
-        with_total = round(with_energy_only + with_fees_total, 2)
-        without_total = round(without_energy, 2)
-        net_saved = round(without_total - with_total, 2)
+        with_fees_per_month = fee_breakdown[-1]["fee_per_month"] if fee_breakdown else ZERO
+        with_total = with_energy + with_fees_total
+        net_saved = without_energy - with_total
 
         # Per-subscription rows for the aside: energy from
         # subscription_energy_by_network, fees bucketed by period.network_id.
@@ -406,14 +403,10 @@ async def query_cost_explorer(
         for b in fee_breakdown:
             nid = b["period"].network_id
             if nid not in per_network_fees:
-                per_network_fees[nid] = {
-                    "fee_total": 0.0,
-                    "months": 0,
-                    "fee_per_month": float(b["fee_per_month"]),
-                }
-            per_network_fees[nid]["fee_total"] += float(b["fee_total"])
-            per_network_fees[nid]["months"] += int(b["months"])
-            per_network_fees[nid]["fee_per_month"] = float(b["fee_per_month"])
+                per_network_fees[nid] = {"fee_total": ZERO, "months": 0}
+            per_network_fees[nid]["fee_total"] += b["fee_total"]
+            per_network_fees[nid]["months"] += b["months"]
+            per_network_fees[nid]["fee_per_month"] = b["fee_per_month"]
 
         subscription_network_ids = sorted(
             set(per_network_fees.keys()) | set(subscription_energy_by_network.keys())
@@ -421,14 +414,14 @@ async def query_cost_explorer(
         per_subscription: list[dict[str, Any]] = []
         for nid in subscription_network_ids:
             net = networks_by_id.get(nid)
-            fees_entry = per_network_fees.get(nid, {"fee_total": 0.0, "months": 0, "fee_per_month": 0.0})
+            fees_entry = per_network_fees.get(nid, {"fee_total": ZERO, "months": 0, "fee_per_month": ZERO})
             per_subscription.append({
                 "network_id": nid,
                 "network_name": net.network_name if net else "Unknown",
-                "energy_at_member_rate": round(subscription_energy_by_network.get(nid, 0.0), 2),
-                "member_fee": round(fees_entry["fee_total"], 2),
+                "energy_at_member_rate": subscription_energy_by_network.get(nid, ZERO),
+                "member_fee": fees_entry["fee_total"],
                 "fee_months": fees_entry["months"],
-                "fee_per_month": round(fees_entry["fee_per_month"], 2),
+                "fee_per_month": fees_entry["fee_per_month"],
             })
         # Stable display order: highest energy first, then alphabetical.
         per_subscription.sort(key=lambda r: (-r["energy_at_member_rate"], r["network_name"]))
@@ -436,11 +429,11 @@ async def query_cost_explorer(
         subscription_block = {
             "active": True,
             "with_total": with_total,
-            "with_energy_at_member_rate": with_energy_only,
+            "with_energy_at_member_rate": with_energy,
             "with_fees_count": with_fees_count,
-            "with_fees_per_month": round(with_fees_per_month, 2),
+            "with_fees_per_month": with_fees_per_month,
             "with_fees_total": with_fees_total,
-            "without_total": without_total,
+            "without_total": without_energy,
             "net_saved": net_saved,
             "fee_breakdown": fee_breakdown,
             "subscriptions": per_subscription,
@@ -453,8 +446,8 @@ async def query_cost_explorer(
     monthly_trend = [
         {
             "month": m,
-            "paid": round(monthly_paid.get(m, 0.0), 2),
-            "at_reference": round(monthly_at_ref.get(m, 0.0), 2),
+            "paid": monthly_paid.get(m, ZERO),
+            "at_reference": monthly_at_ref.get(m, ZERO),
         }
         for m in all_months
     ]
@@ -469,9 +462,8 @@ async def query_cost_explorer(
             "effective_rate_per_kwh": row["effective_rate_per_kwh"],
             "free_session_count": row["free_session_count"],
             "paid_session_count": row["paid_session_count"],
-            "free_charging_delta": round(
-                row["total_at_reference"] - row["total_paid"] if row["free_session_count"] > 0 else 0.0,
-                2,
+            "free_charging_delta": (
+                row["total_at_reference"] - row["total_paid"] if row["free_session_count"] > 0 else ZERO
             ),
         }
 
@@ -483,7 +475,7 @@ async def query_cost_explorer(
 
     # Subscription fees paid out-of-pocket in this range — folded into the
     # headline so "you paid" matches the user's actual spend.
-    total_fees_paid = float(subscription_block.get("with_fees_total") or 0.0) if subscription_block.get("active") else 0.0
+    total_fees_paid: Decimal = subscription_block.get("with_fees_total") or ZERO
     total_paid_energy = total_paid_actual
     total_paid_with_fees = total_paid_actual + total_fees_paid
     total_paid_what_if_with_fees = total_paid_what_if + total_fees_paid
@@ -491,31 +483,31 @@ async def query_cost_explorer(
     # Strip cost ratios — all-in total over each denominator, None when the
     # denominator is zero. $/distance is raw $/km; the route converts it.
     total_sessions = totals_row["session_count"]
-    cost_per_kwh = round(total_paid_with_fees / totals_kwh, 3) if totals_kwh > 0 else None
-    cost_per_session = round(total_paid_with_fees / total_sessions, 2) if total_sessions > 0 else None
+    cost_per_kwh = per_unit(total_paid_with_fees, totals_kwh) if totals_kwh > 0 else None
+    cost_per_session = per_unit(total_paid_with_fees, total_sessions) if total_sessions > 0 else None
     cost_per_distance_km = (
-        round(total_paid_with_fees / total_distance, 4) if total_distance > 0 else None
+        per_unit(total_paid_with_fees, total_distance) if total_distance > 0 else None
     )
     # Average estimated cost of a free session had it been billed.
     cost_per_free_session = (
-        round(free_charging_saved / free_session_count, 2) if free_session_count > 0 else None
+        per_unit(free_charging_saved, free_session_count) if free_session_count > 0 else None
     )
 
     return {
         # Headline: energy + subscription fees in range.
-        "total_paid_actual": round(total_paid_with_fees, 2),
+        "total_paid_actual": total_paid_with_fees,
         # Energy-only — keeps the ledger footer ↔ row arithmetic consistent.
-        "total_paid_energy": round(total_paid_energy, 2),
-        "total_fees_paid": round(total_fees_paid, 2),
-        "total_paid_what_if": round(total_paid_what_if_with_fees, 2),
-        "estimated_total": round(estimated_total, 2),
+        "total_paid_energy": total_paid_energy,
+        "total_fees_paid": total_fees_paid,
+        "total_paid_what_if": total_paid_what_if_with_fees,
+        "estimated_total": estimated_total,
         # Estimated is energy-only; compare like-for-like.
-        "delta_actual_vs_estimated": round(estimated_total - total_paid_energy, 2),
+        "delta_actual_vs_estimated": estimated_total - total_paid_energy,
         "total_sessions": total_sessions,
         "total_kwh": totals_kwh,
         "total_distance": round(total_distance, 2),
         "free_session_count": free_session_count,
-        "free_charging_saved": round(free_charging_saved, 2),
+        "free_charging_saved": free_charging_saved,
         "cost_per_kwh": cost_per_kwh,
         "cost_per_session": cost_per_session,
         "cost_per_distance_km": cost_per_distance_km,
@@ -523,8 +515,8 @@ async def query_cost_explorer(
         "reference_rate": reference_rate,
         "reference_network_id": reference_network_id,
         "reference_network_name": reference_network_name,
-        "total_at_reference": round(total_at_reference, 2),
-        "total_savings_vs_reference": round(total_at_reference - total_paid_energy, 2),
+        "total_at_reference": total_at_reference,
+        "total_savings_vs_reference": total_at_reference - total_paid_energy,
         "subscription": subscription_block,
         "by_network": by_network_list,
         "totals_row": totals_row,

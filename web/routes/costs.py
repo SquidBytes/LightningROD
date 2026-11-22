@@ -1,5 +1,6 @@
 """Charging-cost analytics routes."""
 
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Request
@@ -7,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from web.dependencies import DbSession
+from web.money import ZERO
 from web.queries.comparisons import query_distance_gas_comparison, query_gas_comparison
 from web.queries.cost_explorer import (
     build_cost_explorer_monthly_chart,
@@ -54,7 +56,7 @@ async def costs(
     free_what_if_networks: str | None = None,
     ref_mode: str | None = "network",
     ref_network_id: int | None = None,
-    ref_value: float | None = None,
+    ref_value: Decimal | None = None,
     hx_request: Annotated[str | None, Header()] = None,
 ):
     active_device_id = await get_active_device_id(db)
@@ -80,7 +82,7 @@ async def costs(
     )
 
     if ref_mode_eff == "custom":
-        reference_rate = float(ref_value) if (ref_value is not None and ref_value > 0) else 0.0
+        reference_rate = ref_value if (ref_value is not None and ref_value > 0) else ZERO
         ref_network_name_eff = None
         ref_network_id_eff = None
     else:
@@ -88,7 +90,7 @@ async def costs(
         if ref_net is None:
             non_free_networks = [n for n in all_networks if not n.is_free and n.cost_per_kwh]
             ref_net = non_free_networks[0] if non_free_networks else None
-        reference_rate = float(ref_net.cost_per_kwh or 0) if ref_net else 0.0
+        reference_rate = (ref_net.cost_per_kwh or ZERO) if ref_net else ZERO
         ref_network_name_eff = ref_net.network_name if ref_net else None
         ref_network_id_eff = ref_net.id if ref_net else None
 
@@ -133,7 +135,7 @@ async def costs(
     cost_explorer_strip = {
         **cost_explorer_strip,
         "cost_per_distance": (
-            round(cost_per_distance * strip_distance_factor, 4)
+            cost_per_distance * strip_distance_factor
             if cost_per_distance is not None
             else None
         ),

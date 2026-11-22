@@ -1,5 +1,6 @@
 """Charging cost calculations, summaries, and charts."""
 
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select
@@ -12,6 +13,7 @@ from db.models.reference import (
     EVLocationLookup,
     EVNetworkSubscription,
 )
+from web.money import ZERO, cost_of, per_unit
 from web.queries.time_window import resolve_time_window, window_clause
 
 # km -> miles factor; distance_added is stored in km.
@@ -87,83 +89,65 @@ def compute_session_cost(
 
     # Resolve the subscription active on this session's date.
     active_sub = None
-    session_date = None
     if subscription_periods and session.session_start_utc:
-        session_date = session.session_start_utc.date()
-        active_sub = find_active_subscription(subscription_periods, session_date)
+        active_sub = find_active_subscription(subscription_periods, session.session_start_utc.date())
 
-    # Estimated cost from the hierarchy: location rate, then network rate.
+    # Rate from the hierarchy: location, then member rate, then network.
+    location_rate: Decimal | None = (location.cost_per_kwh or None) if location else None
+    network_rate: Decimal | None = (network.cost_per_kwh or None) if network else None
+    if location_rate:
+        rate: Decimal | None = location_rate
+        rate_label = " (location)"
+    elif network_rate and active_sub:
+        rate, rate_label = active_sub.member_rate, " (member)"
+    else:
+        rate, rate_label = network_rate, ""
+
     estimated_cost = None
-
-    if location and location.cost_per_kwh:
-        cost_val = float(location.cost_per_kwh)
-        estimated_cost = energy_kwh * cost_val
-    elif network and not network.is_free and network.cost_per_kwh:
-        if active_sub:
-            cost_val = float(active_sub.member_rate)
-        else:
-            cost_val = float(network.cost_per_kwh)
-        estimated_cost = energy_kwh * cost_val
-
-    if estimated_cost is not None:
-        result["estimated_cost"] = round(estimated_cost, 4)
+    if rate is not None and (location_rate or not network.is_free):
+        estimated_cost = cost_of(rate, energy_kwh)
+        result["estimated_cost"] = estimated_cost
 
     if session.cost is not None and energy_kwh > 0:
-        result["actual_cost_per_kwh"] = round(float(session.cost) / energy_kwh, 4)
+        result["actual_cost_per_kwh"] = per_unit(session.cost, energy_kwh)
 
     if session.cost is not None and estimated_cost is not None:
-        result["cost_difference"] = round(float(session.cost) - estimated_cost, 4)
+        result["cost_difference"] = session.cost - estimated_cost
 
     # display_cost cascade.
     # (a) Session-level is_free flag
     if session.is_free:
-        result["display_cost"] = 0.0
+        result["display_cost"] = ZERO
         result["cost_source"] = "calculated"
         result["is_free"] = True
 
     # (b) Stored cost (manual or imported) always takes priority for display
     elif session.cost is not None:
-        result["display_cost"] = float(session.cost)
+        result["display_cost"] = session.cost
         result["cost_source"] = session.cost_source or "imported"
 
     # (c) Network-level is_free
     elif network and network.is_free:
-        result["display_cost"] = 0.0
+        result["display_cost"] = ZERO
         result["cost_source"] = "calculated"
         result["is_free"] = True
 
-    # (d) Location cost override
-    elif location and location.cost_per_kwh:
-        cost_val = float(location.cost_per_kwh)
-        result["display_cost"] = round(energy_kwh * cost_val, 4)
+    # (d) Location rate, (e) member rate if a subscription is active, else network rate
+    elif rate is not None:
+        result["display_cost"] = cost_of(rate, energy_kwh)
         result["cost_source"] = "calculated"
-        result["cost_per_kwh"] = cost_val
-        result["calculation"] = f"{energy_kwh} kWh x ${cost_val}/kWh (location)"
-
-    # (e) Network cost — use subscription member_rate if active, else network base rate
-    elif network and network.cost_per_kwh:
-        if active_sub:
-            cost_val = float(active_sub.member_rate)
-            result["display_cost"] = round(energy_kwh * cost_val, 4)
-            result["cost_source"] = "calculated"
-            result["cost_per_kwh"] = cost_val
-            result["calculation"] = f"{energy_kwh} kWh x ${cost_val}/kWh (member)"
-        else:
-            cost_val = float(network.cost_per_kwh)
-            result["display_cost"] = round(energy_kwh * cost_val, 4)
-            result["cost_source"] = "calculated"
-            result["cost_per_kwh"] = cost_val
-            result["calculation"] = f"{energy_kwh} kWh x ${cost_val}/kWh"
+        result["cost_per_kwh"] = rate
+        result["calculation"] = f"{energy_kwh} kWh x ${rate.normalize():f}/kWh{rate_label}"
 
     # (f) No cost data available — result stays with None display_cost
 
     # Subscription savings — non_member_cost is energy at the non-member rate.
-    if active_sub and network and network.cost_per_kwh and energy_kwh > 0:
+    if active_sub and network_rate and energy_kwh > 0:
         result["subscription_active"] = True
-        non_member = energy_kwh * float(network.cost_per_kwh)
-        result["non_member_cost"] = round(non_member, 4)
+        non_member = cost_of(network_rate, energy_kwh)
+        result["non_member_cost"] = non_member
         if result["display_cost"] is not None:
-            result["savings"] = round(non_member - result["display_cost"], 4)
+            result["savings"] = non_member - result["display_cost"]
 
     return result
 
@@ -254,17 +238,17 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
     location_ids = [s.location_id for s in sessions if s.location_id]
     locations_by_id = await get_locations_by_id(db, location_ids)
 
-    total_cost = 0.0
+    total_cost = ZERO
     free_total_kwh = 0.0
     free_session_count = 0
     unconfigured_count = 0
     total_sessions = 0
     total_kwh = 0.0
-    actual_total_cost = 0.0
-    estimated_total_cost = 0.0
+    actual_total_cost = ZERO
+    estimated_total_cost = ZERO
     actual_session_count = 0
     estimated_session_count = 0
-    subscription_total_saved = 0.0
+    subscription_total_saved = ZERO
     subscription_by_network: dict[str, dict] = {}
     by_network: dict[str, dict] = {}
 
@@ -288,10 +272,10 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
             free_session_count += 1
 
         if s.cost is not None and s.cost_source in ("manual", "imported"):
-            actual_total_cost += float(s.cost)
+            actual_total_cost += s.cost
             actual_session_count += 1
         elif s.estimated_cost is not None:
-            estimated_total_cost += float(s.estimated_cost)
+            estimated_total_cost += s.estimated_cost
             estimated_session_count += 1
         elif cost_info["display_cost"] is not None:
             estimated_total_cost += cost_info["display_cost"]
@@ -301,7 +285,7 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
         if net_name not in by_network:
             by_network[net_name] = {
                 "network": net_name,
-                "total_cost": 0.0,
+                "total_cost": ZERO,
                 "session_count": 0,
                 "total_kwh": 0.0,
             }
@@ -313,7 +297,7 @@ async def query_cost_summary(db: AsyncSession, time_range: str = "all", device_i
             subscription_total_saved += cost_info["savings"]
             if net_name not in subscription_by_network:
                 subscription_by_network[net_name] = {
-                    "total_saved": 0.0,
+                    "total_saved": ZERO,
                     "session_count": 0,
                     "member_sessions": 0,
                 }
@@ -342,13 +326,13 @@ def calculate_monthly_fees_in_range(
     periods: list,
     range_start,
     range_end,
-) -> float:
+) -> Decimal:
     """Sum monthly fees for subscription periods that overlap the given date range.
 
     Each calendar month with any overlap is counted as a full month,
     matching how subscription services typically bill.
     """
-    total_fees = 0.0
+    total_fees = ZERO
     for period in periods:
         p_start = max(period.start_date, range_start)
         p_end = min(period.end_date or range_end, range_end)
@@ -356,7 +340,7 @@ def calculate_monthly_fees_in_range(
             continue
         # Count each calendar month touched as a full month
         months = ((p_end.year - p_start.year) * 12 + p_end.month - p_start.month) + 1
-        total_fees += float(period.monthly_fee) * months
+        total_fees += period.monthly_fee * months
     return total_fees
 
 
@@ -387,7 +371,7 @@ async def avg_cost_per_session(
     row = (await db.execute(stmt)).one()
     if row.n is None or int(row.n) == 0 or row.num is None:
         return None
-    return float(row.num) / float(row.n)
+    return per_unit(row.num, row.n)
 
 
 async def cost_per_mile(
@@ -417,9 +401,9 @@ async def cost_per_mile(
         stmt = stmt.where(EVChargingSession.device_id == device_id)
 
     row = (await db.execute(stmt)).one()
-    if row.denom is None or float(row.denom) == 0.0 or row.num is None:
+    if not row.denom or row.num is None:
         return None
-    return float(row.num) / float(row.denom)
+    return per_unit(row.num, row.denom)
 
 
 async def cost_per_kwh(
@@ -449,21 +433,21 @@ async def cost_per_kwh(
         stmt = stmt.where(EVChargingSession.device_id == device_id)
 
     row = (await db.execute(stmt)).one()
-    if row.denom is None or float(row.denom) == 0.0 or row.num is None:
+    if not row.denom or row.num is None:
         return None
-    return float(row.num) / float(row.denom)
+    return per_unit(row.num, row.denom)
 
 
 async def free_charging_savings(
     db: AsyncSession,
     device_id: str | None = None,
     time_range: str = "all",
-) -> float:
+) -> Decimal:
     """Total dollars saved via `is_free=True` sessions in the range.
 
     Computed as Sum(estimated_cost) over is_free sessions — estimated_cost is
     the pre-cascade "would-have-cost" value populated by compute_session_cost
-    (see query_cost_summary). Returns 0.0 when no free sessions exist.
+    (see query_cost_summary). Returns zero when no free sessions exist.
     """
     stmt = (
         select(func.sum(EVChargingSession.estimated_cost))
@@ -478,7 +462,6 @@ async def free_charging_savings(
         stmt = stmt.where(EVChargingSession.device_id == device_id)
 
     row = (await db.execute(stmt)).one()
-    total = row[0]
-    return float(total) if total is not None else 0.0
+    return row[0] if row[0] is not None else ZERO
 
 

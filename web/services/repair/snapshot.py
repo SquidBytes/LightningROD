@@ -10,11 +10,13 @@ from typing import Any
 from sqlalchemy import DateTime, Numeric, Uuid, delete, func, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.base import Cents, Rate
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.repair_backup import RepairBackup
 from db.models.trip_metrics import EVTripMetrics
 from db.models.vehicle_status import EVVehicleStatus
+from web.money import to_money
 
 # Restore scope: only these tables can be restored from snapshots.
 RESTORABLE_MODELS: dict[str, Any] = {
@@ -29,7 +31,8 @@ def serialize_row(obj: Any) -> dict[str, Any]:
     for col in inspect(obj).mapper.columns:
         val = getattr(obj, col.key)
         if isinstance(val, Decimal):
-            val = float(val)
+            # Money stays exact as text; any other Decimal is a measurement.
+            val = str(val) if isinstance(col.type, Cents | Rate) else float(val)
         elif isinstance(val, datetime):
             val = val.isoformat()
         elif isinstance(val, uuid.UUID):
@@ -51,6 +54,9 @@ def deserialize_row(model: type, data: dict[str, Any]) -> dict[str, Any]:
             val = datetime.fromisoformat(val)
         elif isinstance(col_type, Uuid) and isinstance(val, str):
             val = uuid.UUID(val)
+        elif isinstance(col_type, Cents | Rate):
+            # str() also reads snapshots that stored money as a JSON number.
+            val = to_money(str(val))
         elif isinstance(col_type, Numeric) and isinstance(val, int | float):
             val = float(val)
         out[key] = val

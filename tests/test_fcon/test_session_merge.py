@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
@@ -151,14 +152,14 @@ async def test_curated_fields_survive_a_merge_and_a_rerun(db_session):
     await _feed_fcon(db_session)
     [row] = await _sessions(db_session)
     row.location_name = "My Garage"
-    row.cost = 1.23
+    row.cost = Decimal("1.23")
     row.is_free = False
     await db_session.flush()
     await _feed_ha(db_session)
     for p in FCON_CHARGE:  # a re-parse of the archive
         await fcon_adapter.process_sample("telemetry", p, db_session, {"config_id": 1})
     [row] = await _sessions(db_session)
-    assert (row.location_name, float(row.cost), row.is_free) == ("My Garage", 1.23, False)
+    assert (row.location_name, row.cost, row.is_free) == ("My Garage", Decimal("1.23"), False)
 
 
 async def test_rerunning_is_idempotent(db_session):
@@ -176,7 +177,7 @@ async def test_rerunning_is_idempotent(db_session):
 async def test_protected_session_is_untouched_and_nothing_written(db_session):
     manual = EVChargingSession(
         device_id=DEVICE, source_system="csv_import", is_complete=True,
-        session_start_utc=T0, energy_kwh=5.0, cost=2.0,
+        session_start_utc=T0, energy_kwh=5.0, cost=Decimal("2.0"),
     )
     db_session.add(manual)
     await db_session.flush()

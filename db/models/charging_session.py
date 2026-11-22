@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime
-from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -17,7 +16,13 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.models.base import TIMESTAMPTZ, Base, IngestMetaMixin, IngestVersionMixin
+from db.models.base import (
+    TIMESTAMPTZ,
+    Base,
+    CentsAmount,
+    IngestMetaMixin,
+    IngestVersionMixin,
+)
 
 
 class EVChargingSession(IngestMetaMixin, IngestVersionMixin, Base):
@@ -65,10 +70,10 @@ class EVChargingSession(IngestMetaMixin, IngestVersionMixin, Base):
     energy_kwh: Mapped[float | None] = mapped_column()
 
     # Cost
-    cost: Mapped[Decimal | None] = mapped_column()
-    cost_without_overrides: Mapped[Decimal | None] = mapped_column()
+    cost: Mapped[CentsAmount | None] = mapped_column()
+    cost_without_overrides: Mapped[CentsAmount | None] = mapped_column()
     cost_source: Mapped[str | None] = mapped_column(String(20))  # 'imported', 'manual', 'calculated', None
-    estimated_cost: Mapped[Decimal | None] = mapped_column(nullable=True)
+    estimated_cost: Mapped[CentsAmount | None] = mapped_column(nullable=True)
 
     # Session flags
     is_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

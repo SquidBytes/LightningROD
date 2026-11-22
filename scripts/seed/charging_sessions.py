@@ -16,6 +16,7 @@ from __future__ import annotations
 import random
 import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargingNetwork, EVLocationLookup
 from db.models.vehicle import EVVehicle
 from scripts.seed.base import DataMapSeeder, load_declared_mappings
+from web.money import ZERO, cost_of
 
 _DEMO_VIN = "1FT6W1EV0NWG00000"
 _TABLE = "ev_charging_session"
@@ -47,7 +49,7 @@ _PROFILES = [
         7.0,
         (20.0, 50.0),
         (70.0, 95.0),
-        0.12,
+        Decimal("0.12"),
         "AC",
     ),
     (
@@ -61,7 +63,7 @@ _PROFILES = [
         7.0,
         (20.0, 55.0),
         (65.0, 92.0),
-        0.0,  # free at work
+        ZERO,  # free at work
         "AC",
     ),
     (
@@ -75,7 +77,7 @@ _PROFILES = [
         150.0,
         (15.0, 45.0),
         (75.0, 95.0),
-        0.39,
+        Decimal("0.39"),
         "DC",
     ),
     (
@@ -89,7 +91,7 @@ _PROFILES = [
         250.0,
         (15.0, 40.0),
         (80.0, 95.0),
-        0.42,
+        Decimal("0.42"),
         "DC",
     ),
 ]
@@ -220,15 +222,13 @@ async def seed(db: AsyncSession) -> int:
         end_soc = round(rng.uniform(*soc_end_range), 1)
 
         # Cost
-        if rate_per_kwh == 0.0:
-            cost = 0.0
-            estimated_cost = 0.0
-            cost_without_overrides = 0.0
+        if not rate_per_kwh:
+            cost = estimated_cost = cost_without_overrides = ZERO
             cost_source = "calculated"
             session_source_system = "seed"
             is_free = True
         else:
-            estimated_cost = round(energy_kwh * rate_per_kwh, 2)
+            estimated_cost = cost_of(rate_per_kwh, energy_kwh)
             cost_without_overrides = estimated_cost
             roll = rng.random()
             if roll < 0.70:
@@ -238,15 +238,15 @@ async def seed(db: AsyncSession) -> int:
             elif roll < 0.85:
                 cost_source = "manual"
                 session_source_system = "manual_entry"
-                cost = round(estimated_cost * rng.uniform(0.85, 1.20), 2)
+                cost = cost_of(estimated_cost, rng.uniform(0.85, 1.20))
             elif roll < 0.95:
                 cost_source = "adapter"
                 session_source_system = "ha_fordpass"
-                cost = round(estimated_cost * rng.uniform(0.95, 1.05), 2)
+                cost = cost_of(estimated_cost, rng.uniform(0.95, 1.05))
             else:
                 cost_source = "manual"
                 session_source_system = "csv_import"
-                cost = round(estimated_cost * rng.uniform(0.50, 0.90), 2)
+                cost = cost_of(estimated_cost, rng.uniform(0.50, 0.90))
             is_free = False
 
         # Power metrics — average kW inferred from energy/duration

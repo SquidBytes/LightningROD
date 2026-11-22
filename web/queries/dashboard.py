@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
 from db.models.charging_session import EVChargingSession
+from web.money import ZERO, per_unit
 from web.queries.charts import HOVER_LABEL as _HOVER_LABEL
 from web.queries.charts import PLOTLY_CONFIG as _PLOTLY_CONFIG
 from web.queries.charts import wrap_chart as _wrap_chart
@@ -27,7 +28,7 @@ async def query_dashboard_summary(db: AsyncSession, device_id: str | None = None
     Returns dict with:
     - total_sessions: int   (all sessions in DB, regardless of cost resolution)
     - total_kwh: float      (sum of energy_kwh across all sessions)
-    - total_cost: float     (sum of display_cost for sessions with a resolved cost)
+    - total_cost: Decimal   (sum of display_cost for sessions with a resolved cost)
     - avg_cost_per_session: float | None
     - avg_kwh_per_session: float | None
     """
@@ -67,7 +68,7 @@ async def query_dashboard_summary(db: AsyncSession, device_id: str | None = None
     sessions = result.scalars().all()
 
     # Cost totals only for sessions with a resolved cost
-    total_cost = 0.0
+    total_cost = ZERO
     cost_session_count = 0
     for s in sessions:
         cost_info = compute_session_cost(s, networks_by_name)
@@ -76,7 +77,7 @@ async def query_dashboard_summary(db: AsyncSession, device_id: str | None = None
             cost_session_count += 1
 
     avg_cost_per_session = (
-        total_cost / cost_session_count if cost_session_count > 0 else None
+        per_unit(total_cost, cost_session_count) if cost_session_count > 0 else None
     )
     avg_kwh_per_session = (
         total_kwh / total_sessions if total_sessions > 0 else None

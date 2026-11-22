@@ -4,6 +4,7 @@ import json
 import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any, cast
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
@@ -18,7 +19,7 @@ from db.models.data_source_config import DataSourceConfig
 from db.models.reference import EVChargerStall, EVChargingNetwork, EVLocationLookup
 from web import developer_mode as dev_mode_module
 from web.dependencies import DbSession
-from web.money import cost_of
+from web.money import ZERO, cost_of
 from web.queries.gas_prices import (
     delete_gas_price,
     get_all_gas_prices,
@@ -622,7 +623,7 @@ async def create_network_route(
     request: Request,
     db: DbSession,
     network_name: str = Form(...),
-    cost_per_kwh: float | None = Form(None),
+    cost_per_kwh: Decimal | None = Form(None),
     color: str | None = Form(None),
     is_free: str | None = Form(None),
 ):
@@ -699,7 +700,7 @@ async def update_network_route(
     request: Request,
     db: DbSession,
     network_name: str = Form(...),
-    cost_per_kwh: float | None = Form(None),
+    cost_per_kwh: Decimal | None = Form(None),
     color: str | None = Form(None),
     is_free: str | None = Form(None),
 ):
@@ -934,7 +935,7 @@ async def create_location_route(
     address: str | None = Form(None),
     latitude: float | None = Form(None),
     longitude: float | None = Form(None),
-    cost_per_kwh: float | None = Form(None),
+    cost_per_kwh: Decimal | None = Form(None),
 ):
     """Add a location under a network."""
     new_loc = await create_location(
@@ -976,7 +977,7 @@ async def update_location_route(
     address: str | None = Form(None),
     latitude: float | None = Form(None),
     longitude: float | None = Form(None),
-    cost_per_kwh: float | None = Form(None),
+    cost_per_kwh: Decimal | None = Form(None),
 ):
     """Update a location and return the refreshed location list."""
     await update_location(
@@ -1263,8 +1264,8 @@ async def create_subscription_route(
     network_id: int,
     request: Request,
     db: DbSession,
-    member_rate: float = Form(...),
-    monthly_fee: float = Form(0),
+    member_rate: Decimal = Form(...),
+    monthly_fee: Decimal = Form(ZERO),
     start_date: str = Form(...),
     end_date: str = Form(""),
     notes: str = Form(""),
@@ -1326,8 +1327,8 @@ async def update_subscription_route(
     subscription_id: int,
     request: Request,
     db: DbSession,
-    member_rate: float = Form(...),
-    monthly_fee: float = Form(0),
+    member_rate: Decimal = Form(...),
+    monthly_fee: Decimal = Form(ZERO),
     start_date: str = Form(...),
     end_date: str = Form(""),
     notes: str = Form(""),
@@ -1775,17 +1776,15 @@ async def _gas_price_history_context(db: AsyncSession) -> dict:
     distance_unit = unit_ctx["distance_unit"]
     gas_prices = []
     for r in rows:
-        station_metric = float(r.station_price) if r.station_price is not None else None
-        average_metric = float(r.average_price) if r.average_price is not None else None
         gas_prices.append({
             "id": r.id,
             "year": r.year,
             "month": r.month,
             "source": r.source,
-            "station_price_metric": station_metric,
-            "station_price_display": convert_price_per_volume(station_metric, distance_unit),
-            "average_price_metric": average_metric,
-            "average_price_display": convert_price_per_volume(average_metric, distance_unit),
+            "station_price_metric": r.station_price,
+            "station_price_display": convert_price_per_volume(r.station_price, distance_unit),
+            "average_price_metric": r.average_price,
+            "average_price_display": convert_price_per_volume(r.average_price, distance_unit),
         })
     return {
         **unit_ctx,
@@ -1832,8 +1831,8 @@ async def add_gas_price(
     db: DbSession,
     year: int = Form(...),
     month: int = Form(...),
-    station_price: float | None = Form(None),
-    average_price: float | None = Form(None),
+    station_price: Decimal | None = Form(None),
+    average_price: Decimal | None = Form(None),
 ):
     """Add or update a gas price entry. Form values in display units; stored as $/L."""
     unit_ctx = await get_unit_context(db)

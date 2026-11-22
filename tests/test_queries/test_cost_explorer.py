@@ -1,6 +1,7 @@
 """Unit tests for query_cost_explorer aggregator."""
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -22,7 +23,7 @@ async def test_query_cost_explorer_totals(cost_scenario):
     """Headline totals and reference math line up with fixture-computed expectations."""
     db = cost_scenario["db"]
 
-    result = await query_cost_explorer(db, time_range="all", reference_rate=0.50)
+    result = await query_cost_explorer(db, time_range="all", reference_rate=Decimal("0.50"))
 
     assert result["total_paid_actual"] > 0
     assert result["unconfigured_count"] >= 0
@@ -30,21 +31,19 @@ async def test_query_cost_explorer_totals(cost_scenario):
     # the ledger footer arithmetic is consistent). The headline
     # total_paid_actual now includes subscription fees on top of that.
     assert result["totals_row"]["total_paid"] == result["total_paid_energy"]
-    assert result["total_paid_actual"] == round(
-        result["total_paid_energy"] + result["total_fees_paid"], 2
-    )
+    assert result["total_paid_actual"] == result["total_paid_energy"] + result["total_fees_paid"]
     assert isinstance(result["by_network"], list)
     assert result["subscription"] is not None
-    # When reference_rate=0.50, total_at_reference = sum(session.kWh) * 0.50.
+    # When reference_rate=Decimal("0.50"), total_at_reference = sum(session.kWh) * 0.50.
     expected_at_ref = result["totals_row"]["total_kwh"] * 0.50
-    assert abs(result["total_at_reference"] - round(expected_at_ref, 2)) < 0.05
+    assert abs(float(result["total_at_reference"]) - expected_at_ref) < 0.05
 
 
 async def test_query_cost_explorer_range_level_totals_and_ratios(cost_scenario):
     """Range-level counts, distance, and all-in cost ratios derive consistently."""
     db = cost_scenario["db"]
 
-    result = await query_cost_explorer(db, time_range="all", reference_rate=0.50)
+    result = await query_cost_explorer(db, time_range="all", reference_rate=Decimal("0.50"))
 
     # Counts mirror the ledger totals row.
     assert result["total_sessions"] == result["totals_row"]["session_count"]
@@ -54,22 +53,16 @@ async def test_query_cost_explorer_range_level_totals_and_ratios(cost_scenario):
 
     # $/kWh = all-in total / total kWh.
     if result["total_kwh"] > 0:
-        expected_kwh = round(
-            result["total_paid_actual"] / result["total_kwh"], 3
-        )
-        assert result["cost_per_kwh"] == expected_kwh
+        expected_kwh = float(result["total_paid_actual"]) / result["total_kwh"]
+        assert result["cost_per_kwh"] == pytest.approx(expected_kwh)
     # $/session = all-in total / session count.
     if result["total_sessions"] > 0:
-        expected_session = round(
-            result["total_paid_actual"] / result["total_sessions"], 2
-        )
-        assert result["cost_per_session"] == expected_session
+        expected_session = float(result["total_paid_actual"]) / result["total_sessions"]
+        assert result["cost_per_session"] == pytest.approx(expected_session)
     # $/km divides by raw km distance (the route converts to display units).
     if result["total_distance"] > 0:
-        expected_dist = round(
-            result["total_paid_actual"] / result["total_distance"], 4
-        )
-        assert result["cost_per_distance_km"] == expected_dist
+        expected_dist = float(result["total_paid_actual"]) / result["total_distance"]
+        assert result["cost_per_distance_km"] == pytest.approx(expected_dist)
     else:
         assert result["cost_per_distance_km"] is None
 
@@ -82,10 +75,10 @@ async def test_query_cost_explorer_strip_ignores_network_filter(cost_scenario):
     """
     db = cost_scenario["db"]
 
-    unscoped = await query_cost_explorer(db, time_range="all", reference_rate=0.50)
+    unscoped = await query_cost_explorer(db, time_range="all", reference_rate=Decimal("0.50"))
     first_net_id = unscoped["by_network"][0]["network_id"]
     scoped = await query_cost_explorer(
-        db, time_range="all", network_ids=[first_net_id], reference_rate=0.50
+        db, time_range="all", network_ids=[first_net_id], reference_rate=Decimal("0.50")
     )
 
     # The scoped call narrows its own totals — that's expected. The route uses
@@ -99,15 +92,13 @@ async def test_query_cost_explorer_free_charging_strip_figures(cost_scenario):
     """free_charging_saved and cost_per_free_session populate when free sessions exist."""
     db = cost_scenario["db"]
 
-    result = await query_cost_explorer(db, time_range="all", reference_rate=0.40)
+    result = await query_cost_explorer(db, time_range="all", reference_rate=Decimal("0.40"))
 
     if result["free_session_count"] > 0:
         assert result["free_charging_saved"] >= 0.0
         if result["cost_per_free_session"] is not None:
-            expected = round(
-                result["free_charging_saved"] / result["free_session_count"], 2
-            )
-            assert result["cost_per_free_session"] == expected
+            expected = float(result["free_charging_saved"]) / result["free_session_count"]
+            assert result["cost_per_free_session"] == pytest.approx(expected)
     else:
         assert result["free_charging_saved"] == 0.0
         assert result["cost_per_free_session"] is None
@@ -139,13 +130,13 @@ async def test_query_cost_explorer_free_what_if_global(cost_scenario):
     """Global free-charging what-if rebills free sessions at reference_rate."""
     db = cost_scenario["db"]
 
-    baseline = await query_cost_explorer(db, time_range="all", reference_rate=0.40)
+    baseline = await query_cost_explorer(db, time_range="all", reference_rate=Decimal("0.40"))
     what_if = await query_cost_explorer(
         db,
         time_range="all",
         free_charging_what_if=True,
         free_charging_scope="global",
-        reference_rate=0.40,
+        reference_rate=Decimal("0.40"),
     )
 
     free_session_count = sum(r["free_session_count"] for r in baseline["by_network"])
@@ -174,11 +165,11 @@ async def test_query_cost_explorer_free_what_if_per_network_multi(cost_scenario)
 
     # Two free-charging networks, each with one free session.
     free_x = EVChargingNetwork(
-        network_name="Free X", cost_per_kwh=0.0, is_free=True,
+        network_name="Free X", cost_per_kwh=Decimal("0.0"), is_free=True,
         is_verified=True, source_system="test_fixture",
     )
     free_y = EVChargingNetwork(
-        network_name="Free Y", cost_per_kwh=0.0, is_free=True,
+        network_name="Free Y", cost_per_kwh=Decimal("0.0"), is_free=True,
         is_verified=True, source_system="test_fixture",
     )
     db.add_all([free_x, free_y])
@@ -197,7 +188,7 @@ async def test_query_cost_explorer_free_what_if_per_network_multi(cost_scenario)
     ])
     await db.flush()
 
-    baseline = await query_cost_explorer(db, time_range="all", reference_rate=0.40)
+    baseline = await query_cost_explorer(db, time_range="all", reference_rate=Decimal("0.40"))
     eligible = {n["network_id"] for n in baseline["free_charging_eligible_networks"]}
     assert {free_x.id, free_y.id} <= eligible
 
@@ -205,19 +196,19 @@ async def test_query_cost_explorer_free_what_if_per_network_multi(cost_scenario)
     one = await query_cost_explorer(
         db, time_range="all", free_charging_what_if=True,
         free_charging_scope="per_network", free_charging_networks=[free_x.id],
-        reference_rate=0.40,
+        reference_rate=Decimal("0.40"),
     )
     # Rebill both — must move further than the single-network rebill.
     both = await query_cost_explorer(
         db, time_range="all", free_charging_what_if=True,
         free_charging_scope="per_network",
         free_charging_networks=[free_x.id, free_y.id],
-        reference_rate=0.40,
+        reference_rate=Decimal("0.40"),
     )
 
     # Free X rebill adds 30 kWh * 0.40 = 12.00; Free Y adds 20 * 0.40 = 8.00.
-    assert round(one["total_paid_what_if"] - baseline["total_paid_what_if"], 2) == 12.00
-    assert round(both["total_paid_what_if"] - baseline["total_paid_what_if"], 2) == 20.00
+    assert one["total_paid_what_if"] - baseline["total_paid_what_if"] == Decimal("12.00")
+    assert both["total_paid_what_if"] - baseline["total_paid_what_if"] == Decimal("20.00")
     # Actuals are unaffected by the what-if.
     assert both["total_paid_actual"] == baseline["total_paid_actual"]
 
@@ -226,7 +217,7 @@ async def test_query_cost_explorer_subscription_counterfactual(cost_scenario):
     """With/Without/Net saved derive consistently when a subscription is active."""
     db = cost_scenario["db"]
 
-    result = await query_cost_explorer(db, time_range="all", reference_rate=0.50)
+    result = await query_cost_explorer(db, time_range="all", reference_rate=Decimal("0.50"))
 
     sub = result["subscription"]
     if sub["active"]:
@@ -249,18 +240,18 @@ async def test_query_cost_explorer_zero_reference_rate(cost_scenario):
     """reference_rate=0.0 disables the reference comparison (Q-07 edge case)."""
     db = cost_scenario["db"]
 
-    result = await query_cost_explorer(db, time_range="all", reference_rate=0.0)
+    result = await query_cost_explorer(db, time_range="all", reference_rate=Decimal("0.0"))
 
     assert result["total_at_reference"] == 0.0
     # total_savings_vs_reference = total_at_reference - total_paid_energy
     # (apples-to-apples — fees aren't a per-kWh quantity so they're excluded
     # from this comparison). With rate=0 that collapses to -total_paid_energy.
-    assert result["total_savings_vs_reference"] == round(-result["total_paid_energy"], 2)
+    assert result["total_savings_vs_reference"] == -result["total_paid_energy"]
     for row in result["by_network"]:
         assert row["total_at_reference"] == 0.0
         # Per-row delta is total_paid - total_at_reference (positive when you paid
         # more than the reference); with rate=0 it collapses to total_paid.
-        assert row["delta"] == round(row["total_paid"], 2)
+        assert row["delta"] == row["total_paid"]
 
 
 async def test_totals_row_reference_label_network_mode(cost_scenario):
@@ -270,7 +261,7 @@ async def test_totals_row_reference_label_network_mode(cost_scenario):
     result = await query_cost_explorer(
         db,
         time_range="all",
-        reference_rate=0.40,
+        reference_rate=Decimal("0.40"),
         reference_network_name="Blink",
         reference_network_id=99,
     )
@@ -278,7 +269,7 @@ async def test_totals_row_reference_label_network_mode(cost_scenario):
     assert totals["reference_label"] == "Blink - $0.40/kWh"
     # paid_per_kwh + reference_per_kwh are populated when energy > 0.
     assert totals["paid_per_kwh"] is not None
-    assert totals["reference_per_kwh"] == round(0.40, 2)
+    assert totals["reference_per_kwh"] == pytest.approx(0.40, abs=0.005)
 
 
 async def test_totals_row_reference_label_custom_mode(cost_scenario):
@@ -288,12 +279,12 @@ async def test_totals_row_reference_label_custom_mode(cost_scenario):
     result = await query_cost_explorer(
         db,
         time_range="all",
-        reference_rate=0.52,
+        reference_rate=Decimal("0.52"),
         reference_network_name=None,
     )
     totals = result["totals_row"]
     assert totals["reference_label"] == "$0.52/kWh"
-    assert totals["reference_per_kwh"] == 0.52
+    assert totals["reference_per_kwh"] == pytest.approx(0.52, abs=0.005)
 
 
 async def test_totals_row_reference_label_multi_network_weighted(cost_scenario):
@@ -301,7 +292,7 @@ async def test_totals_row_reference_label_multi_network_weighted(cost_scenario):
     db = cost_scenario["db"]
 
     # Multi-network scope with reference_rate=0 -> no reference comparison.
-    result = await query_cost_explorer(db, time_range="all", reference_rate=0.0)
+    result = await query_cost_explorer(db, time_range="all", reference_rate=Decimal("0.0"))
     totals = result["totals_row"]
     assert totals["reference_label"] is None
     assert totals["reference_per_kwh"] is None
@@ -313,7 +304,7 @@ async def test_totals_row_reference_label_multi_network_weighted(cost_scenario):
     weighted = await query_cost_explorer(
         db,
         time_range="all",
-        reference_rate=0.45,
+        reference_rate=Decimal("0.45"),
         reference_network_name="Network B",
     )
     assert weighted["totals_row"]["reference_per_kwh"] == 0.45
@@ -327,15 +318,15 @@ async def test_query_cost_explorer_per_subscription_breakdown(cost_scenario):
     # Add a second subscription on Network A so the breakdown carries two rows.
     net_a_sub = EVNetworkSubscription(
         network_id=cost_scenario["net_a"].id,
-        member_rate=0.20,
-        monthly_fee=4.99,
+        member_rate=Decimal("0.20"),
+        monthly_fee=Decimal("4.99"),
         start_date=date(2025, 6, 1),
         end_date=date(2025, 8, 1),
     )
     db.add(net_a_sub)
     await db.flush()
 
-    result = await query_cost_explorer(db, time_range="all", reference_rate=0.50)
+    result = await query_cost_explorer(db, time_range="all", reference_rate=Decimal("0.50"))
     sub = result["subscription"]
     assert sub["active"] is True
 
@@ -350,15 +341,13 @@ async def test_query_cost_explorer_per_subscription_breakdown(cost_scenario):
     for row in subs:
         assert isinstance(row["network_id"], int)
         assert isinstance(row["network_name"], str)
-        assert isinstance(row["energy_at_member_rate"], float)
-        assert isinstance(row["member_fee"], float)
+        assert isinstance(row["energy_at_member_rate"], Decimal)
+        assert isinstance(row["member_fee"], Decimal)
         assert row["member_fee"] >= 0.0
 
     # Fees should sum to the headline `with_fees_total`.
-    assert abs(
-        sum(r["member_fee"] for r in subs) - sub["with_fees_total"]
-    ) < 0.02
+    assert sum(r["member_fee"] for r in subs) == sub["with_fees_total"]
 
     # Energy sum across networks should not exceed total paid (free sessions
     # don't carry a subscription so they're excluded from the per-net energy).
-    assert sum(r["energy_at_member_rate"] for r in subs) <= sub["with_energy_at_member_rate"] + 0.02
+    assert sum(r["energy_at_member_rate"] for r in subs) <= sub["with_energy_at_member_rate"]

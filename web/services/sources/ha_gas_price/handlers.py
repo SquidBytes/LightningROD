@@ -7,15 +7,28 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
+from typing import Any
 
 from web.services.ingestion._helpers import (
     _get_event_timestamp,
     _get_state_value,
 )
-from web.unit_system import GAL_PER_LITER
-from web.util.numbers import safe_float
+from web.unit_system import to_metric_price_per_volume
 
 logger = logging.getLogger("lightningrod.sources.ha_gas_price.handlers")
+
+
+def metric_gas_price(state_val: Any) -> Decimal | None:
+    """HA $/gal state text as Decimal $/L; None unless it is a positive number."""
+    try:
+        price = Decimal(str(state_val))
+    except InvalidOperation:
+        return None
+    if not price.is_finite() or price <= 0:
+        return None
+    # HA gas sensors report $/gal; all gas-price storage is metric.
+    return to_metric_price_per_volume(price, "us")
 
 
 async def handle_gas_sensor_event(
@@ -43,14 +56,10 @@ async def handle_gas_sensor_event(
         logger.debug("Gas sensor %s has non-numeric state '%s', skipping", entity_id, state_val)
         return False
 
-    price = safe_float(state_val)
-    if price is None or price <= 0:
+    price_metric = metric_gas_price(state_val)
+    if price_metric is None:
         logger.debug("Gas sensor %s value not a valid price: '%s', skipping", entity_id, state_val)
         return False
-
-    # UNIT-02: HA gas sensors report $/gal (US-locale assumption per RESEARCH A1).
-    # Convert to $/L before storing so all gas-price storage is metric.
-    price_metric = price * GAL_PER_LITER
 
     recorded_at = _get_event_timestamp(new_state) or datetime.now(UTC)
 
@@ -62,8 +71,8 @@ async def handle_gas_sensor_event(
 
     await store_gas_price_reading(db, entity_id, price_metric, recorded_at)
     logger.info(
-        "Gas price reading stored: entity=%s, price=%.4f $/L (raw=%.3f $/gal), at=%s",
-        entity_id, price_metric, price, recorded_at,
+        "Gas price reading stored: entity=%s, price=%.4f $/L (raw=%s $/gal), at=%s",
+        entity_id, price_metric, state_val, recorded_at,
     )
 
     # Compute monthly averages and upsert into gas_price_history

@@ -3,6 +3,8 @@
 Tests location resolution, geo-matching, and address normalization.
 """
 
+from decimal import Decimal
+
 import pytest
 
 from web.queries.locations import (
@@ -24,7 +26,7 @@ async def test_get_locations_for_network(db_session):
 
     net = EVChargingNetwork(
         network_name="Location Test Net",
-        cost_per_kwh=0.35,
+        cost_per_kwh=Decimal("0.35"),
         is_free=False,
         is_verified=True,
     )

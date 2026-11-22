@@ -1,11 +1,13 @@
 """Factory for EVChargingSession model instances."""
 
 import uuid
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.charging_session import EVChargingSession
 from tests.factories import BaseFactory
+from web.money import cost_of
 
 
 class ChargingSessionFactory(BaseFactory):
@@ -16,7 +18,7 @@ class ChargingSessionFactory(BaseFactory):
         cls._next_id()
         energy = cls._random_float(5.0, 80.0)
         charge_type = cls._random_choice(["AC Level 2", "DC Fast"])
-        rate = 0.15 if charge_type == "AC Level 2" else cls._random_float(0.30, 0.55)
+        rate = Decimal("0.15") if charge_type == "AC Level 2" else cls._random_money(0.30, 0.55)
 
         defaults = {
             "session_id": uuid.uuid4(),
@@ -25,7 +27,7 @@ class ChargingSessionFactory(BaseFactory):
             "energy_kwh": energy,
             "start_soc": cls._random_float(10.0, 50.0, 1),
             "end_soc": cls._random_float(60.0, 100.0, 1),
-            "cost": round(energy * rate, 2),
+            "cost": cost_of(rate, energy),
             "session_start_utc": cls._random_datetime(days_back=30),
             "is_complete": True,
             "source_system": "test_factory",

@@ -34,10 +34,10 @@
                     ) }}
                     <p class="ledger-sub">
                         {% if has_distance and ev.ev_total and distance_comparison.total_distance and distance_comparison.total_distance > 0 %}
-                            {{ "%.1f"|format((ev.ev_total / distance_comparison.total_distance) * 100) }} ¢/{{ units.distance_label }} all-in
+                            {{ "%.1f"|format((ev.ev_total|float / distance_comparison.total_distance) * 100) }} ¢/{{ units.distance_label }} all-in
                         {% elif not has_distance and ev.ev_total and gas_comparison.total_distance and gas_comparison.total_distance > 0 %}
                             {{ "%.0f"|format(gas_comparison.total_distance) }} {{ units.distance_label }} range added
-                            · {{ "%.1f"|format((ev.ev_total / gas_comparison.total_distance) * 100) }} ¢/{{ units.distance_label }} all-in
+                            · {{ "%.1f"|format((ev.ev_total|float / gas_comparison.total_distance) * 100) }} ¢/{{ units.distance_label }} all-in
                         {% endif %}
                     </p>
                 </div>

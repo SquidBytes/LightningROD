@@ -16,7 +16,7 @@ class NetworkFactory(BaseFactory):
         n = cls._next_id()
         defaults = {
             "network_name": f"Test Network {n}",
-            "cost_per_kwh": cls._random_float(0.20, 0.55),
+            "cost_per_kwh": cls._random_money(0.20, 0.55),
             "is_verified": True,
             "source_system": "test_factory",
         }
@@ -35,8 +35,8 @@ class SubscriptionFactory(BaseFactory):
         cls._next_id()
         start = date.today() - timedelta(days=90)
         defaults = {
-            "member_rate": cls._random_float(0.10, 0.30),
-            "monthly_fee": cls._random_float(5.0, 15.0),
+            "member_rate": cls._random_money(0.10, 0.30),
+            "monthly_fee": cls._random_money(5.0, 15.0),
             "start_date": start,
             "end_date": start + timedelta(days=180),
         }

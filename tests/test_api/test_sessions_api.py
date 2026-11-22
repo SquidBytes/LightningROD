@@ -1,5 +1,7 @@
 """API integration tests for charging session endpoints."""
 
+from decimal import Decimal
+
 import pytest
 from sqlalchemy import select
 
@@ -259,3 +261,35 @@ async def test_sessions_export_csv_honors_charge_type_filter(client, db_session)
     assert response.status_code == 200
     assert "DC Only Stop" in response.text
     assert "AC Only Stop" not in response.text
+
+
+@pytest.mark.db
+async def test_create_session_parses_cost_text_to_the_cent(client, db_session):
+    """POST /charging/sessions reads the cost field as exact text and rounds half up."""
+    response = await client.post(
+        "/charging/sessions",
+        data={"session_date": "2026-03-01", "energy_kwh": "61.3", "cost": "29.425"},
+    )
+    assert response.status_code == 200
+
+    session = (
+        await db_session.execute(
+            select(EVChargingSession).where(EVChargingSession.energy_kwh == 61.3)
+        )
+    ).scalar_one()
+    assert session.cost == Decimal("29.43")
+    assert session.cost_source == "manual"
+
+
+@pytest.mark.db
+async def test_csv_export_keeps_two_decimal_places(client, db_session):
+    """The exported cost column prints whole dollars with their cents."""
+    vehicle = await VehicleFactory.create(db_session)
+    await ChargingSessionFactory.create(
+        db_session, device_id=vehicle.device_id, cost=Decimal("15"), energy_kwh=40.0
+    )
+
+    response = await client.get("/charging/sessions/export.csv")
+
+    assert response.status_code == 200
+    assert ",15.00," in response.text

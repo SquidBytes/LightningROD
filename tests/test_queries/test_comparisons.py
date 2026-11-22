@@ -4,6 +4,7 @@ Tests gas comparison and network rate comparison calculations.
 """
 
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import delete
@@ -58,7 +59,7 @@ async def _setup_comparison_data(db):
 
     net = EVChargingNetwork(
         network_name="Comparison Net",
-        cost_per_kwh=0.35,
+        cost_per_kwh=Decimal("0.35"),
         is_free=False,
         is_verified=True,
     )
@@ -66,14 +67,12 @@ async def _setup_comparison_data(db):
     await db.flush()
 
     # Gas price for June 2025 — station $4.00/gal, average $4.20/gal.
-    # Storage is metric ($/L); divide by LITER_PER_GAL to invert the read-side
-    # multiplication in comparisons._find_gas_price.
-    LITER_PER_GAL = 3.78541
+    # Storage is metric ($/L).
     gas_price = GasPriceHistory(
         year=2025,
         month=6,
-        station_price=4.00 / LITER_PER_GAL,
-        average_price=4.20 / LITER_PER_GAL,
+        station_price=to_metric_price_per_volume(Decimal("4.00"), "us"),
+        average_price=to_metric_price_per_volume(Decimal("4.20"), "us"),
         source="manual",
     )
     db.add(gas_price)
@@ -122,9 +121,9 @@ async def test_gas_comparison(db_session):
 
     # EV costs: each session = kwh * 0.35 -> 14.00 + 10.50 + 17.50 = 42.00.
     # No subscription configured, so ev_total == ev_energy and ev_fees == 0.
-    assert result["ev_energy"] == pytest.approx(42.00, abs=0.01)
-    assert result["ev_fees"] == pytest.approx(0.00, abs=0.01)
-    assert result["ev_total"] == pytest.approx(42.00, abs=0.01)
+    assert result["ev_energy"] == Decimal("42.00")
+    assert result["ev_fees"] == Decimal("0.00")
+    assert result["ev_total"] == Decimal("42.00")
     assert result["session_count"] == 3
     # total_distance is in km (metric base)
     assert result["total_distance"] == pytest.approx(data["total_distance_km"], abs=0.01)
@@ -132,12 +131,12 @@ async def test_gas_comparison(db_session):
     # Gas costs using miles-based path: 360 miles / 25 mpg = 14.4 gallons
     # Station track: 14.4 * $4.00 = $57.60
     # Average track: 14.4 * $4.20 = $60.48
-    assert result["gas_total_low"] == pytest.approx(57.60, abs=0.01)
-    assert result["gas_total_high"] == pytest.approx(60.48, abs=0.01)
+    assert float(result["gas_total_low"]) == pytest.approx(57.60, abs=0.01)
+    assert float(result["gas_total_high"]) == pytest.approx(60.48, abs=0.01)
 
     # Savings: gas - ev
-    assert result["savings_low"] == pytest.approx(57.60 - 42.00, abs=0.01)
-    assert result["savings_high"] == pytest.approx(60.48 - 42.00, abs=0.01)
+    assert float(result["savings_low"]) == pytest.approx(57.60 - 42.00, abs=0.01)
+    assert float(result["savings_high"]) == pytest.approx(60.48 - 42.00, abs=0.01)
     assert result["has_range"] is True
     assert result["ice_label"] == "2024 Ford Explorer 25 MPG"
 
@@ -155,8 +154,8 @@ async def test_gas_comparison_ev_total_includes_subscription_fees(db_session):
     # so the June 1-3 session range yields exactly 1 month -> $7.00 in fees.
     sub = EVNetworkSubscription(
         network_id=net.id,
-        member_rate=0.30,
-        monthly_fee=7.00,
+        member_rate=Decimal("0.30"),
+        monthly_fee=Decimal("7.00"),
         start_date=date(2025, 6, 1),
         end_date=date(2025, 6, 30),
     )
@@ -168,13 +167,13 @@ async def test_gas_comparison_ev_total_includes_subscription_fees(db_session):
     )
 
     # Energy-only stays at 42.00; fees add $7.00; all-in total is 49.00.
-    assert result["ev_energy"] == pytest.approx(42.00, abs=0.01)
-    assert result["ev_fees"] == pytest.approx(7.00, abs=0.01)
-    assert result["ev_total"] == pytest.approx(49.00, abs=0.01)
+    assert result["ev_energy"] == Decimal("42.00")
+    assert result["ev_fees"] == Decimal("7.00")
+    assert result["ev_total"] == Decimal("49.00")
 
     # Savings = gas - all-in EV: 57.60 - 49.00 and 60.48 - 49.00.
-    assert result["savings_low"] == pytest.approx(57.60 - 49.00, abs=0.01)
-    assert result["savings_high"] == pytest.approx(60.48 - 49.00, abs=0.01)
+    assert float(result["savings_low"]) == pytest.approx(57.60 - 49.00, abs=0.01)
+    assert float(result["savings_high"]) == pytest.approx(60.48 - 49.00, abs=0.01)
 
 
 async def test_gas_comparison_no_ice_vehicle(db_session):
@@ -228,7 +227,7 @@ async def test_gas_comparison_empty(db_session):
 # ---------------------------------------------------------------------------
 
 from web.queries.comparisons import query_distance_gas_comparison  # noqa: E402
-from web.unit_system import LITER_PER_GAL, MI_PER_KM  # noqa: E402
+from web.unit_system import MI_PER_KM, to_metric_price_per_volume  # noqa: E402
 
 
 async def _setup_distance_data(db):
@@ -242,11 +241,11 @@ async def _setup_distance_data(db):
         is_default=True,
     )
     db.add(ice)
-    for month, price in ((1, 3.00), (2, 4.00)):
+    for month, price in ((1, Decimal("3.00")), (2, Decimal("4.00"))):
         db.add(GasPriceHistory(
             year=2026, month=month,
-            station_price=price / LITER_PER_GAL,
-            average_price=price / LITER_PER_GAL,
+            station_price=to_metric_price_per_volume(price, "us"),
+            average_price=to_metric_price_per_volume(price, "us"),
             source="manual",
         ))
     await db.flush()
@@ -275,7 +274,7 @@ async def test_distance_comparison_prices_each_month_from_odometer(db_session):
     assert result["total_distance"] == pytest.approx(200.0)
     gallons_per_100km = 100 * MI_PER_KM / 25.0
     expected = gallons_per_100km * 3.00 + gallons_per_100km * 4.00
-    assert result["gas_total_station"] == pytest.approx(expected, rel=1e-3)
+    assert float(result["gas_total_station"]) == pytest.approx(expected, rel=1e-3)
 
 
 async def test_distance_comparison_skips_odometer_resets(db_session):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 from sqlalchemy import select
 
@@ -456,7 +458,7 @@ async def test_edit_location_persists_all_field_changes(client, db_session):
         location_type="public",
         latitude=45.50,
         longitude=-122.60,
-        cost_per_kwh=0.25,
+        cost_per_kwh=Decimal("0.25"),
         network_id=None,
         is_verified=False,
     )

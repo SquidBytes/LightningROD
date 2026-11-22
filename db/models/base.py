@@ -2,12 +2,14 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Annotated, Any
 
-from sqlalchemy import DateTime, Numeric, SmallInteger, String, func
+from sqlalchemy import BigInteger, DateTime, Double, Numeric, SmallInteger, String, func
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
+
+from db.money import to_cents, to_rate
 
 # All timestamps carry timezone info.
 TIMESTAMPTZ = DateTime(timezone=True)
@@ -17,28 +19,49 @@ HA_INGEST_SCHEMA_VERSION = 2  # adapter-driven ingest with declared source units
 FCON_INGEST_SCHEMA_VERSION = 2
 
 
-class FloatNumeric(TypeDecorator[float]):
-    """NUMERIC read as float; SQLite hands back int for whole values otherwise."""
-
-    impl = Numeric(asdecimal=False)
-    cache_ok = True
-
-    def process_result_value(self, value: Any, dialect: Dialect) -> float | None:
-        return None if value is None else float(value)
-
-
-class Money(TypeDecorator[Decimal]):
-    """NUMERIC read as Decimal; a float is written via its repr, so 0.35 stores as 0.35."""
-
-    impl = Numeric
-    cache_ok = True
+class _DecimalOnly(TypeDecorator[Decimal]):
+    """Shared float rejection for the money column types."""
 
     def process_bind_param(self, value: Any, dialect: Dialect) -> Any:
-        return Decimal(str(value)) if isinstance(value, float) else value
+        if isinstance(value, float):
+            raise TypeError(f"money column got float {value!r}; give a Decimal")
+        return value
+
+
+class Cents(_DecimalOnly):
+    """Decimal dollars stored as whole cents; SQL arithmetic on the column works in cents."""
+
+    impl = BigInteger
+    cache_ok = True
+
+    def process_bind_param(self, value: Any, dialect: Dialect) -> int | None:
+        value = super().process_bind_param(value, dialect)
+        return None if value is None else int(to_cents(Decimal(value)).scaleb(2))
+
+    def process_result_value(self, value: Any, dialect: Dialect) -> Decimal | None:
+        # str() because avg() over cents comes back as a float on SQLite.
+        return None if value is None else Decimal(str(value)).scaleb(-2)
+
+
+class Rate(_DecimalOnly):
+    """Per-unit price as Decimal, four decimal places."""
+
+    impl = Numeric(12, 4)
+    cache_ok = True
+
+    def process_bind_param(self, value: Any, dialect: Dialect) -> Decimal | None:
+        # SQLite keeps whatever it is given, so round here, not in the database.
+        value = super().process_bind_param(value, dialect)
+        return None if value is None else to_rate(Decimal(value))
+
+
+# Both are Decimal in Python; the Annotated alias picks the column type.
+CentsAmount = Annotated[Decimal, "cents"]
+RateAmount = Annotated[Decimal, "rate"]
 
 
 class Base(DeclarativeBase):
-    type_annotation_map = {float: FloatNumeric(), Decimal: Money()}
+    type_annotation_map = {float: Double(), CentsAmount: Cents(), RateAmount: Rate()}
 
 
 class IngestMetaMixin:
