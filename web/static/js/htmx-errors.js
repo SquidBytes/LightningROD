@@ -2,7 +2,8 @@
    Server errors built by error_response() arrive retargeted at #toast-root.
    This script (a) moves them inside an open <dialog>, which would otherwise
    draw over the page-level toast, (b) turns non-HTML error bodies (JSON
-   detail, plain text, empty) into a toast instead of a page swap, (c) drops
+   detail, plain text, empty) and every 5xx body the app did not build into
+   a toast instead of a page swap, (c) drops
    errors from requests the user did not start (polling, load, intersect,
    revealed), and (d) closes a dialog whose content failed to load.
    Field-error JSON ({"errors": ...}) is left to the page that owns the form. */
@@ -81,11 +82,14 @@
 
     if (xhr.getResponseHeader('HX-Retarget')) {
       if (detail.target && detail.target.id === ROOT_ID) detail.target = toastRoot();
+      detail.shouldSwap = true;
       return;
     }
 
+    // 4xx HTML goes to its normal target; 5xx HTML is a proxy or crash page.
     var contentType = (xhr.getResponseHeader('Content-Type') || '').toLowerCase();
-    if (contentType.indexOf('text/html') === 0 && xhr.responseText) return;
+    var isHtml = contentType.indexOf('text/html') === 0 && xhr.responseText;
+    if (isHtml && xhr.status < 500) return;
 
     detail.shouldSwap = false;
     var body = contentType.indexOf('json') !== -1 ? parseJson(xhr.responseText) : null;
