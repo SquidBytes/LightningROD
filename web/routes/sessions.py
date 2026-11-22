@@ -323,16 +323,16 @@ async def export_sessions_csv(
 
 async def _load_selected_sessions(
     form, db: AsyncSession
-) -> list[EVChargingSession] | HTMLResponse:
+) -> list[EVChargingSession] | JSONResponse:
     """Sessions named by the comma-separated `session_ids` field, or a 422."""
     try:
         session_ids = [
             int(sid) for sid in str(form.get("session_ids", "")).split(",") if sid.strip()
         ]
     except ValueError:
-        return error_response("Invalid session IDs", 422)
+        return JSONResponse(status_code=422, content={"error": "Invalid session IDs"})
     if not session_ids:
-        return error_response("No sessions selected", 422)
+        return JSONResponse(status_code=422, content={"error": "No sessions selected"})
     result = await db.execute(
         select(EVChargingSession).where(EVChargingSession.id.in_(session_ids))
     )
@@ -347,7 +347,7 @@ async def bulk_update_sessions(
     """Bulk update selected sessions with common field values."""
     form = await request.form()
     selected = await _load_selected_sessions(form, db)
-    if isinstance(selected, HTMLResponse):
+    if isinstance(selected, JSONResponse):
         return selected
     bulk_sessions = selected
 
@@ -405,7 +405,7 @@ async def bulk_delete_sessions(
 ):
     """Delete every selected session."""
     selected = await _load_selected_sessions(await request.form(), db)
-    if isinstance(selected, HTMLResponse):
+    if isinstance(selected, JSONResponse):
         return selected
     for s in selected:
         await db.delete(s)

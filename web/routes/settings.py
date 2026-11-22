@@ -413,6 +413,8 @@ async def delete_vehicle_route(
     request: Request,
     db: DbSession,
 ):
+    if await get_vehicle_by_id(db, vehicle_id) is None:
+        return error_response("Vehicle not found", 404)
     deleted = await delete_vehicle(db, vehicle_id)
     if not deleted:
         return error_response("Cannot delete the active vehicle. Set another vehicle as active first.")
@@ -580,6 +582,8 @@ async def delete_ice_vehicle_route(
     db: DbSession,
 ):
     """Delete an ICE vehicle. Refuses to delete the default row when others exist."""
+    if await get_ice_vehicle_by_id(db, ice_id) is None:
+        return error_response("ICE vehicle not found", 404)
     if not await delete_ice_vehicle(db, ice_id):
         return error_response(
             "Cannot delete the default ICE vehicle. Set a different default first.", 409

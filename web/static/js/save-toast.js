@@ -47,6 +47,8 @@
 
   document.addEventListener('htmx:afterSwap', function (e) {
     scheduleDismiss(document);
+    // An error toast is a swap too, but the edit it refused is still open.
+    if (e && e.detail && e.detail.failed) return;
     // Only sweep rings on save-like swaps. A GET swap (clicking a row to load
     // its detail into the drawer) targets a different region and would
     // otherwise strip the just-applied selection ring off the clicked row.

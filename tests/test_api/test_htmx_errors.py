@@ -27,3 +27,25 @@ async def test_http_exception_stays_json_without_htmx(client):
     response = await client.post("/settings/data-repair/not-a-repair/preview")
     assert response.status_code == 404
     assert response.json() == {"detail": "Unknown repair: not-a-repair"}
+
+
+async def test_rejected_field_is_a_toast_for_htmx(client):
+    response = await client.post(
+        "/settings/networks", data={}, headers={"HX-Request": "true"}
+    )
+    assert response.status_code == 422
+    assert response.headers["HX-Retarget"] == TOAST_ROOT
+    assert "network_name" in response.text
+
+
+async def test_rejected_field_stays_json_without_htmx(client):
+    response = await client.post("/settings/networks", data={})
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"][-1] == "network_name"
+
+
+@pytest.mark.parametrize("path", ["/settings/vehicles/999999", "/settings/ice-vehicles/999999"])
+async def test_deleting_a_missing_row_is_not_found(client, path):
+    response = await client.delete(path)
+    assert response.status_code == 404
+    assert "not found" in response.text
