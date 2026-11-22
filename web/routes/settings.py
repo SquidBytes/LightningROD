@@ -93,6 +93,7 @@ from web.unit_system import (
     to_metric_fuel_volume,
     to_metric_price_per_volume,
 )
+from web.util.htmx import error_response
 
 
 def _vehicle_presets_for_template() -> list[dict]:
@@ -506,8 +507,7 @@ async def create_ice_vehicle_route(
 ):
     """Create an ICE vehicle. Form values are in display units; converted to metric here."""
     if not label or not label.strip():
-        from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=422, content={"detail": "Label is required"})
+        return error_response("Label is required", 422)
     unit_ctx = await get_unit_context(db)
     fuel_metric = to_metric_fuel_efficiency(fuel_efficiency_display, unit_ctx["distance_unit"])
     tank_metric = to_metric_fuel_volume(tank_capacity_display, unit_ctx["distance_unit"])
@@ -577,8 +577,7 @@ async def update_ice_vehicle_route(
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"detail": "ICE vehicle not found"})
     if not label or not label.strip():
-        from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=422, content={"detail": "Label is required"})
+        return error_response("Label is required", 422)
     unit_ctx = await get_unit_context(db)
     fuel_metric = to_metric_fuel_efficiency(fuel_efficiency_display, unit_ctx["distance_unit"])
     tank_metric = to_metric_fuel_volume(tank_capacity_display, unit_ctx["distance_unit"])
