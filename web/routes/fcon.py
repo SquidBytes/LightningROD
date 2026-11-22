@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
@@ -31,6 +31,7 @@ from web.services.sources.fcon.retention import (
     set_retention_days,
 )
 from web.services.sources.fcon.tokens import TOKEN_FIELDS
+from web.util.forms import OptionalInt
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -164,10 +165,10 @@ async def finish_connect(
 async def retention_estimate(
     request: Request,
     db: DbSession,
-    days: int = Query(0),
+    days: OptionalInt = 0,
 ):
     return templates.TemplateResponse(
-        request, ESTIMATE, {"estimate": await estimate(db, max(days, 0))}
+        request, ESTIMATE, {"estimate": await estimate(db, max(days or 0, 0))}
     )
 
 
