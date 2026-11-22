@@ -16,6 +16,7 @@ and converted to UTC before storage. See ``parse_user_local_to_utc``.
 """
 
 from datetime import UTC, datetime, tzinfo
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from web.util.timestamps import from_local, utc
@@ -25,6 +26,9 @@ KM_PER_MI = 1.60934
 MI_PER_KM = 0.621371
 GAL_PER_LITER = 0.264172
 LITER_PER_GAL = 3.78541
+# Prices are Decimal, so they convert with Decimal factors.
+_GAL_PER_LITER_DEC = Decimal(str(GAL_PER_LITER))
+_LITER_PER_GAL_DEC = Decimal(str(LITER_PER_GAL))
 
 # Valid values for settings
 DISTANCE_UNIT_VALUES = ("us", "metric")
@@ -111,7 +115,7 @@ def convert_fuel_volume(liters: float | None, distance_unit: str) -> float | Non
     return float(liters) * GAL_PER_LITER if _normalize_distance_unit(distance_unit) == "us" else float(liters)
 
 
-def convert_price_per_volume(price_per_l: float | None, distance_unit: str) -> float | None:
+def convert_price_per_volume(price_per_l: Decimal | None, distance_unit: str) -> Decimal | None:
     """Convert $/L (DB) to display price-per-volume unit ($/gal or $/L).
 
     US locale: multiply by LITER_PER_GAL to get $/gal.
@@ -119,7 +123,7 @@ def convert_price_per_volume(price_per_l: float | None, distance_unit: str) -> f
     """
     if price_per_l is None:
         return None
-    return float(price_per_l) * LITER_PER_GAL if _normalize_distance_unit(distance_unit) == "us" else float(price_per_l)
+    return price_per_l * _LITER_PER_GAL_DEC if _normalize_distance_unit(distance_unit) == "us" else price_per_l
 
 
 def convert_speed(kmh: float | None, distance_unit: str) -> float | None:
@@ -169,7 +173,7 @@ def to_metric_fuel_volume(value: float | None, distance_unit: str) -> float | No
     return float(value) * LITER_PER_GAL if _normalize_distance_unit(distance_unit) == "us" else float(value)
 
 
-def to_metric_price_per_volume(value: float | None, distance_unit: str) -> float | None:
+def to_metric_price_per_volume(value: Decimal | None, distance_unit: str) -> Decimal | None:
     """Convert user-entered price-per-volume to $/L for storage.
 
     US locale: input is $/gal; multiply by GAL_PER_LITER to get $/L.
@@ -177,7 +181,7 @@ def to_metric_price_per_volume(value: float | None, distance_unit: str) -> float
     """
     if value is None:
         return None
-    return float(value) * GAL_PER_LITER if _normalize_distance_unit(distance_unit) == "us" else float(value)
+    return value * _GAL_PER_LITER_DEC if _normalize_distance_unit(distance_unit) == "us" else value
 
 
 def to_metric_temp(value: float | None, temp_unit: str) -> float | None:

@@ -44,6 +44,7 @@ from web.services.repair import (
     rollback_session,
     serialize_row,
     skipped_keys,
+    snapshot_rows,
 )
 from web.services.vehicles.auto_create import ensure_vehicle
 
@@ -502,3 +503,29 @@ async def test_guard_still_refuses_protected_rows_under_a_key_selection(db_sessi
     assert not op.executed
     backups = await db_session.scalar(select(func.count()).select_from(RepairBackup))
     assert backups == 0
+
+
+@pytest.mark.parametrize("legacy_float_snapshot", [False, True], ids=["text", "legacy-float"])
+async def test_restore_brings_back_a_session_cost_exactly(db_session, legacy_float_snapshot):
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from tests.factories.sessions import ChargingSessionFactory
+
+    session = await ChargingSessionFactory.create(db_session, cost=Decimal("29.42"))
+    await db_session.refresh(session)
+    run_id = uuid.uuid4()
+    await snapshot_rows(db_session, run_id, "test_op", [session])
+    backup = (
+        await db_session.execute(select(RepairBackup).where(RepairBackup.run_id == run_id))
+    ).scalar_one()
+    assert backup.row_json["cost"] == "29.42"
+    if legacy_float_snapshot:
+        backup.row_json["cost"] = 29.42
+        flag_modified(backup, "row_json")
+
+    session.cost = Decimal("1.00")
+    await db_session.flush()
+    assert await restore_run(db_session, run_id) == 1
+    await db_session.refresh(session)
+
+    assert session.cost == Decimal("29.42")

@@ -16,23 +16,23 @@ from db.models.reference import (
     EVNetworkSubscription,
 )
 from db.portable_insert import portable_insert
-from web.money import to_money
+from web.money import to_cents
 
 # Predefined EV charging networks with brand-accurate colors
 PREDEFINED_NETWORKS: list[dict[str, Any]] = [
-    {"name": "Tesla Supercharger", "color": "#CC0000", "cost_per_kwh": 0.42, "is_free": False},
-    {"name": "Electrify America", "color": "#00A94F", "cost_per_kwh": 0.48, "is_free": False},
-    {"name": "ChargePoint", "color": "#FF6B2D", "cost_per_kwh": 0.35, "is_free": False},
-    {"name": "EVgo", "color": "#00AEEF", "cost_per_kwh": 0.39, "is_free": False},
-    {"name": "EV Connect", "color": "#4CAF50", "cost_per_kwh": 0.30, "is_free": False},
-    {"name": "IONNA", "color": "#1A1A2E", "cost_per_kwh": 0.40, "is_free": False},
-    {"name": "Rivian Adventure Network", "color": "#517B50", "cost_per_kwh": 0.35, "is_free": False},
-    {"name": "Blink", "color": "#0072CE", "cost_per_kwh": 0.49, "is_free": False},
-    {"name": "Flo", "color": "#6CBE45", "cost_per_kwh": 0.35, "is_free": False},
-    {"name": "Ford BlueOval", "color": "#003478", "cost_per_kwh": 0.33, "is_free": False},
-    {"name": "Shell Recharge", "color": "#FFD500", "cost_per_kwh": 0.39, "is_free": False},
-    {"name": "BP Pulse", "color": "#009B3A", "cost_per_kwh": 0.36, "is_free": False},
-    {"name": "Home", "color": "#6366F1", "cost_per_kwh": 0.12, "is_free": True},
+    {"name": "Tesla Supercharger", "color": "#CC0000", "cost_per_kwh": Decimal("0.42"), "is_free": False},
+    {"name": "Electrify America", "color": "#00A94F", "cost_per_kwh": Decimal("0.48"), "is_free": False},
+    {"name": "ChargePoint", "color": "#FF6B2D", "cost_per_kwh": Decimal("0.35"), "is_free": False},
+    {"name": "EVgo", "color": "#00AEEF", "cost_per_kwh": Decimal("0.39"), "is_free": False},
+    {"name": "EV Connect", "color": "#4CAF50", "cost_per_kwh": Decimal("0.30"), "is_free": False},
+    {"name": "IONNA", "color": "#1A1A2E", "cost_per_kwh": Decimal("0.40"), "is_free": False},
+    {"name": "Rivian Adventure Network", "color": "#517B50", "cost_per_kwh": Decimal("0.35"), "is_free": False},
+    {"name": "Blink", "color": "#0072CE", "cost_per_kwh": Decimal("0.49"), "is_free": False},
+    {"name": "Flo", "color": "#6CBE45", "cost_per_kwh": Decimal("0.35"), "is_free": False},
+    {"name": "Ford BlueOval", "color": "#003478", "cost_per_kwh": Decimal("0.33"), "is_free": False},
+    {"name": "Shell Recharge", "color": "#FFD500", "cost_per_kwh": Decimal("0.39"), "is_free": False},
+    {"name": "BP Pulse", "color": "#009B3A", "cost_per_kwh": Decimal("0.36"), "is_free": False},
+    {"name": "Home", "color": "#6366F1", "cost_per_kwh": Decimal("0.12"), "is_free": True},
 ]
 
 # Derived lookups from predefined list — used when auto-creating known networks
@@ -106,7 +106,7 @@ async def resolve_network(
 async def create_network(
     db: AsyncSession,
     name: str,
-    cost_per_kwh: float | None,
+    cost_per_kwh: Decimal | None,
     is_free: bool,
     color: str | None,
 ) -> EVChargingNetwork:
@@ -134,7 +134,7 @@ async def update_network(
     db: AsyncSession,
     network_id: int,
     name: str,
-    cost_per_kwh: float | None,
+    cost_per_kwh: Decimal | None,
     is_free: bool,
     color: str | None,
 ) -> EVChargingNetwork | None:
@@ -150,7 +150,7 @@ async def update_network(
         return None
     known = _PREDEFINED_BY_NAME.get(name.lower().strip()) if name else None
     network.network_name = name
-    network.cost_per_kwh = to_money(cost_per_kwh)
+    network.cost_per_kwh = cost_per_kwh
     network.is_free = is_free
     network.color = color if color else (known["color"] if known else DEFAULT_COLOR)
     await db.flush()
@@ -245,7 +245,7 @@ async def create_location(
     address: str | None = None,
     latitude: float | None = None,
     longitude: float | None = None,
-    cost_per_kwh: float | Decimal | None = None,
+    cost_per_kwh: Decimal | None = None,
 ) -> EVLocationLookup:
     """Create a new location linked to a network."""
     loc = EVLocationLookup(
@@ -273,7 +273,7 @@ async def update_location(
     address: str | None = None,
     latitude: float | None = None,
     longitude: float | None = None,
-    cost_per_kwh: float | None = None,
+    cost_per_kwh: Decimal | None = None,
 ) -> EVLocationLookup | None:
     """Update a location row. Returns updated location or None if not found."""
     result = await db.execute(
@@ -288,7 +288,7 @@ async def update_location(
     loc.address = address
     loc.latitude = latitude
     loc.longitude = longitude
-    loc.cost_per_kwh = to_money(cost_per_kwh)
+    loc.cost_per_kwh = cost_per_kwh
     await db.flush()
     await db.refresh(loc)
     return loc
@@ -375,8 +375,8 @@ async def validate_no_overlap(
 async def create_subscription(
     db: AsyncSession,
     network_id: int,
-    member_rate: float,
-    monthly_fee: float,
+    member_rate: Decimal,
+    monthly_fee: Decimal,
     start_date,
     end_date=None,
     notes: str | None = None,
@@ -391,7 +391,7 @@ async def create_subscription(
     sub = EVNetworkSubscription(
         network_id=network_id,
         member_rate=member_rate,
-        monthly_fee=monthly_fee,
+        monthly_fee=to_cents(monthly_fee),
         start_date=start_date,
         end_date=end_date,
         notes=notes,
@@ -405,8 +405,8 @@ async def create_subscription(
 async def update_subscription(
     db: AsyncSession,
     subscription_id: int,
-    member_rate: float,
-    monthly_fee: float,
+    member_rate: Decimal,
+    monthly_fee: Decimal,
     start_date,
     end_date=None,
     notes: str | None = None,
@@ -425,8 +425,8 @@ async def update_subscription(
     if not await validate_no_overlap(db, sub.network_id, start_date, end_date, exclude_id=subscription_id):
         raise ValueError("Subscription period overlaps with an existing period for this network")
 
-    sub.member_rate = to_money(member_rate)
-    sub.monthly_fee = to_money(monthly_fee)
+    sub.member_rate = member_rate
+    sub.monthly_fee = to_cents(monthly_fee)
     sub.start_date = start_date
     sub.end_date = end_date
     sub.notes = notes

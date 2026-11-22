@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import random
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +24,11 @@ def _month_subtract(d: date, months: int) -> date:
     total_months = d.year * 12 + (d.month - 1) - months
     year, month = divmod(total_months, 12)
     return date(year, month + 1, 1)
+
+
+def _price(value: float) -> Decimal:
+    """A random draw as a two-place price."""
+    return Decimal(f"{value:.2f}")
 
 
 async def seed(db: AsyncSession) -> int:
@@ -53,8 +59,8 @@ async def seed(db: AsyncSession) -> int:
         # Pick user-friendly $/gal numbers, then convert to $/L for canonical
         # storage. Without this conversion the read path multiplies again at
         # display, producing 3.78× drift.
-        station_price_gal = round(rng.uniform(2.85, 4.20), 2)
-        average_price_gal = round(station_price_gal + rng.uniform(-0.15, 0.15), 2)
+        station_price_gal = _price(rng.uniform(2.85, 4.20))
+        average_price_gal = station_price_gal + _price(rng.uniform(-0.15, 0.15))
         station_price = to_metric_price_per_volume(station_price_gal, "us")
         average_price = to_metric_price_per_volume(average_price_gal, "us")
 
@@ -88,7 +94,7 @@ async def seed(db: AsyncSession) -> int:
         db.add(
             GasPriceReading(
                 entity_id=_ENTITY_ID,
-                price=to_metric_price_per_volume(round(rng.uniform(2.85, 4.20), 2), "us"),
+                price=to_metric_price_per_volume(_price(rng.uniform(2.85, 4.20)), "us"),
                 recorded_at=datetime(
                     day.year, day.month, day.day, 12, 0, 0, tzinfo=UTC
                 ),

@@ -4,6 +4,7 @@ import json
 import math
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Header, HTTPException, Request
@@ -15,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.charging_session import EVChargingSession
 from db.models.reference import EVChargerStall, EVLocationLookup
 from web.dependencies import DbSession
-from web.money import cost_of, to_money
+from web.money import cost_of, to_cents, to_money
 from web.queries.battery import build_mini_charge_curve, load_reference_charge_curve
 from web.queries.costs import (
     compute_session_cost,
@@ -265,7 +266,7 @@ async def export_sessions_csv(
         return utc(dt).astimezone(tz).isoformat(sep=" ", timespec=timespec)
 
     def _num(v, dp: int) -> str:
-        return "" if v is None else f"{float(v):.{dp}f}"
+        return "" if v is None else f"{v:.{dp}f}"
 
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -380,7 +381,7 @@ async def bulk_update_sessions(
             s.location_name = bulk_location_name if bulk_location_name != "clear" else None
             changed = True
         if bulk_cost_str is not None and bulk_cost_str != "":
-            s.cost = to_money(float(bulk_cost_str))
+            s.cost = to_cents(to_money(bulk_cost_str))
             s.cost_source = "manual"
             changed = True
         if changed:
@@ -461,7 +462,7 @@ async def create_session(
     session_date: Annotated[str | None, Form()] = None,
     session_time: Annotated[str | None, Form()] = None,
     energy_kwh: Annotated[float | None, Form()] = None,
-    cost: Annotated[float | None, Form()] = None,
+    cost: Annotated[Decimal | None, Form()] = None,
     location_name: Annotated[str | None, Form()] = None,
     location_type: Annotated[str | None, Form()] = None,
     charge_type: Annotated[str | None, Form()] = None,
@@ -557,7 +558,7 @@ async def create_session(
         session_start_utc=parsed_date,
         session_end_utc=session_end_utc,
         energy_kwh=energy_kwh,
-        cost=cost if cost is not None else None,
+        cost=to_cents(cost) if cost is not None else None,
         cost_source="manual" if cost is not None else None,
         location_name=location_name or None,
         location_type=location_type or None,
@@ -753,9 +754,9 @@ async def update_session(
     form_data = await request.form()
     submitted_cost = form_data.get("cost")
     if submitted_cost is not None and submitted_cost != "":
-        new_cost = float(str(submitted_cost))
-        if session.cost is None or abs(new_cost - float(session.cost)) > 0.001:
-            session.cost = to_money(new_cost)
+        new_cost = to_cents(to_money(str(submitted_cost)))
+        if session.cost != new_cost:
+            session.cost = new_cost
             session.cost_source = "manual"
     if location_name is not None:
         session.location_name = location_name or None

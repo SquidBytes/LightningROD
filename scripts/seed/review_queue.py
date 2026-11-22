@@ -106,7 +106,7 @@ async def seed(db: AsyncSession) -> int:
         dup_energy = float(orig.energy_kwh) * (1.0 + _RNG.uniform(-0.10, 0.10))
         dup_energy = round(dup_energy, 2)
 
-        dup_cost = float(orig.cost) if orig.cost is not None else None
+        dup_cost = orig.cost
         dup_session_start = orig.session_start_utc + timedelta(
             minutes=start_shift_minutes
         )

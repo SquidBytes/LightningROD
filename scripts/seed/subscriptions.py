@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from decimal import Decimal
 from typing import TypedDict
 
 from sqlalchemy import select, update
@@ -16,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 class _SubscriptionSpec(TypedDict):
     network_name: str
-    member_rate: float
-    monthly_fee: float
+    member_rate: Decimal
+    monthly_fee: Decimal
     start_date: date
     end_date: date | None
     notes: str
@@ -34,7 +35,7 @@ async def _resolve_network_id(db: AsyncSession, network_name: str) -> int | None
 
 
 async def _update_network_cost_per_kwh(
-    db: AsyncSession, network_name: str, cost_per_kwh: float
+    db: AsyncSession, network_name: str, cost_per_kwh: Decimal
 ) -> None:
     """Upsert the non-member cost_per_kwh on an existing network row."""
     net_id = await _resolve_network_id(db, network_name)
@@ -56,14 +57,14 @@ async def seed(db: AsyncSession) -> int:
     Idempotent: skips rows where (network_id, start_date) already exists.
     Returns the number of rows inserted.
     """
-    await _update_network_cost_per_kwh(db, "Tesla Supercharger", 0.57)
-    await _update_network_cost_per_kwh(db, "Electrify America", 0.56)
+    await _update_network_cost_per_kwh(db, "Tesla Supercharger", Decimal("0.57"))
+    await _update_network_cost_per_kwh(db, "Electrify America", Decimal("0.56"))
 
     specs: list[_SubscriptionSpec] = [
         {
             "network_name": "Tesla Supercharger",
-            "member_rate": 0.39,  # $/kWh with Tesla membership, medium congestion
-            "monthly_fee": 12.99,
+            "member_rate": Decimal("0.39"),  # $/kWh with Tesla membership, medium congestion
+            "monthly_fee": Decimal("12.99"),
             "start_date": date(2026, 1, 1),
             "end_date": None,
             "notes": (
@@ -74,16 +75,16 @@ async def seed(db: AsyncSession) -> int:
         },
         {
             "network_name": "Electrify America",
-            "member_rate": 0.42,  # $/kWh with EA Pass+ membership
-            "monthly_fee": 7.00,
+            "member_rate": Decimal("0.42"),  # $/kWh with EA Pass+ membership
+            "monthly_fee": Decimal("7.00"),
             "start_date": date(2026, 1, 1),
             "end_date": None,
             "notes": "tier:pass-plus (25% off non-member rate of $0.56/kWh)",
         },
         {
             "network_name": "ChargePoint",
-            "member_rate": 0.00,  # free tier — pay-as-you-go per session
-            "monthly_fee": 0.00,
+            "member_rate": Decimal("0.00"),  # free tier — pay-as-you-go per session
+            "monthly_fee": Decimal("0.00"),
             "start_date": date(2026, 1, 1),
             "end_date": None,
             "notes": "tier:free",

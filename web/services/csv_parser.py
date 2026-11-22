@@ -10,6 +10,7 @@ import io
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from web.money import to_money
 from web.services.charge_types import normalize_charge_type
 from web.services.source_system import SourceSystem
 from web.util.timestamps import from_local, parse_iso, utc
@@ -557,6 +559,15 @@ def _float_or_none(v: str) -> float | None:
         return None
 
 
+def _money_or_none(v: str) -> Decimal | None:
+    """Return Decimal or None if empty/invalid; never parsed through float."""
+    try:
+        money = to_money(v or "")
+    except InvalidOperation:
+        return None
+    return money if money is not None and money.is_finite() else None
+
+
 def _parse_bool(v: str) -> bool:
     """Return True for 'True'/'1'/'true'/'yes', False otherwise."""
     return v.strip().lower() in ("true", "1", "yes") if v else False
@@ -662,8 +673,8 @@ _DB_FIELD_PARSERS: dict[str, object] = {
     "session_end_utc": _parse_timestamp,
     "recorded_at": _parse_timestamp,
     "energy_kwh": _float_or_none,
-    "cost": _float_or_none,
-    "cost_without_overrides": _float_or_none,
+    "cost": _money_or_none,
+    "cost_without_overrides": _money_or_none,
     "charging_kw": _float_or_none,
     "max_power": _float_or_none,
     "min_power": _float_or_none,

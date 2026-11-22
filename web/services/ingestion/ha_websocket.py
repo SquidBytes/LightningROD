@@ -22,7 +22,6 @@ from websockets.exceptions import (
 )
 
 from web.services.source_system import SourceSystem
-from web.unit_system import GAL_PER_LITER
 
 logger = logging.getLogger("lightningrod.hass")
 
@@ -727,16 +726,11 @@ class HAWebSocketRuntime:
         state_val = state_obj.get("state")
         if state_val is None or state_val in ("unknown", "unavailable", ""):
             return False
-        try:
-            price = float(state_val)
-        except (TypeError, ValueError):
-            return False
-        if price <= 0:
-            return False
+        from web.services.sources.ha_gas_price.handlers import metric_gas_price
 
-        # UNIT-02: HA gas sensors report $/gal (US-locale assumption per RESEARCH A1).
-        # Convert to $/L before storing so all gas-price storage is metric.
-        price_metric = price * GAL_PER_LITER
+        price_metric = metric_gas_price(state_val)
+        if price_metric is None:
+            return False
 
         ts_raw = state_obj.get("last_changed") or state_obj.get("last_updated")
         if not ts_raw:

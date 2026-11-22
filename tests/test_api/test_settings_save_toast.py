@@ -5,6 +5,8 @@ block (data-auto-dismiss) AND the server-rendered ring-inset ring-success
 classes on the saved row.
 """
 
+from decimal import Decimal
+
 import pytest
 from sqlalchemy import delete
 
@@ -37,7 +39,7 @@ async def test_network_put_renders_ring_and_toast(client, db_session):
     """PUT /settings/networks/{id} renders ring on the edited network row + toast."""
     await db_session.execute(delete(EVChargingNetwork))
     await db_session.flush()
-    net = EVChargingNetwork(network_name="ExistingNet", cost_per_kwh=0.25, is_free=False)
+    net = EVChargingNetwork(network_name="ExistingNet", cost_per_kwh=Decimal("0.25"), is_free=False)
     db_session.add(net)
     await db_session.flush()
     response = await client.put(
@@ -118,7 +120,7 @@ async def test_location_post_renders_ring_and_toast(client, db_session):
     await db_session.execute(delete(EVLocationLookup))
     await db_session.execute(delete(EVChargingNetwork))
     await db_session.flush()
-    net = EVChargingNetwork(network_name="LocSmokeNet", cost_per_kwh=0.30, is_free=False)
+    net = EVChargingNetwork(network_name="LocSmokeNet", cost_per_kwh=Decimal("0.30"), is_free=False)
     db_session.add(net)
     await db_session.flush()
     response = await client.post(

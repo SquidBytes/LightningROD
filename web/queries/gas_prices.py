@@ -5,11 +5,12 @@ Provides operations for managing monthly gas prices with two tracks
 """
 
 
+from decimal import Decimal
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import GasPriceHistory, GasPriceReading
-from web.money import to_money
 
 
 async def get_all_gas_prices(db: AsyncSession) -> list[GasPriceHistory]:
@@ -26,8 +27,8 @@ async def upsert_gas_price(
     db: AsyncSession,
     year: int,
     month: int,
-    station_price: float | None = None,
-    average_price: float | None = None,
+    station_price: Decimal | None = None,
+    average_price: Decimal | None = None,
     source: str = "manual",
 ) -> GasPriceHistory:
     """Insert or update a gas price entry for the given year/month.
@@ -46,9 +47,9 @@ async def upsert_gas_price(
 
     if existing:
         if station_price is not None:
-            existing.station_price = to_money(station_price)
+            existing.station_price = station_price
         if average_price is not None:
-            existing.average_price = to_money(average_price)
+            existing.average_price = average_price
         existing.source = source
         await db.flush()
         await db.refresh(existing)
@@ -82,7 +83,7 @@ async def delete_gas_price(db: AsyncSession, price_id: int) -> bool:
 
 async def get_gas_price_for_date(
     db: AsyncSession, year: int, month: int
-) -> tuple[float | None, float | None]:
+) -> tuple[Decimal | None, Decimal | None]:
     """Return (station_price, average_price) for the matching or nearest earlier month.
 
     Uses a simple strategy: find the entry where (year, month) <= the given date,
@@ -101,16 +102,14 @@ async def get_gas_price_for_date(
     entry = result.scalar_one_or_none()
 
     if entry is None:
-        return (3.50, 3.50)
+        return (Decimal("3.50"), Decimal("3.50"))
 
-    station = float(entry.station_price) if entry.station_price is not None else None
-    average = float(entry.average_price) if entry.average_price is not None else None
-    return (station, average)
+    return (entry.station_price, entry.average_price)
 
 
 async def compute_monthly_averages(
     db: AsyncSession, entity_id: str
-) -> dict[tuple[int, int], float]:
+) -> dict[tuple[int, int], Decimal]:
     """Query GasPriceReading for given entity_id, group by year+month.
     Returns {(year, month): avg_price}. Used for HA sensor integration.
     """
@@ -118,17 +117,17 @@ async def compute_monthly_averages(
         select(
             func.extract("year", GasPriceReading.recorded_at).label("yr"),
             func.extract("month", GasPriceReading.recorded_at).label("mo"),
-            func.avg(GasPriceReading.price).label("avg_price"),
+            func.avg(GasPriceReading.price, type_=GasPriceReading.price.type).label("avg_price"),
         )
         .where(GasPriceReading.entity_id == entity_id)
         .group_by("yr", "mo")
     )
     rows = result.all()
-    return {(int(row.yr), int(row.mo)): float(row.avg_price) for row in rows}
+    return {(int(row.yr), int(row.mo)): row.avg_price for row in rows}
 
 
 async def store_gas_price_reading(
-    db: AsyncSession, entity_id: str, price: float, recorded_at
+    db: AsyncSession, entity_id: str, price: Decimal, recorded_at
 ) -> None:
     """Insert a GasPriceReading row. Used for HA sensor integration."""
     reading = GasPriceReading(
@@ -141,7 +140,7 @@ async def store_gas_price_reading(
 
 
 async def store_gas_price_reading_if_new(
-    db: AsyncSession, entity_id: str, price: float, recorded_at
+    db: AsyncSession, entity_id: str, price: Decimal, recorded_at
 ) -> bool:
     """Insert a GasPriceReading only if (entity_id, recorded_at) is not already present.
 
@@ -200,16 +199,13 @@ async def build_fuel_price_trend_chart(
 
     rows_sorted = sorted(rows, key=lambda r: (r.year, r.month))
     x = [date(r.year, r.month, 1) for r in rows_sorted]
-    station = [
-        convert_price_per_volume(float(r.station_price), distance_unit)
-        if r.station_price is not None else None
-        for r in rows_sorted
-    ]
-    average = [
-        convert_price_per_volume(float(r.average_price), distance_unit)
-        if r.average_price is not None else None
-        for r in rows_sorted
-    ]
+
+    def _display(price: Decimal | None) -> float | None:
+        shown = convert_price_per_volume(price, distance_unit)
+        return None if shown is None else float(shown)
+
+    station = [_display(r.station_price) for r in rows_sorted]
+    average = [_display(r.average_price) for r in rows_sorted]
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(

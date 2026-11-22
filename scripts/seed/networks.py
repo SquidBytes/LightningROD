@@ -7,6 +7,8 @@ absent, ensuring ≥ 10 rows total.
 """
 from __future__ import annotations
 
+from decimal import Decimal
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +20,7 @@ from db.models.reference import EVChargingNetwork
 _SEED_NETWORKS: list[dict] = [
     {
         "network_name": "Blink",
-        "cost_per_kwh": 0.40,
+        "cost_per_kwh": Decimal("0.40"),
         "color": "#0033A0",
         "is_verified": True,
         "source_system": "seed",
@@ -26,7 +28,7 @@ _SEED_NETWORKS: list[dict] = [
     },
     {
         "network_name": "Home",
-        "cost_per_kwh": 0.13,
+        "cost_per_kwh": Decimal("0.13"),
         "color": "#6C757D",
         "is_verified": True,
         "source_system": "seed",
@@ -35,7 +37,7 @@ _SEED_NETWORKS: list[dict] = [
     },
     {
         "network_name": "Work",
-        "cost_per_kwh": 0.0,
+        "cost_per_kwh": Decimal("0.0"),
         "color": "#10B981",
         "is_verified": True,
         "source_system": "seed",

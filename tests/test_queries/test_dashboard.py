@@ -4,6 +4,7 @@ Tests dashboard summary aggregation including total sessions, kWh, and cost.
 """
 
 from datetime import UTC
+from decimal import Decimal
 
 import pytest
 
@@ -27,7 +28,7 @@ async def test_dashboard_stats(db_session):
 
     net = EVChargingNetwork(
         network_name="Dashboard Net",
-        cost_per_kwh=0.40,
+        cost_per_kwh=Decimal("0.40"),
         is_free=False,
         is_verified=True,
     )
@@ -59,7 +60,7 @@ async def test_dashboard_stats(db_session):
     assert result["total_sessions"] == 2
     assert result["total_kwh"] == pytest.approx(80.0, abs=0.01)
     # Cost: 50*0.40 + 30*0.40 = 20.00 + 12.00 = 32.00
-    assert result["total_cost"] == pytest.approx(32.00, abs=0.01)
+    assert result["total_cost"] == Decimal("32.00")
     assert result["avg_cost_per_session"] == pytest.approx(16.00, abs=0.01)
     assert result["avg_kwh_per_session"] == pytest.approx(40.00, abs=0.01)
 

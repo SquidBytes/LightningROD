@@ -6,6 +6,8 @@ denominator of `cost_per_mile`. Empty denominators return `None` so the UI can
 render `—` rather than `$0.00` or `NaN`.
 """
 
+from decimal import Decimal
+
 import pytest
 
 from tests.factories.sessions import ChargingSessionFactory
@@ -36,7 +38,7 @@ async def test_avg_cost_per_session_empty_returns_none(db_session):
 
 async def test_avg_cost_per_session_computes_mean(db_session):
     """Three sessions with costs [10, 20, 30] -> 20.0."""
-    for c in (10.0, 20.0, 30.0):
+    for c in (Decimal("10"), Decimal("20"), Decimal("30")):
         await ChargingSessionFactory.create(
             db_session,
             device_id=DEVICE_A,
@@ -57,21 +59,21 @@ async def test_avg_cost_per_session_computes_mean(db_session):
 async def test_cost_per_mile_excludes_null_distance(db_session):
     """Session with NULL distance_added must be excluded from BOTH sides.
 
-    - Session A: cost=50, distance_added=NULL  -> EXCLUDED
-    - Session B: cost=25, distance_added=100 km -> INCLUDED
+    - Session A: cost=Decimal("50"), distance_added=NULL  -> EXCLUDED
+    - Session B: cost=Decimal("25"), distance_added=100 km -> INCLUDED
 
     Expected cost_per_mile = 25.0 / (100 * 0.621371)  ~= 0.40234
     """
     await ChargingSessionFactory.create(
         db_session,
         device_id=DEVICE_A,
-        cost=50.0,
+        cost=Decimal("50.0"),
         distance_added=None,
     )
     await ChargingSessionFactory.create(
         db_session,
         device_id=DEVICE_A,
-        cost=25.0,
+        cost=Decimal("25.0"),
         distance_added=100.0,
     )
 
@@ -85,7 +87,7 @@ async def test_cost_per_mile_zero_distance_returns_none(db_session):
     await ChargingSessionFactory.create(
         db_session,
         device_id=DEVICE_A,
-        cost=25.0,
+        cost=Decimal("25.0"),
         distance_added=0.0,
     )
 
@@ -103,14 +105,14 @@ async def test_cost_per_kwh_excludes_null_energy(db_session):
     await ChargingSessionFactory.create(
         db_session,
         device_id=DEVICE_A,
-        cost=100.0,
+        cost=Decimal("100.0"),
         energy_kwh=None,
         distance_added=50.0,
     )
     await ChargingSessionFactory.create(
         db_session,
         device_id=DEVICE_A,
-        cost=20.0,
+        cost=Decimal("20.0"),
         energy_kwh=50.0,
         distance_added=50.0,
     )
@@ -131,16 +133,16 @@ async def test_free_charging_savings_sums_is_free_sessions(db_session):
         db_session,
         device_id=DEVICE_A,
         is_free=True,
-        cost=0.0,
-        estimated_cost=5.0,
+        cost=Decimal("0.0"),
+        estimated_cost=Decimal("5.0"),
         energy_kwh=20.0,
     )
     await ChargingSessionFactory.create(
         db_session,
         device_id=DEVICE_A,
         is_free=True,
-        cost=0.0,
-        estimated_cost=7.0,
+        cost=Decimal("0.0"),
+        estimated_cost=Decimal("7.0"),
         energy_kwh=28.0,
     )
     # Paid session — must NOT contribute.
@@ -148,15 +150,15 @@ async def test_free_charging_savings_sums_is_free_sessions(db_session):
         db_session,
         device_id=DEVICE_A,
         is_free=False,
-        cost=15.0,
-        estimated_cost=15.0,
+        cost=Decimal("15.0"),
+        estimated_cost=Decimal("15.0"),
         energy_kwh=40.0,
     )
 
     result = await free_charging_savings(
         db_session, device_id=DEVICE_A, time_range="all"
     )
-    assert result == pytest.approx(12.0, abs=0.001)
+    assert result == Decimal("12.00")
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +172,7 @@ async def test_device_id_filter_honored(db_session):
     await ChargingSessionFactory.create(
         db_session,
         device_id=DEVICE_A,
-        cost=10.0,
+        cost=Decimal("10.0"),
         energy_kwh=40.0,
         distance_added=100.0,
     )
@@ -178,7 +180,7 @@ async def test_device_id_filter_honored(db_session):
     await ChargingSessionFactory.create(
         db_session,
         device_id=DEVICE_B,
-        cost=200.0,
+        cost=Decimal("200.0"),
         energy_kwh=80.0,
         distance_added=200.0,
     )

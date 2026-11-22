@@ -6,6 +6,7 @@ All fixtures return a dict with created objects and pre-computed expected values
 
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 
 import pytest_asyncio
 
@@ -70,14 +71,14 @@ async def cost_scenario(db_session):
     # Networks
     net_a = EVChargingNetwork(
         network_name="Network A",
-        cost_per_kwh=0.35,
+        cost_per_kwh=Decimal("0.35"),
         is_free=False,
         is_verified=True,
         source_system="test_fixture",
     )
     net_b = EVChargingNetwork(
         network_name="Network B",
-        cost_per_kwh=0.45,
+        cost_per_kwh=Decimal("0.45"),
         is_free=False,
         is_verified=True,
         source_system="test_fixture",
@@ -88,8 +89,8 @@ async def cost_scenario(db_session):
     # Subscription for Network B: active from 2025-05-01 to 2025-08-01
     sub = EVNetworkSubscription(
         network_id=net_b.id,
-        member_rate=0.25,
-        monthly_fee=12.99,
+        member_rate=Decimal("0.25"),
+        monthly_fee=Decimal("12.99"),
         start_date=date(2025, 5, 1),
         end_date=date(2025, 8, 1),
     )
@@ -100,7 +101,7 @@ async def cost_scenario(db_session):
     loc_x = EVLocationLookup(
         location_name="Station X",
         network_id=net_a.id,
-        cost_per_kwh=0.30,
+        cost_per_kwh=Decimal("0.30"),
         location_type="public",
         is_verified=True,
         source_system="test_fixture",

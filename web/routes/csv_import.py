@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
@@ -10,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from web.dependencies import DbSession
+from web.money import to_money
 from web.queries.settings import get_all_networks, get_app_setting, resolve_network
 from web.queries.vehicles import get_active_vehicle, get_all_vehicles, get_vehicle_by_id
 from web.services.csv_parser import (
@@ -24,6 +26,8 @@ from web.services.csv_parser import (
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
+
+_MONEY_FIELDS = ("cost", "cost_without_overrides")
 
 
 @router.get("/settings/import/template")
@@ -223,7 +227,10 @@ async def execute_import(
     # Parse the full rows payload from the hidden import_data field
     import_data_raw = form.get("import_data", "")
     try:
-        rows: list[dict] = json.loads(str(import_data_raw)) if import_data_raw else []
+        # parse_float keeps money exact; _deserialize_rows turns the measurements back into floats.
+        rows: list[dict] = (
+            json.loads(str(import_data_raw), parse_float=Decimal) if import_data_raw else []
+        )
     except (json.JSONDecodeError, ValueError):
         return JSONResponse(
             status_code=422,
@@ -318,8 +325,8 @@ async def reset_import(
 def _deserialize_rows(rows: list[dict]) -> list[dict]:
     """Convert JSON-serialized row dicts back to typed values for DB insertion.
 
-    Converts ISO datetime strings back to aware datetime objects and UUID strings
-    back to uuid.UUID instances.
+    Converts ISO datetime strings back to aware datetime objects, UUID strings
+    back to uuid.UUID instances, and money back to Decimal.
     """
     import uuid as _uuid
     from datetime import datetime
@@ -345,6 +352,10 @@ def _deserialize_rows(rows: list[dict]) -> list[dict]:
                     deserialized[k] = _uuid.UUID(v)
                 except (ValueError, AttributeError):
                     deserialized[k] = None
+            elif k in _MONEY_FIELDS:
+                deserialized[k] = to_money(v)
+            elif isinstance(v, Decimal):
+                deserialized[k] = float(v)
             else:
                 deserialized[k] = v
         result.append(deserialized)
@@ -354,7 +365,7 @@ def _deserialize_rows(rows: list[dict]) -> list[dict]:
 def _serialize_rows(rows: list[dict]) -> list[dict]:
     """Convert transformed rows to JSON-serializable dicts.
 
-    Converts datetime objects to ISO strings and UUIDs to strings.
+    Converts datetime objects to ISO strings, UUIDs and Decimals to strings.
     """
     import uuid as _uuid
     from datetime import datetime
@@ -365,7 +376,7 @@ def _serialize_rows(rows: list[dict]) -> list[dict]:
         for k, v in row.items():
             if isinstance(v, datetime):
                 serialized[k] = v.isoformat()
-            elif isinstance(v, _uuid.UUID):
+            elif isinstance(v, (_uuid.UUID, Decimal)):
                 serialized[k] = str(v)
             else:
                 serialized[k] = v

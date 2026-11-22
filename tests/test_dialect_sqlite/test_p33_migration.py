@@ -8,6 +8,7 @@ Verifies the post-migration shape of:
 """
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import select, text
@@ -82,8 +83,8 @@ async def test_p33_gas_price_history_stored_metric(db_session: AsyncSession):
     row = GasPriceHistory(
         year=2099,
         month=12,
-        station_price=1.058,  # $/L (≈ $4.00 / gal)
-        average_price=1.111,  # $/L (≈ $4.20 / gal)
+        station_price=Decimal("1.058"),  # $/L (≈ $4.00 / gal)
+        average_price=Decimal("1.111"),  # $/L (≈ $4.20 / gal)
         source="manual",
     )
     db_session.add(row)
@@ -107,7 +108,7 @@ async def test_p33_gas_price_readings_stored_metric(db_session: AsyncSession):
     """UNIT-02: gas_price_readings.price stored in $/L after migration."""
     reading = GasPriceReading(
         entity_id="sensor.gas_price_test",
-        price=1.058,  # $/L
+        price=Decimal("1.058"),  # $/L
         recorded_at=datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC),
     )
     db_session.add(reading)
