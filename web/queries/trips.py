@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import Float, and_, asc, desc, func, not_, or_, select
+from sqlalchemy import and_, asc, desc, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.battery_status import EVBatteryStatus
@@ -210,7 +210,7 @@ async def query_trips(
         func.count().label("trip_count"),
         func.sum(summary_subq.c.distance).label("total_distance"),
         func.sum(summary_subq.c.energy_consumed).label("total_energy"),
-        func.avg(summary_subq.c.efficiency, type_=Float()).label("avg_efficiency"),
+        func.avg(summary_subq.c.efficiency).label("avg_efficiency"),
     ).select_from(summary_subq)
     summary_result = await db.execute(summary_stmt)
     summary_row = summary_result.one()

@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-from sqlalchemy import Float, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.dialect import date_trunc_compat
@@ -102,8 +102,8 @@ async def query_soc_timeline(
         stmt = (
             select(
                 bucket_col,
-                func.avg(EVBatteryStatus.hv_battery_soc, type_=Float()).label("soc"),
-                func.avg(EVBatteryStatus.hv_battery_kw, type_=Float()).label("kw"),
+                func.avg(EVBatteryStatus.hv_battery_soc).label("soc"),
+                func.avg(EVBatteryStatus.hv_battery_kw).label("kw"),
                 func.max(EVBatteryStatus.hv_battery_range).label("range"),
             )
             .where(EVBatteryStatus.hv_battery_soc.isnot(None))
