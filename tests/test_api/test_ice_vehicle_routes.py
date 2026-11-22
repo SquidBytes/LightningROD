@@ -150,8 +150,8 @@ async def test_set_default_promotes_row(client, db_session):
     assert ice_default.is_default is False
 
 
-async def test_delete_default_guard_returns_422_alert(client, db_session):
-    """DELETE on default row when others exist returns alert-error and keeps both rows."""
+async def test_delete_default_guard_returns_409_toast(client, db_session):
+    """DELETE on default row when others exist returns a 409 toast and keeps both rows."""
     await _clear_ice_vehicles(db_session)
     ice_default = IceVehicle(
         label="Guarded Default",
@@ -169,7 +169,8 @@ async def test_delete_default_guard_returns_422_alert(client, db_session):
     default_id = ice_default.id
 
     response = await client.delete(f"/settings/ice-vehicles/{default_id}")
-    assert response.status_code == 200
+    assert response.status_code == 409
+    assert response.headers["HX-Retarget"] == "#toast-root"
     assert b"Cannot delete the default" in response.content
 
     result = await db_session.execute(select(IceVehicle))

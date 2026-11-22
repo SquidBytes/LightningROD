@@ -38,6 +38,7 @@ from web.queries.vehicles import (
 )
 from web.services.source_system import SourceSystem
 from web.unit_system import parse_user_local_to_utc, to_metric_distance
+from web.util.htmx import error_response
 from web.util.timestamps import utc
 
 router = APIRouter()
@@ -322,16 +323,16 @@ async def export_sessions_csv(
 
 async def _load_selected_sessions(
     form, db: AsyncSession
-) -> list[EVChargingSession] | JSONResponse:
+) -> list[EVChargingSession] | HTMLResponse:
     """Sessions named by the comma-separated `session_ids` field, or a 422."""
     try:
         session_ids = [
             int(sid) for sid in str(form.get("session_ids", "")).split(",") if sid.strip()
         ]
     except ValueError:
-        return JSONResponse(status_code=422, content={"error": "Invalid session IDs"})
+        return error_response("Invalid session IDs", 422)
     if not session_ids:
-        return JSONResponse(status_code=422, content={"error": "No sessions selected"})
+        return error_response("No sessions selected", 422)
     result = await db.execute(
         select(EVChargingSession).where(EVChargingSession.id.in_(session_ids))
     )
@@ -346,7 +347,7 @@ async def bulk_update_sessions(
     """Bulk update selected sessions with common field values."""
     form = await request.form()
     selected = await _load_selected_sessions(form, db)
-    if isinstance(selected, JSONResponse):
+    if isinstance(selected, HTMLResponse):
         return selected
     bulk_sessions = selected
 
@@ -404,7 +405,7 @@ async def bulk_delete_sessions(
 ):
     """Delete every selected session."""
     selected = await _load_selected_sessions(await request.form(), db)
-    if isinstance(selected, JSONResponse):
+    if isinstance(selected, HTMLResponse):
         return selected
     for s in selected:
         await db.delete(s)
@@ -743,7 +744,7 @@ async def update_session(
     )
     session = result.scalar_one_or_none()
     if session is None:
-        return HTMLResponse(content="<p class='text-gray-400 p-4'>Session not found.</p>", status_code=404)
+        return error_response("Session not found.", 404)
 
     # Capture old network_id before any updates (for cost recalculation check)
     old_network_id = session.network_id
@@ -948,7 +949,7 @@ async def delete_session(
     )
     session = result.scalar_one_or_none()
     if session is None:
-        return HTMLResponse(content="Session not found.", status_code=404)
+        return error_response("Session not found.", 404)
 
     await db.delete(session)
 
@@ -976,7 +977,7 @@ async def session_detail(
     session = result.scalar_one_or_none()
 
     if session is None:
-        return HTMLResponse(content="<p class='text-gray-400 p-4'>Session not found.</p>", status_code=404)
+        return error_response("Session not found.", 404)
 
     network_obj, location_obj = await get_session_cost_context(db, session)
     sub_periods = await get_subscriptions_for_network(db, network_obj.id) if network_obj else []
@@ -1033,7 +1034,7 @@ async def session_modal(
     session = result.scalar_one_or_none()
 
     if session is None:
-        return HTMLResponse(content="<p class='text-gray-400 p-4'>Session not found.</p>", status_code=404)
+        return error_response("Session not found.", 404)
 
     network_obj, location_obj = await get_session_cost_context(db, session)
     sub_periods = await get_subscriptions_for_network(db, network_obj.id) if network_obj else []
