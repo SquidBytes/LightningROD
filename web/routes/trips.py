@@ -37,6 +37,7 @@ from web.queries.vehicles import (
 from web.services.source_system import SourceSystem
 from web.services.sources.ha_fordpass.adapter import LIGHTNINGROD_TRIP_NAMESPACE
 from web.unit_system import MI_PER_KM, parse_user_local_to_utc, to_metric_distance
+from web.util.htmx import error_response
 from web.util.timestamps import utc
 
 router = APIRouter()
@@ -265,10 +266,7 @@ async def trip_detail(
     trip = result.scalar_one_or_none()
 
     if trip is None:
-        return HTMLResponse(
-            content="<p class='text-base-content/40 p-4'>Trip not found.</p>",
-            status_code=404,
-        )
+        return error_response("Trip not found.", 404)
 
     radar_chart = build_driving_score_radar(trip)
     unit_ctx = await get_unit_context(db)
@@ -293,10 +291,7 @@ async def trip_drawer(
     trip = result.scalar_one_or_none()
 
     if trip is None:
-        return HTMLResponse(
-            content="<p class='text-base-content/40 p-4'>Trip not found.</p>",
-            status_code=404,
-        )
+        return error_response("Trip not found.", 404)
 
     radar_chart = build_driving_score_radar(trip)
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
@@ -388,10 +383,7 @@ async def trip_expanded(
     )
     trip = result.scalar_one_or_none()
     if not trip:
-        return HTMLResponse(
-            '<p class="text-base-content/30 p-4">Trip not found.</p>',
-            status_code=404,
-        )
+        return error_response("Trip not found.", 404)
     battery_df = pd.DataFrame()
     vehicle_df = pd.DataFrame()
     if trip.start_time and trip.end_time:
@@ -452,10 +444,7 @@ async def create_trip(
     hx_request: Annotated[str | None, Header()] = None,
 ):
     if not trip_date:
-        return HTMLResponse(
-            content="<p class='text-error text-sm p-2'>Date is required.</p>",
-            status_code=422,
-        )
+        return error_response("Date is required.", 422)
 
     # Parse trip_date as local-time (midnight) in the user's configured TZ so
     # the resulting UTC instant lines up with their day, matching how charging
@@ -464,10 +453,7 @@ async def create_trip(
     try:
         parsed_date = parse_user_local_to_utc(trip_date, "00:00", create_trip_user_tz)
     except ValueError:
-        return HTMLResponse(
-            content="<p class='text-error text-sm p-2'>Invalid date format.</p>",
-            status_code=422,
-        )
+        return error_response("Invalid date format.", 422)
 
     # Convert user-entered distance + efficiency to metric (km, km/kWh) for storage
     unit_ctx = await get_unit_context(db)
@@ -536,7 +522,7 @@ async def delete_trip(
     )
     trip = result.scalar_one_or_none()
     if trip is None:
-        return HTMLResponse(content="Trip not found.", status_code=404)
+        return error_response("Trip not found.", 404)
 
     await db.delete(trip)
 

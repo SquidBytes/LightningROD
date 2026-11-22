@@ -35,6 +35,7 @@ async def client(db_session):
         trips,
     )
     from web.routes.admin import data_sources as admin_data_sources
+    from web.util.htmx import install_error_handler
 
     app = FastAPI(title="LightningROD-Test")
     app.mount("/static", StaticFiles(directory="web/static"), name="static")
@@ -52,6 +53,7 @@ async def client(db_session):
     app.include_router(driving_performance.router, prefix="/driving")
     app.include_router(admin_data_sources.router)
     app.include_router(fcon.router)
+    install_error_handler(app)
 
     # Register localtime filter on Jinja2 templates
     for route_module in [dashboard, sessions, costs, performance, settings,

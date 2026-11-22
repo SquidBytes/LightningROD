@@ -93,6 +93,7 @@ from web.unit_system import (
     to_metric_fuel_volume,
     to_metric_price_per_volume,
 )
+from web.util.htmx import error_response
 
 
 def _vehicle_presets_for_template() -> list[dict]:
@@ -293,23 +294,6 @@ async def new_vehicle_form(
     )
 
 
-async def _vehicle_conflict_response(request: Request, db: AsyncSession) -> HTMLResponse:
-    """Re-render the vehicle card with the unique-constraint error."""
-    veh_ctx = await _vehicle_management_context(db)
-    veh_ctx["error"] = "A vehicle with that VIN or device ID already exists."
-    return templates.TemplateResponse(
-        request, "settings/partials/vehicle_management.html", veh_ctx, status_code=409
-    )
-
-
-async def _ice_vehicle_conflict_response(request: Request, db: AsyncSession) -> HTMLResponse:
-    """Re-render the ICE vehicle card with the unique-constraint error."""
-    ctx = await _ice_vehicle_management_context(db)
-    ctx["error"] = "Could not save: it conflicts with an existing ICE vehicle."
-    return templates.TemplateResponse(
-        request, "settings/partials/ice_vehicle_management.html", ctx, status_code=409
-    )
-
 
 @router.post("/settings/vehicles", response_class=HTMLResponse)
 async def create_vehicle_route(
@@ -327,11 +311,7 @@ async def create_vehicle_route(
     device_id: str | None = Form(None),
 ):
     if not display_name or not display_name.strip():
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=422,
-            content={"detail": "Display name is required"},
-        )
+        return error_response("Display name is required", 422)
     new_vehicle = await create_vehicle(
         db,
         display_name=display_name.strip(),
@@ -346,7 +326,7 @@ async def create_vehicle_route(
         device_id=device_id or None,
     )
     if new_vehicle is None:
-        return await _vehicle_conflict_response(request, db)
+        return error_response("A vehicle with that VIN or device ID already exists.", 409)
     veh_ctx = await _vehicle_management_context(db)
     veh_ctx["saved"] = True
     veh_ctx["just_saved_row_id"] = new_vehicle.id
@@ -366,7 +346,7 @@ async def edit_vehicle_form(
     """Return the vehicle edit modal form with vehicle data + presets."""
     vehicle = await get_vehicle_by_id(db, vehicle_id)
     if vehicle is None:
-        return HTMLResponse(status_code=404)
+        return error_response("Vehicle not found.", 404)
     unit_ctx = await get_unit_context(db)
     return templates.TemplateResponse(
         request,
@@ -396,14 +376,9 @@ async def update_vehicle_route(
     device_id: str | None = Form(None),
 ):
     if not display_name or not display_name.strip():
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=422,
-            content={"detail": "Display name is required"},
-        )
+        return error_response("Display name is required", 422)
     if await get_vehicle_by_id(db, vehicle_id) is None:
-        from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=404, content={"detail": "Vehicle not found"})
+        return error_response("Vehicle not found", 404)
     updated = await update_vehicle(
         db,
         vehicle_id,
@@ -419,7 +394,7 @@ async def update_vehicle_route(
         device_id=device_id or None,
     )
     if updated is None:
-        return await _vehicle_conflict_response(request, db)
+        return error_response("A vehicle with that VIN or device ID already exists.", 409)
     veh_ctx = await _vehicle_management_context(db)
     veh_ctx["saved"] = True
     veh_ctx["just_saved_row_id"] = vehicle_id
@@ -440,10 +415,7 @@ async def delete_vehicle_route(
 ):
     deleted = await delete_vehicle(db, vehicle_id)
     if not deleted:
-        return HTMLResponse(
-            '<div class="alert alert-error text-sm">Cannot delete the active vehicle. Set another vehicle as active first.</div>',
-            status_code=400,
-        )
+        return error_response("Cannot delete the active vehicle. Set another vehicle as active first.")
     veh_ctx = await _vehicle_management_context(db)
     return templates.TemplateResponse(
         request,
@@ -506,14 +478,12 @@ async def create_ice_vehicle_route(
 ):
     """Create an ICE vehicle. Form values are in display units; converted to metric here."""
     if not label or not label.strip():
-        from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=422, content={"detail": "Label is required"})
+        return error_response("Label is required", 422)
     unit_ctx = await get_unit_context(db)
     fuel_metric = to_metric_fuel_efficiency(fuel_efficiency_display, unit_ctx["distance_unit"])
     tank_metric = to_metric_fuel_volume(tank_capacity_display, unit_ctx["distance_unit"])
     if fuel_metric is None:
-        from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=422, content={"detail": "Combined fuel economy is required"})
+        return error_response("Combined fuel economy is required", 422)
     new_ice = await create_ice_vehicle(
         db,
         label=label.strip(),
@@ -522,7 +492,7 @@ async def create_ice_vehicle_route(
         is_default=is_default,
     )
     if new_ice is None:
-        return await _ice_vehicle_conflict_response(request, db)
+        return error_response("Could not save: it conflicts with an existing ICE vehicle.", 409)
     ctx = await _ice_vehicle_management_context(db)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = new_ice.id
@@ -544,8 +514,7 @@ async def edit_ice_vehicle_form(
     """Return the ICE vehicle edit modal body with display-unit values pre-converted."""
     row = await get_ice_vehicle_by_id(db, ice_id)
     if row is None:
-        from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=404, content={"detail": "ICE vehicle not found"})
+        return error_response("ICE vehicle not found", 404)
     unit_ctx = await get_unit_context(db)
     fuel_metric = float(row.fuel_efficiency_l_per_100km) if row.fuel_efficiency_l_per_100km else None
     tank_metric = float(row.tank_capacity_l) if row.tank_capacity_l else None
@@ -574,17 +543,14 @@ async def update_ice_vehicle_route(
     """Update an ICE vehicle. Form values are in display units; converted to metric here."""
     row = await get_ice_vehicle_by_id(db, ice_id)
     if row is None:
-        from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=404, content={"detail": "ICE vehicle not found"})
+        return error_response("ICE vehicle not found", 404)
     if not label or not label.strip():
-        from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=422, content={"detail": "Label is required"})
+        return error_response("Label is required", 422)
     unit_ctx = await get_unit_context(db)
     fuel_metric = to_metric_fuel_efficiency(fuel_efficiency_display, unit_ctx["distance_unit"])
     tank_metric = to_metric_fuel_volume(tank_capacity_display, unit_ctx["distance_unit"])
     if fuel_metric is None:
-        from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=422, content={"detail": "Combined fuel economy is required"})
+        return error_response("Combined fuel economy is required", 422)
     updated = await update_ice_vehicle(
         db,
         ice_id,
@@ -594,7 +560,7 @@ async def update_ice_vehicle_route(
         is_default=is_default,
     )
     if updated is None:
-        return await _ice_vehicle_conflict_response(request, db)
+        return error_response("Could not save: it conflicts with an existing ICE vehicle.", 409)
     ctx = await _ice_vehicle_management_context(db)
     ctx["saved"] = True
     ctx["just_saved_row_id"] = ice_id
@@ -614,10 +580,11 @@ async def delete_ice_vehicle_route(
     db: DbSession,
 ):
     """Delete an ICE vehicle. Refuses to delete the default row when others exist."""
-    success = await delete_ice_vehicle(db, ice_id)
+    if not await delete_ice_vehicle(db, ice_id):
+        return error_response(
+            "Cannot delete the default ICE vehicle. Set a different default first.", 409
+        )
     ctx = await _ice_vehicle_management_context(db)
-    if not success:
-        ctx["error"] = "Cannot delete the default ICE vehicle. Set a different default first."
     return templates.TemplateResponse(
         request,
         "settings/partials/ice_vehicle_management.html",
@@ -696,7 +663,7 @@ async def edit_network_row(
     networks = await get_all_networks(db)
     network = next((n for n in networks if n.id == network_id), None)
     if network is None:
-        return HTMLResponse(status_code=404)
+        return error_response("Network not found.", 404)
     return templates.TemplateResponse(
         request,
         "settings/partials/network_edit_row.html",
@@ -714,7 +681,7 @@ async def edit_network_modal(
     networks = await get_all_networks(db)
     network = next((n for n in networks if n.id == network_id), None)
     if network is None:
-        return HTMLResponse(status_code=404)
+        return error_response("Network not found.", 404)
     return templates.TemplateResponse(
         request,
         "settings/partials/network_edit_modal.html",
@@ -784,7 +751,7 @@ async def recalculate_network_costs(
     )
     network = result.scalar_one_or_none()
     if not network:
-        return HTMLResponse("Network not found", status_code=404)
+        return error_response("Network not found.", 404)
 
     locations = await get_locations_for_network(db, network_id)
     location_cost_map = {loc.id: loc.cost_per_kwh for loc in locations if loc.cost_per_kwh is not None}
@@ -821,7 +788,7 @@ async def convert_network_modal(
     networks = await get_all_networks(db)
     network = next((n for n in networks if n.id == network_id), None)
     if network is None:
-        return HTMLResponse(status_code=404)
+        return error_response("Network not found.", 404)
     other_networks = [n for n in networks if n.id != network_id]
     # Count sessions that will be reassigned
     result = await db.execute(
@@ -857,7 +824,7 @@ async def convert_network_to_location(
     )
     source = result.scalar_one_or_none()
     if not source:
-        return HTMLResponse("Source network not found", status_code=404)
+        return error_response("Source network not found.", 404)
 
     # Validate target network exists and is different
     result = await db.execute(
@@ -865,7 +832,7 @@ async def convert_network_to_location(
     )
     target = result.scalar_one_or_none()
     if not target:
-        return HTMLResponse("Target network not found", status_code=404)
+        return error_response("Target network not found.", 404)
 
     # Create the new location under target network
     new_location = await create_location(
@@ -1120,7 +1087,7 @@ async def stall_edit_modal(
     )
     stall = result.scalar_one_or_none()
     if not stall:
-        return HTMLResponse("<p>Stall not found.</p>", status_code=404)
+        return error_response("Stall not found.", 404)
     loc_id = location_id or stall.location_id
     return templates.TemplateResponse(
         request,
@@ -1313,13 +1280,7 @@ async def create_subscription_route(
             notes=notes.strip() or None,
         )
     except ValueError as e:
-        ctx = await _subscription_tab_context(db, network_id)
-        ctx["error"] = str(e)
-        return templates.TemplateResponse(
-            request,
-            "settings/partials/subscription_tab.html",
-            ctx,
-        )
+        return error_response(str(e), 422)
 
     ctx = await _subscription_tab_context(db, network_id)
     ctx["saved"] = True
@@ -1347,7 +1308,7 @@ async def edit_subscription_form(
     )
     sub = result.scalar_one_or_none()
     if sub is None:
-        return HTMLResponse(status_code=404)
+        return error_response("Subscription not found.", 404)
 
     return templates.TemplateResponse(
         request,
@@ -1383,13 +1344,7 @@ async def update_subscription_route(
             notes=notes.strip() or None,
         )
     except ValueError as e:
-        ctx = await _subscription_tab_context(db, network_id)
-        ctx["error"] = str(e)
-        return templates.TemplateResponse(
-            request,
-            "settings/partials/subscription_tab.html",
-            ctx,
-        )
+        return error_response(str(e), 422)
 
     ctx = await _subscription_tab_context(db, network_id)
     ctx["saved"] = True

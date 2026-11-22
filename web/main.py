@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
+from web.util.htmx import install_error_handler
 from web.util.timestamps import utc
 
 
@@ -204,6 +205,7 @@ def create_app() -> FastAPI:
     app.include_router(driving_performance.router, prefix="/driving")
     app.include_router(admin_data_sources.router)
     app.include_router(fcon.router)
+    install_error_handler(app)
 
     # Register Jinja filters on all Jinja2Templates instances used by routes
     from web.unit_system import (

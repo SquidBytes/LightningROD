@@ -2,15 +2,6 @@
 <div class="space-y-2">
     <p class="text-sm uppercase tracking-wide text-base-content/40 mb-3">Subscription Periods</p>
 
-    {% if error is defined and error %}
-    <div class="alert alert-error text-sm mb-3">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z" />
-        </svg>
-        <span>{{ error }}</span>
-    </div>
-    {% endif %}
-
     {% for sub in periods %}
     <div class="bg-base-300/50 rounded-lg px-4 py-3 {% if just_saved_row_id == sub.id %}ring-2 ring-inset ring-success rounded{% endif %}" id="subscription-{{ sub.id }}">
         <div class="flex items-center justify-between">

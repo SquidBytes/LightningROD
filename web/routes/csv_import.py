@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from web.dependencies import DbSession
@@ -21,6 +21,7 @@ from web.services.csv_parser import (
     parse_csv_file,
     transform_rows,
 )
+from web.util.htmx import error_response
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -60,31 +61,22 @@ async def upload_csv(
     auto-detects column mappings silently, transforms rows with timezone-aware
     parsing, runs duplicate detection, and renders the import preview.
 
-    Returns 422 JSONResponse if the file is empty or cannot be parsed.
+    Returns a 422 error toast if the file is empty or cannot be parsed.
     """
     # Read file contents
     contents = await file.read()
 
     if not contents:
-        return JSONResponse(
-            status_code=422,
-            content={"detail": "Uploaded file is empty."},
-        )
+        return error_response("Uploaded file is empty.", 422)
 
     # Parse CSV
     try:
         headers, raw_rows = parse_csv_file(contents)
     except ValueError as exc:
-        return JSONResponse(
-            status_code=422,
-            content={"detail": str(exc)},
-        )
+        return error_response(str(exc), 422)
 
     if not headers:
-        return JSONResponse(
-            status_code=422,
-            content={"detail": "CSV file has no column headers."},
-        )
+        return error_response("CSV file has no column headers.", 422)
 
     # Auto-detect column mappings silently
     db_fields = get_db_field_options()
@@ -225,10 +217,7 @@ async def execute_import(
     try:
         rows: list[dict] = json.loads(str(import_data_raw)) if import_data_raw else []
     except (json.JSONDecodeError, ValueError):
-        return JSONResponse(
-            status_code=422,
-            content={"detail": "Invalid import data — please restart the import."},
-        )
+        return error_response("Invalid import data — please restart the import.", 422)
 
     # Collect selected row indices from repeated checkbox values
     selected_rows_raw = form.getlist("selected_rows")

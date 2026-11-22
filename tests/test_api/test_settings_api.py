@@ -45,5 +45,6 @@ async def test_create_vehicle_duplicate_device_id_is_rejected(client, db_session
         "/settings/vehicles", data={**form, "display_name": "Second"}
     )
     assert response.status_code == 409
+    assert response.headers["HX-Retarget"] == "#toast-root"
     assert "already exists" in response.text
     assert "Vehicle saved." not in response.text

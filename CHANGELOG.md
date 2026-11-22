@@ -20,6 +20,7 @@ For feature documentation, see the docs site at
 
 ### Fixed
 
+- Error messages from saves, deletes and uploads now appear as a toast on every page
 - Saving a vehicle whose VIN or device ID already exists now shows an error instead of a success toast
 
 - Fixed location recording stopping after the first GPS reading on SQLite installs
