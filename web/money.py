@@ -1,15 +1,13 @@
-"""Money is Decimal dollars; totals are rounded to the cent here and nowhere else."""
+"""Money is Decimal dollars; parsing and cost arithmetic for the web layer."""
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import overload
 
+from db.money import to_cents
+
+__all__ = ["ZERO", "cost_of", "per_unit", "to_cents", "to_money"]
+
 ZERO = Decimal("0.00")
-_CENT = Decimal("0.01")
-
-
-def to_cents(value: Decimal) -> Decimal:
-    """Round to the cent, half up."""
-    return value.quantize(_CENT, ROUND_HALF_UP)
 
 
 @overload

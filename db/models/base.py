@@ -9,7 +9,7 @@ from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
-from web.money import to_cents
+from db.money import to_cents
 
 # All timestamps carry timezone info.
 TIMESTAMPTZ = DateTime(timezone=True)
