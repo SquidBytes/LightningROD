@@ -4,6 +4,8 @@ import random
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+from db.money import to_cents
+
 
 class BaseFactory:
     """Base class for test data factories.
@@ -49,7 +51,7 @@ class BaseFactory:
     @classmethod
     def _random_money(cls, low: float, high: float) -> Decimal:
         """Generate a random two-place Decimal amount or rate."""
-        return Decimal(f"{cls._rng.uniform(low, high):.2f}")
+        return to_cents(Decimal(str(cls._rng.uniform(low, high))))
 
     @classmethod
     def _random_int(cls, low: int, high: int) -> int:

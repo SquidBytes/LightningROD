@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.reference import GasPriceHistory, GasPriceReading
+from db.money import to_cents
 from web.unit_system import to_metric_price_per_volume
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ def _month_subtract(d: date, months: int) -> date:
 
 def _price(value: float) -> Decimal:
     """A random draw as a two-place price."""
-    return Decimal(f"{value:.2f}")
+    return to_cents(Decimal(str(value)))
 
 
 async def seed(db: AsyncSession) -> int:

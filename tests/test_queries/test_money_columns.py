@@ -1,9 +1,9 @@
 """Money columns: totals as cents, rates to four places, floats rejected; measurements as float."""
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.exc import StatementError
 
@@ -99,6 +99,12 @@ def test_to_money_parses_text_and_rejects_float():
         to_money(0.35)  # type: ignore[call-overload]
 
 
+@pytest.mark.parametrize("raw", ["NaN", "Infinity", "-Infinity", "abc"])
+def test_to_money_refuses_text_that_is_not_a_finite_number(raw):
+    with pytest.raises(InvalidOperation):
+        to_money(raw)
+
+
 # --- totals round to the cent, half up ---
 
 
@@ -144,6 +150,17 @@ async def test_rate_keeps_four_places(db_session, written, stored):
 
     assert network.cost_per_kwh == Decimal(stored)
     assert isinstance(network.cost_per_kwh, Decimal)
+
+
+async def test_rate_is_rounded_before_it_reaches_the_database(db_session):
+    network = await create_network(db_session, "Stored Rate", Decimal("0.12345"), False, None)
+
+    stored = await db_session.scalar(
+        text("SELECT CAST(cost_per_kwh AS TEXT) FROM ev_charging_networks WHERE id = :id"),
+        {"id": network.id},
+    )
+
+    assert Decimal(stored) == Decimal("0.1235")  # half up; SQLite would otherwise keep 0.12345
 
 
 # --- SQL over a cents column comes back in dollars ---

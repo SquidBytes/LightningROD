@@ -1,6 +1,6 @@
 """Money is Decimal dollars; parsing and cost arithmetic for the web layer."""
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import overload
 
 from db.money import to_cents
@@ -15,14 +15,17 @@ def to_money(value: str | int | Decimal) -> Decimal: ...
 @overload
 def to_money(value: str | int | Decimal | None) -> Decimal | None: ...
 def to_money(value: str | int | Decimal | None) -> Decimal | None:
-    """Parse outside input straight to Decimal; blank text is None."""
+    """Parse outside input straight to Decimal; blank text is None, NaN and infinity are refused."""
     if isinstance(value, float):
         raise TypeError("money must not pass through float; give text, int or Decimal")
     if value is None or isinstance(value, Decimal):
         return value
     if isinstance(value, str) and not value.strip():
         return None
-    return Decimal(value.strip() if isinstance(value, str) else value)
+    money = Decimal(value.strip() if isinstance(value, str) else value)
+    if not money.is_finite():
+        raise InvalidOperation(f"money must be a finite number, got {money}")
+    return money
 
 
 def cost_of(rate: Decimal, quantity: float) -> Decimal:

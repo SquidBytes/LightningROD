@@ -9,7 +9,7 @@ from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
-from db.money import to_cents
+from db.money import to_cents, to_rate
 
 # All timestamps carry timezone info.
 TIMESTAMPTZ = DateTime(timezone=True)
@@ -48,6 +48,11 @@ class Rate(_DecimalOnly):
 
     impl = Numeric(12, 4)
     cache_ok = True
+
+    def process_bind_param(self, value: Any, dialect: Dialect) -> Decimal | None:
+        # SQLite keeps whatever it is given, so round here, not in the database.
+        value = super().process_bind_param(value, dialect)
+        return None if value is None else to_rate(Decimal(value))
 
 
 # Both are Decimal in Python; the Annotated alias picks the column type.

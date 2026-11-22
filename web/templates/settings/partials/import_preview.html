@@ -486,7 +486,7 @@ function applyImportBulkEdit() {
         }
         if (chargeType) row.charge_type = chargeType;
         if (location) row.location_name = location;
-        if (cost) row.cost = parseFloat(cost);
+        if (cost) row.cost = cost;
     });
 
     dataInput.value = JSON.stringify(importData);
