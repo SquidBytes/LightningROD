@@ -15,7 +15,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
-from web.services.pipeline.observation import INGEST_SCHEMA_VERSION, TripObservation
+from web.services.pipeline.observation import (
+    INGEST_SCHEMA_VERSION,
+    Observation,
+    TripObservation,
+)
 from web.services.source_merge import Rule, merge_values
 from web.services.source_system import INGESTED, SourceSystem
 from web.util.timestamps import parse_iso, utc
@@ -32,6 +36,9 @@ START_TIME_WINDOW_SECONDS = 120.0
 # agree. The band is wide enough for source rounding drift, far tighter than
 # the x1.609 spread two genuinely different drives show.
 SAME_DRIVE_TOLERANCE = 0.25
+
+# How long after a drive a reading may still describe it.
+ENRICH_WINDOW = timedelta(hours=3)
 
 TEMP_FIELDS: tuple[str, ...] = ("ambient_temp", "cabin_temp", "outside_air_temp")
 # Regen and coaching values: Ford keeps revising these after the drive ends.
@@ -226,11 +233,37 @@ async def find_same_drive(db: AsyncSession, candidate: dict) -> EVTripMetrics | 
     return next((r for r in rows if is_same_drive(row_values(r), candidate)), None)
 
 
-def _enrich_same_source(row: EVTripMetrics, values: dict[str, Any]) -> None:
-    """A later report of a drive by its own source: never moves distance, energy or times."""
+def _enrich(row: EVTripMetrics, values: dict[str, Any], *, refresh_scores: bool = True) -> None:
+    """Fill gaps, and optionally refresh regen and scores; never moves distance, energy or times."""
     for column, value in values.items():
-        if value is not None and (column in SCORE_FIELDS or getattr(row, column) is None):
+        refresh = refresh_scores and column in SCORE_FIELDS
+        if value is not None and (refresh or getattr(row, column) is None):
             setattr(row, column, value)
+
+
+async def enrich_newest_trip(db: AsyncSession, obs: Observation) -> EVTripMetrics | None:
+    """Put regen and scores from a `metrics` reading on the drive they describe.
+
+    Ford reports them for "the latest trip" with no trip id, so the reading's
+    own time decides: taken as the drive ended, it refreshes that trip; taken
+    later, it may already describe the next drive and only fills gaps.
+    """
+    at = utc(obs.recorded_at)
+    slack = timedelta(seconds=END_TIME_WINDOW_SECONDS)
+    trip = await db.scalar(
+        select(EVTripMetrics)
+        .where(
+            EVTripMetrics.device_id == obs.device_id,
+            EVTripMetrics.end_time >= at - ENRICH_WINDOW,
+            EVTripMetrics.end_time <= at + slack,
+        )
+        .order_by(EVTripMetrics.end_time.desc())
+        .limit(1)
+    )
+    if trip is None or trip.end_time is None or not is_mergeable(trip):
+        return None
+    _enrich(trip, obs.values, refresh_scores=at <= utc(trip.end_time) + slack)
+    return trip
 
 
 async def upsert_trip(db: AsyncSession, obs: TripObservation) -> EVTripMetrics | None:
@@ -248,7 +281,7 @@ async def upsert_trip(db: AsyncSession, obs: TripObservation) -> EVTripMetrics |
             logger.info("%s trip matches protected trip %s; not written", source, existing.id)
             return None
         if existing.source_system == source:
-            _enrich_same_source(existing, values)
+            _enrich(existing, values)
         else:
             apply_merge(
                 existing, {**values, "trip_id": obs.trip_id, "source_system": source}, source

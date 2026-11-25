@@ -31,6 +31,12 @@ class MetricField:
     unit: str
     shape: Shape = "number"
     notes: str | None = None
+    # Capacity arrives as Wh on some firmware and kWh on others.
+    wh_autoscale: bool = False
+    # Found inside `customMetrics`, whose keys carry a vehicle-specific prefix.
+    custom: bool = False
+    # Ford sends 0 when it has no reading for these.
+    zero_is_unmeasured: bool = False
 
     @property
     def db_unit(self) -> str:
@@ -39,6 +45,7 @@ class MetricField:
 
 BATTERY = "ev_battery_status"
 VEHICLE = "ev_vehicle_status"
+TRIPS = "ev_trip_metrics"
 
 FIELDS: tuple[MetricField, ...] = (
     MetricField("xevBatteryStateOfCharge", BATTERY, "hv_battery_soc", "%"),
@@ -48,7 +55,10 @@ FIELDS: tuple[MetricField, ...] = (
         "xevBatteryIoCurrent", BATTERY, "hv_battery_amperage", "A",
         notes="Negative while charging",
     ),
-    MetricField("xevBatteryCapacity", BATTERY, "hv_battery_capacity", "kWh"),
+    MetricField(
+        "xevBatteryCapacity", BATTERY, "hv_battery_capacity", "kWh", wh_autoscale=True,
+        notes="Wh on some firmware; a value of 1000 or more is taken as Wh",
+    ),
     MetricField("xevBatteryRange", BATTERY, "hv_battery_range", "km"),
     MetricField("xevBatteryMaximumRange", BATTERY, "hv_battery_max_range", "km"),
     MetricField("xevBatteryTemperature", BATTERY, "hv_battery_temperature", "degC"),
@@ -76,8 +86,38 @@ FIELDS: tuple[MetricField, ...] = (
     ),
 )
 
+# Ford's figures for the drive just driven; they describe a trip, not an instant.
+TRIP_FIELDS: tuple[MetricField, ...] = (
+    MetricField(
+        "tripXevBatteryRangeRegenerated", TRIPS, "range_regenerated", "km",
+        zero_is_unmeasured=True,
+    ),
+    MetricField(
+        "tripXevBatteryChargeRegenerated", TRIPS, "charge_regenerated", "%",
+        zero_is_unmeasured=True,
+        notes="Estimated electrical charge recovered through regeneration during the trip, "
+        "per Ford's data dictionary",
+    ),
+    MetricField(
+        "accumulated-vehicle-speed-cruising-coaching-score", TRIPS, "speed_score", "%",
+        custom=True, zero_is_unmeasured=True,
+    ),
+    MetricField(
+        "accumulated-acceleration-coaching-score", TRIPS, "acceleration_score", "%",
+        custom=True, zero_is_unmeasured=True,
+    ),
+    MetricField(
+        "accumulated-deceleration-coaching-score", TRIPS, "deceleration_score", "%",
+        custom=True, zero_is_unmeasured=True,
+    ),
+    MetricField(
+        "custom:vehicle-electrical-efficiency", TRIPS, "electrical_efficiency", "%",
+        custom=True, zero_is_unmeasured=True,
+    ),
+)
 
-def data_map(source: SourceRef) -> list[DataMapping]:
+
+def data_map(source: SourceRef, fields: tuple[MetricField, ...] = FIELDS) -> list[DataMapping]:
     """The parser's mappings, attributed to one source."""
     return [
         DataMapping(
@@ -88,8 +128,9 @@ def data_map(source: SourceRef) -> list[DataMapping]:
             db_column=f.column,
             db_unit=f.db_unit,
             notes=f.notes,
+            wh_autoscale=f.wh_autoscale,
         )
-        for f in FIELDS
+        for f in fields
     ]
 
 
@@ -128,7 +169,20 @@ def _convert(f: MetricField, entry: Any) -> Any:
         return None
     if f.shape == "text":
         return str(value)
-    return _number(value, f.unit)
+    number = _number(value, f.unit)
+    if number is None or (f.zero_is_unmeasured and number == 0):
+        return None
+    # Real packs are ~10-300 kWh, so 1000 or more can only be Wh.
+    return number / 1000.0 if f.wh_autoscale and abs(number) >= 1000 else number
+
+
+def _entry(f: MetricField, metrics: Mapping[str, Any]) -> Any:
+    if not f.custom:
+        return metrics.get(f.metric)
+    custom = metrics.get("customMetrics")
+    if not isinstance(custom, Mapping):
+        return None
+    return next((entry for key, entry in custom.items() if f.metric in key), None)
 
 
 def _kw(volts: Any, amps: Any) -> float | None:
@@ -146,15 +200,17 @@ class ParsedRow:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-def parse_metrics(metrics: Mapping[str, Any]) -> list[ParsedRow]:
+def parse_metrics(
+    metrics: Mapping[str, Any], fields: tuple[MetricField, ...] = FIELDS
+) -> list[ParsedRow]:
     """One row per table the metrics cover, stamped with the newest metric time.
 
     A row's recorded_at is the latest updateTime among its own metrics, so an
     unchanged reading re-parses to the same row.
     """
     rows: dict[str, ParsedRow] = {}
-    for f in FIELDS:
-        entry = metrics.get(f.metric)
+    for f in fields:
+        entry = _entry(f, metrics)
         stamp = _update_time(entry)
         if entry is None or stamp is None:
             continue
@@ -176,3 +232,8 @@ def parse_metrics(metrics: Mapping[str, Any]) -> list[ParsedRow]:
         if (kw := _kw(v.get("motor_voltage"), v.get("motor_amperage"))) is not None:
             v["motor_kw"] = kw
     return list(rows.values())
+
+
+def parse_trip_enrichment(metrics: Mapping[str, Any]) -> ParsedRow | None:
+    """Regen and coaching scores for the newest trip, or None when the dict has none."""
+    return next(iter(parse_metrics(metrics, TRIP_FIELDS)), None)
