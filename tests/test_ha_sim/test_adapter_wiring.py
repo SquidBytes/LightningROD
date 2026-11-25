@@ -223,7 +223,7 @@ async def _battery_rows(db_session) -> list[EVBatteryStatus]:
 
 
 @pytest.mark.asyncio
-async def test_metrics_snapshot_uses_last_updated_when_last_changed_is_stale(db_session):
+async def test_metrics_row_is_stamped_with_the_reading_time_not_the_event_time(db_session):
     from datetime import UTC, datetime
 
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
@@ -233,21 +233,34 @@ async def test_metrics_snapshot_uses_last_updated_when_last_changed_is_stale(db_
     await db_session.flush()
 
     (row,) = await _battery_rows(db_session)
+    # Every metric in the event carries updateTime 2026-04-19T12:00:00Z.
     # SQLite drops tzinfo; the stored value is UTC either way.
-    assert row.recorded_at.replace(tzinfo=UTC) == datetime(2026, 10, 17, 21, 34, 1, tzinfo=UTC)
+    assert row.recorded_at.replace(tzinfo=UTC) == datetime(2026, 4, 19, 12, 0, tzinfo=UTC)
 
 
 @pytest.mark.asyncio
-async def test_metrics_snapshots_30s_apart_get_distinct_times(db_session):
+async def test_the_same_reading_delivered_twice_stays_one_row(db_session):
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
     entity_id, base = _make_metrics_event(_TEST_DEVICE_ID)
     for ts in ("2026-10-17T21:34:01+00:00", "2026-10-17T21:34:31+00:00"):
         await _dispatch_event(entity_id, _with_stale_last_changed(base, ts), db_session)
     await db_session.flush()
 
+    assert len(await _battery_rows(db_session)) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_newer_reading_gets_its_own_row(db_session):
+    await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
+    entity_id, first = _make_metrics_event(_TEST_DEVICE_ID)
+    _, second = _make_metrics_event(_TEST_DEVICE_ID)
+    second["attributes"]["xevBatteryStateOfCharge"] = {"updateTime": "2026-04-19T12:00:30Z", "value": 79}
+    for new_state in (first, second):
+        await _dispatch_event(entity_id, new_state, db_session)
+    await db_session.flush()
+
     rows = await _battery_rows(db_session)
-    assert len(rows) == 2
-    assert rows[0].recorded_at != rows[1].recorded_at
+    assert [float(r.hv_battery_soc) for r in rows] == [80.0, 79.0]
 
 
 @pytest.mark.asyncio

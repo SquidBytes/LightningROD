@@ -152,7 +152,8 @@ async def test_three_events_fill_scratch_and_leave_live_untouched(db_session, tm
         "ev_trip_metrics": 1,
         "ev_battery_status": 1,
         "ev_charging_session": 1,
-        "ev_vehicle_status": 0,
+        # The metrics event now also yields a dense vehicle row.
+        "ev_vehicle_status": 1,
         "ev_location": 0,
         "ha_raw_events": 0,
     }
@@ -274,9 +275,10 @@ async def test_run_reports_scratch_only_rows_without_full_device_id(tmp_path):
     assert by_table["ev_trip_metrics"].scratch_count == 1
     assert by_table["ev_trip_metrics"].live_count == 0
     assert len(by_table["ev_charging_session"].scratch_only) == 1
-    # Status and location rows are stamped at replay time, after the window;
-    # they must still be counted and the drift flagged.
-    assert by_table["ev_vehicle_status"].scratch_count == 1
+    # Old-handler status and location rows are stamped at replay time, after
+    # the window; they must still be counted and the drift flagged. The
+    # metrics event adds a second vehicle row stamped with its reading time.
+    assert by_table["ev_vehicle_status"].scratch_count == 2
     assert by_table["ev_location"].scratch_count == 3
     assert by_table["ev_location"].span["scratch"][1] > report.until
     assert report.devices == ["…N001"]

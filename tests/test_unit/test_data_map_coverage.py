@@ -82,8 +82,13 @@ _TRIP_SEGMENT_PREFIX = "xev-key-off-trip-segment-data."
 _HA_INJECTED = {"friendly_name", "icon", "unit_of_measurement", "device_class"}
 
 
+# The full Ford metrics dict; the four unit-matrix fixtures carry only a slice of it.
+_FULL_METRICS = _FIXTURES_DIR.parent / "ha_metrics" / "metrics_full.json"
+
+
 def _load_fixtures() -> list[tuple[str, dict]]:
-    out = [(path.name, json.loads(path.read_text())) for path in sorted(_FIXTURES_DIR.glob("*.json"))]
+    paths = [*sorted(_FIXTURES_DIR.glob("*.json")), _FULL_METRICS]
+    out = [(path.name, json.loads(path.read_text())) for path in paths]
     assert out, f"No payload fixtures found under {_FIXTURES_DIR}"
     return out
 
@@ -116,6 +121,12 @@ def _resolves(entity_id: str, state: dict, attribute: str) -> bool:
         if not isinstance(node, dict) or segment not in node:
             return False
         node = node[segment]
+    if entity_id.endswith(_METRICS_SUFFIX) and leaf not in attributes:
+        # Coaching scores sit under customMetrics, keyed by a vehicle-specific
+        # name that contains the mapped one.
+        custom = attributes.get("customMetrics") or {}
+        match = next((v for k, v in custom.items() if leaf in k), None)
+        node = {} if match is None else {leaf: match}
     if not isinstance(node, dict) or leaf not in node:
         return False
 
@@ -123,7 +134,9 @@ def _resolves(entity_id: str, state: dict, attribute: str) -> bool:
     # which arrive as {"updateTime": ..., "value": <scalar>} wrappers.
     if entity_id.endswith(_METRICS_SUFFIX) and leaf not in _HA_INJECTED:
         value = node[leaf]
-        return isinstance(value, dict) and "value" in value
+        # Per-wheel and per-door metrics are a list of wrappers.
+        wrappers = value if isinstance(value, list) else [value]
+        return bool(wrappers) and all(isinstance(w, dict) and "value" in w for w in wrappers)
     return True
 
 

@@ -32,7 +32,20 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.base import HA_INGEST_SCHEMA_VERSION
+from web.services.pipeline.context import IngestContext
+from web.services.pipeline.location import record_position
+from web.services.pipeline.observation import Observation
+from web.services.pipeline.status import upsert_status
+from web.services.pipeline.trips import enrich_newest_trip
 from web.services.source_system import SourceSystem
+from web.services.sources.ford_metrics.last_seen import record_last_seen
+from web.services.sources.ford_metrics.parser import (
+    FIELDS,
+    TRIP_FIELDS,
+    TRIPS,
+    data_map,
+    parse_metrics,
+)
 from web.services.units import detection
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
 from web.services.units.families import (
@@ -79,39 +92,16 @@ _trace = logging.getLogger("lightningrod.units.trace")
 # tests/test_unit/test_data_map_coverage.py locks that invariant.
 # `source_unit` strings must be ones web.services.units.to_metric recognizes.
 
+# The metrics entity's attributes are Ford's raw metrics dict, the same one
+# FordConnect telemetry carries, so the shared parser reads it.
+METRICS = SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY)
+METRICS_MAP: list[DataMapping] = data_map(METRICS, FIELDS + TRIP_FIELDS)
+
 DATA_MAP: list[DataMapping] = [
-    # --- ev_battery_status (from sensor.{vin}_metrics) -------------------
-    DataMapping(
-        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
-        source_field="xevBatteryRange",
-        source_unit="km",
-        db_table="ev_battery_status",
-        db_column="hv_battery_range",
-        db_unit="km",
-        notes="Canonical metric source; replaces elveh state reading",
-    ),
-    DataMapping(
-        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
-        source_field="xevBatteryMaximumRange",
-        source_unit="km",
-        db_table="ev_battery_status",
-        db_column="hv_battery_max_range",
-        db_unit="km",
-        notes="Canonical metric source; replaces elveh.maximumBatteryRange",
-    ),
-    # ha-fordpass installs disagree on pack-capacity scale — some report raw Wh
-    # (131000), others already-kWh (141.2). A blind Wh/1000 corrupted the
-    # kWh-reporting installs, so wh_autoscale disambiguates by magnitude.
-    DataMapping(
-        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
-        source_field="xevBatteryCapacity",
-        source_unit="Wh",
-        wh_autoscale=True,
-        db_table="ev_battery_status",
-        db_column="hv_battery_capacity",
-        db_unit="kWh",
-        notes="Mixed Wh/kWh across ha-fordpass versions; magnitude-autoscaled to kWh",
-    ),
+    # --- every status and trip column the metrics entity carries -----------
+    *METRICS_MAP,
+    # ha-fordpass installs disagree on pack-capacity scale: some report raw Wh
+    # (131000), others already-kWh (141.2), so wh_autoscale decides by magnitude.
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
         source_field="maximumBatteryCapacity",
@@ -217,17 +207,6 @@ DATA_MAP: list[DataMapping] = [
         db_column="range_regenerated",
         db_unit="km",
         notes="From metrics tripXevBatteryRangeRegenerated via localize_distance",
-    ),
-    # Primary regen source; the elveh mapping above is the localized fallback
-    # for installs whose metrics entity lacks the attribute.
-    DataMapping(
-        source=SourceRef("sensor.fordpass_{vin}_metrics", SourceKind.HA_ENTITY),
-        source_field="tripXevBatteryRangeRegenerated",
-        source_unit="km",
-        db_table="ev_trip_metrics",
-        db_column="range_regenerated",
-        db_unit="km",
-        notes="Raw API passthrough (km); backfills the newest trip row",
     ),
     DataMapping(
         source=SourceRef("sensor.fordpass_{vin}_elveh", SourceKind.HA_ENTITY),
@@ -594,19 +573,6 @@ def convert(
     return converted
 
 
-def _metric_value(attrs: dict, key: str) -> Any:
-    """Unwrap one `{"updateTime": ..., "value": x}` metrics attribute.
-
-    Unwraps exactly one level, so a metric whose `value` is itself structured
-    (Ford sends a few) comes back as that dict rather than a number. Bare
-    scalars pass through unchanged.
-    """
-    raw = attrs.get(key)
-    if isinstance(raw, dict):
-        return raw.get("value")
-    return raw
-
-
 # ---------------------------------------------------------------------------
 # Device-id extraction
 # ---------------------------------------------------------------------------
@@ -686,6 +652,14 @@ async def process_sample(
 # Per-entity handlers
 # ---------------------------------------------------------------------------
 
+def parse_metrics_entity(new_state: dict, device_id: str, ctx: IngestContext) -> list[Observation]:
+    """Status rows and the trip enrichment in one metrics-entity state."""
+    attrs = new_state.get("attributes") or {}
+    rows = [*parse_metrics(attrs), *parse_metrics(attrs, TRIP_FIELDS)]
+    record_last_seen(_last_seen_raw, METRICS_MAP, rows)
+    return [Observation(device_id, r.table, r.recorded_at, r.values, ctx.source_system) for r in rows]
+
+
 async def _handle_metrics_entity(
     entity_id: str,
     new_state: dict,
@@ -693,176 +667,31 @@ async def _handle_metrics_entity(
     db: AsyncSession,
     ha_config: dict | None = None,
 ) -> None:
-    """sensor.fordpass_{vin}_metrics -> ev_battery_status row.
-
-    Writes a row with hv_battery_range + hv_battery_max_range (+ any other
-    battery fields available on the metrics entity) and
-    ingest_schema_version = HA_INGEST_SCHEMA_VERSION.
-    """
-    from db.models.battery_status import EVBatteryStatus
-
-    attrs = new_state.get("attributes") or {}
-    pattern = _entity_pattern(entity_id)
-
-    range_mapping = lookup_mapping(pattern, "xevBatteryRange")
-    max_range_mapping = lookup_mapping(pattern, "xevBatteryMaximumRange")
-
-    raw_range = _metric_value(attrs, "xevBatteryRange")
-    raw_max_range = _metric_value(attrs, "xevBatteryMaximumRange")
-    hv_range = (
-        convert(range_mapping, raw_range, new_state, ha_config)
-        if range_mapping
-        else None
+    """sensor.fordpass_{vin}_metrics -> status rows, GPS fix and trip regen and scores."""
+    ctx = IngestContext(
+        SourceSystem.HA_FORDPASS,
+        (ha_config or {}).get("_config_id"),
+        (ha_config or {}).get("unit_system"),
     )
-    hv_max_range = (
-        convert(max_range_mapping, raw_max_range, new_state, ha_config)
-        if max_range_mapping
-        else None
-    )
-
-    # Cross-reference: metrics is canonical (km). If any target entity has
-    # recent reads for the paired attributes, let the detection layer derive
-    # the target unit from the observed ratio.
-    if hv_range is not None:
-        detection.try_cross_reference(
-            device_id,
-            "sensor.fordpass_{vin}_metrics",
-            "xevBatteryRange",
-            hv_range,
-            "km",
-        )
-    if hv_max_range is not None:
-        detection.try_cross_reference(
-            device_id,
-            "sensor.fordpass_{vin}_metrics",
-            "xevBatteryMaximumRange",
-            hv_max_range,
-            "km",
-        )
-
-    # SI-already scalar attributes pass through without conversion
-    hv_soc = safe_float(_metric_value(attrs, "xevBatteryStateOfCharge"))
-    hv_actual_soc = safe_float(_metric_value(attrs, "xevBatteryActualStateOfCharge"))
-    cap_mapping = lookup_mapping(pattern, "xevBatteryCapacity")
-    hv_capacity = (
-        convert(cap_mapping, _metric_value(attrs, "xevBatteryCapacity"), new_state, ha_config)
-        if cap_mapping
-        else None
-    )
-    hv_voltage = safe_float(_metric_value(attrs, "xevBatteryVoltage"))
-    hv_amperage = safe_float(_metric_value(attrs, "xevBatteryIoCurrent"))
-    # Ford publishes no pack-power metric. ha-fordpass derives its elveh
-    # batterykW attribute from voltage x current, so deriving it the same way
-    # here keeps the two ingestion paths numerically identical.
-    hv_kw = (
-        round(hv_voltage * hv_amperage / 1000.0, 2)
-        if hv_voltage is not None and hv_amperage is not None
-        else None
-    )
-
-    recorded_at = _parse_event_ts(new_state) or datetime.now(UTC)
-
-    values = {
-        "hv_battery_range": hv_range,
-        "hv_battery_max_range": hv_max_range,
-        "hv_battery_soc": hv_soc,
-        "hv_battery_actual_soc": hv_actual_soc,
-        "hv_battery_capacity": hv_capacity,
-        "hv_battery_voltage": hv_voltage,
-        "hv_battery_amperage": hv_amperage,
-        "hv_battery_kw": hv_kw,
-    }
-    # A row whose every value column is NULL carries no telemetry; every
-    # consumer filters those out anyway, so skip the insert.
-    if any(v is not None for v in values.values()):
-        db.add(EVBatteryStatus(
-            device_id=device_id,
-            recorded_at=recorded_at,
-            source_system=SourceSystem.HA_FORDPASS,
-            original_timestamp=recorded_at,
-            ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
-            **values,
-        ))
-        logger.debug(
-            "ha_fordpass: wrote ev_battery_status for %s range=%s max=%s",
-            device_id,
-            hv_range,
-            hv_max_range,
-        )
-    else:
-        logger.debug(
-            "ha_fordpass: metrics event for %s carried no battery values; "
-            "no ev_battery_status row written",
-            device_id,
-        )
-
-    await _backfill_trip_regen(entity_id, attrs, device_id, db, recorded_at, ha_config)
-
-
-async def _backfill_trip_regen(
-    entity_id: str,
-    attrs: dict,
-    device_id: str,
-    db: AsyncSession,
-    recorded_at: datetime,
-    ha_config: dict | None,
-) -> None:
-    """NULL-fill regen + driving score on the newest trip row from metrics attrs.
-
-    tripXevBatteryRangeRegenerated (raw km) and tripXevBatteryChargeRegenerated
-    (a regen-vs-brake driving score %) live on the metrics entity, which is
-    always enabled — unlike the elveh fallback, whose trip attributes many
-    installs never emit. Metrics refreshes every poll cycle, so a trip row
-    created by the events handler gets its regen/score within one cycle.
-    Only NULL fields are filled; elveh-sourced values are never overwritten.
-    """
-    raw_regen = _metric_value(attrs, "tripXevBatteryRangeRegenerated")
-    raw_score = safe_float(_metric_value(attrs, "tripXevBatteryChargeRegenerated"))
-    # ha-fordpass emits 0 for missing telemetry; treat as unmeasured.
-    if raw_score == 0:
-        raw_score = None
-    regen = None
-    if raw_regen is not None:
-        regen_mapping = lookup_mapping(
-            _entity_pattern(entity_id), "tripXevBatteryRangeRegenerated"
-        )
-        if regen_mapping is not None:
-            regen = convert(regen_mapping, raw_regen, None, ha_config)
-    if regen == 0:
-        regen = None
-    if regen is None and raw_score is None:
-        return
-
-    from datetime import timedelta
-
-    from sqlalchemy import select as _select
-
-    from db.models.trip_metrics import EVTripMetrics
-
-    trip = (await db.execute(
-        _select(EVTripMetrics)
-        .where(EVTripMetrics.device_id == device_id)
-        .where(EVTripMetrics.end_time >= recorded_at - timedelta(hours=24))
-        .order_by(EVTripMetrics.end_time.desc())
-        .limit(1)
-    )).scalar_one_or_none()
-    if trip is None:
-        return
-
-    changed = False
-    if regen is not None and trip.range_regenerated is None:
-        trip.range_regenerated = regen
-        changed = True
-    if raw_score is not None and trip.charge_regenerated is None:
-        trip.charge_regenerated = raw_score
-        changed = True
-    if changed:
-        logger.debug(
-            "ha_fordpass: backfilled trip %s regen=%s score=%s from metrics",
-            trip.id,
-            regen,
-            raw_score,
-        )
+    observations = parse_metrics_entity(new_state, device_id, ctx)
+    status = [o for o in observations if o.table != TRIPS]
+    await upsert_status(db, status)
+    # Metrics is always km, so it tells the detection layer what unit the
+    # localized entities must be in. Goes away with detection itself.
+    for obs in status:
+        for metric, column in (
+            ("xevBatteryRange", "hv_battery_range"),
+            ("xevBatteryMaximumRange", "hv_battery_max_range"),
+        ):
+            if obs.values.get(column) is not None:
+                detection.record_declared(METRICS.pattern, metric, "km", obs.values[column])
+                detection.try_cross_reference(
+                    device_id, METRICS.pattern, metric, obs.values[column], "km"
+                )
+    await record_position(db, device_id, new_state.get("attributes") or {}, ctx.source_system)
+    for obs in observations:
+        if obs.table == TRIPS:
+            await enrich_newest_trip(db, obs)
 
 
 async def _handle_events_entity(

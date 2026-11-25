@@ -13,7 +13,8 @@ from sqlalchemy import event, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
-from web.services.pipeline.trips import is_same_drive
+from web.services.pipeline.observation import Observation
+from web.services.pipeline.trips import enrich_newest_trip, is_same_drive
 from web.services.repair.base import (
     DEFAULT_PREVIEW_LIMIT,
     RepairDiff,
@@ -32,6 +33,7 @@ from web.services.repair.replay_core import (
 )
 from web.services.repair.snapshot import deserialize_row, serialize_row
 from web.services.source_system import INGESTED, SourceSystem
+from web.services.sources.ford_metrics.parser import parse_trip_enrichment
 from web.util.timestamps import parse_iso, utc
 
 logger = logging.getLogger("lightningrod.repair.recorder_replay")
@@ -348,17 +350,18 @@ class RecorderReplay(RepairOperation):
 
         async def _dispatch(event: ArchivedEvent, ha_config: dict, session) -> None:
             if event.entity_id.endswith("_metrics"):
-                # Dispatching metrics would write an EVBatteryStatus row per
-                # state; the trip regen backfill is its only trip-relevant
-                # effect, so call it directly.
-                attrs = event.payload.get("attributes") or {}
+                # Only the trip regen matters here; the status rows a full
+                # dispatch would write are not this operation's business.
                 device_id = adapter._device_id_from_entity(event.entity_id) or "unknown"
-                recorded_at = adapter._parse_event_ts(event.payload) or datetime.now(
-                    UTC
-                )
-                await adapter._backfill_trip_regen(
-                    event.entity_id, attrs, device_id, session, recorded_at, ha_config
-                )
+                row = parse_trip_enrichment(event.payload.get("attributes") or {})
+                if row is not None:
+                    await enrich_newest_trip(
+                        session,
+                        Observation(
+                            device_id, row.table, row.recorded_at, row.values,
+                            SourceSystem.HA_FORDPASS,
+                        ),
+                    )
             else:
                 await dispatch_slug(
                     event.entity_id,
