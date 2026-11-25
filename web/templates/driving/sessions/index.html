@@ -129,26 +129,8 @@ function markRowSelected(tripId) {
     if (target) accentRing.forEach(function(c) { target.classList.add(c); });
 }
 
-function showToast(message, type) {
-    var toast = document.createElement('div');
-    toast.className = 'toast toast-bottom toast-end z-50';
-    toast.setAttribute('data-auto-dismiss', '3000');
-    var alertEl = document.createElement('div');
-    alertEl.className = 'alert ' + (type === 'success' ? 'alert-success' : 'alert-error');
-    var span = document.createElement('span');
-    span.textContent = message;
-    alertEl.appendChild(span);
-    toast.appendChild(alertEl);
-    document.body.appendChild(toast);
-    if (window.LR && LR.scheduleDismiss) {
-        LR.scheduleDismiss(document);
-    } else {
-        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
-    }
-}
-
 document.body.addEventListener('trip-created', function() {
-    showToast('Trip added', 'success');
+    LR.toast('Trip added', 'success');
     document.getElementById('trip-modal').close();
 });
 

@@ -264,24 +264,6 @@ function confirmDeleteFromModal(sessionId) {
 // Listen for closeModal event from HTMX responses
 document.body.addEventListener('closeModal', closeSessionModal);
 
-function showToast(message, type) {
-    var toast = document.createElement('div');
-    toast.className = 'toast toast-bottom toast-end z-50';
-    toast.setAttribute('data-auto-dismiss', '3000');
-    var alertEl = document.createElement('div');
-    alertEl.className = 'alert ' + (type === 'success' ? 'alert-success' : 'alert-error');
-    var span = document.createElement('span');
-    span.textContent = message;
-    alertEl.appendChild(span);
-    toast.appendChild(alertEl);
-    document.body.appendChild(toast);
-    if (window.LR && LR.scheduleDismiss) {
-        LR.scheduleDismiss(document);
-    } else {
-        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
-    }
-}
-
 // Drawn on a row when the user clicks it (drawer opens). Cleared globally by
 // save-toast.js on any non-dismiss click, so only the most-recently-clicked
 // row carries the accent ring at any time.
@@ -312,7 +294,7 @@ function highlightRow(sessionId) {
 
 // Listen for HTMX trigger events for toasts
 document.body.addEventListener('session-updated', function(evt) {
-    showToast('Session saved', 'success');
+    LR.toast('Session saved', 'success');
     var sessionId = evt.detail ? evt.detail.sessionId : null;
     if (sessionId) {
         setTimeout(function() {
@@ -322,14 +304,14 @@ document.body.addEventListener('session-updated', function(evt) {
 });
 document.body.addEventListener('session-deleted', function(evt) {
     var bulk = evt.detail && evt.detail.bulk;
-    showToast(bulk ? 'Deleted ' + evt.detail.count + ' sessions' : 'Session deleted', 'success');
+    LR.toast(bulk ? 'Deleted ' + evt.detail.count + ' sessions' : 'Session deleted', 'success');
     closeDrawer();
     closeSessionModal();
     var delModal = document.getElementById('delete-session-modal');
     if (delModal) delModal.close();
 });
 document.body.addEventListener('session-created', function(evt) {
-    showToast('Session added', 'success');
+    LR.toast('Session added', 'success');
     var sessionId = evt.detail ? evt.detail.sessionId : null;
     if (sessionId) {
         setTimeout(function() {
@@ -451,7 +433,7 @@ function applyGroupEdit() {
     if (costInput.value) formData.append('bulk_cost', costInput.value);
 
     submitBulk('PUT', '/charging/sessions/bulk', formData, 'Bulk update failed', function() {
-        showToast('Updated ' + ids.length + ' sessions', 'success');
+        LR.toast('Updated ' + ids.length + ' sessions', 'success');
     });
 }
 
@@ -467,7 +449,7 @@ function submitBulk(method, url, formData, failMessage, onDone) {
         headers: { 'HX-Request': 'true' }
     }).then(function(resp) {
         if (!resp.ok) {
-            showToast(failMessage, 'error');
+            LR.toast(failMessage, 'error');
             return;
         }
         var trigger = resp.headers.get('HX-Trigger');
@@ -487,7 +469,7 @@ function submitBulk(method, url, formData, failMessage, onDone) {
 function openBulkDeleteModal() {
     var ids = selectedSessionIds();
     if (ids.length === 0) {
-        showToast('No sessions selected', 'error');
+        LR.toast('No sessions selected', 'error');
         return;
     }
     document.getElementById('bulk-delete-count').textContent = ids.length;
