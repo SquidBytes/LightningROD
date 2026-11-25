@@ -6,12 +6,12 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from web.services.pipeline.location import record_position
 from web.services.pipeline.observation import Observation
 from web.services.pipeline.status import upsert_status
 from web.services.sources.fcon.charge_sessions import record_session_if_ended
 from web.services.sources.fcon.garage import fill_battery, garage_facts
 from web.services.sources.fcon.identity import SOURCE_SYSTEM, device_id_of
-from web.services.sources.fcon.positions import record_position
 from web.services.sources.fcon.trips import record_trip_if_ended
 from web.services.sources.ford_metrics.parser import data_map, parse_metrics
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
@@ -85,7 +85,7 @@ async def process_sample(
     await upsert_status(
         db, [Observation(device_id, r.table, r.recorded_at, r.values, SOURCE_SYSTEM) for r in rows]
     )
-    await record_position(db, device_id, payload.get("metrics") or {})
+    await record_position(db, device_id, payload.get("metrics") or {}, SOURCE_SYSTEM)
     config_id = (source_config or {}).get("config_id")
     await record_session_if_ended(db, device_id, payload, config_id)
     await record_trip_if_ended(db, device_id, payload)
