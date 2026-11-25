@@ -1,6 +1,5 @@
 """Charging-cost analytics routes."""
 
-from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Request
@@ -27,6 +26,7 @@ from web.queries.vehicles import (
     get_all_vehicles,
 )
 from web.unit_system import MI_PER_KM
+from web.util.forms import OptionalDecimal, OptionalInt
 
 router = APIRouter()
 templates = Jinja2Templates(directory="web/templates")
@@ -55,8 +55,8 @@ async def costs(
     free_what_if_scope: str | None = "global",
     free_what_if_networks: str | None = None,
     ref_mode: str | None = "network",
-    ref_network_id: int | None = None,
-    ref_value: Decimal | None = None,
+    ref_network_id: OptionalInt = None,
+    ref_value: OptionalDecimal = None,
     hx_request: Annotated[str | None, Header()] = None,
 ):
     active_device_id = await get_active_device_id(db)

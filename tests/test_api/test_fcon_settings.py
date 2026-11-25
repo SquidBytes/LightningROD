@@ -233,3 +233,8 @@ async def test_connect_without_key_stores_plain_tokens(client, db_session, monke
     stored = await _stored(db_session)
     assert stored["client_secret"] == SECRET
     assert stored["refresh_token"] == "ref-token-value"
+
+
+async def test_retention_estimate_accepts_a_cleared_field(client):
+    resp = await client.get("/settings/fcon/retention-estimate?days=", headers={"HX-Request": "true"})
+    assert resp.status_code == 200

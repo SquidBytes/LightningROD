@@ -50,3 +50,13 @@ async def test_costs_page_renders_mile_for_mile_section(client, db_session):
     assert "odometer" in response.text
     # Single EV column: the "Your EV" label appears exactly once.
     assert response.text.count("Your EV — actual spend") == 1
+
+
+@pytest.mark.db
+async def test_custom_comparison_with_an_empty_value_is_not_an_error(client, db_session):
+    """Choosing "Custom" submits the form before a value is typed."""
+    response = await client.get(
+        "/charging/costs?ref_mode=custom&ref_value=&ref_network_id=",
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 200

@@ -380,7 +380,7 @@ class HAWebSocketRuntime:
         self._log_event(entity_id, new_state, branch, raised)
 
     def _log_event(
-        self, entity_id: str, new_state: dict, branch: str, raised: bool
+        self, entity_id: str, new_state: dict | None, branch: str, raised: bool
     ) -> None:
         """One line per event. Never the payload; the device id as its last 4 chars.
 
@@ -397,7 +397,8 @@ class HAWebSocketRuntime:
             "event slug=%s device=%s last_updated=%s branch=%s raised=%s",
             slug or entity_id.partition(".")[0],
             device_id[-4:] if device_id else "-",
-            new_state.get("last_updated"),
+            # HA sends a null new_state when an entity is removed.
+            (new_state or {}).get("last_updated"),
             branch,
             raised,
         )

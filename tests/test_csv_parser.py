@@ -552,3 +552,11 @@ def test_transform_rows_duration_seconds_is_a_number():
 
     assert result[0]["charge_duration_seconds"] == 45.0
     assert isinstance(result[0]["charge_duration_seconds"], float)
+
+
+@pytest.mark.parametrize("text", ["nan", "NaN", "inf", "-Infinity"])
+def test_float_parser_refuses_nan_and_infinity(text):
+    """pandas writes a missing value as nan; stored, it turns every cost total into NaN."""
+    from web.services.csv_parser import _float_or_none
+
+    assert _float_or_none(text) is None

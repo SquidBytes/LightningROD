@@ -48,3 +48,10 @@ async def test_create_vehicle_duplicate_device_id_is_rejected(client, db_session
     assert response.headers["HX-Retarget"] == "#toast-root"
     assert "already exists" in response.text
     assert "Vehicle saved." not in response.text
+
+
+@pytest.mark.db
+async def test_settings_page_loads_the_chart_library(client, db_session):
+    """The Fuel tab's price trend chart arrives over htmx and needs Plotly on the page."""
+    response = await client.get("/settings")
+    assert "plotly.min.js" in response.text
