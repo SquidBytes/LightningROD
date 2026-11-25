@@ -124,7 +124,7 @@ def _snapshot(row: EVTripMetrics) -> dict:
         "odometer_start": _f(row.odometer_start), "odometer_end": _f(row.odometer_end),
         "ambient_temp": _f(row.ambient_temp), "cabin_temp": _f(row.cabin_temp),
         "outside_air_temp": _f(row.outside_air_temp),
-        "driving_score": _f(row.driving_score), "range_regenerated": _f(row.range_regenerated),
+        "charge_regenerated": _f(row.charge_regenerated), "range_regenerated": _f(row.range_regenerated),
         "electrical_efficiency": _f(row.electrical_efficiency),
         "brake_torque": _f(row.brake_torque), "source_system": row.source_system,
         "trip_id": row.trip_id,
@@ -139,7 +139,7 @@ EXPECTED = {
     "distance": 12.6, "energy_consumed": 2.4, "efficiency": 5.25,
     "odometer_start": 1000.0, "odometer_end": 1013.0,
     "ambient_temp": 22.0, "cabin_temp": 21.0, "outside_air_temp": 20.0,
-    "driving_score": 88.0, "range_regenerated": 3.0, "electrical_efficiency": 90.0,
+    "charge_regenerated": 88.0, "range_regenerated": 3.0, "electrical_efficiency": 90.0,
     "brake_torque": 500.0, "source_system": SourceSystem.HA_FORDPASS,
 }
 

@@ -33,7 +33,7 @@ def _render_drawer(
     tpl = env.get_template("driving/sessions/partials/drawer.html")
     trip = SimpleNamespace(
         id=1,
-        driving_score=None,
+        charge_regenerated=None,
         speed_score=None,
         acceleration_score=None,
         deceleration_score=None,

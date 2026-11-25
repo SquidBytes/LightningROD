@@ -386,7 +386,7 @@ async def test_elveh_first_then_events_enriches_temps(db_session):
         device_id=_TEST_DEVICE_ID,
         distance_miles=_TRIP_DIST_MILES,
         energy_consumed=_TRIP_ENERGY_KWH,
-        driving_score=90.0,
+        charge_regenerated=90.0,
     )
     await _dispatch_event(elveh_entity_id, elveh_state, db_session)
     await db_session.flush()
@@ -423,7 +423,7 @@ async def test_elveh_first_then_events_enriches_temps(db_session):
 
     row = rows[0]
     # elveh-written score must still be present
-    assert row.driving_score is not None, "driving_score written by elveh must survive enrich"
+    assert row.charge_regenerated is not None, "charge_regenerated written by elveh must survive enrich"
 
 
 async def test_events_first_then_elveh_enriches_scores(db_session):
@@ -454,7 +454,7 @@ async def test_events_first_then_elveh_enriches_scores(db_session):
         device_id=_TEST_DEVICE_ID,
         distance_miles=_TRIP_DIST_MILES,
         energy_consumed=_TRIP_ENERGY_KWH,
-        driving_score=88.0,
+        charge_regenerated=88.0,
     )
     await _dispatch_event(elveh_entity_id, elveh_state, db_session)
     await db_session.flush()
@@ -470,9 +470,9 @@ async def test_events_first_then_elveh_enriches_scores(db_session):
 
     row = rows[0]
     # elveh-sourced score must be present on the enriched row
-    assert row.driving_score is not None, "driving_score should be set after elveh enrichment"
-    assert float(row.driving_score) == pytest.approx(88.0), (
-        f"driving_score should be 88.0 after elveh enrich, got {row.driving_score}"
+    assert row.charge_regenerated is not None, "charge_regenerated should be set after elveh enrichment"
+    assert float(row.charge_regenerated) == pytest.approx(88.0), (
+        f"charge_regenerated should be 88.0 after elveh enrich, got {row.charge_regenerated}"
     )
 
 

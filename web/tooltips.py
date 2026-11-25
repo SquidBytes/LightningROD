@@ -111,6 +111,10 @@ TOOLTIPS: dict[str, str] = {
         "Station and regional average fuel prices over time, in your configured units."
     ),
     # --- driving_performance (/driving/performance) ---
+    "driving_sessions_charge_regenerated": (
+        "Ford metric `tripXevBatteryChargeRegenerated`: estimated electrical charge recovered "
+        "through regeneration during the trip, as a percentage."
+    ),
     "driving_performance_temp_scatter": (
         "Each trip's efficiency plotted against ambient temperature, with a linear regression trendline."
     ),

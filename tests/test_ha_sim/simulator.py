@@ -379,7 +379,7 @@ def make_trip_event(
     duration_minutes: float = 25.0,
     efficiency: float = 3.2,
     energy_consumed: float = 4.8,
-    driving_score: float = 85.0,
+    charge_regenerated: float = 85.0,
     update_time_iso: str | None = None,
 ) -> tuple[str, dict]:
     """Generate an elveh event with trip attributes.
@@ -409,7 +409,7 @@ def make_trip_event(
         "tripDuration": duration_minutes,
         "tripEnergyConsumed": energy_consumed,
         "tripEfficiency": efficiency,
-        "tripDrivingScore": driving_score,
+        "tripDrivingScore": charge_regenerated,
         "tripSpeedScore": 80.0,
         "tripAccelerationScore": 75.0,
         "tripDecelerationScore": 70.0,

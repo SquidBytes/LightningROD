@@ -43,7 +43,7 @@
                 {% if trip.speed_score is not none %}<div><span class="text-base-content/40">Speed:</span> {{ "%.0f"|format(trip.speed_score) }}</div>{% endif %}
                 {% if trip.acceleration_score is not none %}<div><span class="text-base-content/40">Accel:</span> {{ "%.0f"|format(trip.acceleration_score) }}</div>{% endif %}
                 {% if trip.deceleration_score is not none %}<div><span class="text-base-content/40">Decel:</span> {{ "%.0f"|format(trip.deceleration_score) }}</div>{% endif %}
-                {% if trip.driving_score is not none %}<div><span class="text-base-content/40">Overall:</span> {{ "%.0f"|format(trip.driving_score) }}</div>{% endif %}
+                {% if trip.charge_regenerated is not none %}<div title="{{ tooltips.driving_sessions_charge_regenerated }}"><span class="text-base-content/40">Charge regenerated:</span> {{ "%.0f"|format(trip.charge_regenerated) }} %</div>{% endif %}
             </div>
         {% else %}
             <p class="text-base-content/30 text-sm">No driving score data available.</p>

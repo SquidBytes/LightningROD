@@ -17,6 +17,7 @@ For feature documentation, see the docs site at
 - Charts fit the screen on phones and hide their toolbar
 - The charge curve in the charging session drawer is now a lightweight drawing
 - Charging sessions with any known charger-type spelling (`AC_CHARGING`, `DC_COMBO`, `L1`, …) are now stored as `AC` or `DC`; existing rows are updated on upgrade
+- The trip "Driving score" is now shown as "Charge regenerated", which is what Ford reports it as (percent of battery charge recovered through regeneration)
 - Costs are now stored to the exact cent and per-kWh and fuel prices to four decimal places; existing values are rounded on upgrade
 
 ### Fixed

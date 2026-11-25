@@ -133,7 +133,7 @@ class RecorderReplay(RepairOperation):
         "odometer_start",
         "odometer_end",
         "range_regenerated",
-        "driving_score",
+        "charge_regenerated",
         "speed_score",
         "acceleration_score",
         "deceleration_score",

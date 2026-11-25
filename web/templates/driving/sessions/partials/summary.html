@@ -86,7 +86,7 @@
                     {% with col_id="efficiency", col_label="Efficiency", sort_key="efficiency", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
                         {% include "partials/column_dropdown.html" %}
                     {% endwith %}
-                    {% with col_id="score", col_label="Score", sort_key="score", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
+                    {% with col_id="score", col_label="Charge regen", sort_key="score", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
                         {% include "partials/column_dropdown.html" %}
                     {% endwith %}
                     {% with col_id="regen", col_label="Regen", sort_key="regen", filter_key=None, filter_values=[], filter_form_id="filter-form" %}
@@ -134,12 +134,12 @@
                         {% endif %}
                     </div>
                 </div>
-                {% if trip.driving_score is not none %}
+                {% if trip.charge_regenerated is not none %}
                 <div class="mt-2">
                     <div class="relative h-5 w-full rounded overflow-hidden">
                         <div class="absolute inset-0 bg-gradient-to-r from-error via-warning to-success"></div>
                         <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
-                            {{ "%.0f"|format(trip.driving_score) }}
+                            Charge regenerated {{ "%.0f"|format(trip.charge_regenerated) }} %
                         </span>
                     </div>
                 </div>

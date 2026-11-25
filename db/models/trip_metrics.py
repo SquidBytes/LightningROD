@@ -56,8 +56,10 @@ class EVTripMetrics(IngestMetaMixin, IngestVersionMixin, Base):
     cabin_temp: Mapped[float | None] = mapped_column()
     outside_air_temp: Mapped[float | None] = mapped_column()
 
-    # Driving scores
-    driving_score: Mapped[float | None] = mapped_column()
+    # Ford: estimated electrical charge recovered through regeneration during the trip, in %.
+    charge_regenerated: Mapped[float | None] = mapped_column()
+
+    # Coaching scores
     speed_score: Mapped[float | None] = mapped_column()
     acceleration_score: Mapped[float | None] = mapped_column()
     deceleration_score: Mapped[float | None] = mapped_column()

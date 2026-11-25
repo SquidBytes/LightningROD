@@ -139,7 +139,7 @@ async def test_switch_off_writes_one_trip_and_park_does_not_split(db_session):
     assert trip.is_complete
     assert float(trip.distance) == 13.0
     assert float(trip.energy_consumed) == 2.5
-    assert trip.cabin_temp is None and trip.driving_score is None
+    assert trip.cabin_temp is None and trip.charge_regenerated is None
     fixes = (await db_session.execute(
         select(EVLocation).where(EVLocation.device_id == DEVICE)
     )).scalars().all()

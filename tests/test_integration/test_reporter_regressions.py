@@ -301,7 +301,7 @@ async def test_metrics_backfills_trip_regen_and_score(db_session):
     ).scalar_one_or_none()
     assert trip is not None
     assert float(trip.range_regenerated) == pytest.approx(2.1, abs=0.01)
-    assert float(trip.driving_score) == pytest.approx(85.0)
+    assert float(trip.charge_regenerated) == pytest.approx(85.0)
 
 
 async def test_metrics_backfill_does_not_overwrite_elveh_regen(db_session):

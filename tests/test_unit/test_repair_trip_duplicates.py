@@ -204,7 +204,7 @@ def test_string_end_time_coerced():
 
 
 def test_temps_from_events_canonical_loser_win():
-    survivor = _row(1, 122.0, driving_score=90.0)  # elveh-canonical, no temps
+    survivor = _row(1, 122.0, charge_regenerated=90.0)  # elveh-canonical, no temps
     loser = _row(2, 196.34, ambient_temp=21.5, cabin_temp=22.0)
     merged = merge_pair(survivor, loser)
     assert merged["ambient_temp"] == 21.5
@@ -213,9 +213,9 @@ def test_temps_from_events_canonical_loser_win():
 
 def test_scores_from_elveh_canonical_loser_win():
     survivor = _row(1, 122.0, ambient_temp=21.5)  # events-canonical, no scores
-    loser = _row(2, 196.34, driving_score=88.0, range_regenerated=4.2)
+    loser = _row(2, 196.34, charge_regenerated=88.0, range_regenerated=4.2)
     merged = merge_pair(survivor, loser)
-    assert merged["driving_score"] == 88.0
+    assert merged["charge_regenerated"] == 88.0
     assert merged["range_regenerated"] == 4.2
 
 
@@ -269,7 +269,7 @@ async def _seed_corrupt_pair(db, device: str, source: str = "ha_fordpass"):
         energy_consumed=18.0,
         duration=80.0,
         efficiency=6.78,
-        driving_score=90.0,
+        charge_regenerated=90.0,
         speed_score=95.0,
         odometer_start=None,
         odometer_end=None,
@@ -356,7 +356,7 @@ async def test_consolidation_full_lifecycle(db_session):
     assert float(merged.distance) == pytest.approx(122.0)
     assert float(merged.efficiency) == pytest.approx(6.78)
     assert float(merged.ambient_temp) == pytest.approx(21.5)
-    assert float(merged.driving_score) == pytest.approx(90.0)
+    assert float(merged.charge_regenerated) == pytest.approx(90.0)
     assert float(merged.energy_consumed) == pytest.approx(20.0)
     assert float(merged.duration) == pytest.approx(80.0)
     assert float(merged.odometer_start) == pytest.approx(1000.0)
