@@ -1,58 +1,29 @@
-"""Trips and charge sessions folded from a series of Ford `metrics` samples. Pure.
+"""Trips and charge sessions folded from a series of samples. Pure, and source-neutral.
 
-A trip is an ignition-ON span in which the odometer moves. A park with the
+A trip is an ignition-on span in which the odometer moves. A park with the
 vehicle left running stays one trip; switching off ends it. Remote start
-sets ignition ON with the vehicle stationary, so a span without odometer
-movement is not a trip. `tripProgress` is not used yet.
+switches on with the vehicle stationary, so a span without odometer movement
+is not a trip.
 
-A session is the plug span: it starts at the first sample that is plugged in
-and charging, and ends when the plug reads DISCONNECTED, nothing else. Every
-other display state (PAUSED, SCHEDULED, ...) simply accrues no charge time,
+A session is the plug span: it starts at the first sample that is charging
+and ends at the unplug, nothing else. A pause simply accrues no charge time,
 so no debounce is needed and a pause cannot split a session.
+
+Each source builds the samples from its own payloads.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from itertools import pairwise
 from typing import Any
 
 from web.services.charge_types import normalize_charge_type
-from web.util.timestamps import parse_iso, utc
-
-
-def parse_time(raw: Any) -> datetime | None:
-    return utc(parse_iso(raw))
-
-
-def _entry(metrics: dict, name: str) -> dict:
-    entry = metrics.get(name)
-    return entry if isinstance(entry, dict) else {}
-
-
-def _value(metrics: dict, name: str) -> Any:
-    return _entry(metrics, name).get("value")
-
-
-def _float(metrics: dict, name: str) -> float | None:
-    value = _value(metrics, name)
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return float(value)
-
-
-def _text(metrics: dict, name: str) -> str | None:
-    value = _value(metrics, name)
-    return str(value).upper() if value is not None else None
-
-
-IGNITION_ON = frozenset({"ON", "RUN", "START"})
 
 
 @dataclass(frozen=True)
 class TripSample:
-    # When the ignition last reported, falling back to the payload's time.
     at: datetime
     ignition_on: bool
     odometer: float | None
@@ -61,24 +32,6 @@ class TripSample:
     brake_torque: float | None
     brake_torque_at: datetime | None
     range_regenerated: float | None
-
-    @classmethod
-    def from_payload(cls, payload: dict) -> TripSample | None:
-        m = payload.get("metrics") or {}
-        ignition = _entry(m, "ignitionStatus")
-        at = parse_time(ignition.get("updateTime")) or parse_time(payload.get("updateTime"))
-        if at is None:
-            return None
-        return cls(
-            at=at,
-            ignition_on=str(ignition.get("value") or "").upper() in IGNITION_ON,
-            odometer=_float(m, "odometer"),
-            energy=_float(m, "xevBatteryEnergyRemaining"),
-            outside_temp=_float(m, "outsideTemperature"),
-            brake_torque=_float(m, "brakeTorque"),
-            brake_torque_at=parse_time(_entry(m, "brakeTorque").get("updateTime")),
-            range_regenerated=_float(m, "tripXevBatteryRangeRegenerated"),
-        )
 
 
 def _last(values: list[float | None]) -> float | None:
@@ -139,18 +92,12 @@ def derive_trip(samples: list[TripSample]) -> dict[str, Any] | None:
     }
 
 
-IN_PROGRESS = "IN_PROGRESS"
-CONNECTED = "CONNECTED"
-DISCONNECTED = "DISCONNECTED"
-# Never observed, but the reference integration treats them as charging.
-CHARGING_PLUG = frozenset({"CHARGING", "CHARGINGAC"})
-# The charger output reads 2-3 V with nothing plugged in; ~350 V when live.
-IDLE_CHARGER_VOLTS = 50.0
-
-
 @dataclass(frozen=True)
 class ChargeSample:
     at: datetime
+    charging: bool
+    unplugged: bool
+    # The source's own words for these states, stored as they came.
     plug: str | None
     display: str | None
     station: str | None
@@ -160,78 +107,14 @@ class ChargeSample:
     range_km: float | None
     battery_temp: float | None
     outside_temp: float | None
-    charger_volts: float | None
-    charger_amps: float | None
-    pack_amps: float | None
+    # Charger-side readings while live; None when idle or not reported.
+    volts: float | None
+    amps: float | None
+    kw: float | None
     estimated_end: datetime | None
-    # Only a measured fix: INFERRED positions are dead-reckoned guesses.
+    # Only a measured fix: an estimated position is left out.
     latitude: float | None
     longitude: float | None
-
-    @classmethod
-    def from_payload(cls, payload: dict) -> ChargeSample | None:
-        at = parse_time(payload.get("updateTime"))
-        if at is None:
-            return None
-        m = payload.get("metrics") or {}
-        ttf = m.get("xevBatteryTimeToFullCharge")
-        ttf_at = parse_time(ttf.get("updateTime")) if isinstance(ttf, dict) else None
-        ttf_min = _float(m, "xevBatteryTimeToFullCharge")
-        position = _value(m, "position")
-        lat = lon = None
-        if isinstance(position, dict) and position.get("gpsCoordinateMethod") == "ACTUAL":
-            loc = position.get("location") or {}
-            if isinstance(loc.get("lat"), (int, float)) and isinstance(loc.get("lon"), (int, float)):
-                lat, lon = float(loc["lat"]), float(loc["lon"])
-        return cls(
-            at=at,
-            plug=_text(m, "xevPlugChargerStatus"),
-            display=_text(m, "xevBatteryChargeDisplayStatus"),
-            station=_text(m, "xevChargeStationCommunicationStatus"),
-            power_type=_text(m, "xevChargeStationPowerType"),
-            soc=_float(m, "xevBatteryStateOfCharge"),
-            energy=_float(m, "xevBatteryEnergyRemaining"),
-            range_km=_float(m, "xevBatteryRange"),
-            battery_temp=_float(m, "xevBatteryTemperature"),
-            outside_temp=_float(m, "outsideTemperature"),
-            charger_volts=_float(m, "xevBatteryChargerVoltageOutput"),
-            charger_amps=_float(m, "xevBatteryChargerCurrentOutput"),
-            pack_amps=_float(m, "xevBatteryIoCurrent"),
-            estimated_end=(
-                ttf_at + timedelta(minutes=ttf_min)
-                if ttf_at is not None and ttf_min is not None and ttf_min > 0
-                else None
-            ),
-            latitude=lat,
-            longitude=lon,
-        )
-
-    @property
-    def charging(self) -> bool:
-        return (self.plug == CONNECTED and self.display == IN_PROGRESS) or (
-            self.plug in CHARGING_PLUG
-        )
-
-    @property
-    def unplugged(self) -> bool:
-        return self.plug == DISCONNECTED
-
-    @property
-    def volts(self) -> float | None:
-        v = self.charger_volts
-        return v if v is not None and v >= IDLE_CHARGER_VOLTS else None
-
-    @property
-    def kw(self) -> float | None:
-        """Charger-side power; on DC the charger current reads 0, so use the pack's."""
-        volts = self.volts
-        if volts is None:
-            return None
-        if self.charger_amps:
-            return round(volts * self.charger_amps / 1000.0, 3)
-        if self.pack_amps is not None:
-            return round(volts * abs(self.pack_amps) / 1000.0, 3)
-        return None
 
 
 def _delta(end: float | None, start: float | None) -> float | None:
@@ -266,7 +149,7 @@ def derive_session(samples: list[ChargeSample]) -> dict[str, Any] | None:
         "charging_status": last_live.display,
         "station_status": last_live.station,
         "charging_voltage": last_live.volts,
-        "charging_amperage": last_live.charger_amps if last_live.volts else None,
+        "charging_amperage": last_live.amps if last_live.volts else None,
         "charging_kw": last_live.kw,
         "session_start_utc": start.at,
         "session_end_utc": end.at,

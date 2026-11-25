@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from db.models.location import EVLocation
 from web.services.pipeline.location import record_position
+from web.services.sources.ford_metrics.samples import position_observation
 from web.util.timestamps import utc
 
 pytestmark = pytest.mark.db
@@ -27,6 +28,10 @@ def _metrics(at: datetime, lat: float = 10.0, lon: float = 20.0, method: str = "
     }
 
 
+async def _record(db, metrics: dict, source: str):
+    return await record_position(db, position_observation(DEVICE, metrics, source))
+
+
 async def _fixes(db):
     return (
         await db.execute(
@@ -36,7 +41,7 @@ async def _fixes(db):
 
 
 async def test_measured_fix_is_stored_with_its_own_time(db_session):
-    await record_position(db_session, DEVICE, _metrics(T0), "ha_fordpass")
+    await _record(db_session, _metrics(T0), "ha_fordpass")
 
     (fix,) = await _fixes(db_session)
     assert (utc(fix.recorded_at), utc(fix.original_timestamp)) == (T0, T0)
@@ -46,36 +51,36 @@ async def test_measured_fix_is_stored_with_its_own_time(db_session):
 
 
 async def test_estimated_position_is_not_stored(db_session):
-    await record_position(db_session, DEVICE, _metrics(T0, method="INFERRED"), "fcon")
+    await _record(db_session, _metrics(T0, method="INFERRED"), "fcon")
 
     assert await _fixes(db_session) == []
 
 
 async def test_same_fix_from_two_sources_is_stored_once(db_session):
-    await record_position(db_session, DEVICE, _metrics(T0), "fcon")
-    await record_position(db_session, DEVICE, _metrics(T0), "ha_fordpass")
+    await _record(db_session, _metrics(T0), "fcon")
+    await _record(db_session, _metrics(T0), "ha_fordpass")
 
     assert [f.source_system for f in await _fixes(db_session)] == ["fcon"]
 
 
 async def test_fix_within_60_seconds_and_50_metres_is_skipped(db_session):
-    await record_position(db_session, DEVICE, _metrics(T0), "fcon")
+    await _record(db_session, _metrics(T0), "fcon")
     # 0.0001 degrees of latitude is about 11 metres.
-    await record_position(db_session, DEVICE, _metrics(T0 + timedelta(seconds=30), lat=10.0001), "fcon")
+    await _record(db_session, _metrics(T0 + timedelta(seconds=30), lat=10.0001), "fcon")
 
     assert len(await _fixes(db_session)) == 1
 
 
 async def test_fix_within_60_seconds_but_far_away_is_kept(db_session):
-    await record_position(db_session, DEVICE, _metrics(T0), "fcon")
+    await _record(db_session, _metrics(T0), "fcon")
     # 0.001 degrees of latitude is about 111 metres.
-    await record_position(db_session, DEVICE, _metrics(T0 + timedelta(seconds=30), lat=10.001), "fcon")
+    await _record(db_session, _metrics(T0 + timedelta(seconds=30), lat=10.001), "fcon")
 
     assert len(await _fixes(db_session)) == 2
 
 
 async def test_fix_at_the_same_place_after_60_seconds_is_kept(db_session):
-    await record_position(db_session, DEVICE, _metrics(T0), "fcon")
-    await record_position(db_session, DEVICE, _metrics(T0 + timedelta(seconds=61)), "fcon")
+    await _record(db_session, _metrics(T0), "fcon")
+    await _record(db_session, _metrics(T0 + timedelta(seconds=61)), "fcon")
 
     assert len(await _fixes(db_session)) == 2

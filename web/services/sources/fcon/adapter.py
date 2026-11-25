@@ -15,6 +15,7 @@ from web.services.sources.fcon.identity import SOURCE_SYSTEM, device_id_of
 from web.services.sources.fcon.trips import record_trip_if_ended
 from web.services.sources.ford_metrics.last_seen import record_last_seen
 from web.services.sources.ford_metrics.parser import data_map, parse_metrics
+from web.services.sources.ford_metrics.samples import position_observation
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
 from web.services.vehicles.auto_create import ensure_vehicle
 
@@ -39,8 +40,7 @@ async def process_sample(
     source_ref: str, payload: dict, db: Any, source_config: dict | None = None
 ) -> None:
     """Parse one endpoint response; `source_ref` is the endpoint name."""
-    ctx = IngestContext.from_config(SOURCE_SYSTEM, source_config)
-    device_id = device_id_of(payload)
+    ctx, device_id = IngestContext.from_config(SOURCE_SYSTEM, source_config), device_id_of(payload)
     if source_ref == "garage" and device_id is not None:
         await record_garage(db, device_id, payload)
     if source_ref != "telemetry":
@@ -54,6 +54,7 @@ async def process_sample(
     if vehicle is not None and capacity:
         fill_battery(vehicle, float(capacity))
     await upsert_status(db, observations)
-    await record_position(db, device_id, payload.get("metrics") or {}, ctx.source_system)
+    metrics = payload.get("metrics") or {}
+    await record_position(db, position_observation(device_id, metrics, SOURCE_SYSTEM))
     await record_session_if_ended(db, device_id, payload, ctx.config_id)
     await record_trip_if_ended(db, device_id, payload)

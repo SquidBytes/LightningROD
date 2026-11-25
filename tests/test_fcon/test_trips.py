@@ -10,9 +10,10 @@ from sqlalchemy import select
 from db.models.location import EVLocation
 from db.models.trip_metrics import EVTripMetrics
 from tests.test_fcon.payloads import telemetry
+from web.services.pipeline.derive import TripSample, derive_trip
 from web.services.sources.fcon import adapter
 from web.services.sources.fcon.raw_store import FconRawArchive
-from web.services.sources.fcon.trips import TripSample, derive_trip
+from web.services.sources.ford_metrics.samples import trip_sample
 
 T0 = datetime(2026, 8, 30, 7, 48, tzinfo=UTC)
 DEVICE = "your_vin_000000001"
@@ -25,7 +26,7 @@ def _payload(minutes: int, ignition: str, odometer: float, **values) -> dict:
 
 
 def _samples(*payloads: dict) -> list[TripSample]:
-    out = [TripSample.from_payload(p) for p in payloads]
+    out = [trip_sample(p) for p in payloads]
     assert all(out)
     return out  # type: ignore[return-value]
 

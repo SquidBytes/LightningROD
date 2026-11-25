@@ -8,13 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.charging_session import EVChargingSession
 from db.models.fcon_raw_sample import FconRawSample
 from web.queries.locations import LOCATION_MATCH_RADIUS_M, haversine_meters
-from web.services.pipeline.derive import ChargeSample, derive_session
+from web.services.pipeline.derive import derive_session
 from web.services.pipeline.observation import SessionObservation
 from web.services.pipeline.sessions import upsert_session
 from web.services.sources.fcon.history import telemetry_since_boundary
 from web.services.sources.fcon.identity import SOURCE_SYSTEM
-
-__all__ = ["ChargeSample", "derive_session", "record_session_if_ended", "schedule_location_name"]
+from web.services.sources.ford_metrics.samples import charge_sample
 
 
 def schedule_location_name(schedules: dict | None, lat: float, lon: float) -> str | None:
@@ -30,7 +29,7 @@ def schedule_location_name(schedules: dict | None, lat: float, lon: float) -> st
 
 
 def _is_unplug(payload: dict) -> bool:
-    sample = ChargeSample.from_payload(payload)
+    sample = charge_sample(payload)
     return sample is not None and sample.unplugged
 
 
@@ -45,11 +44,11 @@ async def record_session_if_ended(
     db: AsyncSession, device_id: str, payload: dict, config_id: int | None = None
 ) -> EVChargingSession | None:
     """If this telemetry sample is an unplug that closes a charge, write the session."""
-    current = ChargeSample.from_payload(payload)
+    current = charge_sample(payload)
     if current is None or not current.unplugged:
         return None
     payloads = await telemetry_since_boundary(db, device_id, current.at, _is_unplug)
-    samples = [s for p in payloads if (s := ChargeSample.from_payload(p)) is not None]
+    samples = [s for p in payloads if (s := charge_sample(p)) is not None]
     if not samples or samples[-1].at != current.at:
         samples.append(current)
     fields = derive_session(samples)

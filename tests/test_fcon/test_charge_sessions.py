@@ -9,13 +9,11 @@ from sqlalchemy import select
 
 from db.models.charging_session import EVChargingSession
 from tests.test_fcon.payloads import telemetry
+from web.services.pipeline.derive import ChargeSample, derive_session
 from web.services.sources.fcon import adapter
-from web.services.sources.fcon.charge_sessions import (
-    ChargeSample,
-    derive_session,
-    schedule_location_name,
-)
+from web.services.sources.fcon.charge_sessions import schedule_location_name
 from web.services.sources.fcon.raw_store import FconRawArchive
+from web.services.sources.ford_metrics.samples import charge_sample
 
 T0 = datetime(2026, 8, 24, 20, 0, tzinfo=UTC)
 DEVICE = "your_vin_000000001"
@@ -39,7 +37,7 @@ def _payload(minutes: int, plug: str, display: str, **values) -> dict:
 
 
 def _sample(minutes: int, plug: str, display: str, **values) -> ChargeSample:
-    s = ChargeSample.from_payload(_payload(minutes, plug, display, **values))
+    s = charge_sample(_payload(minutes, plug, display, **values))
     assert s is not None
     return s
 

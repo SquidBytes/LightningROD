@@ -47,3 +47,16 @@ class SessionObservation:
     source_system: str
     # The source's own name for the place; used only when no location resolves.
     location_name: str | None = None
+
+
+@dataclass(frozen=True)
+class PositionObservation:
+    """One measured GPS fix."""
+
+    device_id: str
+    recorded_at: datetime
+    latitude: float
+    longitude: float
+    source_system: str
+    altitude: float | None = None
+    compass_direction: str | None = None
