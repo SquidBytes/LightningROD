@@ -1006,8 +1006,8 @@ async def _handle_events_entity(
 
     # Match-and-enrich fallback: legacy predicate match for trips whose source
     # didn't carry tripUpdateTime (no deterministic id available).
+    from web.services.pipeline.trips import apply_merge, is_mergeable
     from web.services.sources.ha_fordpass.handlers import _find_matching_trip
-    from web.services.trip_merge import apply_merge, is_mergeable
 
     start_time = recorded_at - timedelta(seconds=duration) if duration else None
     existing = await _find_matching_trip(

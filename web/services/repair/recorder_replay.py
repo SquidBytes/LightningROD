@@ -13,6 +13,7 @@ from sqlalchemy import event, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
+from web.services.pipeline.trips import is_same_drive
 from web.services.repair.base import (
     DEFAULT_PREVIEW_LIMIT,
     RepairDiff,
@@ -22,7 +23,6 @@ from web.services.repair.base import (
     RepairResult,
     rollback_session,
 )
-from web.services.repair.ops.trip_duplicates import is_same_drive
 from web.services.repair.replay_core import (
     SENTINEL_CONFIG_ID,
     UNIT_SENSITIVE_SUFFIXES,

@@ -287,7 +287,7 @@ async def _find_matching_trip(
     match = result.scalar_one_or_none()
     if match is not None or around is None:
         return match
-    from web.services.trip_merge import find_same_drive
+    from web.services.pipeline.trips import find_same_drive
 
     return await find_same_drive(db, {
         "device_id": device_id, "end_time": around, "start_time": start_time,
@@ -699,7 +699,7 @@ async def handle_battery_status(slug, new_state, ha_config, device_id, db):
                         duration=trip_fields.get("duration"),
                     )
 
-                from web.services.trip_merge import apply_merge, is_mergeable
+                from web.services.pipeline.trips import apply_merge, is_mergeable
 
                 if existing is not None and not is_mergeable(existing):
                     logger.info("Trip matches protected row %s; not written", existing.id)

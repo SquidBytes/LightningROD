@@ -1,7 +1,8 @@
-"""One trip row per drive when Home Assistant and FordConnect both record it.
+"""One trip row per drive, whichever sources record it.
 
-Whichever source arrives second merges into the first source's row instead of
-inserting, through `PRECEDENCE` (see `source_merge`).
+A second source merges into the first source's row through `PRECEDENCE` (see
+`source_merge`); the same source reporting again only fills gaps and refreshes
+regen and scores. Manual and imported trips are never changed.
 """
 
 from __future__ import annotations
@@ -14,13 +15,35 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.trip_metrics import EVTripMetrics
+from web.services.pipeline.observation import INGEST_SCHEMA_VERSION, TripObservation
 from web.services.source_merge import Rule, merge_values
 from web.services.source_system import INGESTED, SourceSystem
-from web.util.timestamps import utc
+from web.util.timestamps import parse_iso, utc
 
-__all__ = ["PRECEDENCE", "apply_merge", "find_same_drive"]
+logger = logging.getLogger("lightningrod.pipeline.trips")
 
-logger = logging.getLogger("lightningrod.trip_merge")
+# A km-value stored alongside its double-converted twin sits near x1.609344.
+RATIO_BAND = (1.55, 1.67)
+END_TIME_WINDOW_SECONDS = 120.0
+# The two trip sources disagree by seconds on where a drive begins, never by
+# minutes: a far-off start means a different drive that merely ended alongside.
+START_TIME_WINDOW_SECONDS = 120.0
+# Only distance carries the unit bug, so a twin's duration and kWh must still
+# agree. The band is wide enough for source rounding drift, far tighter than
+# the x1.609 spread two genuinely different drives show.
+SAME_DRIVE_TOLERANCE = 0.25
+
+TEMP_FIELDS: tuple[str, ...] = ("ambient_temp", "cabin_temp", "outside_air_temp")
+# Regen and coaching values: Ford keeps revising these after the drive ends.
+SCORE_FIELDS: tuple[str, ...] = (
+    "charge_regenerated",
+    "speed_score",
+    "acceleration_score",
+    "deceleration_score",
+    "electrical_efficiency",
+    "range_regenerated",
+    "brake_torque",
+)
 
 # Each odometer end is a whole km (±0.5), so a delta is good to ±1 km; the
 # captures show no key-on/off lag in the odometer, so nothing is added for timing.
@@ -93,6 +116,59 @@ _MATCH_FIELDS = (
 )
 
 
+def _measurements_agree(val_a: Any, val_b: Any) -> bool:
+    """One drive measured twice: values agree, or a source never recorded it."""
+    if val_a is None or val_b is None:
+        return True
+    num_a, num_b = float(val_a), float(val_b)
+    scale = max(abs(num_a), abs(num_b))
+    return scale <= 0 or abs(num_a - num_b) / scale <= SAME_DRIVE_TOLERANCE
+
+
+def _starts_agree(row_a: dict, row_b: dict) -> bool:
+    """Same drive start, or a source never recorded one."""
+    start_a = parse_iso(row_a.get("start_time"))
+    start_b = parse_iso(row_b.get("start_time"))
+    if start_a is None or start_b is None:
+        return True
+    return abs((start_b - start_a).total_seconds()) <= START_TIME_WINDOW_SECONDS
+
+
+def is_unit_twin(row_a: dict, row_b: dict) -> bool:
+    """Whether two rows can be one drive whose distance was written twice.
+
+    The bug rewrote distance alone, so every other measurement the pair
+    shares must still line up. Fields NULL on either side prove nothing and
+    are left to the checks that can still run.
+    """
+    return (
+        _starts_agree(row_a, row_b)
+        and _measurements_agree(row_a.get("duration"), row_b.get("duration"))
+        and _measurements_agree(
+            row_a.get("energy_consumed"), row_b.get("energy_consumed")
+        )
+    )
+
+
+def is_same_drive(row_a: dict, row_b: dict) -> bool:
+    """Whether two rows record one drive, at equal distances or as x1.609 twins."""
+    if row_a.get("device_id") != row_b.get("device_id"):
+        return False
+    end_a = parse_iso(row_a.get("end_time"))
+    end_b = parse_iso(row_b.get("end_time"))
+    if end_a is None or end_b is None:
+        return False
+    if abs((end_b - end_a).total_seconds()) > END_TIME_WINDOW_SECONDS:
+        return False
+    dist_a, dist_b = row_a.get("distance"), row_b.get("distance")
+    if dist_a is not None and dist_b is not None:
+        smaller, larger = sorted((float(dist_a), float(dist_b)))
+        twin = smaller > 0 and RATIO_BAND[0] <= larger / smaller <= RATIO_BAND[1]
+        if not (twin or _measurements_agree(dist_a, dist_b)):
+            return False
+    return is_unit_twin(row_a, row_b)
+
+
 def is_mergeable(row: EVTripMetrics) -> bool:
     return row.source_system in INGESTED
 
@@ -131,11 +207,6 @@ def apply_merge(row: EVTripMetrics, incoming: dict, incoming_source: str) -> dic
 
 async def find_same_drive(db: AsyncSession, candidate: dict) -> EVTripMetrics | None:
     """A stored trip, from any source, that records the same drive as `candidate`."""
-    from web.services.repair.ops.trip_duplicates import (
-        END_TIME_WINDOW_SECONDS,
-        is_same_drive,
-    )
-
     end: datetime | None = utc(candidate.get("end_time"))
     if end is None or candidate.get("device_id") is None:
         return None
@@ -153,3 +224,49 @@ async def find_same_drive(db: AsyncSession, candidate: dict) -> EVTripMetrics | 
     ).scalars().all()
     candidate = {k: utc(v) for k, v in candidate.items()}
     return next((r for r in rows if is_same_drive(row_values(r), candidate)), None)
+
+
+def _enrich_same_source(row: EVTripMetrics, values: dict[str, Any]) -> None:
+    """A later report of a drive by its own source: never moves distance, energy or times."""
+    for column, value in values.items():
+        if value is not None and (column in SCORE_FIELDS or getattr(row, column) is None):
+            setattr(row, column, value)
+
+
+async def upsert_trip(db: AsyncSession, obs: TripObservation) -> EVTripMetrics | None:
+    """Store one drive; returns its row, or None when a protected trip already records it."""
+    source, values = obs.source_system, obs.values
+    existing = await db.scalar(select(EVTripMetrics).where(EVTripMetrics.trip_id == obs.trip_id))
+    if existing is not None and existing.source_system == source:
+        # The same record again (a replay or re-parse) refreshes it.
+        for column, value in values.items():
+            setattr(existing, column, value)
+        return existing
+    existing = existing or await find_same_drive(db, {"device_id": obs.device_id, **values})
+    if existing is not None:
+        if not is_mergeable(existing):
+            logger.info("%s trip matches protected trip %s; not written", source, existing.id)
+            return None
+        if existing.source_system == source:
+            _enrich_same_source(existing, values)
+        else:
+            apply_merge(
+                existing, {**values, "trip_id": obs.trip_id, "source_system": source}, source
+            )
+        return existing
+    trip = EVTripMetrics(
+        trip_id=obs.trip_id,
+        device_id=obs.device_id,
+        source_system=source,
+        is_complete=True,
+        recorded_at=values["end_time"],
+        original_timestamp=values.get("start_time") or values["end_time"],
+        ingest_schema_version=INGEST_SCHEMA_VERSION.get(source),
+        **values,
+    )
+    db.add(trip)
+    await db.flush()
+    logger.info(
+        "Stored %s trip: %s km, %s kWh", source, values.get("distance"), values.get("energy_consumed")
+    )
+    return trip

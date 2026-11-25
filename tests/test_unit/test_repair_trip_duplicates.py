@@ -18,11 +18,11 @@ from db.models.repair_backup import RepairBackup
 from db.models.trip_metrics import EVTripMetrics
 from tests.factories.trips import TripFactory
 from tests.factories.vehicles import VehicleFactory
+from web.services.pipeline.trips import is_same_drive
 from web.services.repair import add_skips, clear_skips, restore_run
 from web.services.repair.ops.trip_duplicates import (
     TripDuplicateConsolidation,
     find_unit_duplicate_pairs,
-    is_same_drive,
     merge_pair,
 )
 

@@ -12,12 +12,12 @@ from sqlalchemy import select
 from db.models.trip_metrics import EVTripMetrics
 from tests.factories.trips import TripFactory
 from tests.test_fcon.payloads import telemetry
+from web.services.pipeline.trips import PRECEDENCE, merge_changes
 from web.services.source_system import SourceSystem
 from web.services.sources.fcon import adapter as fcon_adapter
 from web.services.sources.fcon.raw_store import FconRawArchive
 from web.services.sources.ha_fordpass import handlers as fp_handlers
 from web.services.sources.ha_fordpass.adapter import process_sample as ha_process
-from web.services.trip_merge import PRECEDENCE, merge_changes
 
 VIN = "YOURVIN0000000001"
 DEVICE = VIN.lower()

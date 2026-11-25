@@ -8,15 +8,14 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.migrations.versions.p34_battery_trips_overhaul import (
-    _SCORE_FIELDS as _P34_SCORE_FIELDS,
-)
-from db.migrations.versions.p34_battery_trips_overhaul import (
-    _TEMP_FIELDS,
-    _coerce_datetime,
-    _is_events_canonical,
-)
 from db.models.trip_metrics import EVTripMetrics
+from web.services.pipeline.trips import (
+    END_TIME_WINDOW_SECONDS,
+    RATIO_BAND,
+    SCORE_FIELDS,
+    TEMP_FIELDS,
+    is_unit_twin,
+)
 from web.services.repair.base import (
     DEFAULT_PREVIEW_LIMIT,
     RepairDiff,
@@ -25,26 +24,15 @@ from web.services.repair.base import (
     RepairPreview,
     mutable_only,
 )
+from web.util.timestamps import parse_iso
 
-# A km-value stored alongside its double-converted twin sits near x1.609344.
-RATIO_BAND = (1.55, 1.67)
-END_TIME_WINDOW_SECONDS = 120.0
-# The two trip sources disagree by seconds on where a drive begins, never by
-# minutes: a far-off start means a different drive that merely ended alongside.
-START_TIME_WINDOW_SECONDS = 120.0
-# Only distance carries the unit bug, so a twin's duration and kWh must still
-# agree. The band is wide enough for source rounding drift, far tighter than
-# the x1.609 spread two genuinely different drives show.
-SAME_DRIVE_TOLERANCE = 0.25
 
-# The migration is history and keeps the column's old name.
-_SCORE_FIELDS: tuple[str, ...] = tuple(
-    "charge_regenerated" if f == "driving_score" else f for f in _P34_SCORE_FIELDS
-)
+def _is_events_canonical(row: dict) -> bool:
+    return any(row.get(f) is not None for f in TEMP_FIELDS)
 
 
 def _is_elveh_canonical(row: dict) -> bool:
-    return any(row.get(f) is not None for f in _SCORE_FIELDS)
+    return any(row.get(f) is not None for f in SCORE_FIELDS)
 
 
 # P34's _MAX_FIELDS also maxed distance/efficiency; here MAX would resurrect
@@ -62,64 +50,11 @@ _NULL_FILL_FIELDS: tuple[str, ...] = (
 
 _PAIR_FIELDS: tuple[str, ...] = (
     ("id", "device_id", "end_time", "distance", "efficiency")
-    + _TEMP_FIELDS
-    + _SCORE_FIELDS
+    + TEMP_FIELDS
+    + SCORE_FIELDS
     + _MAX_FIELDS_SAFE
     + _NULL_FILL_FIELDS
 )
-
-
-def _measurements_agree(val_a: Any, val_b: Any) -> bool:
-    """One drive measured twice: values agree, or a source never recorded it."""
-    if val_a is None or val_b is None:
-        return True
-    num_a, num_b = float(val_a), float(val_b)
-    scale = max(abs(num_a), abs(num_b))
-    return scale <= 0 or abs(num_a - num_b) / scale <= SAME_DRIVE_TOLERANCE
-
-
-def _starts_agree(row_a: dict, row_b: dict) -> bool:
-    """Same drive start, or a source never recorded one."""
-    start_a = _coerce_datetime(row_a.get("start_time"))
-    start_b = _coerce_datetime(row_b.get("start_time"))
-    if start_a is None or start_b is None:
-        return True
-    return abs((start_b - start_a).total_seconds()) <= START_TIME_WINDOW_SECONDS
-
-
-def is_unit_twin(row_a: dict, row_b: dict) -> bool:
-    """Whether two rows can be one drive whose distance was written twice.
-
-    The bug rewrote distance alone, so every other measurement the pair
-    shares must still line up. Fields NULL on either side prove nothing and
-    are left to the checks that can still run.
-    """
-    return (
-        _starts_agree(row_a, row_b)
-        and _measurements_agree(row_a.get("duration"), row_b.get("duration"))
-        and _measurements_agree(
-            row_a.get("energy_consumed"), row_b.get("energy_consumed")
-        )
-    )
-
-
-def is_same_drive(row_a: dict, row_b: dict) -> bool:
-    """Whether two rows record one drive, at equal distances or as x1.609 twins."""
-    if row_a.get("device_id") != row_b.get("device_id"):
-        return False
-    end_a = _coerce_datetime(row_a.get("end_time"))
-    end_b = _coerce_datetime(row_b.get("end_time"))
-    if end_a is None or end_b is None:
-        return False
-    if abs((end_b - end_a).total_seconds()) > END_TIME_WINDOW_SECONDS:
-        return False
-    dist_a, dist_b = row_a.get("distance"), row_b.get("distance")
-    if dist_a is not None and dist_b is not None:
-        smaller, larger = sorted((float(dist_a), float(dist_b)))
-        twin = smaller > 0 and RATIO_BAND[0] <= larger / smaller <= RATIO_BAND[1]
-        if not (twin or _measurements_agree(dist_a, dist_b)):
-            return False
-    return is_unit_twin(row_a, row_b)
 
 
 def find_unit_duplicate_pairs(
@@ -134,7 +69,7 @@ def find_unit_duplicate_pairs(
     for row in rows:
         if row.get("device_id") is None or row.get("distance") is None:
             continue
-        end_time = _coerce_datetime(row.get("end_time"))
+        end_time = parse_iso(row.get("end_time"))
         if end_time is None:
             continue
         candidates.append((row, end_time, float(row["distance"])))
@@ -187,12 +122,12 @@ def merge_pair(survivor: dict, loser: dict) -> dict:
     members = (survivor, loser)
     merged: dict[str, Any] = {}
 
-    for field in _TEMP_FIELDS:
+    for field in TEMP_FIELDS:
         val = _preferred(members, field, _is_events_canonical)
         if val is not None and val != survivor.get(field):
             merged[field] = val
 
-    for field in _SCORE_FIELDS:
+    for field in SCORE_FIELDS:
         val = _preferred(members, field, _is_elveh_canonical)
         if val is not None and val != survivor.get(field):
             merged[field] = val
@@ -227,11 +162,9 @@ def _identity(row: EVTripMetrics) -> dict:
 def pair_evidence(survivor: dict, loser: dict) -> dict[str, str]:
     """Why these two rows were paired: the x1.609 ratio and the end-time gap."""
     smaller, larger = float(survivor["distance"]), float(loser["distance"])
-    gap = abs(
-        (
-            _coerce_datetime(loser["end_time"]) - _coerce_datetime(survivor["end_time"])
-        ).total_seconds()
-    )
+    kept_end, removed_end = parse_iso(survivor["end_time"]), parse_iso(loser["end_time"])
+    # Pairing already required both end times.
+    gap = abs((removed_end - kept_end).total_seconds()) if kept_end and removed_end else 0.0
     return {
         "distance ratio": f"{larger / smaller:.4g}x",
         "distances": f"{survivor['distance']} kept / {loser['distance']} removed",
