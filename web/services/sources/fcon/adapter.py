@@ -6,13 +6,14 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from web.services.pipeline.observation import Observation
+from web.services.pipeline.status import upsert_status
 from web.services.sources.fcon.charge_sessions import record_session_if_ended
 from web.services.sources.fcon.garage import fill_battery, garage_facts
 from web.services.sources.fcon.identity import SOURCE_SYSTEM, device_id_of
 from web.services.sources.fcon.positions import record_position
 from web.services.sources.fcon.trips import record_trip_if_ended
 from web.services.sources.ford_metrics.parser import data_map, parse_metrics
-from web.services.sources.ford_metrics.writer import upsert_rows
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
 from web.services.vehicles.auto_create import ensure_vehicle
 
@@ -81,7 +82,9 @@ async def process_sample(
         for metric, entry in row.raw.items():
             column = _BY_FIELD[metric].db_column
             _record_last_seen(metric, entry, row.values.get(column))
-    await upsert_rows(db, device_id, rows, source_system=SOURCE_SYSTEM)
+    await upsert_status(
+        db, [Observation(device_id, r.table, r.recorded_at, r.values, SOURCE_SYSTEM) for r in rows]
+    )
     await record_position(db, device_id, payload.get("metrics") or {})
     config_id = (source_config or {}).get("config_id")
     await record_session_if_ended(db, device_id, payload, config_id)
