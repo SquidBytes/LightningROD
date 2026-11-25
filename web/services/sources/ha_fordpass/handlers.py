@@ -1146,7 +1146,7 @@ async def handle_energy_transfer(slug, new_state, ha_config, device_id, db):
         ingest_schema_version=HA_INGEST_SCHEMA_VERSION,
     )
     if merge_into is not None:
-        from web.services.session_merge import apply_session_merge, session_values
+        from web.services.pipeline.sessions import apply_session_merge, session_values
 
         target = await db.get(EVChargingSession, merge_into)
         if target is not None:
