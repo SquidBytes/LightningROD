@@ -305,7 +305,7 @@ async def test_metrics_backfills_trip_regen_and_score(db_session):
 
 
 async def test_later_metrics_payload_refreshes_regen_on_the_same_trip(db_session):
-    """Ford keeps revising regen after the drive; the newest reading for that trip wins."""
+    """A newer reading taken as the drive ended replaces the stored regen."""
     payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
     ha_config = {"unit_system": "metric"}
     await process_sample(
@@ -319,8 +319,10 @@ async def test_later_metrics_payload_refreshes_regen_on_the_same_trip(db_session
     ).scalar_one()
     assert float(trip.range_regenerated) == pytest.approx(2.1, abs=0.01)
 
-    stamp = metrics["attributes"]["tripXevBatteryRangeRegenerated"]["updateTime"]
-    metrics["attributes"]["tripXevBatteryRangeRegenerated"] = {"updateTime": stamp, "value": 2.6}
+    # Thirty seconds after the first reading (2026-04-19T12:00:00Z).
+    metrics["attributes"]["tripXevBatteryRangeRegenerated"] = {
+        "updateTime": "2026-04-19T12:00:30Z", "value": 2.6,
+    }
     await process_sample("sensor.fordpass_YOUR_VIN_metrics", metrics, db_session, ha_config)
     await db_session.flush()
 

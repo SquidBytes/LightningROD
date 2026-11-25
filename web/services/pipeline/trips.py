@@ -37,9 +37,6 @@ START_TIME_WINDOW_SECONDS = 120.0
 # the x1.609 spread two genuinely different drives show.
 SAME_DRIVE_TOLERANCE = 0.25
 
-# How long after a drive a reading may still describe it.
-ENRICH_WINDOW = timedelta(hours=3)
-
 TEMP_FIELDS: tuple[str, ...] = ("ambient_temp", "cabin_temp", "outside_air_temp")
 # Regen and coaching values: Ford keeps revising these after the drive ends.
 SCORE_FIELDS: tuple[str, ...] = (
@@ -233,20 +230,20 @@ async def find_same_drive(db: AsyncSession, candidate: dict) -> EVTripMetrics | 
     return next((r for r in rows if is_same_drive(row_values(r), candidate)), None)
 
 
-def _enrich(row: EVTripMetrics, values: dict[str, Any], *, refresh_scores: bool = True) -> None:
-    """Fill gaps, and optionally refresh regen and scores; never moves distance, energy or times."""
+def _enrich(row: EVTripMetrics, values: dict[str, Any]) -> None:
+    """Fill gaps and refresh regen and scores; never moves distance, energy or times."""
     for column, value in values.items():
-        refresh = refresh_scores and column in SCORE_FIELDS
-        if value is not None and (refresh or getattr(row, column) is None):
+        if value is not None and (column in SCORE_FIELDS or getattr(row, column) is None):
             setattr(row, column, value)
 
 
 async def enrich_newest_trip(db: AsyncSession, obs: Observation) -> EVTripMetrics | None:
     """Put regen and scores from a `metrics` reading on the drive they describe.
 
-    Ford reports them for "the latest trip" with no trip id, so the reading's
-    own time decides: taken as the drive ended, it refreshes that trip; taken
-    later, it may already describe the next drive and only fills gaps.
+    Ford reports them for "the latest trip" with no trip id, so only a reading
+    taken as a stored trip ended is applied. Any other reading may describe a
+    drive whose row does not exist yet, and is dropped; the source delivers
+    the same reading again on its next refresh.
     """
     at = utc(obs.recorded_at)
     slack = timedelta(seconds=END_TIME_WINDOW_SECONDS)
@@ -254,15 +251,15 @@ async def enrich_newest_trip(db: AsyncSession, obs: Observation) -> EVTripMetric
         select(EVTripMetrics)
         .where(
             EVTripMetrics.device_id == obs.device_id,
-            EVTripMetrics.end_time >= at - ENRICH_WINDOW,
+            EVTripMetrics.end_time >= at - slack,
             EVTripMetrics.end_time <= at + slack,
         )
         .order_by(EVTripMetrics.end_time.desc())
         .limit(1)
     )
-    if trip is None or trip.end_time is None or not is_mergeable(trip):
+    if trip is None or not is_mergeable(trip):
         return None
-    _enrich(trip, obs.values, refresh_scores=at <= utc(trip.end_time) + slack)
+    _enrich(trip, obs.values)
     return trip
 
 

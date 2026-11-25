@@ -9,7 +9,7 @@ Quirks of the upstream integration that this adapter exists to absorb:
   `entity_registry_enabled_default=False`, so a fresh install ingests nothing
   from them until the user enables them.
 - Every attribute on the metrics entity is `{"updateTime": ..., "value": x}`.
-  Read them through `_metric_value` — a raw `attrs.get` yields the wrapper
+  The shared Ford parser unwraps them — a raw `attrs.get` yields the wrapper
   dict, which every numeric conversion silently turns into None.
 - ha-fordpass builds the elveh trip attributes with `localize_distance` /
   `localize_temperature`, so they arrive in HA's unit system, not raw metric.
@@ -33,7 +33,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.base import HA_INGEST_SCHEMA_VERSION
 from web.services.pipeline.context import IngestContext
-from web.services.pipeline.location import record_position
 from web.services.pipeline.observation import Observation
 from web.services.pipeline.status import upsert_status
 from web.services.pipeline.trips import enrich_newest_trip
@@ -45,6 +44,7 @@ from web.services.sources.ford_metrics.parser import (
     TRIPS,
     data_map,
     parse_metrics,
+    parse_trip_enrichment,
 )
 from web.services.units import detection
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
@@ -655,7 +655,9 @@ async def process_sample(
 def parse_metrics_entity(new_state: dict, device_id: str, ctx: IngestContext) -> list[Observation]:
     """Status rows and the trip enrichment in one metrics-entity state."""
     attrs = new_state.get("attributes") or {}
-    rows = [*parse_metrics(attrs), *parse_metrics(attrs, TRIP_FIELDS)]
+    rows = parse_metrics(attrs)
+    if (trip := parse_trip_enrichment(attrs)) is not None:
+        rows.append(trip)
     record_last_seen(_last_seen_raw, METRICS_MAP, rows)
     return [Observation(device_id, r.table, r.recorded_at, r.values, ctx.source_system) for r in rows]
 
@@ -667,7 +669,11 @@ async def _handle_metrics_entity(
     db: AsyncSession,
     ha_config: dict | None = None,
 ) -> None:
-    """sensor.fordpass_{vin}_metrics -> status rows, GPS fix and trip regen and scores."""
+    """sensor.fordpass_{vin}_metrics -> status rows and trip regen and scores.
+
+    GPS still comes from the device tracker; storing `position` here as well
+    would record each fix twice under two different timestamps.
+    """
     ctx = IngestContext(
         SourceSystem.HA_FORDPASS,
         (ha_config or {}).get("_config_id"),
@@ -688,7 +694,6 @@ async def _handle_metrics_entity(
                 detection.try_cross_reference(
                     device_id, METRICS.pattern, metric, obs.values[column], "km"
                 )
-    await record_position(db, device_id, new_state.get("attributes") or {}, ctx.source_system)
     for obs in observations:
         if obs.table == TRIPS:
             await enrich_newest_trip(db, obs)

@@ -105,8 +105,9 @@ async def test_metrics_regen_backfill_reads_the_value_wrapper(db_session):
         EVTripMetrics(
             trip_id=uuid.uuid4(),
             device_id=_DEVICE_ID,
-            end_time=datetime(2026, 8, 25, 13, 0, tzinfo=UTC),
-            recorded_at=datetime(2026, 8, 25, 13, 0, tzinfo=UTC),
+            # The drive ended a minute before the metrics reading (13:52:34Z).
+            end_time=datetime(2026, 8, 25, 13, 51, 34, tzinfo=UTC),
+            recorded_at=datetime(2026, 8, 25, 13, 51, 34, tzinfo=UTC),
             distance=19.0,
             source_system="ha_fordpass",
         )

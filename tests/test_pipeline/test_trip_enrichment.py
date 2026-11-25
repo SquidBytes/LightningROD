@@ -85,13 +85,23 @@ async def test_a_reading_taken_as_the_drive_ended_refreshes_regen_and_scores(db_
 
 
 @pytest.mark.db
-async def test_a_reading_taken_long_after_the_drive_only_fills_gaps(db_session):
-    """It may already describe the next drive, so it never replaces a stored value."""
+async def test_a_reading_taken_long_after_the_drive_is_not_applied(db_session):
+    """It may describe the next drive, whose trip row does not exist yet."""
     trip = await _trip(db_session)
 
-    await enrich_newest_trip(db_session, _reading(END + timedelta(hours=1), range_regenerated=9.9, charge_regenerated=3.0))
+    reading = _reading(END + timedelta(minutes=45), range_regenerated=9.9, charge_regenerated=3.0)
+    assert await enrich_newest_trip(db_session, reading) is None
+    assert (trip.range_regenerated, trip.charge_regenerated) == (2.0, None)
 
-    assert (trip.range_regenerated, trip.charge_regenerated) == (2.0, 3.0)
+
+@pytest.mark.db
+async def test_the_trip_ending_at_the_reading_is_chosen_over_an_earlier_one(db_session):
+    earlier = await _trip(db_session, end_time=END - timedelta(minutes=45), speed_score=None)
+    current = await _trip(db_session, speed_score=None)
+
+    await enrich_newest_trip(db_session, _reading(END, speed_score=81.0))
+
+    assert (earlier.speed_score, current.speed_score) == (None, 81.0)
 
 
 @pytest.mark.db
