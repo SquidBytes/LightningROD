@@ -159,8 +159,8 @@ def test_sort_indicator_renders_for_active_column():
     assert "text-primary" in html
 
 
-def test_sortable_columns_include_date_distance_duration_score():
+def test_sortable_columns_include_date_distance_duration_regen():
     """The four key columns expose sortable headers."""
     html = _render_index()
-    for label in ("Date", "Distance", "Duration", "Charge regen"):
+    for label in ("Date", "Distance", "Duration", "Charge regen", "Range regen"):
         assert label in html

@@ -38,8 +38,8 @@ SORTABLE_COLUMNS = {
     "efficiency": EVTripMetrics.efficiency,
     "duration": EVTripMetrics.duration,
     "temperature": EVTripMetrics.outside_air_temp,
-    "score": EVTripMetrics.charge_regenerated,
-    "regen": EVTripMetrics.range_regenerated,
+    "charge_regen": EVTripMetrics.charge_regenerated,
+    "range_regen": EVTripMetrics.range_regenerated,
 }
 
 

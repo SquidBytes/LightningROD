@@ -43,7 +43,7 @@
             <h4 class="text-sm font-medium text-base-content/60 mb-1">Regeneration</h4>
             {% if trip.range_regenerated is not none %}
             <p class="text-sm">
-                <span class="text-base-content/40">Range Regenerated:</span>
+                <span class="text-base-content/40">Range regenerated:</span>
                 <span>{{ "%.1f"|format(trip.range_regenerated|cvt_dist(distance_unit)) }} {{ units.range_label }}</span>
             </p>
             {% endif %}
