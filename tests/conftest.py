@@ -19,7 +19,11 @@ def _resolve_test_db_url() -> str:
 
     sqlite: tmpfile DB wiped at module load so each session starts clean.
     postgres (default): the dockerized test-db service URL.
+    TEST_DATABASE_URL overrides both, so two checkouts on different
+    migrations can each use their own database in the one container.
     """
+    if override := os.environ.get("TEST_DATABASE_URL"):
+        return override
     backend = os.environ.get("TEST_BACKEND", "postgres")
     if backend == "sqlite":
         tmp = Path(tempfile.gettempdir()) / "lightningrod_test_dialect.db"
