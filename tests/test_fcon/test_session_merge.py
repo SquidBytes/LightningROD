@@ -221,7 +221,7 @@ def test_distance_added_rejects_unit_conversion(ha_km, stored, warns, fcon_first
 
     fcon = {"distance_added": 13.0, "device_id": DEVICE}
     ha = {"distance_added": ha_km, "device_id": DEVICE}
-    with caplog.at_level("WARNING", logger="lightningrod.session_merge"):
+    with caplog.at_level("WARNING", logger="lightningrod.pipeline.sessions"):
         if fcon_first:
             merged = {**fcon, **merge_values(SESSION_PRECEDENCE, fcon, ha, SourceSystem.HA_FORDPASS)}
         else:

@@ -236,7 +236,7 @@ def test_fcon_odometer_checks_ha_distance(ha_km, stored, warns, fcon_first, capl
     fcon = {"distance": 13.0, "odometer_start": 1000.0, "odometer_end": 1013.0,
             "energy_consumed": 2.6, "device_id": DEVICE}
     ha = {"distance": ha_km, "energy_consumed": 2.4, "device_id": DEVICE}
-    with caplog.at_level("WARNING", logger="lightningrod.trip_merge"):
+    with caplog.at_level("WARNING", logger="lightningrod.pipeline.trips"):
         if fcon_first:
             merged = {**fcon, **merge_changes(fcon, ha, SourceSystem.HA_FORDPASS)}
         else:
