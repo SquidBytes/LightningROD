@@ -1,9 +1,9 @@
 {# Lazy-loaded trip detail content - radar chart + metrics #}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-    <!-- Driving Score Radar Chart -->
+    <!-- Coaching score radar -->
     <div>
         {% if radar_chart %}
-            <h4 class="text-sm font-medium text-base-content/60 mb-2">Driving Score</h4>
+            <h4 class="text-sm font-medium text-base-content/60 mb-2">Driving Scores</h4>
             {{ radar_chart | safe }}
         {% else %}
             <p class="text-base-content/40 text-sm py-4">No driving score data available.</p>
@@ -38,13 +38,21 @@
         </div>
         {% endif %}
 
-        {% if trip.range_regenerated is not none %}
+        {% if trip.range_regenerated is not none or trip.charge_regenerated is not none %}
         <div>
             <h4 class="text-sm font-medium text-base-content/60 mb-1">Regeneration</h4>
+            {% if trip.range_regenerated is not none %}
             <p class="text-sm">
-                <span class="text-base-content/40">Range Regenerated:</span>
+                <span class="text-base-content/40">Range regenerated:</span>
                 <span>{{ "%.1f"|format(trip.range_regenerated|cvt_dist(distance_unit)) }} {{ units.range_label }}</span>
             </p>
+            {% endif %}
+            {% if trip.charge_regenerated is not none %}
+            <p class="text-sm" title="{{ tooltips.driving_sessions_charge_regenerated }}">
+                <span class="text-base-content/40">Charge regenerated:</span>
+                <span>{{ "%.0f"|format(trip.charge_regenerated) }} %</span>
+            </p>
+            {% endif %}
         </div>
         {% endif %}
 
@@ -55,14 +63,10 @@
         </div>
         {% endif %}
 
-        {% if trip.driving_score is not none %}
+        {% if trip.speed_score is not none or trip.acceleration_score is not none or trip.deceleration_score is not none %}
         <div>
             <h4 class="text-sm font-medium text-base-content/60 mb-1">Scores</h4>
             <div class="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                    <span class="text-base-content/40">Overall:</span>
-                    <span>{{ "%.0f"|format(trip.driving_score) }}</span>
-                </div>
                 {% if trip.speed_score is not none %}
                 <div>
                     <span class="text-base-content/40">Speed:</span>
@@ -85,7 +89,7 @@
         </div>
         {% endif %}
 
-        {% if not (trip.ambient_temp is not none or trip.cabin_temp is not none or trip.outside_air_temp is not none or trip.range_regenerated is not none or trip.electrical_efficiency is not none or trip.driving_score is not none) %}
+        {% if not (trip.ambient_temp is not none or trip.cabin_temp is not none or trip.outside_air_temp is not none or trip.range_regenerated is not none or trip.electrical_efficiency is not none or trip.charge_regenerated is not none) %}
         <p class="text-base-content/40 text-sm py-2">No additional details available for this trip.</p>
         {% endif %}
     </div>

@@ -106,6 +106,10 @@ TOOLTIPS: dict[str, str] = {
     "driving_sessions_total_energy": (
         "Sum of energy consumed across every trip in the selected date range."
     ),
+    "driving_sessions_charge_regenerated": (
+        "Ford metric `tripXevBatteryChargeRegenerated`: estimated electrical charge recovered "
+        "through regeneration during the trip, as a percentage."
+    ),
     # --- settings/fuel ---
     "fuel_price_trend": (
         "Station and regional average fuel prices over time, in your configured units."

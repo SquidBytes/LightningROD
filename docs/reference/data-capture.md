@@ -121,7 +121,7 @@ nearest vehicle-status readings.
 | `cabin_temp` | `events…cabin_temperature` / `elveh.tripCabinTemp` | °C | Yes | |
 | `outside_air_temp` | `events…outside_air_ambient_temperature` / `elveh.tripOutsideAirAmbientTemp` | °C | Yes | |
 | `odometer_start` / `odometer_end` | nearest `ev_vehicle_status.odometer` | km | Yes | Derived, not a direct attribute. |
-| `driving_score` | `metrics.tripXevBatteryChargeRegenerated` / `elveh.tripDrivingScore` | 0–100 | Intermittent | Absent when telemetry reports 0. |
+| `charge_regenerated` | `metrics.tripXevBatteryChargeRegenerated` / `elveh.tripDrivingScore` | % | Intermittent | Ford: estimated electrical charge recovered through regeneration during the trip. Absent when telemetry reports 0. |
 | `electrical_efficiency` | `elveh.tripElectricalEfficiency` | 0–100 | Yes | |
 | `speed_score` | `elveh.tripSpeedScore` | 0–100 | Intermittent | elveh-only; empty when the vehicle reports no coaching score. |
 | `acceleration_score` | `elveh.tripAccelerationScore` | 0–100 | Intermittent | elveh-only. |

@@ -34,7 +34,7 @@ def _render_index(sort_by="date", sort_dir="desc"):
     env.filters["cvt_eff"] = lambda v, u: v
     env.filters["localtime"] = lambda v, tz, fmt="%Y-%m-%d": str(v)
     trip = SimpleNamespace(
-        id=1, driving_score=None, end_time=None, distance=None, duration=None,
+        id=1, charge_regenerated=None, end_time=None, distance=None, duration=None,
         outside_air_temp=None, cabin_temp=None, ambient_temp=None,
         energy_consumed=None, efficiency=None, range_regenerated=None,
     )
@@ -159,8 +159,8 @@ def test_sort_indicator_renders_for_active_column():
     assert "text-primary" in html
 
 
-def test_sortable_columns_include_date_distance_duration_score():
+def test_sortable_columns_include_date_distance_duration_regen():
     """The four key columns expose sortable headers."""
     html = _render_index()
-    for label in ("Date", "Distance", "Duration", "Score"):
+    for label in ("Date", "Distance", "Duration", "Charge regen", "Range regen"):
         assert label in html

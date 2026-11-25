@@ -218,7 +218,7 @@ async def test_replay_fills_duration_and_scores_from_the_archive(op, db_session)
     assert changed == 1
     assert op.last_details["errors"] == 0
     assert float(trip.duration) == pytest.approx(1800.0)
-    assert float(trip.driving_score) == pytest.approx(85.0)
+    assert float(trip.charge_regenerated) == pytest.approx(85.0)
     assert float(trip.speed_score) == pytest.approx(60.0)
     assert float(trip.range_regenerated) == pytest.approx(2.1)
 

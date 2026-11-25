@@ -134,7 +134,7 @@ async def test_metrics_regen_backfill_reads_the_value_wrapper(db_session):
         )
     ).scalar_one()
     assert float(trip.range_regenerated) == pytest.approx(2.1)
-    assert float(trip.driving_score) == pytest.approx(85.0)
+    assert float(trip.charge_regenerated) == pytest.approx(85.0)
 
 
 async def test_pack_current_comes_from_xev_battery_io_current(db_session):

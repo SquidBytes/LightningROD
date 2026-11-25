@@ -853,8 +853,8 @@ async def _backfill_trip_regen(
     if regen is not None and trip.range_regenerated is None:
         trip.range_regenerated = regen
         changed = True
-    if raw_score is not None and trip.driving_score is None:
-        trip.driving_score = raw_score
+    if raw_score is not None and trip.charge_regenerated is None:
+        trip.charge_regenerated = raw_score
         changed = True
     if changed:
         logger.debug(

@@ -38,8 +38,8 @@ SORTABLE_COLUMNS = {
     "efficiency": EVTripMetrics.efficiency,
     "duration": EVTripMetrics.duration,
     "temperature": EVTripMetrics.outside_air_temp,
-    "score": EVTripMetrics.driving_score,
-    "regen": EVTripMetrics.range_regenerated,
+    "charge_regen": EVTripMetrics.charge_regenerated,
+    "range_regen": EVTripMetrics.range_regenerated,
 }
 
 
@@ -378,42 +378,34 @@ def build_efficiency_trend_chart(
     )
 
 
-def build_driving_score_radar(trip) -> str:
-    """Build driving score radar (Scatterpolar) chart for a single trip.
-
-    Accepts a trip object (EVTripMetrics instance or any object with
-    driving_score, speed_score, acceleration_score, deceleration_score).
-    Returns HTML string. Empty string if all scores are None or 0.
-    """
+def build_trip_score_radar(trip) -> str:
+    """Radar of a trip's coaching scores; a single stat when fewer than three exist."""
     scores = {
         "Speed": getattr(trip, "speed_score", None),
         "Acceleration": getattr(trip, "acceleration_score", None),
         "Deceleration": getattr(trip, "deceleration_score", None),
-        "Overall": getattr(trip, "driving_score", None),
     }
-
-    # Missing sub-scores drop out entirely (0 is ha-fordpass's "unmeasured"
-    # sentinel) instead of rendering as real 0-score radar spokes.
+    # 0 is ha-fordpass's "unmeasured" sentinel, not a real reading.
     values = {
         k: float(v) for k, v in scores.items() if v is not None and float(v) != 0
     }
-    if not values:
+    regen = float(getattr(trip, "charge_regenerated", None) or 0)
+    if not values and not regen:
         return ""
 
-    # A radar needs at least 3 axes to read as a shape. With fewer (e.g. only
-    # the Overall score backfilled from the metrics sensor), render a compact
-    # radial stat instead of a degenerate spike.
+    # A radar needs three axes to read as a shape; with fewer, show one stat.
     if len(values) < 3:
-        label, score = (
-            ("Overall", values["Overall"]) if "Overall" in values
-            else next(iter(values.items()))
-        )
+        if regen:
+            label, value, text = "Charge regenerated", regen, f"{regen:.0f} %"
+        else:
+            name, value = next(iter(values.items()))
+            label, text = f"{name} score", f"{value:.0f}"
         return (
             '<div class="flex items-center gap-4 py-2">'
             f'<div class="radial-progress text-primary" role="progressbar" '
-            f'style="--value:{score:.0f}; --size:4.5rem; --thickness:4px;">'
-            f'<span class="text-lg font-bold">{score:.0f}</span></div>'
-            f'<span class="text-sm text-base-content/60">{label} driving score</span>'
+            f'style="--value:{value:.0f}; --size:4.5rem; --thickness:4px;">'
+            f'<span class="text-base font-bold">{text}</span></div>'
+            f'<span class="text-sm text-base-content/60">{label}</span>'
             "</div>"
         )
 
@@ -757,7 +749,7 @@ def _build_trip_score_fallback(
     or efficiency data either.
     """
     score_fields = [
-        ("Driving", trip.driving_score),
+        ("Charge regenerated %", trip.charge_regenerated),
         ("Speed", trip.speed_score),
         ("Acceleration", trip.acceleration_score),
         ("Deceleration", trip.deceleration_score),

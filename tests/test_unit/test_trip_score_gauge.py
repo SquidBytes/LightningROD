@@ -1,10 +1,9 @@
-"""Unit tests for the trip-row driving-score gauge.
+"""Unit tests for the trip-row charge-regenerated gauge.
 
 Renders web/templates/driving/sessions/partials/trip_row.html in isolation
 via Jinja2 Environment to assert the radial-progress gauge replaces the
-previous static-gradient bar and that color bands track the score value
-(<50 -> text-error, 50-74 -> text-warning, >=75 -> text-success). Score=0
-is converted to NULL upstream at the adapter, so it is not exercised here.
+previous static-gradient bar in one neutral colour. 0 is converted to NULL
+upstream at the adapter, so it is not exercised here.
 """
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,13 +11,15 @@ from types import SimpleNamespace
 import pytest
 from jinja2 import Environment, FileSystemLoader
 
+from web.tooltips import TOOLTIPS
+
 pytestmark = pytest.mark.unit
 
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "web" / "templates"
 
 
-def _render(driving_score):
-    """Render trip_row.html with a single trip whose driving_score is set.
+def _render(charge_regenerated):
+    """Render trip_row.html with a single trip whose charge_regenerated is set.
 
     Other trip fields are None or neutral so this test only exercises the
     score-gauge cell. Filters cvt_dist / cvt_temp / cvt_eff are stubbed as
@@ -29,10 +30,11 @@ def _render(driving_score):
     env.filters["cvt_temp"] = lambda v, u: v
     env.filters["cvt_eff"] = lambda v, u: v
     env.filters["localtime"] = lambda v, tz, fmt="%Y-%m-%d": str(v)
+    env.globals["tooltips"] = TOOLTIPS
     tpl = env.get_template("driving/sessions/partials/trip_row.html")
     trip = SimpleNamespace(
         id=1,
-        driving_score=driving_score,
+        charge_regenerated=charge_regenerated,
         end_time=None,
         distance=None,
         duration=None,
@@ -56,44 +58,27 @@ def _render(driving_score):
     )
 
 
-def test_color_band_error():
-    """Score < 50 → text-error gauge color."""
-    html = _render(49)
-    assert "text-error" in html
-    assert "radial-progress" in html
-
-
-def test_color_band_warning_lower():
-    """Score = 50 → text-warning (lower bound of warning band)."""
-    html = _render(50)
-    assert "text-warning" in html
-
-
-def test_color_band_warning_upper():
-    """Score = 74 → text-warning (upper bound of warning band)."""
-    html = _render(74)
-    assert "text-warning" in html
-
-
-def test_color_band_success():
-    """Score = 75 → text-success (lower bound of success band)."""
-    html = _render(75)
-    assert "text-success" in html
+@pytest.mark.parametrize("value", [3, 49, 50, 74, 75, 100])
+def test_gauge_is_one_neutral_colour(value):
+    """A regeneration percentage is not good or bad, so no value is painted red, amber or green."""
+    html = _render(value)
+    assert "radial-progress text-primary" in html
+    for judged in ("text-error", "text-warning", "text-success"):
+        assert judged not in html
 
 
 def test_score_none_renders_emdash():
-    """driving_score=None → em-dash, no gauge rendered."""
+    """charge_regenerated=None → em-dash, no gauge rendered."""
     html = _render(None)
     assert "—" in html  # U+2014 em-dash
     assert "radial-progress" not in html
 
 
 def test_score_value_present_in_gauge():
-    """Score=82 → gauge has --value:82 and centered text 82."""
+    """82 → gauge has --value:82 and centered text "82 %"."""
     html = _render(82)
     assert "--value:82" in html
-    # Centered span text — the integer score appears literally in the gauge
-    assert ">82<" in html
+    assert ">82 %<" in html
 
 
 def test_static_gradient_removed():
@@ -103,9 +88,9 @@ def test_static_gradient_removed():
 
 
 def test_aria_label_present():
-    """Gauge advertises score via aria-label for screen readers."""
+    """Gauge names the metric and its unit for screen readers."""
     html = _render(60)
-    assert 'aria-label="Driving score: 60 of 100"' in html
+    assert 'aria-label="Charge regenerated: 60 %"' in html
 
 
 def _render_with_duration(duration):
@@ -115,10 +100,11 @@ def _render_with_duration(duration):
     env.filters["cvt_temp"] = lambda v, u: v
     env.filters["cvt_eff"] = lambda v, u: v
     env.filters["localtime"] = lambda v, tz, fmt="%Y-%m-%d": str(v)
+    env.globals["tooltips"] = TOOLTIPS
     tpl = env.get_template("driving/sessions/partials/trip_row.html")
     trip = SimpleNamespace(
         id=1,
-        driving_score=None,
+        charge_regenerated=None,
         end_time=None,
         distance=None,
         duration=duration,

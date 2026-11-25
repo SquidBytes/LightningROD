@@ -15,7 +15,7 @@ It has two pages under the sidebar's `DRIVING` group:
 !!! tip "See it live"
     Explore this page in the [interactive demo](https://lightningrod.dev/demo).
 
-A paginated table of trips with nine columns: number, date, distance, duration, temperature, energy used, efficiency, driving score, and regeneration.
+A paginated table of trips with nine columns: number, date, distance, duration, temperature, energy used, efficiency, charge regenerated (percent of battery), and range regenerated (distance).
 
 !!! note "Where efficiency comes from"
     Efficiency is calculated by LightningROD as distance / energy from the trip data. The vehicle's dash may show a lower number for the same trip because its own figure includes climate and accessory energy, while the API's `energy_consumed` covers propulsion only. No independent vehicle-reported efficiency is available through Home Assistant today.
@@ -37,7 +37,7 @@ If **Hide short trips** or **Hide vehicle-on trips** is enabled in [Settings →
 
 Click **Export CSV** above the table to download the trips matching the current filters (date range and sort order). Hidden short trips stay out of the export too. Each row ends with the trip ID, its source, and when it was ingested.
 
-One row per trip, with start/end times, start and end location, distance, duration, energy, efficiency, odometer readings, ambient/cabin/outside temperatures, driving scores, regenerated range, and the source system. Distances, efficiency, and temperatures export in your configured display units; times in your configured timezone; energy in kWh.
+One row per trip, with start/end times, start and end location, distance, duration, energy, efficiency, odometer readings, ambient/cabin/outside temperatures, charge regenerated, coaching scores, range regenerated, and the source system. Distances, efficiency, and temperatures export in your configured display units; times in your configured timezone; energy in kWh.
 
 ## Driving Performance (`/driving/performance`)
 
@@ -45,7 +45,7 @@ A driving-side analytics page introduced in v0.3.
 
 ### Summary Row
 
-- **Range Recovered (Regen)** -- total regen across trips in range
+- **Range Regenerated** -- total range regenerated across trips in the selected dates
 - Plus per-page summary tiles for total distance, average efficiency, and more
 
 ### Driving Efficiency Trend

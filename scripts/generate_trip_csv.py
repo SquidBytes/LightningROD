@@ -73,7 +73,7 @@ def efficiency_for_temp(temp_f: float, trip_type: str) -> float:
     return round(base + random.uniform(-0.2, 0.2), 2)
 
 
-def driving_scores(trip_type: str) -> dict:
+def trip_scores(trip_type: str) -> dict:
     """Generate correlated driving scores."""
     if trip_type == "commute":
         # Regular commute, consistent driving
@@ -93,7 +93,7 @@ def driving_scores(trip_type: str) -> dict:
         accel = random.randint(60, 88)
         decel = random.randint(65, 90)
     return {
-        "driving_score": overall,
+        "charge_regenerated": overall,
         "speed_score": speed,
         "acceleration_score": accel,
         "deceleration_score": decel,
@@ -205,7 +205,7 @@ def derive_trips(sessions: list[dict]) -> list[dict]:
         ambient = seasonal_temp(trip_start)
         eff = efficiency_for_temp(ambient, trip_type)
         energy = round(distance / eff, 2) if eff > 0 else round(distance / 2.0, 2)
-        scores = driving_scores(trip_type)
+        scores = trip_scores(trip_type)
 
         # Regen: typically 5-15% of distance
         regen = round(distance * random.uniform(0.03, 0.15), 2)
@@ -278,7 +278,7 @@ def derive_trips(sessions: list[dict]) -> list[dict]:
             ambient = seasonal_temp(trip_date)
             eff = efficiency_for_temp(ambient, "errand")
             energy = round(distance / eff, 2) if eff > 0 else round(distance / 2.0, 2)
-            scores = driving_scores("errand")
+            scores = trip_scores("errand")
             regen = round(distance * random.uniform(0.03, 0.12), 1)
             cabin = round(random.uniform(68, 73), 1)
             elec_eff = round(eff * random.uniform(0.92, 1.02), 2)
@@ -315,7 +315,7 @@ def write_csv(trips: list[dict], out_path: str):
         "device_id", "start_time", "end_time", "recorded_at",
         "distance", "duration", "energy_consumed", "efficiency",
         "range_regenerated", "ambient_temp", "cabin_temp", "outside_air_temp",
-        "driving_score", "speed_score", "acceleration_score", "deceleration_score",
+        "charge_regenerated", "speed_score", "acceleration_score", "deceleration_score",
         "electrical_efficiency", "brake_torque", "is_complete", "source_system",
     ]
     with open(out_path, "w", newline="", encoding="utf-8") as f:

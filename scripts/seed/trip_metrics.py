@@ -168,7 +168,7 @@ async def seed(db: AsyncSession) -> int:
         )  # noqa: F841
 
         # --- Driving scores (not in DATA_MAP — sensible defaults) ---
-        driving_score = round(rng.uniform(60.0, 100.0), 1)
+        charge_regenerated = round(rng.uniform(60.0, 100.0), 1)
         speed_score = round(rng.uniform(55.0, 100.0), 1)
         acceleration_score = round(rng.uniform(50.0, 100.0), 1)
         deceleration_score = round(rng.uniform(50.0, 100.0), 1)
@@ -199,7 +199,7 @@ async def seed(db: AsyncSession) -> int:
             ambient_temp=ambient_temp,
             cabin_temp=cabin_temp,
             outside_air_temp=outside_air_temp,
-            driving_score=driving_score,
+            charge_regenerated=charge_regenerated,
             speed_score=speed_score,
             acceleration_score=acceleration_score,
             deceleration_score=deceleration_score,

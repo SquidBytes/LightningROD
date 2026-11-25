@@ -9,10 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.migrations.versions.p34_battery_trips_overhaul import (
-    _SCORE_FIELDS,
+    _SCORE_FIELDS as _P34_SCORE_FIELDS,
+)
+from db.migrations.versions.p34_battery_trips_overhaul import (
     _TEMP_FIELDS,
     _coerce_datetime,
-    _is_elveh_canonical,
     _is_events_canonical,
 )
 from db.models.trip_metrics import EVTripMetrics
@@ -35,6 +36,16 @@ START_TIME_WINDOW_SECONDS = 120.0
 # agree. The band is wide enough for source rounding drift, far tighter than
 # the x1.609 spread two genuinely different drives show.
 SAME_DRIVE_TOLERANCE = 0.25
+
+# The migration is history and keeps the column's old name.
+_SCORE_FIELDS: tuple[str, ...] = tuple(
+    "charge_regenerated" if f == "driving_score" else f for f in _P34_SCORE_FIELDS
+)
+
+
+def _is_elveh_canonical(row: dict) -> bool:
+    return any(row.get(f) is not None for f in _SCORE_FIELDS)
+
 
 # P34's _MAX_FIELDS also maxed distance/efficiency; here MAX would resurrect
 # the corrupted larger distance, so only these two are safe to max-merge.

@@ -41,7 +41,7 @@ async def _seed_corrupt_pair(db_session):
         distance=122.0,
         end_time=T0,
         source_system="ha_fordpass",
-        driving_score=90.0,
+        charge_regenerated=90.0,
         **SAME_DRIVE,
     )
     loser = await TripFactory.create(

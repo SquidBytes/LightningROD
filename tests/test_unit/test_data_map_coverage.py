@@ -54,7 +54,7 @@ _UNIT_FUL_TOKENS: tuple[str, ...] = (
 # SI, scores, counts, currency, version tags).
 _EXEMPTIONS: set[tuple[str, str]] = {
     # Scores are 0-100 dimensionless
-    ("ev_trip_metrics", "driving_score"),
+    ("ev_trip_metrics", "charge_regenerated"),
     ("ev_trip_metrics", "speed_score"),
     ("ev_trip_metrics", "acceleration_score"),
     ("ev_trip_metrics", "deceleration_score"),

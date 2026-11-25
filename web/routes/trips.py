@@ -16,12 +16,12 @@ from web.dependencies import DbSession
 from web.queries.settings import get_app_setting, get_unit_context
 from web.queries.trips import (
     build_drive_graph,
-    build_driving_score_radar,
     build_environment_chart,
     build_expanded_battery_chart,
     build_expanded_driving_chart,
     build_expanded_environment_chart,
     build_short_trip_filter,
+    build_trip_score_radar,
     get_trip_hide_settings,
     query_hidden_trip_count,
     query_trip_battery_series,
@@ -209,7 +209,7 @@ async def export_trips_csv(
         f"efficiency_{eff_label}", f"odometer_start_{distance_label}",
         f"odometer_end_{distance_label}", f"ambient_temp_{temp_label}",
         f"cabin_temp_{temp_label}", f"outside_air_temp_{temp_label}",
-        "driving_score", "speed_score", "acceleration_score", "deceleration_score",
+        "charge_regenerated_pct", "speed_score", "acceleration_score", "deceleration_score",
         f"range_regenerated_{distance_label}", "source_system",
         "trip_id", f"ingested_at ({user_tz})", f"original_timestamp ({user_tz})",
     ])
@@ -235,7 +235,7 @@ async def export_trips_csv(
             _num(convert_temp(t.ambient_temp, temp_unit), 1),
             _num(convert_temp(t.cabin_temp, temp_unit), 1),
             _num(convert_temp(t.outside_air_temp, temp_unit), 1),
-            _num(t.driving_score, 0),
+            _num(t.charge_regenerated, 0),
             _num(t.speed_score, 0),
             _num(t.acceleration_score, 0),
             _num(t.deceleration_score, 0),
@@ -268,7 +268,7 @@ async def trip_detail(
     if trip is None:
         return error_response("Trip not found.", 404)
 
-    radar_chart = build_driving_score_radar(trip)
+    radar_chart = build_trip_score_radar(trip)
     unit_ctx = await get_unit_context(db)
 
     context = {
@@ -293,7 +293,7 @@ async def trip_drawer(
     if trip is None:
         return error_response("Trip not found.", 404)
 
-    radar_chart = build_driving_score_radar(trip)
+    radar_chart = build_trip_score_radar(trip)
     user_tz = await get_app_setting(db, "user_timezone", "UTC")
     unit_ctx = await get_unit_context(db)
 

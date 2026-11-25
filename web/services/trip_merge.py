@@ -74,7 +74,7 @@ PRECEDENCE: dict[str, Rule] = {
     "ambient_temp": Rule(SourceSystem.HA_FORDPASS, "events trip summary is canonical for temperatures"),
     "cabin_temp": Rule(SourceSystem.HA_FORDPASS, "events trip summary is canonical for temperatures"),
     "outside_air_temp": Rule(SourceSystem.HA_FORDPASS, "events trip summary is canonical for temperatures"),
-    "driving_score": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for scores"),
+    "charge_regenerated": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for regen"),
     "speed_score": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for scores"),
     "acceleration_score": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for scores"),
     "deceleration_score": Rule(SourceSystem.HA_FORDPASS, "elveh is canonical for scores"),

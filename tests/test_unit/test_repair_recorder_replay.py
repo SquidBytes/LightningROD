@@ -194,7 +194,7 @@ async def test_execute_fills_null_fields_and_is_idempotent(db_session):
     assert float(trip.cabin_temp) == pytest.approx(20.0)
     assert float(trip.outside_air_temp) == pytest.approx(15.0)
     assert float(trip.range_regenerated) == pytest.approx(2.1)
-    assert float(trip.driving_score) == pytest.approx(85.0)
+    assert float(trip.charge_regenerated) == pytest.approx(85.0)
     assert float(trip.speed_score) == pytest.approx(60.0)
     assert trip.start_time == STATE_TS - timedelta(seconds=1800)
 
