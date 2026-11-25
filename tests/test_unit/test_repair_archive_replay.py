@@ -461,7 +461,6 @@ async def test_csv_import_trip_is_left_byte_identical(op, db_session):
     changed = await op.execute(db_session)
 
     assert changed == 0
-    assert op.last_details["protected_reverted"] >= 1
     assert serialize_row(trip) == before
 
 

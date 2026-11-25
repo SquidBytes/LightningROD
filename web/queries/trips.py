@@ -604,7 +604,7 @@ def _interpolate_series(
 GPS_MATCH_TOLERANCE_SECONDS = 30 * 60  # nearest GPS snapshot must be within 30 min
 
 
-async def _nearest_gps(
+async def nearest_gps(
     db: AsyncSession, device_id: str, target_time: datetime
 ) -> tuple[float, float] | None:
     """Closest GPS snapshot to target_time within the tolerance window, or None.
@@ -658,8 +658,8 @@ async def detect_trip_locations(
             return match.location_name
         return f"{lat:.2f}, {lon:.2f}"
 
-    start_coords = await _nearest_gps(db, device_id, start_time)
-    end_coords = await _nearest_gps(db, device_id, end_time)
+    start_coords = await nearest_gps(db, device_id, start_time)
+    end_coords = await nearest_gps(db, device_id, end_time)
 
     start_name = _resolve_name(start_coords)
     end_name = _resolve_name(end_coords)
@@ -695,8 +695,8 @@ async def detect_trip_location_ids(
         match = _find_geo_match(all_locations, coords[0], coords[1])
         return match.id if match else None
 
-    start_coords = await _nearest_gps(db, device_id, start_time)
-    end_coords = await _nearest_gps(db, device_id, end_time)
+    start_coords = await nearest_gps(db, device_id, start_time)
+    end_coords = await nearest_gps(db, device_id, end_time)
     return (_resolve_id(start_coords), _resolve_id(end_coords))
 
 

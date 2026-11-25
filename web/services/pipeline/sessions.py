@@ -1,9 +1,10 @@
-"""One charging-session row per charge when Home Assistant and FordConnect both record it.
+"""One charging-session row per charge, whichever sources record it.
 
 HA's energy-transfer log entry is Ford's own record of the whole charge, so
 it wins everything it measures. FordConnect adds what only per-minute
 telemetry sees. Columns a user curates, or that come from an approved
-location, are fill-only: a merge never overwrites them.
+location, are fill-only: a merge never overwrites them. Manual and imported
+sessions are never changed.
 """
 
 from __future__ import annotations
@@ -11,7 +12,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.models.charging_session import EVChargingSession
+from web.queries.locations import get_location_defaults, resolve_location
+from web.queries.sessions import find_matching_sessions
+from web.queries.trips import nearest_gps
+from web.services.pipeline.observation import INGEST_SCHEMA_VERSION, SessionObservation
 from web.services.source_merge import (
     Rule,
     is_km_mile_twin,
@@ -19,7 +27,8 @@ from web.services.source_merge import (
 )
 from web.services.source_system import INGESTED, SourceSystem
 
-logger = logging.getLogger("lightningrod.session_merge")
+logger = logging.getLogger("lightningrod.pipeline.sessions")
+
 
 def checked_distance_added(current: dict, incoming: dict, incoming_source: str) -> Any:
     """HA's range added, unless it is FordConnect's converted between km and miles.
@@ -115,9 +124,105 @@ def apply_session_merge(
 
 
 def refresh_own_row(row: EVChargingSession, derived: dict) -> None:
-    """Re-derive an unmerged FordConnect row: measured columns refresh, curated ones only fill."""
+    """The same source reporting its own charge again: measured columns refresh, curated ones only fill."""
     for field, value in derived.items():
         rule = SESSION_PRECEDENCE.get(field)
         if rule is not None and rule.winner == KEEP and getattr(row, field) is not None:
             continue
         setattr(row, field, value)
+
+
+async def _measured_position(
+    db: AsyncSession, obs: SessionObservation
+) -> tuple[float | None, float | None]:
+    """The session's coordinates; 0,0 is a broken reading, so use the nearest stored fix."""
+    lat, lon = obs.values.get("latitude"), obs.values.get("longitude")
+    if lat is None or lon is None:
+        return None, None
+    if (float(lat), float(lon)) != (0.0, 0.0):
+        return lat, lon
+    return await nearest_gps(db, obs.device_id, obs.values["session_start_utc"]) or (None, None)
+
+
+async def _location_fields(
+    db: AsyncSession, obs: SessionObservation, lat: float | None, lon: float | None
+) -> dict[str, Any]:
+    """Place columns from the resolved location; the source's own name is only a fallback."""
+    location_id = await resolve_location(
+        db,
+        latitude=lat,
+        longitude=lon,
+        location_name=obs.location_name,
+        source_system=obs.source_system,
+    )
+    defaults = await get_location_defaults(db, location_id)
+    return {
+        "location_id": location_id,
+        "location_name": defaults.location_name or obs.location_name,
+        "location_type": defaults.location_type,
+        "network_id": defaults.network_id,
+        "charge_type": obs.values.get("charge_type") or defaults.charge_type,
+        "stall_id": defaults.stall_id,
+        "evse_voltage": defaults.evse_voltage,
+        "evse_amperage": defaults.evse_amperage,
+        "charger_rated_kw": defaults.charger_rated_kw,
+        "evse_source": "stall_default" if defaults.stall_id else None,
+    }
+
+
+async def upsert_session(db: AsyncSession, obs: SessionObservation) -> EVChargingSession | None:
+    """Store one charge; returns its row, or None when a protected session already records it."""
+    source = obs.source_system
+    start = obs.values["session_start_utc"]
+    lat, lon = await _measured_position(db, obs)
+    values = {**obs.values, "latitude": lat, "longitude": lon}
+
+    existing = await db.scalar(
+        select(EVChargingSession).where(
+            EVChargingSession.device_id == obs.device_id,
+            EVChargingSession.source_system == source,
+            EVChargingSession.session_start_utc == start,
+        )
+    )
+    target = existing
+    if target is None:
+        others = [
+            m
+            for m in await find_matching_sessions(db, obs.device_id, start, values.get("energy_kwh"))
+            if m[1] != source
+        ]
+        other_id = next((mid for mid, other in others if other in INGESTED), None)
+        if other_id is not None:
+            target = await db.get(EVChargingSession, other_id)
+        elif others:
+            logger.info("%s session matches protected session %s; not written", source, others[0][0])
+            return None
+
+    # Resolve a place only when the row does not already have one, so a merge
+    # or re-parse never creates a stray unverified location.
+    if target is None or target.location_id is None:
+        values.update(await _location_fields(db, obs, lat, lon))
+
+    if existing is not None:
+        refresh_own_row(existing, values)
+        return existing
+    if target is not None:
+        apply_session_merge(target, {**values, "source_system": source}, source)
+        return target
+
+    session = EVChargingSession(
+        device_id=obs.device_id,
+        source_system=source,
+        is_complete=True,
+        recorded_at=obs.recorded_at,
+        original_timestamp=start,
+        ingest_schema_version=INGEST_SCHEMA_VERSION.get(source),
+        **values,
+    )
+    db.add(session)
+    await db.flush()
+    logger.info(
+        "Stored %s charging session: %s kWh, %s -> %s%%",
+        source, values.get("energy_kwh"), values.get("start_soc"), values.get("end_soc"),
+    )
+    return session

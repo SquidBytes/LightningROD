@@ -9,6 +9,8 @@ For feature documentation, see the docs site at
 
 ### Added
 
+- Home Assistant now records about 20 more readings it already receives, such as ignition, gear, tire pressure, 12 V battery, motor volts and amps, and outside temperature
+- Trips from Home Assistant now pick up Ford's speed, acceleration and deceleration coaching scores
 - Added `LR_LOG_LEVEL` to control log verbosity; logs now carry timestamps and one line per Home Assistant event
 
 ### Changed
@@ -17,6 +19,7 @@ For feature documentation, see the docs site at
 - Charts fit the screen on phones and hide their toolbar
 - The charge curve in the charging session drawer is now a lightweight drawing
 - Charging sessions with any known charger-type spelling (`AC_CHARGING`, `DC_COMBO`, `L1`, …) are now stored as `AC` or `DC`; existing rows are updated on upgrade
+- Battery and vehicle readings from Home Assistant are now stamped with the time the vehicle took them, and a reading delivered twice is stored once
 - The trip "Driving score" is now shown as "Charge regenerated", which is what Ford reports it as (percent of battery charge recovered through regeneration); the trips table columns are now "Charge regen" and "Range regen"
 - Costs are now stored to the exact cent and per-kWh and fuel prices to four decimal places; existing values are rounded on upgrade
 

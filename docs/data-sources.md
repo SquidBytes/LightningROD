@@ -26,7 +26,7 @@ the observable record of how each value is mapped and converted.
 | `telemetry` | `torqueAtTransmission` | `Nm` | `ev_vehicle_status` | `torque_at_transmission` | `Nm` |  |
 | `telemetry` | `wheelTorqueStatus` | `enum` | `ev_vehicle_status` | `wheel_torque_status` | `enum` |  |
 | `telemetry` | `xevBatteryActualStateOfCharge` | `%` | `ev_battery_status` | `hv_battery_actual_soc` | `%` |  |
-| `telemetry` | `xevBatteryCapacity` | `kWh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` |  |
+| `telemetry` | `xevBatteryCapacity` | `kWh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` | Wh on some firmware; a value of 1000 or more is taken as Wh |
 | `telemetry` | `xevBatteryIoCurrent` | `A` | `ev_battery_status` | `hv_battery_amperage` | `A` | Negative while charging |
 | `telemetry` | `xevBatteryMaximumRange` | `km` | `ev_battery_status` | `hv_battery_max_range` | `km` |  |
 | `telemetry` | `xevBatteryPerformanceStatus` | `enum` | `ev_battery_status` | `performance_status` | `enum` |  |
@@ -60,10 +60,39 @@ the observable record of how each value is mapped and converted.
 | `sensor.fordpass_{vin}_events` | `xev-key-off-trip-segment-data.distance_traveled` | `km` | `ev_trip_metrics` | `distance` | `km` | Canonical source; replaces elveh.tripDistanceTraveled |
 | `sensor.fordpass_{vin}_events` | `xev-key-off-trip-segment-data.energy_consumed` | `Wh` | `ev_trip_metrics` | `energy_consumed` | `kWh` | Canonical source; Wh -> kWh via to_metric |
 | `sensor.fordpass_{vin}_events` | `xev-key-off-trip-segment-data.outside_air_ambient_temperature` | `degC` | `ev_trip_metrics` | `outside_air_temp` | `degC` | Canonical metric source; Ford API key is outside_air_ambient_temperature (raw °C) |
-| `sensor.fordpass_{vin}_metrics` | `tripXevBatteryRangeRegenerated` | `km` | `ev_trip_metrics` | `range_regenerated` | `km` | Raw API passthrough (km); backfills the newest trip row |
-| `sensor.fordpass_{vin}_metrics` | `xevBatteryCapacity` | `Wh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` | Mixed Wh/kWh across ha-fordpass versions; magnitude-autoscaled to kWh |
-| `sensor.fordpass_{vin}_metrics` | `xevBatteryMaximumRange` | `km` | `ev_battery_status` | `hv_battery_max_range` | `km` | Canonical metric source; replaces elveh.maximumBatteryRange |
-| `sensor.fordpass_{vin}_metrics` | `xevBatteryRange` | `km` | `ev_battery_status` | `hv_battery_range` | `km` | Canonical metric source; replaces elveh state reading |
+| `sensor.fordpass_{vin}_metrics` | `acceleratorPedalPosition` | `%` | `ev_vehicle_status` | `accelerator_position` | `%` |  |
+| `sensor.fordpass_{vin}_metrics` | `accumulated-acceleration-coaching-score` | `%` | `ev_trip_metrics` | `acceleration_score` | `%` |  |
+| `sensor.fordpass_{vin}_metrics` | `accumulated-deceleration-coaching-score` | `%` | `ev_trip_metrics` | `deceleration_score` | `%` |  |
+| `sensor.fordpass_{vin}_metrics` | `accumulated-vehicle-speed-cruising-coaching-score` | `%` | `ev_trip_metrics` | `speed_score` | `%` |  |
+| `sensor.fordpass_{vin}_metrics` | `batteryLoadStatus` | `enum` | `ev_battery_status` | `lv_load_status` | `enum` | 12V |
+| `sensor.fordpass_{vin}_metrics` | `batteryStateOfCharge` | `%` | `ev_battery_status` | `lv_battery_level` | `%` | 12V |
+| `sensor.fordpass_{vin}_metrics` | `batteryVoltage` | `V` | `ev_battery_status` | `lv_battery_voltage` | `V` | 12V |
+| `sensor.fordpass_{vin}_metrics` | `brakeTorque` | `Nm` | `ev_vehicle_status` | `brake_torque` | `Nm` |  |
+| `sensor.fordpass_{vin}_metrics` | `custom:vehicle-electrical-efficiency` | `%` | `ev_trip_metrics` | `electrical_efficiency` | `%` |  |
+| `sensor.fordpass_{vin}_metrics` | `doorLockStatus` | `list` | `ev_vehicle_status` | `door_lock_status` | `list` |  |
+| `sensor.fordpass_{vin}_metrics` | `gearLeverPosition` | `enum` | `ev_vehicle_status` | `gear_position` | `enum` |  |
+| `sensor.fordpass_{vin}_metrics` | `ignitionStatus` | `enum` | `ev_vehicle_status` | `ignition_status` | `enum` |  |
+| `sensor.fordpass_{vin}_metrics` | `odometer` | `km` | `ev_vehicle_status` | `odometer` | `km` | Clamped so it never runs backwards |
+| `sensor.fordpass_{vin}_metrics` | `outsideTemperature` | `degC` | `ev_vehicle_status` | `outside_temperature` | `degC` | Not ambientTemp, which is unreliable |
+| `sensor.fordpass_{vin}_metrics` | `seatBeltStatus` | `list` | `ev_vehicle_status` | `seatbelt_status` | `list` |  |
+| `sensor.fordpass_{vin}_metrics` | `speed` | `kmh` | `ev_vehicle_status` | `speed` | `km/h` |  |
+| `sensor.fordpass_{vin}_metrics` | `tirePressure` | `list` | `ev_vehicle_status` | `tire_pressure` | `list` | kPa per wheel |
+| `sensor.fordpass_{vin}_metrics` | `torqueAtTransmission` | `Nm` | `ev_vehicle_status` | `torque_at_transmission` | `Nm` |  |
+| `sensor.fordpass_{vin}_metrics` | `tripXevBatteryChargeRegenerated` | `%` | `ev_trip_metrics` | `charge_regenerated` | `%` | Estimated electrical charge recovered through regeneration during the trip, per Ford's data dictionary |
+| `sensor.fordpass_{vin}_metrics` | `tripXevBatteryRangeRegenerated` | `km` | `ev_trip_metrics` | `range_regenerated` | `km` |  |
+| `sensor.fordpass_{vin}_metrics` | `wheelTorqueStatus` | `enum` | `ev_vehicle_status` | `wheel_torque_status` | `enum` |  |
+| `sensor.fordpass_{vin}_metrics` | `xevBatteryActualStateOfCharge` | `%` | `ev_battery_status` | `hv_battery_actual_soc` | `%` |  |
+| `sensor.fordpass_{vin}_metrics` | `xevBatteryCapacity` | `kWh` | `ev_battery_status` | `hv_battery_capacity` | `kWh` | Wh on some firmware; a value of 1000 or more is taken as Wh |
+| `sensor.fordpass_{vin}_metrics` | `xevBatteryIoCurrent` | `A` | `ev_battery_status` | `hv_battery_amperage` | `A` | Negative while charging |
+| `sensor.fordpass_{vin}_metrics` | `xevBatteryMaximumRange` | `km` | `ev_battery_status` | `hv_battery_max_range` | `km` |  |
+| `sensor.fordpass_{vin}_metrics` | `xevBatteryPerformanceStatus` | `enum` | `ev_battery_status` | `performance_status` | `enum` |  |
+| `sensor.fordpass_{vin}_metrics` | `xevBatteryRange` | `km` | `ev_battery_status` | `hv_battery_range` | `km` |  |
+| `sensor.fordpass_{vin}_metrics` | `xevBatteryStateOfCharge` | `%` | `ev_battery_status` | `hv_battery_soc` | `%` |  |
+| `sensor.fordpass_{vin}_metrics` | `xevBatteryTemperature` | `degC` | `ev_battery_status` | `hv_battery_temperature` | `degC` |  |
+| `sensor.fordpass_{vin}_metrics` | `xevBatteryVoltage` | `V` | `ev_battery_status` | `hv_battery_voltage` | `V` |  |
+| `sensor.fordpass_{vin}_metrics` | `xevTractionMotorCurrent` | `A` | `ev_battery_status` | `motor_amperage` | `A` |  |
+| `sensor.fordpass_{vin}_metrics` | `xevTractionMotorVoltage` | `V` | `ev_battery_status` | `motor_voltage` | `V` |  |
+| `sensor.fordpass_{vin}_metrics` | `yawRate` | `deg/s` | `ev_vehicle_status` | `yaw_rate` | `deg/s` |  |
 | `sensor.fordpass_{vin}_outsidetemp` | `state` | `degC` | `ev_charging_session` | `ambient_temp_start` | `degC` | Cached from the outsidetemp state; applied at session-write time |
 | `sensor.fordpass_{vin}_outsidetemp` | `state` | `degC` | `ev_charging_session` | `ambient_temp_end` | `degC` | Cached from the outsidetemp state; mirrored to start/end |
 | `sensor.fordpass_{vin}_outsidetemp` | `state` | `degC` | `ev_vehicle_status` | `outside_temperature` | `degC` | Time-series ambient temp from the outsidetemp entity state. Shares its source with ev_charging_session.ambient_temp_start/end (different cache discipline — vehicle_status writes per snapshot). |

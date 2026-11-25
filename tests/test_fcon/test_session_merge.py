@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from db.models.charging_session import EVChargingSession
 from tests.test_fcon.payloads import telemetry
-from web.services.session_merge import KEEP, SESSION_PRECEDENCE
+from web.services.pipeline.sessions import KEEP, SESSION_PRECEDENCE
 from web.services.source_system import SourceSystem
 from web.services.sources.fcon import adapter as fcon_adapter
 from web.services.sources.fcon.raw_store import FconRawArchive
@@ -217,11 +217,11 @@ def test_every_rule_documents_its_reason():
 )
 @pytest.mark.parametrize("fcon_first", [True, False])
 def test_distance_added_rejects_unit_conversion(ha_km, stored, warns, fcon_first, caplog):
-    from web.services.session_merge import merge_values
+    from web.services.pipeline.sessions import merge_values
 
     fcon = {"distance_added": 13.0, "device_id": DEVICE}
     ha = {"distance_added": ha_km, "device_id": DEVICE}
-    with caplog.at_level("WARNING", logger="lightningrod.session_merge"):
+    with caplog.at_level("WARNING", logger="lightningrod.pipeline.sessions"):
         if fcon_first:
             merged = {**fcon, **merge_values(SESSION_PRECEDENCE, fcon, ha, SourceSystem.HA_FORDPASS)}
         else:

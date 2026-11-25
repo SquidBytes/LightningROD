@@ -12,12 +12,12 @@ from sqlalchemy import select
 from db.models.trip_metrics import EVTripMetrics
 from tests.factories.trips import TripFactory
 from tests.test_fcon.payloads import telemetry
+from web.services.pipeline.trips import PRECEDENCE, merge_changes
 from web.services.source_system import SourceSystem
 from web.services.sources.fcon import adapter as fcon_adapter
 from web.services.sources.fcon.raw_store import FconRawArchive
 from web.services.sources.ha_fordpass import handlers as fp_handlers
 from web.services.sources.ha_fordpass.adapter import process_sample as ha_process
-from web.services.trip_merge import PRECEDENCE, merge_changes
 
 VIN = "YOURVIN0000000001"
 DEVICE = VIN.lower()
@@ -236,7 +236,7 @@ def test_fcon_odometer_checks_ha_distance(ha_km, stored, warns, fcon_first, capl
     fcon = {"distance": 13.0, "odometer_start": 1000.0, "odometer_end": 1013.0,
             "energy_consumed": 2.6, "device_id": DEVICE}
     ha = {"distance": ha_km, "energy_consumed": 2.4, "device_id": DEVICE}
-    with caplog.at_level("WARNING", logger="lightningrod.trip_merge"):
+    with caplog.at_level("WARNING", logger="lightningrod.pipeline.trips"):
         if fcon_first:
             merged = {**fcon, **merge_changes(fcon, ha, SourceSystem.HA_FORDPASS)}
         else:

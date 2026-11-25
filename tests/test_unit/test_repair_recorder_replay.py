@@ -234,7 +234,6 @@ async def test_csv_import_row_stays_byte_identical(db_session):
     changed = await op.execute(db_session)
 
     assert changed == 0
-    assert op.last_details["protected_reverted"] >= 1
     assert serialize_row(trip) == before
     # Dedup matched the protected row, so no ha_fordpass twin was inserted.
     count = await db_session.scalar(

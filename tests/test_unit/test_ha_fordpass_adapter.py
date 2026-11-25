@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
+from web.services.sources.ford_metrics.parser import parse_metrics
 from web.services.sources.ha_fordpass.adapter import (  # noqa: F401
     DATA_MAP,
     LIGHTNINGROD_TRIP_NAMESPACE,
     _last_seen_raw,
-    _metric_value,
     compute_trip_id,
     process_sample,
 )
@@ -30,22 +30,13 @@ def _load(name: str) -> dict:
 
 # Metrics entity values are already metric, and each one is value-wrapped.
 
-def test_metrics_entity_battery_range_passthrough():
-    """xevBatteryRange from metrics is already kilometers."""
-    payload = _load("metric_ha_imperial_vehicle.json")
-    metrics_state = payload["sensor.fordpass_YOUR_VIN_metrics"]
-    raw = metrics_state["attributes"]["xevBatteryRange"]
-    assert _metric_value(metrics_state["attributes"], "xevBatteryRange") == 260
-    assert "updateTime" in raw, "metrics attributes arrive value-wrapped"
-    # Adapter must emit this value unchanged to hv_battery_range column
-
-
-def test_metrics_entity_max_range_passthrough():
-    """xevBatteryMaximumRange from metrics is already kilometers."""
+def test_metrics_entity_ranges_pass_through_as_kilometres():
+    """xevBatteryRange and xevBatteryMaximumRange from metrics are already kilometres."""
     payload = _load("metric_ha_imperial_vehicle.json")
     attrs = payload["sensor.fordpass_YOUR_VIN_metrics"]["attributes"]
-    assert _metric_value(attrs, "xevBatteryMaximumRange") == 418
-    # Adapter must emit unchanged to hv_battery_max_range
+    assert "updateTime" in attrs["xevBatteryRange"], "metrics attributes arrive value-wrapped"
+    battery = next(r for r in parse_metrics(attrs) if r.table == "ev_battery_status")
+    assert (battery.values["hv_battery_range"], battery.values["hv_battery_max_range"]) == (260, 418)
 
 
 def test_every_metrics_attribute_is_value_wrapped():
@@ -57,6 +48,10 @@ def test_every_metrics_attribute_is_value_wrapped():
         for key, value in attrs.items():
             if key in ("friendly_name", "icon"):
                 continue  # injected by Home Assistant, not part of the metrics dict
+            if key == "customMetrics":
+                value = next(iter(value.values()))  # a dict of wrappers, keyed by Ford's names
+            if isinstance(value, list):
+                value = value[0]  # per-wheel and per-door metrics are lists of wrappers
             assert isinstance(value, dict) and "value" in value, (
                 f"{fixture}: metrics attribute {key!r} is not value-wrapped"
             )

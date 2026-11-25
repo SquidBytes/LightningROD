@@ -304,34 +304,29 @@ async def test_metrics_backfills_trip_regen_and_score(db_session):
     assert float(trip.charge_regenerated) == pytest.approx(85.0)
 
 
-async def test_metrics_backfill_does_not_overwrite_elveh_regen(db_session):
-    """An elveh-sourced regen value survives a later metrics event."""
-    from web.services.sources.ha_fordpass import handlers as fp_handlers
-    from web.services.sources.ha_fordpass.handlers import handle_battery_status
-
-    fp_handlers._last_trip_values.clear()
-
+async def test_later_metrics_payload_refreshes_regen_on_the_same_trip(db_session):
+    """A newer reading taken as the drive ended replaces the stored regen."""
     payload = json.loads((FIXTURES_DIR / "metric_ha_imperial_vehicle.json").read_text())
     ha_config = {"unit_system": "metric"}
-
-    await handle_battery_status(
-        "elveh", payload["sensor.fordpass_YOUR_VIN_elveh"], ha_config, "YOUR_VIN", db_session
-    )
-    trip = (
-        await db_session.execute(
-            select(EVTripMetrics).order_by(EVTripMetrics.id.desc()).limit(1)
-        )
-    ).scalar_one()
-    trip.range_regenerated = 9.9  # pretend elveh delivered a distinct value
-    await db_session.flush()
-
     await process_sample(
-        "sensor.fordpass_YOUR_VIN_metrics", payload["sensor.fordpass_YOUR_VIN_metrics"],
+        "sensor.fordpass_YOUR_VIN_events", payload["sensor.fordpass_YOUR_VIN_events"],
         db_session, ha_config,
     )
+    metrics = payload["sensor.fordpass_YOUR_VIN_metrics"]
+    await process_sample("sensor.fordpass_YOUR_VIN_metrics", metrics, db_session, ha_config)
+    trip = (
+        await db_session.execute(select(EVTripMetrics).order_by(EVTripMetrics.id.desc()).limit(1))
+    ).scalar_one()
+    assert float(trip.range_regenerated) == pytest.approx(2.1, abs=0.01)
+
+    # Thirty seconds after the first reading (2026-04-19T12:00:00Z).
+    metrics["attributes"]["tripXevBatteryRangeRegenerated"] = {
+        "updateTime": "2026-04-19T12:00:30Z", "value": 2.6,
+    }
+    await process_sample("sensor.fordpass_YOUR_VIN_metrics", metrics, db_session, ha_config)
     await db_session.flush()
-    await db_session.refresh(trip)
-    assert float(trip.range_regenerated) == pytest.approx(9.9)
+
+    assert float(trip.range_regenerated) == pytest.approx(2.6, abs=0.01)
 
 
 async def test_reporter_260mi_418km_max_range(db_session):
