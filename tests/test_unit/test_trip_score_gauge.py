@@ -2,9 +2,8 @@
 
 Renders web/templates/driving/sessions/partials/trip_row.html in isolation
 via Jinja2 Environment to assert the radial-progress gauge replaces the
-previous static-gradient bar and that color bands track the score value
-(<50 -> text-error, 50-74 -> text-warning, >=75 -> text-success). Score=0
-is converted to NULL upstream at the adapter, so it is not exercised here.
+previous static-gradient bar in one neutral colour. 0 is converted to NULL
+upstream at the adapter, so it is not exercised here.
 """
 from pathlib import Path
 from types import SimpleNamespace
@@ -59,29 +58,13 @@ def _render(charge_regenerated):
     )
 
 
-def test_color_band_error():
-    """Score < 50 → text-error gauge color."""
-    html = _render(49)
-    assert "text-error" in html
-    assert "radial-progress" in html
-
-
-def test_color_band_warning_lower():
-    """Score = 50 → text-warning (lower bound of warning band)."""
-    html = _render(50)
-    assert "text-warning" in html
-
-
-def test_color_band_warning_upper():
-    """Score = 74 → text-warning (upper bound of warning band)."""
-    html = _render(74)
-    assert "text-warning" in html
-
-
-def test_color_band_success():
-    """Score = 75 → text-success (lower bound of success band)."""
-    html = _render(75)
-    assert "text-success" in html
+@pytest.mark.parametrize("value", [3, 49, 50, 74, 75, 100])
+def test_gauge_is_one_neutral_colour(value):
+    """A regeneration percentage is not good or bad, so no value is painted red, amber or green."""
+    html = _render(value)
+    assert "radial-progress text-primary" in html
+    for judged in ("text-error", "text-warning", "text-success"):
+        assert judged not in html
 
 
 def test_score_none_renders_emdash():

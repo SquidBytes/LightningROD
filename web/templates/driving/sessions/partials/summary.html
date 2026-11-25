@@ -135,13 +135,12 @@
                     </div>
                 </div>
                 {% if trip.charge_regenerated is not none %}
-                <div class="mt-2">
-                    <div class="relative h-5 w-full rounded overflow-hidden">
-                        <div class="absolute inset-0 bg-gradient-to-r from-error via-warning to-success"></div>
-                        <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
-                            Charge regenerated {{ "%.0f"|format(trip.charge_regenerated) }} %
-                        </span>
+                <div class="mt-2" title="{{ tooltips.driving_sessions_charge_regenerated }}">
+                    <div class="flex justify-between text-xs text-base-content/60">
+                        <span>Charge regenerated</span>
+                        <span class="font-semibold text-base-content">{{ "%.0f"|format(trip.charge_regenerated) }} %</span>
                     </div>
+                    <progress class="progress progress-primary w-full" value="{{ "%.0f"|format(trip.charge_regenerated) }}" max="100"></progress>
                 </div>
                 {% endif %}
             </div>
