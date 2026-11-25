@@ -14,6 +14,7 @@ from tests.factories.networks import NetworkFactory
 from tests.factories.sessions import ChargingSessionFactory
 from web.services.pipeline.observation import SessionObservation
 from web.services.pipeline.sessions import upsert_session
+from web.util.timestamps import utc
 
 pytestmark = pytest.mark.db
 
@@ -51,8 +52,8 @@ async def test_new_charge_is_inserted_and_stamped_from_the_observation(db_sessio
 
     (session,) = await _sessions(db_session)
     assert session.source_system == "fcon"
-    assert session.recorded_at == END
-    assert session.original_timestamp == START + timedelta(minutes=5)
+    assert utc(session.recorded_at) == END
+    assert utc(session.original_timestamp) == START + timedelta(minutes=5)
     assert session.is_complete is True
     assert session.energy_kwh == 10.4
 
@@ -78,7 +79,7 @@ async def test_two_sources_merge_into_one_row_in_either_order(db_session, order)
     (session,) = await _sessions(db_session)
     assert session.source_system == "ha_fordpass"
     # Home Assistant carries Ford's own charge log.
-    assert (session.session_start_utc, session.energy_kwh, session.start_soc) == (START, 10.0, 40.0)
+    assert (utc(session.session_start_utc), session.energy_kwh, session.start_soc) == (START, 10.0, 40.0)
     # Only FordConnect reads charger volts.
     assert session.charging_voltage == 240.0
 

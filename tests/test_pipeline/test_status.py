@@ -11,6 +11,7 @@ from db.models.battery_status import EVBatteryStatus
 from db.models.vehicle_status import EVVehicleStatus
 from web.services.pipeline.observation import Observation
 from web.services.pipeline.status import upsert_status
+from web.util.timestamps import utc
 
 pytestmark = pytest.mark.db
 
@@ -44,8 +45,8 @@ async def test_row_is_stamped_with_the_reading_time_and_source(db_session):
     await upsert_status(db_session, [_obs(BATTERY, {"hv_battery_soc": 50.0}, source="ha_fordpass")])
 
     (row,) = await _rows(db_session, EVBatteryStatus)
-    assert row.recorded_at == AT
-    assert row.original_timestamp == AT
+    assert utc(row.recorded_at) == AT
+    assert utc(row.original_timestamp) == AT
     assert row.source_system == "ha_fordpass"
     assert row.ingest_schema_version == 2
 

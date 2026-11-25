@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from db.models.location import EVLocation
 from web.services.pipeline.location import record_position
+from web.util.timestamps import utc
 
 pytestmark = pytest.mark.db
 
@@ -38,7 +39,7 @@ async def test_measured_fix_is_stored_with_its_own_time(db_session):
     await record_position(db_session, DEVICE, _metrics(T0), "ha_fordpass")
 
     (fix,) = await _fixes(db_session)
-    assert (fix.recorded_at, fix.original_timestamp) == (T0, T0)
+    assert (utc(fix.recorded_at), utc(fix.original_timestamp)) == (T0, T0)
     assert (fix.latitude, fix.longitude, fix.altitude) == (10.0, 20.0, 12.0)
     assert fix.compass_direction == "NORTH"
     assert fix.source_system == "ha_fordpass"

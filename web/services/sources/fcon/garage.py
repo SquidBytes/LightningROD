@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from db.models.vehicle import EVVehicle
-from web.services.vehicles.auto_create import fill_vehicle
+from web.services.source_system import SourceSystem
+from web.services.vehicles.auto_create import ensure_vehicle, fill_vehicle
 from web.services.vehicles.battery_match import match_battery, preset_model, presets_for
 
 # The spec names it nickName; the others guard against a renamed key.
@@ -46,6 +47,20 @@ def garage_facts(garage: dict) -> GarageFacts:
         facts={"make": make, "model": model, "year": year},
         display_name=nickname or fallback or None,
         auto_names=auto_names,
+    )
+
+
+async def record_garage(db: Any, device_id: str, payload: dict) -> None:
+    """Create or update the vehicle from a /garage response."""
+    garage = garage_facts(payload)
+    await ensure_vehicle(
+        db,
+        device_id,
+        source_system=SourceSystem.FCON,
+        vin=payload.get("vin"),
+        display_name=garage.display_name,
+        auto_names=garage.auto_names,
+        **garage.facts,
     )
 
 
