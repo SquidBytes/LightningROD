@@ -80,8 +80,8 @@ from web.services.repair.snapshot import list_runs, purge_run, restore_run
 from web.services.secrets import mask_secret
 from web.services.source_system import SourceSystem
 from web.services.sources.config_store import find_row, merge_into_row, read_row
-from web.services.sources.ha_fordpass import adapter as ha_fordpass_adapter
-from web.services.sources.ha_fordpass.config import HAFordpassConfig
+from web.services.sources.ford.ha_fordpass import adapter as ha_fordpass_adapter
+from web.services.sources.ford.ha_fordpass.config import HAFordpassConfig
 from web.services.sources.registry import REGISTRY as SOURCE_REGISTRY
 from web.services.vehicles.registry import VehicleRegistry
 from web.unit_system import (
@@ -1514,7 +1514,9 @@ async def data_sources_tab(
 
 async def _save_gas_sensors(db: AsyncSession, station: str | None, average: str | None) -> None:
     """Store both gas sensor entity ids, then drop the cached ones."""
-    from web.services.sources.ha_gas_price.adapter import invalidate_gas_sensor_cache
+    from web.services.sources.home_assistant.ha_gas_price.adapter import (
+        invalidate_gas_sensor_cache,
+    )
 
     await set_app_setting(db, "gas_sensor_station_entity_id", station or "")
     await set_app_setting(db, "gas_sensor_average_entity_id", average or "")

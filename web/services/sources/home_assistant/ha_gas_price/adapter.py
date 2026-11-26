@@ -87,7 +87,9 @@ async def try_handle_event(entity_id: str, new_state: dict, db) -> bool:
         return False
     if entity_id != station_entity and entity_id != average_entity:
         return False
-    from web.services.sources.ha_gas_price.handlers import handle_gas_sensor_event
+    from web.services.sources.home_assistant.ha_gas_price.handlers import (
+        handle_gas_sensor_event,
+    )
 
     return await handle_gas_sensor_event(
         entity_id, new_state, station_entity, average_entity, db

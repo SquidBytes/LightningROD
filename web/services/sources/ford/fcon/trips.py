@@ -12,10 +12,10 @@ from web.queries.trips import detect_trip_location_ids
 from web.services.pipeline.derive import derive_trip
 from web.services.pipeline.observation import TripObservation
 from web.services.pipeline.trips import upsert_trip
-from web.services.sources.fcon.history import telemetry_since_boundary
-from web.services.sources.fcon.identity import SOURCE_SYSTEM
-from web.services.sources.ford_metrics.parser import parse_time
-from web.services.sources.ford_metrics.samples import trip_sample
+from web.services.sources.ford.fcon.history import telemetry_since_boundary
+from web.services.sources.ford.fcon.identity import SOURCE_SYSTEM
+from web.services.sources.ford.metrics import parse_time
+from web.services.sources.ford.samples import trip_sample
 
 
 def trip_uuid(device_id: str, start: datetime) -> uuid.UUID:

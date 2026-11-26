@@ -62,7 +62,7 @@ def _session_state(entity_id: str, when: datetime) -> dict:
 @pytest.fixture
 def live_thermal_cache(monkeypatch):
     """Prime the adapter caches the way a live outsidetemp/elvehcharging pair would."""
-    from web.services.sources.ha_fordpass import adapter as fp_adapter
+    from web.services.sources.ford.ha_fordpass import adapter as fp_adapter
 
     def _prime(device_id: str) -> None:
         fp_adapter._last_outsidetemp[device_id] = NOW_AMBIENT_C
@@ -158,7 +158,7 @@ async def test_live_session_does_take_the_cached_temperature(
     Without this side, the xfail above would read as "the cache is never the
     right source", which is not the defect.
     """
-    from web.services.sources.ha_fordpass.handlers import handle_energy_transfer
+    from web.services.sources.ford.ha_fordpass.handlers import handle_energy_transfer
 
     vin = "LIVEVIN"
     now = datetime.now(UTC)

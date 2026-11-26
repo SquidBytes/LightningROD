@@ -1,7 +1,7 @@
 """Shared HA-generic helpers used by ingestion runtime + source adapters.
 
-Both `web/services/sources/ha_fordpass/handlers.py` and
-`web/services/sources/ha_gas_price/handlers.py` import from here so the
+Both `web/services/sources/ford/ha_fordpass/handlers.py` and
+`web/services/sources/home_assistant/ha_gas_price/handlers.py` import from here so the
 two adapters stay thin.
 
 Functions in this module are HA-event-shape generic; unit handling is delegated
@@ -15,7 +15,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from web.services.sources.ha_fordpass import adapter as ha_fordpass
+from web.services.sources.ford.ha_fordpass import adapter as ha_fordpass
 from web.services.units import detection
 from web.services.units.families import normalize_unit_string
 from web.services.units.to_metric import UnknownSourceUnit, to_metric

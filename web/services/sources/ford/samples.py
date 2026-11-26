@@ -7,7 +7,7 @@ from typing import Any
 
 from web.services.pipeline.derive import ChargeSample, TripSample
 from web.services.pipeline.observation import PositionObservation
-from web.services.sources.ford_metrics.parser import parse_time
+from web.services.sources.ford.metrics import parse_time
 
 IGNITION_ON = frozenset({"ON", "RUN", "START"})
 IN_PROGRESS = "IN_PROGRESS"

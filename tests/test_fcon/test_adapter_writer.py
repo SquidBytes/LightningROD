@@ -11,7 +11,7 @@ from db.models.battery_status import EVBatteryStatus
 from db.models.vehicle import EVVehicle
 from db.models.vehicle_status import EVVehicleStatus
 from tests.test_fcon.payloads import telemetry
-from web.services.sources.fcon import adapter
+from web.services.sources.ford.fcon import adapter
 
 pytestmark = pytest.mark.db
 

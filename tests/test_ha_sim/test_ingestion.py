@@ -18,8 +18,8 @@ from tests.test_ha_sim.simulator import (
     make_lastrefresh_event,
     make_trip_event,
 )
-from web.services.sources.ha_fordpass.dispatch import SENSOR_HANDLERS
-from web.services.sources.ha_fordpass.handlers import extract_slug
+from web.services.sources.ford.ha_fordpass.dispatch import SENSOR_HANDLERS
+from web.services.sources.ford.ha_fordpass.handlers import extract_slug
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 

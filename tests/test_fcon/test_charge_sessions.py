@@ -10,10 +10,10 @@ from sqlalchemy import select
 from db.models.charging_session import EVChargingSession
 from tests.test_fcon.payloads import telemetry
 from web.services.pipeline.derive import ChargeSample, derive_session
-from web.services.sources.fcon import adapter
-from web.services.sources.fcon.charge_sessions import schedule_location_name
-from web.services.sources.fcon.raw_store import FconRawArchive
-from web.services.sources.ford_metrics.samples import charge_sample
+from web.services.sources.ford.fcon import adapter
+from web.services.sources.ford.fcon.charge_sessions import schedule_location_name
+from web.services.sources.ford.fcon.raw_store import FconRawArchive
+from web.services.sources.ford.samples import charge_sample
 
 T0 = datetime(2026, 8, 24, 20, 0, tzinfo=UTC)
 DEVICE = "your_vin_000000001"

@@ -165,7 +165,7 @@ def test_watched_tables_are_present_in_metadata():
 
 
 def test_all_unit_ful_columns_have_mappings():
-    from web.services.sources.ha_fordpass.adapter import DATA_MAP
+    from web.services.sources.ford.ha_fordpass.adapter import DATA_MAP
     discovered = _discover_unit_ful_columns()
     covered = {(c.db_table, c.db_column) for c in DATA_MAP}
     missing = discovered - covered - _EXEMPTIONS
@@ -174,7 +174,7 @@ def test_all_unit_ful_columns_have_mappings():
         f"Discovered {len(discovered)} unit-ful columns across "
         f"{_WATCHED_TABLES}, {len(covered)} have mappings, "
         f"{len(_EXEMPTIONS)} exempt.\n"
-        "Fix: add the mapping in web/services/sources/ha_fordpass/adapter.py, "
+        "Fix: add the mapping in web/services/sources/ford/ha_fordpass/adapter.py, "
         "OR add the column to _EXEMPTIONS here with a justification comment."
     )
 
@@ -186,7 +186,7 @@ def test_every_mapping_field_appears_in_a_recorded_payload():
     `xevBatteryAmperage`/`xevBatteryPower` pair Ford never sends, and an
     `ambientTemp` reading of the wrong field alive through a green suite.
     """
-    from web.services.sources.ha_fordpass.adapter import DATA_MAP
+    from web.services.sources.ford.ha_fordpass.adapter import DATA_MAP
 
     fixtures = _load_fixtures()
     unresolved: list[str] = []
@@ -205,7 +205,7 @@ def test_every_mapping_field_appears_in_a_recorded_payload():
         "Mappings naming attributes no recorded payload carries:\n  "
         + "\n  ".join(sorted(unresolved))
         + "\nFix: correct the mapping in "
-        "web/services/sources/ha_fordpass/adapter.py to the attribute the "
+        "web/services/sources/ford/ha_fordpass/adapter.py to the attribute the "
         "integration emits, OR add a captured payload under "
         "tests/fixtures/ha_payloads/ that proves the attribute is real."
     )

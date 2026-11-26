@@ -13,7 +13,7 @@ from sqlalchemy import select
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
-from web.services.sources.ha_fordpass.adapter import process_sample
+from web.services.sources.ford.ha_fordpass.adapter import process_sample
 from web.unit_system import convert_distance
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]

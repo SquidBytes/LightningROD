@@ -150,8 +150,8 @@ async def test_catchup_sweep_routes_no_slug_handler_at_the_tracker(
     ha_simulator, catchup_db
 ):
     """Widening the sweep must not feed tracker payloads to sensor handlers."""
-    from web.services.sources.ha_fordpass.dispatch import dispatch_slug
-    from web.services.sources.ha_fordpass.handlers import extract_slug
+    from web.services.sources.ford.ha_fordpass.dispatch import dispatch_slug
+    from web.services.sources.ford.ha_fordpass.handlers import extract_slug
 
     assert extract_slug(TRACKER) is None
 

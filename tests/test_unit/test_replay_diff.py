@@ -48,7 +48,7 @@ COUNTED = (
 @pytest.fixture(autouse=True)
 def _clear_ingestion_state():
     from web.services.repair.replay_core import purge_pending_state
-    from web.services.sources.ha_fordpass.adapter import _last_seen_raw
+    from web.services.sources.ford.ha_fordpass.adapter import _last_seen_raw
     from web.services.units import detection
 
     def _clear():

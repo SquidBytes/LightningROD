@@ -39,7 +39,7 @@ async def test_data_sources_page_contains_table_headers(client: AsyncClient):
 
 async def test_data_sources_page_renders_every_mapping(client: AsyncClient):
     """Every DATA_MAP entry must appear in the rendered HTML."""
-    from web.services.sources.ha_fordpass.adapter import DATA_MAP
+    from web.services.sources.ford.ha_fordpass.adapter import DATA_MAP
     r = await client.get("/admin/data-sources")
     for mapping in DATA_MAP:
         assert mapping.db_column in r.text, (
@@ -68,7 +68,7 @@ async def test_data_sources_sidebar_link_hidden_when_dev_mode_disabled(client: A
 
 async def test_data_sources_page_handles_empty_last_seen(client: AsyncClient):
     """Before any ingest, _last_seen_raw is empty; page must still render."""
-    from web.services.sources.ha_fordpass import adapter
+    from web.services.sources.ford.ha_fordpass import adapter
     adapter._last_seen_raw.clear()
     r = await client.get("/admin/data-sources")
     assert r.status_code == 200

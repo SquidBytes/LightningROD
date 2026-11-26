@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import select
 
 from db.models.battery_status import EVBatteryStatus
-from web.services.sources.ha_fordpass.adapter import process_sample
+from web.services.sources.ford.ha_fordpass.adapter import process_sample
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
@@ -176,8 +176,8 @@ async def test_elveh_trip_scores_use_the_score_suffixed_names(db_session):
     """Coaching scores are `tripSpeedScore` / `tripAccelerationScore` /
     `tripDecelerationScore` — the unsuffixed names never existed."""
     from db.models.trip_metrics import EVTripMetrics
-    from web.services.sources.ha_fordpass import handlers as fp_handlers
-    from web.services.sources.ha_fordpass.handlers import handle_battery_status
+    from web.services.sources.ford.ha_fordpass import handlers as fp_handlers
+    from web.services.sources.ford.ha_fordpass.handlers import handle_battery_status
 
     fp_handlers._last_trip_values.clear()
 
@@ -222,8 +222,8 @@ async def test_outside_temperature_comes_from_the_entity_state(db_session):
     ambient temperature.
     """
     from db.models.charging_session import EVChargingSession
-    from web.services.sources.ha_fordpass import adapter as fp_adapter
-    from web.services.sources.ha_fordpass.handlers import handle_energy_transfer
+    from web.services.sources.ford.ha_fordpass import adapter as fp_adapter
+    from web.services.sources.ford.ha_fordpass.handlers import handle_energy_transfer
 
     fp_adapter._last_outsidetemp.pop(_DEVICE_ID, None)
 
@@ -287,7 +287,7 @@ async def test_outside_temperature_comes_from_the_entity_state(db_session):
 
 async def test_state_mapping_without_a_unit_drops_the_value(db_session):
     """A state-sourced mapping never guesses a unit for an unstamped event."""
-    from web.services.sources.ha_fordpass import adapter as fp_adapter
+    from web.services.sources.ford.ha_fordpass import adapter as fp_adapter
 
     fp_adapter._last_outsidetemp.pop(_DEVICE_ID, None)
     await process_sample(
@@ -306,7 +306,7 @@ async def test_state_mapping_without_a_unit_drops_the_value(db_session):
 async def test_log_entry_without_session_data_records_nothing(db_session):
     """An entity with only HA's default attributes must not create a blank session."""
     from db.models.charging_session import EVChargingSession
-    from web.services.sources.ha_fordpass.handlers import handle_energy_transfer
+    from web.services.sources.ford.ha_fordpass.handlers import handle_energy_transfer
 
     state = {
         "entity_id": f"sensor.fordpass_{_DEVICE_ID}_energytransferlogentry",

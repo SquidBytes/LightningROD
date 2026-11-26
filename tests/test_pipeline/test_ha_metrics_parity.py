@@ -10,8 +10,8 @@ from sqlalchemy import select
 
 from db.models.battery_status import EVBatteryStatus
 from db.models.vehicle_status import EVVehicleStatus
-from web.services.sources.fcon import adapter as fcon
-from web.services.sources.ha_fordpass import adapter as ha
+from web.services.sources.ford.fcon import adapter as fcon
+from web.services.sources.ford.ha_fordpass import adapter as ha
 
 pytestmark = pytest.mark.db
 

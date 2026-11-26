@@ -34,8 +34,8 @@ from web.services.ingestion._helpers import (
     _resolve_and_convert,
 )
 from web.services.source_system import SourceSystem
-from web.services.sources.ha_fordpass import adapter as ha_fordpass
-from web.services.sources.ha_fordpass.dispatch import handles
+from web.services.sources.ford.ha_fordpass import adapter as ha_fordpass
+from web.services.sources.ford.ha_fordpass.dispatch import handles
 from web.services.units.to_metric import UnknownSourceUnit, to_metric
 from web.util.numbers import safe_float
 from web.util.timestamps import parse_iso, utc

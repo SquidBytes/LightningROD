@@ -7,14 +7,14 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
-from web.services.sources.fcon.client import (
+from web.services.sources.ford.fcon.client import (
     AuthExpired,
     FordClient,
     FordError,
     RateLimited,
 )
-from web.services.sources.fcon.config import FconConfig
-from web.services.sources.fcon.tokens import (
+from web.services.sources.ford.fcon.config import FconConfig
+from web.services.sources.ford.fcon.tokens import (
     ConsentRequired,
     TokenManager,
     exchange_code,

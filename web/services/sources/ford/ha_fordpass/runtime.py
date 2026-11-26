@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from db.models.data_source_config import DataSourceConfig
-from web.services.sources.ha_fordpass.config import HAFordpassConfig
+from web.services.sources.ford.ha_fordpass.config import HAFordpassConfig
 
 if TYPE_CHECKING:
     from web.services.ingestion.base import IngestionRuntime

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 import pytest
 
 from tests.test_fcon.payloads import telemetry
-from web.services.sources.ford_metrics.parser import (
+from web.services.sources.ford.metrics import (
     BATTERY,
     VEHICLE,
     data_map,

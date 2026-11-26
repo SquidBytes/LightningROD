@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 
-from web.services.sources.fcon.client import FordError
+from web.services.sources.ford.fcon.client import FordError
 
 # Ford keeps only the first 16 characters of `state`.
 STATE_BYTES = 8

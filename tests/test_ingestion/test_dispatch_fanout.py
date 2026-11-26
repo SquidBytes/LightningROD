@@ -36,11 +36,11 @@ async def test_dispatch_routes_gas_price_first(archive_store):
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=True),
         ) as gas_mock,
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug",
             new=AsyncMock(),
         ) as slug_mock,
     ):
@@ -57,11 +57,11 @@ async def test_dispatch_falls_through_to_slug_when_gas_returns_false(archive_sto
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=False),
         ) as gas_mock,
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug",
             new=AsyncMock(),
         ) as slug_mock,
     ):
@@ -82,11 +82,11 @@ async def test_dispatch_swallows_gas_branch_exceptions_and_continues(archive_sto
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(side_effect=RuntimeError("kaboom")),
         ) as gas_mock,
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug",
             new=AsyncMock(),
         ) as slug_mock,
     ):
@@ -104,11 +104,11 @@ async def test_dispatch_swallows_slug_branch_exceptions(archive_store):
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=False),
         ),
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug",
             new=AsyncMock(side_effect=RuntimeError("slug-fail")),
         ),
     ):
@@ -123,11 +123,11 @@ async def test_dispatch_archives_every_event_with_config_id(archive_store):
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=False),
         ),
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
         ),
     ):
         await rt._dispatch("sensor.fordpass_VIN_soc", {"state": "85"})
@@ -148,11 +148,11 @@ async def test_dispatch_archives_before_the_gas_branch(archive_store):
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(side_effect=lambda *a, **k: calls.append("gas") or False),
         ),
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug",
             new=AsyncMock(side_effect=lambda *a, **k: calls.append("slug")),
         ),
     ):
@@ -174,11 +174,11 @@ async def test_dispatch_continues_when_the_archive_itself_raises(archive_store):
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=False),
         ) as gas_mock,
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
         ) as slug_mock,
     ):
         await rt._dispatch("sensor.fordpass_VIN_soc", {"state": "85"})
@@ -204,11 +204,11 @@ async def test_dispatch_continues_when_the_archive_write_fails():
             "web.services.ingestion.raw_archive.AsyncSessionLocal", new=_no_connection
         ),
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=False),
         ) as gas_mock,
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
         ) as slug_mock,
     ):
         await rt._dispatch("sensor.fordpass_VIN_soc", {"state": "85"})
@@ -227,11 +227,11 @@ async def test_dispatch_logs_one_info_line_with_device_suffix_only(
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=False),
         ),
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug",
             new=AsyncMock(return_value=True),
         ),
         caplog.at_level("INFO", logger="lightningrod.hass"),
@@ -259,7 +259,7 @@ async def test_dispatch_log_line_reports_gas_branch_and_errors(archive_store, ca
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=True),
         ),
         caplog.at_level("INFO", logger="lightningrod.hass"),
@@ -270,11 +270,11 @@ async def test_dispatch_log_line_reports_gas_branch_and_errors(archive_store, ca
     caplog.clear()
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=False),
         ),
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug",
             new=AsyncMock(side_effect=RuntimeError("slug-fail")),
         ),
         caplog.at_level("INFO", logger="lightningrod.hass"),
@@ -290,11 +290,11 @@ async def test_dispatch_logs_unrelated_entities_at_debug_only(archive_store, cap
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=False),
         ),
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug",
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug",
             new=AsyncMock(return_value=False),
         ),
         caplog.at_level("DEBUG", logger="lightningrod.hass"),

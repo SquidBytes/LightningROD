@@ -16,21 +16,21 @@ from web.dependencies import DbSession
 from web.services.ingestion import supervisor
 from web.services.secrets import mask_secret
 from web.services.sources.config_store import find_row, merge_into_row, read_row
-from web.services.sources.fcon import DATA_SOURCE
-from web.services.sources.fcon.client import FordClient
-from web.services.sources.fcon.config import FconConfig
-from web.services.sources.fcon.consent import (
+from web.services.sources.ford.fcon import DATA_SOURCE
+from web.services.sources.ford.fcon.client import FordClient
+from web.services.sources.ford.fcon.config import FconConfig
+from web.services.sources.ford.fcon.consent import (
     SOURCE_NAME,
     finish_consent,
     start_consent,
 )
-from web.services.sources.fcon.oauth import CALLBACK_PATH, redirect_uri_for
-from web.services.sources.fcon.retention import (
+from web.services.sources.ford.fcon.oauth import CALLBACK_PATH, redirect_uri_for
+from web.services.sources.ford.fcon.retention import (
     estimate,
     get_retention_days,
     set_retention_days,
 )
-from web.services.sources.fcon.tokens import TOKEN_FIELDS
+from web.services.sources.ford.fcon.tokens import TOKEN_FIELDS
 from web.util.forms import OptionalInt
 
 router = APIRouter()

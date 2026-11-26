@@ -8,8 +8,8 @@ from sqlalchemy import select
 from db.models.vehicle import EVVehicle
 from tests.test_fcon.payloads import telemetry
 from web.queries.settings import get_app_setting, set_app_setting
-from web.services.sources.fcon import adapter
-from web.services.sources.fcon.garage import garage_facts
+from web.services.sources.ford.fcon import adapter
+from web.services.sources.ford.fcon.garage import garage_facts
 from web.services.vehicles.auto_create import ensure_vehicle
 from web.services.vehicles.battery_match import match_battery, presets_for
 

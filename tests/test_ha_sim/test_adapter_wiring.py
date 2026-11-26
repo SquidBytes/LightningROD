@@ -16,9 +16,9 @@ from sqlalchemy import select
 from db.models.battery_status import EVBatteryStatus
 from db.models.trip_metrics import EVTripMetrics
 from tests.factories.vehicles import VehicleFactory
-from web.services.sources.ha_fordpass import handlers as fordpass_handlers
-from web.services.sources.ha_fordpass.dispatch import SENSOR_HANDLERS
-from web.services.sources.ha_fordpass.handlers import extract_slug
+from web.services.sources.ford.ha_fordpass import handlers as fordpass_handlers
+from web.services.sources.ford.ha_fordpass.dispatch import SENSOR_HANDLERS
+from web.services.sources.ford.ha_fordpass.handlers import extract_slug
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 

@@ -17,15 +17,15 @@ from db.engine import AsyncSessionLocal
 from db.models.data_source_config import DataSourceConfig
 from web.services.source_system import SourceSystem
 from web.services.sources.config_store import merge_into_row
-from web.services.sources.fcon.client import (
+from web.services.sources.ford.fcon.client import (
     AuthExpired,
     FordClient,
     FordError,
     RateLimited,
 )
-from web.services.sources.fcon.config import FconConfig
-from web.services.sources.fcon.tokens import ConsentRequired, TokenManager
-from web.services.sources.ford_metrics.parser import parse_time
+from web.services.sources.ford.fcon.config import FconConfig
+from web.services.sources.ford.fcon.tokens import ConsentRequired, TokenManager
+from web.services.sources.ford.metrics import parse_time
 
 logger = logging.getLogger("lightningrod.ingestion.fcon")
 

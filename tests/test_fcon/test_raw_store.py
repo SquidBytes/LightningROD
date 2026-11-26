@@ -10,9 +10,9 @@ from sqlalchemy import func, select
 from db.models.fcon_raw_sample import FconRawSample
 from tests.conftest import FixedSessionFactory
 from tests.test_fcon.payloads import telemetry
-from web.services.sources.fcon import ingest
-from web.services.sources.fcon.identity import device_id_of
-from web.services.sources.fcon.raw_store import FconRawArchive, fingerprint
+from web.services.sources.ford.fcon import ingest
+from web.services.sources.ford.fcon.identity import device_id_of
+from web.services.sources.ford.fcon.raw_store import FconRawArchive, fingerprint
 
 pytestmark = pytest.mark.db
 
@@ -81,7 +81,7 @@ async def test_store_sample_parses_only_new_responses(db_session, monkeypatch):
     factory = FixedSessionFactory(db_session)
     monkeypatch.setattr(ingest, "AsyncSessionLocal", factory)
     monkeypatch.setattr(archive_module, "AsyncSessionLocal", factory)
-    import web.services.sources.fcon.raw_store as raw_store
+    import web.services.sources.ford.fcon.raw_store as raw_store
 
     monkeypatch.setattr(raw_store, "AsyncSessionLocal", factory)
     parsed: list[str] = []
@@ -101,7 +101,7 @@ async def test_store_sample_parses_only_new_responses(db_session, monkeypatch):
 
 async def test_retention_prunes_old_rows(db_session, monkeypatch):
     import web.services.ingestion.raw_archive as archive_module
-    import web.services.sources.fcon.raw_store as raw_store
+    import web.services.sources.ford.fcon.raw_store as raw_store
 
     factory = FixedSessionFactory(db_session)
     monkeypatch.setattr(archive_module, "AsyncSessionLocal", factory)
@@ -117,7 +117,7 @@ async def test_retention_prunes_old_rows(db_session, monkeypatch):
 
 
 async def test_retention_estimate_falls_back_then_uses_observed_rate(db_session):
-    from web.services.sources.fcon.retention import (
+    from web.services.sources.ford.fcon.retention import (
         TYPICAL_SAMPLE_BYTES,
         TYPICAL_SAMPLES_PER_DAY,
         estimate,

@@ -16,9 +16,9 @@ from web.services.ingestion.fcon_poller import (
     FconPollingRuntime,
     vehicle_is_awake,
 )
-from web.services.sources.fcon.client import FordClient
-from web.services.sources.fcon.config import FconConfig
-from web.services.sources.fcon.tokens import TokenManager
+from web.services.sources.ford.fcon.client import FordClient
+from web.services.sources.ford.fcon.config import FconConfig
+from web.services.sources.ford.fcon.tokens import TokenManager
 
 pytestmark = pytest.mark.unit
 
@@ -236,7 +236,7 @@ async def test_start_and_stop():
 
 def test_source_builds_poller_from_decrypted_config():
     from db.models.data_source_config import DataSourceConfig
-    from web.services.sources.fcon import DATA_SOURCE
+    from web.services.sources.ford.fcon import DATA_SOURCE
 
     row = DataSourceConfig(id=3, source_name="fcon", instance_label="default", config_json={})
     assert DATA_SOURCE.build_runtime is not None

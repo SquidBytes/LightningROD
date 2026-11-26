@@ -20,8 +20,8 @@ from tests.test_ha_sim.simulator import (
     make_events_trip_event,
     make_trip_event,
 )
-from web.services.sources.ha_fordpass.dispatch import SENSOR_HANDLERS
-from web.services.sources.ha_fordpass.handlers import extract_slug
+from web.services.sources.ford.ha_fordpass.dispatch import SENSOR_HANDLERS
+from web.services.sources.ford.ha_fordpass.handlers import extract_slug
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 
@@ -270,7 +270,7 @@ async def test_trip_identical_events_dedupe(db_session):
     # Clear the module-level _last_trip_values cache to simulate a second
     # delivery that is NOT suppressed by in-memory state (forcing the DB-level
     # dedup check to be the one under test).
-    from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+    from web.services.sources.ford.ha_fordpass import handlers as fordpass_handlers
     fordpass_handlers._last_trip_values.clear()
 
     _, state2 = make_trip_event(
@@ -397,7 +397,7 @@ async def test_elveh_first_then_events_enriches_temps(db_session):
     assert len(rows_after_elveh) == 1, "elveh should insert one row"
 
     # Clear in-memory cache so the events handler isn't suppressed
-    from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+    from web.services.sources.ford.ha_fordpass import handlers as fordpass_handlers
     fordpass_handlers._last_trip_values.clear()
 
     # --- events fires second ----------------------------------------------
@@ -545,7 +545,7 @@ async def test_three_source_dedupe(db_session):
     assert len(rows) == 1, "elveh should insert one row"
 
     # Clear caches so the second delivery exercises the DB lookup path.
-    from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+    from web.services.sources.ford.ha_fordpass import handlers as fordpass_handlers
     fordpass_handlers._last_trip_values.clear()
 
     # 2. events fires next carrying the SAME updateTime
@@ -576,7 +576,7 @@ async def test_unique_constraint_blocks_duplicate(db_session):
     from sqlalchemy.exc import IntegrityError
 
     from db.models.trip_metrics import EVTripMetrics
-    from web.services.sources.ha_fordpass.adapter import compute_trip_id
+    from web.services.sources.ford.ha_fordpass.adapter import compute_trip_id
 
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
 
@@ -611,7 +611,7 @@ async def test_unique_constraint_blocks_duplicate(db_session):
 async def test_trip_cache_restored_when_transaction_rolls_back(db_session):
     """A rolled-back trip insert must not leave the in-memory cache claiming it was written."""
     from db.models.trip_metrics import EVTripMetrics
-    from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+    from web.services.sources.ford.ha_fordpass import handlers as fordpass_handlers
 
     await VehicleFactory.create(db_session, device_id=_TEST_DEVICE_ID)
     entity_id, state = make_trip_event(

@@ -37,8 +37,8 @@ from web.services.pipeline.observation import Observation
 from web.services.pipeline.status import upsert_status
 from web.services.pipeline.trips import enrich_newest_trip
 from web.services.source_system import SourceSystem
-from web.services.sources.ford_metrics.last_seen import record_last_seen
-from web.services.sources.ford_metrics.parser import (
+from web.services.sources.ford.last_seen import record_last_seen
+from web.services.sources.ford.metrics import (
     FIELDS,
     TRIP_FIELDS,
     TRIPS,
@@ -841,7 +841,7 @@ async def _handle_events_entity(
     # Match-and-enrich fallback: legacy predicate match for trips whose source
     # didn't carry tripUpdateTime (no deterministic id available).
     from web.services.pipeline.trips import apply_merge, is_mergeable
-    from web.services.sources.ha_fordpass.handlers import _find_matching_trip
+    from web.services.sources.ford.ha_fordpass.handlers import _find_matching_trip
 
     start_time = recorded_at - timedelta(seconds=duration) if duration else None
     existing = await _find_matching_trip(
@@ -983,7 +983,7 @@ async def _handle_energy_transfer_entity(
     Delegates to the slug handler so duplicate detection, location resolution
     and EVSE defaults have exactly one implementation.
     """
-    from web.services.sources.ha_fordpass.handlers import handle_energy_transfer
+    from web.services.sources.ford.ha_fordpass.handlers import handle_energy_transfer
 
     await handle_energy_transfer(
         "energytransferlogentry", new_state, ha_config or {}, device_id, db

@@ -9,13 +9,13 @@ from web.services.pipeline.context import IngestContext
 from web.services.pipeline.location import record_position
 from web.services.pipeline.observation import Observation
 from web.services.pipeline.status import upsert_status
-from web.services.sources.fcon.charge_sessions import record_session_if_ended
-from web.services.sources.fcon.garage import fill_battery, record_garage
-from web.services.sources.fcon.identity import SOURCE_SYSTEM, device_id_of
-from web.services.sources.fcon.trips import record_trip_if_ended
-from web.services.sources.ford_metrics.last_seen import record_last_seen
-from web.services.sources.ford_metrics.parser import data_map, parse_metrics
-from web.services.sources.ford_metrics.samples import position_observation
+from web.services.sources.ford.fcon.charge_sessions import record_session_if_ended
+from web.services.sources.ford.fcon.garage import fill_battery, record_garage
+from web.services.sources.ford.fcon.identity import SOURCE_SYSTEM, device_id_of
+from web.services.sources.ford.fcon.trips import record_trip_if_ended
+from web.services.sources.ford.last_seen import record_last_seen
+from web.services.sources.ford.metrics import data_map, parse_metrics
+from web.services.sources.ford.samples import position_observation
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
 from web.services.vehicles.auto_create import ensure_vehicle
 

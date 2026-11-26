@@ -96,9 +96,35 @@ Browser                   FastAPI
    (HTMX swaps into page)
 ```
 
+## Data Sources and the Pipeline
+
+A data source translates one provider's payloads into LightningROD's own shapes. The shared pipeline stores them. The two never mix: nothing under `pipeline/` imports from `sources/` (a test enforces it).
+
+```
+web/services/
+  pipeline/                 shared, knows no manufacturer
+    observation.py          the shapes a source hands over
+    status.py               battery and vehicle rows
+    location.py             GPS fixes
+    trips.py                trips: dedup, merge, manual rows protected
+    sessions.py             charging sessions: dedup, merge, location
+    derive.py               a trip or a charge from a series of samples
+  sources/
+    base.py, registry.py    what every source provides; the list of sources
+    ford/
+      metrics.py            reads Ford's `metrics` format (shared by both)
+      samples.py            Ford readings as pipeline samples and GPS fixes
+      fcon/                 FordConnect: OAuth, polling, config
+      ha_fordpass/          Home Assistant FordPass: events, config
+    home_assistant/
+      ha_gas_price/         not a vehicle, so not under a manufacturer
+```
+
+To add a manufacturer, create `sources/<maker>/` with one folder per way of connecting. Each source folder holds a config schema, a transport and a parser that returns observations, then gets one line in `registry.py`. Code two of the maker's sources share sits at the top of the maker's folder. Dedup, merging, location matching and the odometer check come from `pipeline/` unchanged.
+
 ## Home Assistant Ingestion Architecture
 
-HA data flows through a layered pipeline. The entry point is the `ha_fordpass` adapter (`web/services/sources/ha_fordpass/adapter.py`), which owns `DATA_MAP` — a registry of every known HA entity/attribute pair with its declared source unit, destination DB column, and conversion rule. `hass_processor.py` dispatches raw `state_changed` events to this adapter; it no longer contains any unit-conversion logic of its own.
+HA data flows through a layered pipeline. The entry point is the `ha_fordpass` adapter (`web/services/sources/ford/ha_fordpass/adapter.py`), which owns `DATA_MAP` — a registry of every known HA entity/attribute pair with its declared source unit, destination DB column, and conversion rule. `hass_processor.py` dispatches raw `state_changed` events to this adapter; it no longer contains any unit-conversion logic of its own.
 
 ```
 HA WebSocket

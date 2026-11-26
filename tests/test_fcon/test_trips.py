@@ -11,9 +11,9 @@ from db.models.location import EVLocation
 from db.models.trip_metrics import EVTripMetrics
 from tests.test_fcon.payloads import telemetry
 from web.services.pipeline.derive import TripSample, derive_trip
-from web.services.sources.fcon import adapter
-from web.services.sources.fcon.raw_store import FconRawArchive
-from web.services.sources.ford_metrics.samples import trip_sample
+from web.services.sources.ford.fcon import adapter
+from web.services.sources.ford.fcon.raw_store import FconRawArchive
+from web.services.sources.ford.samples import trip_sample
 
 T0 = datetime(2026, 8, 30, 7, 48, tzinfo=UTC)
 DEVICE = "your_vin_000000001"

@@ -6,7 +6,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from web.services.sources.base import DataSource
-from web.services.sources.ha_fordpass.config import HAFordpassConfig
+from web.services.sources.ford.ha_fordpass.config import HAFordpassConfig
 from web.services.sources.registry import REGISTRY
 
 pytestmark = pytest.mark.unit
@@ -33,7 +33,7 @@ def test_registry_has_ha_fordpass():
     d = by_name["ha_fordpass"]
     assert isinstance(d, DataSource)
     assert d.display_name == "Home Assistant (FordPass)"
-    assert d.adapter_module == "web.services.sources.ha_fordpass.adapter"
+    assert d.adapter_module == "web.services.sources.ford.ha_fordpass.adapter"
     assert d.config_schema is HAFordpassConfig
     assert d.setup_flow == "ha_websocket"
     assert d.secret_fields == frozenset({"ha_token"})
@@ -50,7 +50,7 @@ def test_registry_has_ha_gas_price():
     d = by_name["ha_gas_price"]
     assert isinstance(d, DataSource)
     assert d.display_name == "Home Assistant (Gas Price Sensors)"
-    assert d.adapter_module == "web.services.sources.ha_gas_price.adapter"
+    assert d.adapter_module == "web.services.sources.home_assistant.ha_gas_price.adapter"
     assert issubclass(d.config_schema, BaseModel)
     assert d.setup_flow == "static"
     assert d.secret_fields == frozenset()

@@ -21,8 +21,8 @@ from db.models.fcon_raw_sample import FconRawSample
 from db.portable_insert import portable_insert
 from web.queries.settings import RAW_ARCHIVE_DEFAULT_RETENTION_DAYS
 from web.services.ingestion.raw_archive import RetentionPruner
-from web.services.sources.fcon.identity import SOURCE_SYSTEM, device_id_of
-from web.services.sources.ford_metrics.parser import parse_time
+from web.services.sources.ford.fcon.identity import SOURCE_SYSTEM, device_id_of
+from web.services.sources.ford.metrics import parse_time
 
 logger = logging.getLogger("lightningrod.sources.fcon.raw_store")
 
@@ -95,7 +95,7 @@ class FconRawArchive(RetentionPruner):
         return bool(getattr(result, "rowcount", 1))
 
     async def prune(self) -> None:
-        from web.services.sources.fcon.retention import get_retention_days
+        from web.services.sources.ford.fcon.retention import get_retention_days
 
         async with AsyncSessionLocal() as db:
             days = await get_retention_days(db)

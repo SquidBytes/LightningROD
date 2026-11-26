@@ -1,7 +1,7 @@
 """Base types every source package builds on.
 
 Ingestion-pipeline-facing adapters duck-type to the `SourceAdapter` shape.
-Concrete adapters live under `web/services/sources/<source_name>/adapter.py`,
+Concrete adapters live under `web/services/sources/<maker>/<source_name>/adapter.py`,
 and each package declares its own `DATA_SOURCE`.
 
 Transport-neutral by design: what `source_ref` and `payload` mean is the

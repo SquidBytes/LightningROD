@@ -10,7 +10,7 @@ The 2026-03-21 auto-detect unit system logic is gone ; see
 
 import pytest
 
-from web.services.sources.ha_fordpass.handlers import (
+from web.services.sources.ford.ha_fordpass.handlers import (
     _format_address,
     _normalize_charge_type,
     extract_slug,

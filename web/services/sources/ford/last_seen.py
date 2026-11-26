@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from web.services.sources.ford_metrics.parser import ParsedRow
+from web.services.sources.ford.metrics import ParsedRow
 from web.services.units.data_map import DataMapping
 
 

@@ -669,7 +669,7 @@ def resolve_source_unit(
     """
     # Late imports to avoid a circular dependency: ha_fordpass.adapter imports
     # this module.
-    from web.services.sources.ha_fordpass import adapter as ha_fordpass
+    from web.services.sources.ford.ha_fordpass import adapter as ha_fordpass
 
     entity_pattern = ha_fordpass._entity_pattern(entity_id) if entity_id else ""
     attrs = (new_state or {}).get("attributes") or {} if isinstance(new_state, dict) else {}

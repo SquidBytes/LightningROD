@@ -6,8 +6,8 @@ import logging
 from typing import Any
 
 from db.engine import AsyncSessionLocal
-from web.services.sources.fcon import adapter
-from web.services.sources.fcon.raw_store import fcon_raw_archive, utc_now
+from web.services.sources.ford.fcon import adapter
+from web.services.sources.ford.fcon.raw_store import fcon_raw_archive, utc_now
 
 logger = logging.getLogger("lightningrod.sources.fcon.ingest")
 

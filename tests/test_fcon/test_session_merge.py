@@ -12,9 +12,9 @@ from db.models.charging_session import EVChargingSession
 from tests.test_fcon.payloads import telemetry
 from web.services.pipeline.sessions import KEEP, SESSION_PRECEDENCE
 from web.services.source_system import SourceSystem
-from web.services.sources.fcon import adapter as fcon_adapter
-from web.services.sources.fcon.raw_store import FconRawArchive
-from web.services.sources.ha_fordpass.handlers import handle_energy_transfer
+from web.services.sources.ford.fcon import adapter as fcon_adapter
+from web.services.sources.ford.fcon.raw_store import FconRawArchive
+from web.services.sources.ford.ha_fordpass.handlers import handle_energy_transfer
 
 pytestmark = pytest.mark.db
 

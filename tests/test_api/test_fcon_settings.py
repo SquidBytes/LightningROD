@@ -13,7 +13,7 @@ from db.models.data_source_config import DataSourceConfig
 from web.routes import fcon as fcon_routes
 from web.services.secrets import is_encrypted, mask_secret
 from web.services.sources.config_store import find_row, read_row
-from web.services.sources.fcon.client import FordClient
+from web.services.sources.ford.fcon.client import FordClient
 
 pytestmark = pytest.mark.db
 

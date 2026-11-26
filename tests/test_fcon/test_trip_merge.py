@@ -14,10 +14,10 @@ from tests.factories.trips import TripFactory
 from tests.test_fcon.payloads import telemetry
 from web.services.pipeline.trips import PRECEDENCE, merge_changes
 from web.services.source_system import SourceSystem
-from web.services.sources.fcon import adapter as fcon_adapter
-from web.services.sources.fcon.raw_store import FconRawArchive
-from web.services.sources.ha_fordpass import handlers as fp_handlers
-from web.services.sources.ha_fordpass.adapter import process_sample as ha_process
+from web.services.sources.ford.fcon import adapter as fcon_adapter
+from web.services.sources.ford.fcon.raw_store import FconRawArchive
+from web.services.sources.ford.ha_fordpass import handlers as fp_handlers
+from web.services.sources.ford.ha_fordpass.adapter import process_sample as ha_process
 
 VIN = "YOURVIN0000000001"
 DEVICE = VIN.lower()
@@ -158,7 +158,7 @@ async def test_both_orders_give_one_merged_row(db_session, order):
     trip_id = got.pop("trip_id")
     assert got == EXPECTED
     # HA's id derives from the vehicle's own trip timestamp, whoever came first.
-    from web.services.sources.ha_fordpass.adapter import compute_trip_id
+    from web.services.sources.ford.ha_fordpass.adapter import compute_trip_id
 
     assert trip_id == compute_trip_id(DEVICE, KEYOFF)
 

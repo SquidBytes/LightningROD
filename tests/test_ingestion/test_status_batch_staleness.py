@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy import select
 
 from db.models.vehicle_status import EVVehicleStatus
-from web.services.sources.ha_fordpass.dispatch import dispatch_slug
+from web.services.sources.ford.ha_fordpass.dispatch import dispatch_slug
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
 

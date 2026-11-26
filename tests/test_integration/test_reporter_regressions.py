@@ -13,7 +13,7 @@ from sqlalchemy import select
 from db.models.battery_status import EVBatteryStatus
 from db.models.charging_session import EVChargingSession
 from db.models.trip_metrics import EVTripMetrics
-from web.services.sources.ha_fordpass.adapter import process_sample
+from web.services.sources.ford.ha_fordpass.adapter import process_sample
 from web.unit_system import convert_distance
 
 pytestmark = [pytest.mark.ha_sim, pytest.mark.db]
@@ -104,8 +104,8 @@ async def test_reporter_no_duplicate_trip_from_elveh_and_events(db_session):
     uom). With the ha_unit_system_converted mapping both paths agree and the
     predicate match dedups them into a single enriched row.
     """
-    from web.services.sources.ha_fordpass import handlers as fp_handlers
-    from web.services.sources.ha_fordpass.handlers import handle_battery_status
+    from web.services.sources.ford.ha_fordpass import handlers as fp_handlers
+    from web.services.sources.ford.ha_fordpass.handlers import handle_battery_status
 
     fp_handlers._last_trip_values.clear()
 
@@ -161,8 +161,8 @@ async def test_elveh_trip_distance_canonical_km_across_unit_matrix(
     must convert every combo back to canonical km. The elveh STATE uom (which
     tracks the vehicle display system) must play no part.
     """
-    from web.services.sources.ha_fordpass import handlers as fp_handlers
-    from web.services.sources.ha_fordpass.handlers import handle_battery_status
+    from web.services.sources.ford.ha_fordpass import handlers as fp_handlers
+    from web.services.sources.ford.ha_fordpass.handlers import handle_battery_status
 
     fp_handlers._last_trip_values.clear()
 
@@ -246,7 +246,7 @@ async def test_battery_capacity_already_kwh_not_divided(db_session):
 
 async def test_elveh_capacity_already_kwh_not_divided(db_session):
     """Lock: elveh maximumBatteryCapacity (131.0, already kWh) stores as 131.0."""
-    from web.services.sources.ha_fordpass.handlers import (
+    from web.services.sources.ford.ha_fordpass.handlers import (
         _flush_battery_status,
         handle_battery_status,
     )

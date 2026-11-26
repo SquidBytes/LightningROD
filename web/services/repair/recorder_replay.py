@@ -33,7 +33,7 @@ from web.services.repair.replay_core import (
 )
 from web.services.repair.snapshot import deserialize_row, serialize_row
 from web.services.source_system import INGESTED, SourceSystem
-from web.services.sources.ford_metrics.parser import parse_trip_enrichment
+from web.services.sources.ford.metrics import parse_trip_enrichment
 from web.util.timestamps import parse_iso, utc
 
 logger = logging.getLogger("lightningrod.repair.recorder_replay")
@@ -320,8 +320,8 @@ class RecorderReplay(RepairOperation):
         unselected or skipped groups are reverted (updates) or deleted
         (recovered inserts) after the fact.
         """
-        from web.services.sources.ha_fordpass import adapter
-        from web.services.sources.ha_fordpass.dispatch import dispatch_slug
+        from web.services.sources.ford.ha_fordpass import adapter
+        from web.services.sources.ford.ha_fordpass.dispatch import dispatch_slug
 
         details: dict[str, Any] = {
             "states_replayed": 0,

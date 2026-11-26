@@ -11,9 +11,9 @@ from web.queries.locations import LOCATION_MATCH_RADIUS_M, haversine_meters
 from web.services.pipeline.derive import derive_session
 from web.services.pipeline.observation import SessionObservation
 from web.services.pipeline.sessions import upsert_session
-from web.services.sources.fcon.history import telemetry_since_boundary
-from web.services.sources.fcon.identity import SOURCE_SYSTEM
-from web.services.sources.ford_metrics.samples import charge_sample
+from web.services.sources.ford.fcon.history import telemetry_since_boundary
+from web.services.sources.ford.fcon.identity import SOURCE_SYSTEM
+from web.services.sources.ford.samples import charge_sample
 
 
 def schedule_location_name(schedules: dict | None, lat: float, lon: float) -> str | None:

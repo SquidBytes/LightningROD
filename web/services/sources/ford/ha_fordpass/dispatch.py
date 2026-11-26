@@ -55,8 +55,8 @@ async def dispatch_slug(
     # Import handlers module here to trigger the @handles decorator
     # side-effects that populate SENSOR_HANDLERS. Top-level import would
     # create a cycle (handlers.py imports `handles` from this module).
-    from web.services.sources.ha_fordpass import handlers  # noqa: F401
-    from web.services.sources.ha_fordpass.handlers import (
+    from web.services.sources.ford.ha_fordpass import handlers  # noqa: F401
+    from web.services.sources.ford.ha_fordpass.handlers import (
         _ensure_vehicle_exists,
         extract_slug,
         get_device_id,

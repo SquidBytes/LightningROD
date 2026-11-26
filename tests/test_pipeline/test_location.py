@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from db.models.location import EVLocation
 from web.services.pipeline.location import record_position
-from web.services.sources.ford_metrics.samples import position_observation
+from web.services.sources.ford.samples import position_observation
 from web.util.timestamps import utc
 
 pytestmark = pytest.mark.db

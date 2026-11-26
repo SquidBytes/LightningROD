@@ -41,8 +41,8 @@ def op(db_session):
 @pytest.fixture(autouse=True)
 def _clear_ingestion_state():
     """Reset handler pending caches and unit-detection caches around each test."""
-    from web.services.sources.ha_fordpass import handlers as fp
-    from web.services.sources.ha_fordpass.adapter import _last_seen_raw
+    from web.services.sources.ford.ha_fordpass import handlers as fp
+    from web.services.sources.ford.ha_fordpass.adapter import _last_seen_raw
     from web.services.units import detection
 
     def _clear():

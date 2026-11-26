@@ -40,7 +40,7 @@ depends_on: str | Sequence[str] | None = None
 # ---------------------------------------------------------------------------
 # Changing this UUID would invalidate every existing deterministic trip_id and
 # break the dedup invariant. The same constant lives in
-# web/services/sources/ha_fordpass/adapter.py for runtime use.
+# web/services/sources/ford/ha_fordpass/adapter.py for runtime use.
 LIGHTNINGROD_TRIP_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-4a5b-9c8d-7e6f5a4b3c20")
 
 

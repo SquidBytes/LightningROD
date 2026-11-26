@@ -171,7 +171,7 @@ class FconArchiveReparse(RepairOperation):
         )
 
     async def _replay(self, db: AsyncSession) -> _ChangeLog:
-        from web.services.sources.fcon import adapter
+        from web.services.sources.ford.fcon import adapter
 
         samples = (
             await db.execute(

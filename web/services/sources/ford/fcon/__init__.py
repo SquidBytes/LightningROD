@@ -2,13 +2,13 @@
 
 from web.services.source_system import SourceSystem
 from web.services.sources.base import DataSource
-from web.services.sources.fcon.config import FconConfig
-from web.services.sources.fcon.runtime import build_runtime
+from web.services.sources.ford.fcon.config import FconConfig
+from web.services.sources.ford.fcon.runtime import build_runtime
 
 DATA_SOURCE = DataSource(
     source_name=SourceSystem.FCON,
     display_name="FordConnect",
-    adapter_module="web.services.sources.fcon.adapter",
+    adapter_module="web.services.sources.ford.fcon.adapter",
     config_schema=FconConfig,
     setup_flow="oauth",
     # client_id is not secret: it travels in the authorize URL.

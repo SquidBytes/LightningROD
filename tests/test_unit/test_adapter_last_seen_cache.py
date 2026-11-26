@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from web.services.sources.ha_fordpass import adapter
+from web.services.sources.ford.ha_fordpass import adapter
 from web.services.units.data_map import DataMapping, SourceKind, SourceRef
 
 pytestmark = pytest.mark.unit

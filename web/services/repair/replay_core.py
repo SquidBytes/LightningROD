@@ -172,8 +172,11 @@ async def replay_events(
     """
     # Lazy: the repair registry imports this package and must never pull in
     # the HA stack.
-    from web.services.sources.ha_fordpass.dispatch import dispatch_slug
-    from web.services.sources.ha_fordpass.handlers import extract_slug, get_device_id
+    from web.services.sources.ford.ha_fordpass.dispatch import dispatch_slug
+    from web.services.sources.ford.ha_fordpass.handlers import (
+        extract_slug,
+        get_device_id,
+    )
 
     stats = ReplayStats()
     fallback = dict(fallback_config or {})
@@ -221,7 +224,7 @@ async def replay_events(
 
 
 def _pending_caches() -> list[dict[tuple[int, str], Any]]:
-    from web.services.sources.ha_fordpass import handlers as fp
+    from web.services.sources.ford.ha_fordpass import handlers as fp
 
     return [
         fp._pending_vehicle_status,
@@ -240,7 +243,7 @@ async def flush_pending_status(
     Live ingestion flushes on `lastrefresh` or a 30 s wall-clock timeout, so a
     replay that finishes faster than that would otherwise drop the last batch.
     """
-    from web.services.sources.ha_fordpass import handlers as fp
+    from web.services.sources.ford.ha_fordpass import handlers as fp
 
     devices = {
         key[1]

@@ -321,8 +321,10 @@ class HAWebSocketRuntime:
         """
         from db.engine import AsyncSessionLocal
         from web.services.ingestion.raw_archive import raw_archive
-        from web.services.sources.ha_fordpass.dispatch import dispatch_slug
-        from web.services.sources.ha_gas_price.adapter import try_handle_event
+        from web.services.sources.ford.ha_fordpass.dispatch import dispatch_slug
+        from web.services.sources.home_assistant.ha_gas_price.adapter import (
+            try_handle_event,
+        )
 
         # Archive first, in its own committed session: the typed branches below
         # roll their session back on error and the raw event must survive that.
@@ -433,7 +435,7 @@ class HAWebSocketRuntime:
         # Deferred import — handlers transitively imports _helpers which
         # imports the ingestion package; a top-level import here would create
         # a cycle at module-load time.
-        from web.services.sources.ha_fordpass.handlers import _FORDPASS_ENTITY_RE
+        from web.services.sources.ford.ha_fordpass.handlers import _FORDPASS_ENTITY_RE
 
         for entity_id in self._entity_states:
             match = _FORDPASS_ENTITY_RE.match(entity_id)
@@ -727,7 +729,9 @@ class HAWebSocketRuntime:
         state_val = state_obj.get("state")
         if state_val is None or state_val in ("unknown", "unavailable", ""):
             return False
-        from web.services.sources.ha_gas_price.handlers import metric_gas_price
+        from web.services.sources.home_assistant.ha_gas_price.handlers import (
+            metric_gas_price,
+        )
 
         price_metric = metric_gas_price(state_val)
         if price_metric is None:

@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from web.services.sources.fcon.client import FordError, authorize_url
-from web.services.sources.fcon.oauth import (
+from web.services.sources.ford.fcon.client import FordError, authorize_url
+from web.services.sources.ford.fcon.oauth import (
     PasteRejected,
     explain_token_error,
     new_state,

@@ -35,7 +35,7 @@ from web.queries.vehicles import (
     get_all_vehicles,
 )
 from web.services.source_system import SourceSystem
-from web.services.sources.ha_fordpass.adapter import LIGHTNINGROD_TRIP_NAMESPACE
+from web.services.sources.ford.ha_fordpass.adapter import LIGHTNINGROD_TRIP_NAMESPACE
 from web.unit_system import MI_PER_KM, parse_user_local_to_utc, to_metric_distance
 from web.util.htmx import error_response
 from web.util.timestamps import utc

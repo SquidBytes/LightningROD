@@ -18,8 +18,8 @@ async def ha_simulator():
 def _clear_shared_state() -> None:
     """Empty every module-level cache the ingestion path accumulates into."""
     from web.services.ingestion.raw_archive import raw_archive
-    from web.services.sources.ha_fordpass import adapter
-    from web.services.sources.ha_fordpass import handlers as fordpass_handlers
+    from web.services.sources.ford.ha_fordpass import adapter
+    from web.services.sources.ford.ha_fordpass import handlers as fordpass_handlers
 
     raw_archive.reset()
     # Tuple-keyed pending dicts are cleared wholesale: dict.clear() removes

@@ -6,8 +6,8 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from web.services.sources.fcon.client import FordClient, FordError, RateLimited
-from web.services.sources.fcon.config import FconConfig
+from web.services.sources.ford.fcon.client import FordClient, FordError, RateLimited
+from web.services.sources.ford.fcon.config import FconConfig
 
 REFRESH_LEEWAY = timedelta(seconds=90)
 TOKEN_FIELDS = (

@@ -194,11 +194,11 @@ async def test_dispatch_records_the_unit_system_it_captured_under(
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=False),
         ),
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
         ),
     ):
         await rt._dispatch(_entity("soc"), _state("soc"))
@@ -220,11 +220,11 @@ async def test_dispatch_without_an_ha_config_stores_no_unit_system(
 
     with (
         patch(
-            "web.services.sources.ha_gas_price.adapter.try_handle_event",
+            "web.services.sources.home_assistant.ha_gas_price.adapter.try_handle_event",
             new=AsyncMock(return_value=False),
         ),
         patch(
-            "web.services.sources.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
+            "web.services.sources.ford.ha_fordpass.dispatch.dispatch_slug", new=AsyncMock()
         ),
     ):
         await rt._dispatch(_entity("soc"), _state("soc"))

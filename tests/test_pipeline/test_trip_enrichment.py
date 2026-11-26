@@ -9,7 +9,7 @@ import pytest
 from tests.factories.trips import TripFactory
 from web.services.pipeline.observation import Observation
 from web.services.pipeline.trips import enrich_newest_trip
-from web.services.sources.ford_metrics.parser import (
+from web.services.sources.ford.metrics import (
     parse_metrics,
     parse_trip_enrichment,
 )

@@ -11,15 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.services.source_system import SourceSystem
 from web.services.sources.config_store import find_row, merge_into_row, read_row
-from web.services.sources.fcon.client import FordClient, FordError, authorize_url
-from web.services.sources.fcon.config import FconConfig
-from web.services.sources.fcon.oauth import (
+from web.services.sources.ford.fcon.client import FordClient, FordError, authorize_url
+from web.services.sources.ford.fcon.config import FconConfig
+from web.services.sources.ford.fcon.oauth import (
     PasteRejected,
     explain_token_error,
     new_state,
     parse_returned,
 )
-from web.services.sources.fcon.tokens import exchange_code, token_fields
+from web.services.sources.ford.fcon.tokens import exchange_code, token_fields
 
 SOURCE_NAME = SourceSystem.FCON
 _NO_CREDENTIALS = "Save your Client ID and Client Secret first."

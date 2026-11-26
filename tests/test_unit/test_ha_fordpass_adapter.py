@@ -10,14 +10,14 @@ from pathlib import Path
 
 import pytest
 
-from web.services.sources.ford_metrics.parser import parse_metrics
-from web.services.sources.ha_fordpass.adapter import (  # noqa: F401
+from web.services.sources.ford.ha_fordpass.adapter import (  # noqa: F401
     DATA_MAP,
     LIGHTNINGROD_TRIP_NAMESPACE,
     _last_seen_raw,
     compute_trip_id,
     process_sample,
 )
+from web.services.sources.ford.metrics import parse_metrics
 
 pytestmark = pytest.mark.unit
 
@@ -176,7 +176,7 @@ def test_compute_trip_id_uses_locked_namespace():
 
 def test_score_zero_becomes_null():
     """tripDrivingScore=0 ingested → DB stores NULL, not 0.0."""
-    from web.services.sources.ha_fordpass.handlers import _score_or_null
+    from web.services.sources.ford.ha_fordpass.handlers import _score_or_null
 
     assert _score_or_null(0) is None
     assert _score_or_null("0") is None
@@ -185,7 +185,7 @@ def test_score_zero_becomes_null():
 
 def test_score_nonzero_passes_through():
     """tripDrivingScore=42 ingested → DB stores 42.0."""
-    from web.services.sources.ha_fordpass.handlers import _score_or_null
+    from web.services.sources.ford.ha_fordpass.handlers import _score_or_null
 
     assert _score_or_null(42) == 42.0
     assert _score_or_null("87.5") == 87.5
@@ -193,7 +193,7 @@ def test_score_nonzero_passes_through():
 
 def test_score_invalid_returns_null():
     """Non-numeric score values return None (matches _safe_float behavior)."""
-    from web.services.sources.ha_fordpass.handlers import _score_or_null
+    from web.services.sources.ford.ha_fordpass.handlers import _score_or_null
 
     assert _score_or_null(None) is None
     assert _score_or_null("nope") is None
@@ -203,7 +203,7 @@ def test_score_invalid_returns_null():
 # ("0:41:18") on current ha-fordpass, bare minutes on older builds.
 
 def test_duration_canonicalized_to_seconds_from_elveh():
-    from web.services.sources.ha_fordpass.handlers import _duration_to_seconds
+    from web.services.sources.ford.ha_fordpass.handlers import _duration_to_seconds
 
     assert _duration_to_seconds("0:41:18") == 2478.0
     assert _duration_to_seconds("1:00:00") == 3600.0
@@ -214,7 +214,7 @@ def test_duration_canonicalized_to_seconds_from_elveh():
 
 
 def test_duration_to_seconds_handles_invalid():
-    from web.services.sources.ha_fordpass.handlers import _duration_to_seconds
+    from web.services.sources.ford.ha_fordpass.handlers import _duration_to_seconds
 
     assert _duration_to_seconds(None) is None
     assert _duration_to_seconds("") is None

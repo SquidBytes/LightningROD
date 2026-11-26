@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.fcon_raw_sample import FconRawSample
 from web.queries.settings import clamp_retention_days, get_app_setting, set_app_setting
-from web.services.sources.fcon.raw_store import (
+from web.services.sources.ford.fcon.raw_store import (
     DEFAULT_RETENTION_DAYS,
     RETENTION_SETTING,
 )
